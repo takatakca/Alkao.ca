@@ -109,3 +109,4 @@ TAKATAK membership (set `SUPABASE_URL` and `SUPABASE_ANON_KEY`). See
 | Run 31 | "Ajouter à mon calendrier" on the tickets page: an `.ics` file made in the browser, without the personal link |
 | Run 32 | Stripe test mode said out loud: a banner in the shop and a badge in `/ops` with `sk_test_` keys, gone with live keys |
 | Run 33 | The gate hears and feels each answer: one beep and buzz when a ticket is let in, two otherwise; on or off per device |
+| Run 34 | Owner decisions recorded in [ALKAO_DECISIONS.md](docs/ALKAO_DECISIONS.md). A dispute the buyer wins cancels the tickets nobody has used; a partial one waits in "À traiter" |

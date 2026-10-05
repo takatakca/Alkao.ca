@@ -9,6 +9,7 @@ import { DomainError } from "../domain/errors.js";
 import { CHECKOUT_HOLD_GRACE_SECONDS, CHECKOUT_SESSION_SECONDS, orderStatusAfterRefund } from "../domain/lifecycle.js";
 import { quoteFromLines, type Quote } from "../domain/pricing.js";
 import { PaymentProviderError, type CheckoutLineItem, type PaymentGateway, type PaymentWebhookEvent } from "./gateway.js";
+import { voidAfterLostDispute } from "../ops/chargeback.js";
 
 export interface PaymentsDeps {
   db: Db;
@@ -360,6 +361,10 @@ export class PaymentsService {
       await writeAudit(tx, scope, system, action, order, {
         disputeId: event.disputeId, status: event.status, amountCents: event.amountCents, reason: event.reason,
       });
+      // Run 34: a lost dispute cancels the tickets nobody has used (owner decision).
+      if (event.status === "lost") {
+        await voidAfterLostDispute(tx, scope, payment.orderId, { disputeId: event.disputeId, amountCents: event.amountCents }, system);
+      }
       return { outcome: "processed", clientId: scope.clientId, refund: null };
     }
 
