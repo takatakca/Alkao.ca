@@ -7,7 +7,10 @@ import type { Hono } from "hono";
 export interface OpsUiConfig {
   supabaseUrl: string | null;
   supabaseAnonKey: string | null;
-  /** Origins allowed to embed the app (the TAKATAK dashboard, later). Empty: no framing. */
+  /**
+   * Origins allowed to embed the app (the TAKATAK dashboard). They are also the only origins
+   * whose postMessage session handover the app accepts. Empty: no framing.
+   */
   frameAncestors: string[];
 }
 
@@ -54,7 +57,7 @@ export function mountOpsUi(app: Hono<any>, cfg: OpsUiConfig): void {
 
   app.get("/ops", (c) => c.body(read(join(UI_DIR, "index.html")), 200, headers("text/html; charset=utf-8")));
   app.get("/ops/config.json", (c) =>
-    c.body(JSON.stringify({ supabaseUrl: cfg.supabaseUrl, supabaseAnonKey: cfg.supabaseAnonKey }), 200, headers("application/json")),
+    c.body(JSON.stringify({ supabaseUrl: cfg.supabaseUrl, supabaseAnonKey: cfg.supabaseAnonKey, embedOrigins: cfg.frameAncestors }), 200, headers("application/json")),
   );
   for (const [name, file] of Object.entries(FILES)) {
     app.get(`/ops/${name}`, (c) => c.body(read(file.path), 200, headers(file.type)));
