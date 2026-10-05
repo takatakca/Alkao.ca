@@ -455,13 +455,22 @@ describe("ALKAO Operations app", () => {
   it("shows who did what in the journal and on the order, to owners only (Run 30)", async () => {
     const h = seed.havana;
     // Something this owner did: the journal says "Vous".
-    const sent = await call(app, "POST", `${adm(h.clientId, h.brandId)}/orders/${h.orderId}/tickets-email`, { token: await tokenFor(seed.users.havanaOwner) });
+    const owner = await tokenFor(seed.users.havanaOwner);
+    const sent = await call(app, "POST", `${adm(h.clientId, h.brandId)}/orders/${h.orderId}/tickets-email`, { token: owner });
     expect(sent.status).toBe(202);
+    // And something that is not about an order, for the filter to leave out.
+    expect((await call(app, "POST", `${adm(h.clientId, h.brandId)}/venues`, { token: owner, body: { name: "Salle du journal" } })).status).toBe(201);
     const page = await signedIn(seed.users.havanaOwner);
+    // The filtered answer comes late, as on a busy network: the page must not show stale rows meanwhile.
+    await page.route("**/audit?*action=order*", async (r) => { await new Promise((ok) => setTimeout(ok, 400)); await r.continue(); });
     await page.goto(`${origin}/ops#${brandPath()}/dashboard`);
     await page.getByRole("link", { name: "Journal" }).click();
     await page.getByRole("heading", { name: "Journal" }).waitFor();
+    // Everything first (catalog, sessions, orders…), then only orders.
+    await page.getByRole("cell", { name: "Lieu créé" }).first().waitFor();
     await page.getByLabel("Afficher").selectOption({ label: "Commandes" });
+    // Never the unfiltered rows while the filtered ones load.
+    await expect.poll(() => page.locator("tbody tr td:nth-child(3)").allTextContents()).not.toContain("Lieu créé");
     await page.getByRole("cell", { name: "Commande payée" }).first().waitFor();
     const mine = page.getByRole("row").filter({ hasText: "Billets envoyés par courriel" }).first();
     expect(await mine.getByRole("cell").nth(1).textContent()).toBe("Vous (propriétaire)");
