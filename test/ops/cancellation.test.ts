@@ -139,7 +139,8 @@ describe("session cancellation", () => {
 
     // Buyers are told: one email per order that held tickets for the session, with the amount.
     const sender = new Outbox();
-    await deliverTicketEmails(db.pool, { sender, publicUrl: "https://billets.alkao.test", credentialMasterSecret: TEST_CREDENTIAL_SECRET });
+    // A moment later: emails stamped in the same millisecond would not be due yet.
+    await deliverTicketEmails(db.pool, { sender, publicUrl: "https://billets.alkao.test", credentialMasterSecret: TEST_CREDENTIAL_SECRET }, new Date(Date.now() + 1000));
     const cancelled = sender.sent.filter((m) => m.subject.startsWith("Séance annulée"));
     expect(cancelled).toHaveLength(3);
     expect(cancelled.every((m) => /Vous êtes remboursé de \d/.test(m.text) && !m.text.includes("/billets#"))).toBe(true);
@@ -178,7 +179,8 @@ describe("session cancellation", () => {
     expect(progress.orders).toMatchObject({ total: 1, voided: 1 });
     expect(await tickets(free.orderId)).toEqual([{ status: "void", void_reason: "cancelled" }]);
     const sender = new Outbox();
-    await deliverTicketEmails(db.pool, { sender, publicUrl: "https://billets.alkao.test", credentialMasterSecret: TEST_CREDENTIAL_SECRET });
+    // A moment later: emails stamped in the same millisecond would not be due yet.
+    await deliverTicketEmails(db.pool, { sender, publicUrl: "https://billets.alkao.test", credentialMasterSecret: TEST_CREDENTIAL_SECRET }, new Date(Date.now() + 1000));
     expect(sender.sent.filter((m) => m.subject.startsWith("Séance annulée")).map((m) => m.text.includes("Vos billets sont annulés."))).toEqual([true]);
   });
 
