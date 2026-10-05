@@ -390,6 +390,27 @@ each run, so there is nothing else to schedule.
 | GET | `/v1/admin/…/settings/reminders` | `credentials.manage` | `{ reminders: { enabled } }`, `true` by default |
 | PUT | `/v1/admin/…/settings/reminders` | `credentials.manage` | `{ enabled }`. Logged as `settings.reminders_updated` |
 
+### Sales by period and by day (Run 26)
+
+| Method | Path | Permission | Result |
+|---|---|---|---|
+| GET | `/v1/admin/…/reports/daily?from&to&eventId` | `orders.read` | `{ report: { timeZone, days: [...], totals } }`, one row per day |
+| GET | `/v1/admin/…/reports/daily.csv?from&to&eventId` | `orders.read` | The same rows as CSV (amounts in cents). Logged as `reports.daily_exported` |
+
+Each day gives: orders, subtotal before taxes, all taxes with TPS (GST) and TVQ (QST)
+apart, gross, refunds (count and amount), commission, commission returned, and net to the
+Client before Stripe's fees. This is the total minus refunds minus the net commission.
+
+- **Sales** count on the day they were **paid**. **Refunds** count on the day Stripe
+  **completed** them, so a March refund of a February sale is in March, as in the bank.
+- The sales report (`/reports/sales`) instead counts refunds against the orders of the
+  period. Both are right; they answer different questions.
+- Days follow the time zone of the Brand's venues (America/Toronto when there is none). The
+  report returns it as `timeZone`.
+- In the Operations app, the dashboard has a period picker (today, 7 days, this month, last
+  month, since the start) and an event filter. Both drive the totals, the by-day table and
+  the two CSV exports.
+
 ### Role → permission
 
 | Role | catalog.read · inventory.read · holds.read | catalog.write | orders.read · buyers.read | audit.read |

@@ -100,3 +100,5 @@ TAKATAK membership (set `SUPABASE_URL` and `SUPABASE_ANON_KEY`). See
 | Run 22 | At the gate without a QR code: find the order by reference (no buyer data for gate staff), admit by hand under the scan rules |
 | Run 23 | Reminder email during the 24 hours before the session, on or off per Brand |
 | Run 24 | `GET /metrics` for monitoring (token, platform-wide counts only), retry button for stuck refunds, [incident runbook](docs/ALKAO_RUNBOOK.md) |
+| Run 25 | Isolation sweep extended to every route of Runs 18–24, with a mutation check; security review addendum |
+| Run 26 | Sales by period (today, 7 days, month, last month) and by day, with TPS and TVQ, refunds on their own day and commission; CSV for the accountant |

@@ -829,6 +829,26 @@ export function createApp(deps: AppDeps) {
       "cache-control": "no-store",
     });
 
+  // Run 26: day by day for the accountant (no buyer data, so orders.read is enough).
+  app.get(`${ADMIN}/reports/daily`, ...admin, can("ticketing.orders.read"), async (c) => {
+    const q = api.ReportQuery.parse(c.req.query());
+    return c.json({ report: await reports.dailyReport(deps.db, c.get("scope"), q) });
+  });
+
+  app.get(`${ADMIN}/reports/daily.csv`, ...admin, can("ticketing.orders.read"), async (c) => {
+    const q = api.ReportQuery.parse(c.req.query());
+    const report = await reports.dailyReport(deps.db, c.get("scope"), q);
+    await catalog.writeAudit(deps.db, c.get("scope"), actor(c), "reports.daily_exported", { type: "brand", id: c.get("scope").brandId }, { days: report.days.length, ...q });
+    return csv(
+      c,
+      "alkao-ventes-par-jour.csv",
+      toCsv(
+        ["day", "orders", "subtotal_cents", "tax_cents", "gst_cents", "qst_cents", "gross_cents", "refunds", "refunded_cents", "commission_cents", "commission_refunded_cents", "net_to_client_cents"],
+        report.days.map((d) => [d.day, d.orders, d.subtotalCents, d.taxCents, d.gstCents, d.qstCents, d.grossCents, d.refunds, d.refundedCents, d.commissionCents, d.commissionRefundedCents, d.netToClientCents]),
+      ),
+    );
+  });
+
   app.get(`${ADMIN}/reports/attendees.csv`, ...admin, can("ticketing.buyers.read"), async (c) => {
     const { sessionId } = api.AttendeesQuery.parse(c.req.query());
     const rows = await reports.attendeesRows(deps.db, c.get("scope"), sessionId);

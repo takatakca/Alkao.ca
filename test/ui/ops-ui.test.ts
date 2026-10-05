@@ -74,7 +74,8 @@ describe("ALKAO Operations app", () => {
     await page.goto(`${origin}/ops#/`);
     await page.getByText("Havana Resort — Événements").click();
     await page.getByRole("heading", { name: "Tableau de bord" }).waitFor();
-    expect(await page.getByText("Ventes brutes").isVisible()).toBe(true);
+    // The figures load after the page frame (Run 26).
+    await page.getByText("Ventes brutes").waitFor();
     expect(await page.getByText("Net client (avant frais Stripe)").isVisible()).toBe(true);
     // FESTI-ICE (another Client) is not offered to a Havana-only owner.
     await page.goto(`${origin}/ops#/`);
@@ -385,6 +386,24 @@ describe("ALKAO Operations app", () => {
     await page.getByRole("button", { name: "Réessayer" }).click();
     // This test deployment has no Stripe: the retry reaches ALKAO, which says so.
     await page.getByRole("alert").getByText("Paiements non configurés", { exact: false }).waitFor();
+  });
+
+  it("reports a chosen period, day by day, and exports it for the accountant (Run 26)", async () => {
+    const page = await signedIn(seed.users.havanaOwner);
+    await page.goto(`${origin}/ops#${brandPath()}/dashboard`);
+    await page.getByRole("heading", { name: "Par jour" }).waitFor();
+    const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Toronto", dateStyle: "short" }).format(new Date());
+    await page.getByRole("cell", { name: today }).waitFor();
+    // Last month: nothing was sold then.
+    await page.getByLabel("Période").selectOption("lastMonth");
+    await page.getByText("Aucune vente ni aucun remboursement sur cette période.").waitFor();
+    await page.getByLabel("Période").selectOption("today");
+    await page.getByRole("cell", { name: today }).waitFor();
+    const [file] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: "Exporter par jour (CSV)" }).click()]);
+    expect(file.suggestedFilename()).toBe("alkao-ventes-par-jour.csv");
+    const csv = await new Response((await file.createReadStream()) as unknown as ReadableStream).text();
+    expect(csv.split("\r\n")[0]).toMatch(/^day,orders,subtotal_cents,tax_cents,gst_cents,qst_cents/);
+    expect(csv).toContain(`${today},`);
   });
 
   it("hides money from gate staff", async () => {
