@@ -76,6 +76,10 @@ How it behaves:
 5. Make a test purchase. You should see the payment on the Client's Stripe account, the
    tickets email, QR codes on `/billets`, and a scan at the gate.
 
+6. Set up monitoring before the first sale. Point the uptime service at `/health/ready`, set
+   `ALKAO_METRICS_TOKEN`, and add the alerts listed in [ALKAO_RUNBOOK.md](ALKAO_RUNBOOK.md).
+   Keep the runbook at hand on event days.
+
 ## 5. TAKATAK dashboard (optional, later)
 
 takatakca/takatak-v1#95 adds the "ALKAO — Billetterie" menu. It is add-only and off by

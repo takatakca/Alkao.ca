@@ -424,6 +424,7 @@ manager only.
 | `ALKAO_PUBLIC_URL` | — | Public HTTPS origin of ALKAO: buyers' `/billets` links (email worker) and the hosted shop's Stripe return pages (server) |
 | `RESEND_API_KEY` / `ALKAO_EMAIL_FROM` | — | Email worker: Resend API key and the verified sender address (the Brand name is the display name) |
 | `ALKAO_EMAIL_MAX_AGE_HOURS` | `72` | Emails queued longer ago are skipped, never sent late |
+| `ALKAO_METRICS_TOKEN` | — | Bearer token (≥ 32 chars) for `GET /metrics`: platform-wide health counts in the Prometheus text format (Run 24). Without it, `/metrics` answers `404`. Alerts in [ALKAO_RUNBOOK.md](ALKAO_RUNBOOK.md) |
 
 Stripe webhook events to send to `/v1/webhooks/stripe` (Connect endpoint, events on connected
 accounts): `checkout.session.completed`, `checkout.session.expired`,

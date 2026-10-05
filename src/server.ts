@@ -20,6 +20,7 @@ const app = createApp({
   opsUi: config.opsUi,
   publicUrl: config.publicUrl,
   trustedProxyHops: config.trustedProxyHops,
+  metricsToken: config.metricsToken,
   logRequests: process.env.ALKAO_LOG_REQUESTS !== "false",
 });
 

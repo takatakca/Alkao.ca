@@ -370,6 +370,23 @@ describe("ALKAO Operations app", () => {
     await page.getByText("activé", { exact: true }).waitFor();
   });
 
+  it("offers to retry a refund Stripe has not settled (Run 24)", async () => {
+    const f = seed.festi;
+    const order = await seedPaidOrder(db.pool, f, "reessayer@example.com");
+    await db.pool.query(
+      `INSERT INTO public.ticketing_refunds (client_id, brand_id, event_id, order_id, amount_cents, commission_refund_cents, requested_by, last_error)
+       VALUES ($1, $2, $3, $4, 500, 0, 'user', 'refund_payment')`,
+      [f.clientId, f.brandId, f.eventId, order.orderId],
+    );
+    const page = await signedIn(seed.users.festiOwner);
+    await page.goto(`${origin}/ops#/c/${f.clientId}/b/${f.brandId}/order/${order.orderId}`);
+    await page.getByRole("heading", { name: "Remboursements" }).waitFor();
+    expect(await page.getByText("(refund_payment)").isVisible()).toBe(true);
+    await page.getByRole("button", { name: "Réessayer" }).click();
+    // This test deployment has no Stripe: the retry reaches ALKAO, which says so.
+    await page.getByRole("alert").getByText("Paiements non configurés", { exact: false }).waitFor();
+  });
+
   it("hides money from gate staff", async () => {
     const page = await signedIn(seed.users.havanaStaff);
     await page.goto(`${origin}/ops#${brandPath()}/dashboard`);

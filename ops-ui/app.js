@@ -269,7 +269,7 @@ function Attention({ a, prefix }) {
   return html`<section class="card attention" aria-labelledby="todo-title">
     <h2 id="todo-title">À traiter (${a.total})</h2>
     ${group("Litiges Stripe ouverts", a.disputes, (d) => html`${order(d.orderId, d.reference)} · ${d.buyerName ?? d.buyerEmail} · ${money(d.amountCents)} · ${DISPUTE_FR[d.status] ?? d.status}${d.evidenceDueBy ? ` · réponse avant le ${when(d.evidenceDueBy)}` : ""}`)}
-    ${group("Remboursements bloqués chez Stripe", a.refunds, (r) => html`${order(r.orderId, r.reference)} · ${money(r.amountCents)} · depuis le ${when(r.createdAt)}${r.lastError ? ` · ${r.lastError}` : ""} — ouvrez la commande pour réessayer`)}
+    ${group("Remboursements bloqués chez Stripe", a.refunds, (r) => html`${order(r.orderId, r.reference)} · ${money(r.amountCents)} · depuis le ${when(r.createdAt)}${r.lastError ? ` · ${r.lastError}` : ""} — « Réessayer » sur la commande`)}
     ${group("Courriels non reçus", a.emails, (e) => html`${order(e.orderId, e.reference)} · ${EMAIL_KIND_FR[e.kind] ?? e.kind} · ${e.buyerEmail}${e.lastError ? ` · ${e.lastError}` : ""}`)}
     ${group("Remboursés dans Stripe, billets encore valides", a.outsideRefunds, (r) => html`${order(r.orderId, r.reference)} · ${money(r.outsideCents)} remboursés hors ALKAO`)}
     ${group("Annulations de séance à reprendre", a.cancellations, (c) => html`<a href=${`#${prefix}/event/${c.eventId}`}>Séance du ${when(c.startsAt)}</a> · ${c.failed} remboursement${c.failed > 1 ? "s" : ""} en échec`)}
@@ -489,6 +489,11 @@ function OrderDetail({ api, base, orderId }) {
   const reissue = (ticketId) => act(async () => { await api(`${base}/tickets/${ticketId}/credential/reissue`, { method: "POST" }); setMessage("Nouveau code QR émis ; l'ancien ne fonctionne plus."); });
   const resendEmail = act(async () => { await api(`${base}/orders/${orderId}/tickets-email`, { method: "POST" }); setMessage(`Billets renvoyés à ${o.buyerEmail}.`); reloadOrder(); });
   const toggle = (id) => setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
+  // Run 24: a refund Stripe failed on or never settled, tried again (the same refund, never a second one).
+  const retryRefund = (refundId) => act(async () => {
+    await api(`${base}/refunds/${refundId}/retry`, { method: "POST" });
+    setMessage("Remboursement effectué."); reloadOrder(); reloadRefunds();
+  });
   // Run 21: cancel the checked tickets without refunding them (after a dispute, a refund made in Stripe…).
   const voidSelected = act(async () => {
     if (!confirm(`Annuler ${selected.length} billet(s) sans remboursement ? Leurs codes QR ne fonctionneront plus et les places seront remises en vente.`)) return;
@@ -545,8 +550,9 @@ function OrderDetail({ api, base, orderId }) {
         <p class="muted">À la demande de l'acheteur. L'anonymisation est possible une fois ses séances passées, sans remboursement en cours ni litige ouvert.</p>`}
     </div>
     <h2>Remboursements</h2>
-    ${refunds.loading ? html`<${Loading} />` : html`<table><thead><tr><th>Date</th><th>Statut</th><th class="num">Montant</th><th class="num">Commission rendue</th><th>Motif</th></tr></thead>
-      <tbody>${(refunds.data?.refunds ?? []).map((r) => html`<tr><td>${when(r.createdAt)}</td><td><${Badge} status=${r.status} /></td><td class="num">${money(r.amountCents)}</td><td class="num">${money(r.commissionRefundCents)}</td><td>${r.reason ?? ""}</td></tr>`)}</tbody></table>`}`;
+    ${refunds.loading ? html`<${Loading} />` : html`<table><thead><tr><th>Date</th><th>Statut</th><th class="num">Montant</th><th class="num">Commission rendue</th><th>Motif</th><th></th></tr></thead>
+      <tbody>${(refunds.data?.refunds ?? []).map((r) => html`<tr><td>${when(r.createdAt)}</td><td><${Badge} status=${r.status} /></td><td class="num">${money(r.amountCents)}</td><td class="num">${money(r.commissionRefundCents)}</td><td>${r.reason ?? ""}${r.lastError ? html` <span class="muted">(${r.lastError})</span>` : ""}</td>
+        <td>${r.status === "pending" && html`<button class="secondary" onClick=${retryRefund(r.id)}>Réessayer</button>`}</td></tr>`)}</tbody></table>`}`;
 }
 
 // ── Scanner ─────────────────────────────────────────────────────────────────

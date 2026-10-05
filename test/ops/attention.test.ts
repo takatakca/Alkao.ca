@@ -99,6 +99,42 @@ describe("the to-do list", () => {
   });
 });
 
+describe("a cancellation refund retried from the order", () => {
+  it("leaves the list once the retried refund has succeeded", async () => {
+    const t = seed.havana;
+    const order = await orderFor(t, "reessai@example.com", "12 days");
+    const { rows: job } = await db.pool.query<{ id: string }>(
+      `INSERT INTO public.ticketing_session_cancellations (client_id, brand_id, event_id, session_id, reason)
+       VALUES ($1, $2, $3, $4, 'neige') RETURNING id`,
+      [t.clientId, t.brandId, t.eventId, order.sessionId],
+    );
+    const { rows: refund } = await db.pool.query<{ id: string }>(
+      `INSERT INTO public.ticketing_refunds (client_id, brand_id, event_id, order_id, amount_cents, commission_refund_cents, requested_by, last_error)
+       VALUES ($1, $2, $3, $4, 500, 0, 'system', 'refund_payment') RETURNING id`,
+      [t.clientId, t.brandId, t.eventId, order.orderId],
+    );
+    await db.pool.query(
+      `INSERT INTO public.ticketing_session_cancellation_orders (cancellation_id, client_id, brand_id, event_id, order_id, status, refund_id, attempts)
+       VALUES ($1, $2, $3, $4, $5, 'failed', $6, 5)`,
+      [job[0]!.id, t.clientId, t.brandId, t.eventId, order.orderId, refund[0]!.id],
+    );
+    const sessions = async () => (await attention(t, seed.users.havanaOwner)).body.attention.cancellations.map((c: { sessionId: string }) => c.sessionId);
+    expect(await sessions()).toContain(order.sessionId);
+
+    // Staff press "Réessayer" on the order and Stripe settles it: what the ledger then holds.
+    const tx = await db.pool.connect();
+    try {
+      await tx.query("BEGIN");
+      await tx.query(`UPDATE public.ticketing_refunds SET status = 'succeeded', last_error = NULL WHERE id = $1`, [refund[0]!.id]);
+      await tx.query(`UPDATE public.ticketing_orders SET refunded_cents = 500, status = 'partially_refunded' WHERE id = $1`, [order.orderId]);
+      await tx.query("COMMIT");
+    } finally {
+      tx.release();
+    }
+    expect(await sessions()).not.toContain(order.sessionId);
+  });
+});
+
 describe("cancelling tickets without a refund", () => {
   it("voids the chosen tickets, frees their seats, revokes their QR codes and clears the list", async () => {
     const t = seed.havana;
