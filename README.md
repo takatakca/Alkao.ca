@@ -103,3 +103,4 @@ TAKATAK membership (set `SUPABASE_URL` and `SUPABASE_ANON_KEY`). See
 | Run 25 | Isolation sweep extended to every route of Runs 18–24, with a mutation check; security review addendum |
 | Run 26 | Sales by period (today, 7 days, month, last month) and by day, with TPS and TVQ, refunds on their own day and commission; CSV for the accountant |
 | Run 27 | "Retrouver mes billets" on the shop: the tickets are sent again to the address that bought them; same answer whatever the address, rate-limited |
+| Run 28 | Duplicate an event: a draft copy with the same ticket types, and its sessions moved by N days when asked |

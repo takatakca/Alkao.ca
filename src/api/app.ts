@@ -26,6 +26,7 @@ import { CredentialsService } from "../scanner/service.js";
 import { toCsv } from "../ops/csv.js";
 import * as findTickets from "../delivery/find-tickets.js";
 import * as attention from "../ops/attention.js";
+import * as duplicate from "../ops/duplicate.js";
 import * as metrics from "../ops/metrics.js";
 import * as reminders from "../delivery/reminders.js";
 import * as privacy from "../ops/privacy.js";
@@ -448,6 +449,14 @@ export function createApp(deps: AppDeps) {
     const eventId = param(c, "eventId");
     if (!eventId) return fail(c, 404, "event_not_found");
     return c.json({ event: await catalog.getEvent(deps.db, c.get("scope"), eventId) });
+  });
+
+  // Run 28: a new draft event from this one (same ticket types; sessions moved if asked).
+  app.post(`${ADMIN}/events/:eventId/duplicate`, ...admin, can("ticketing.catalog.write"), async (c) => {
+    const eventId = param(c, "eventId");
+    if (!eventId) return fail(c, 404, "event_not_found");
+    const body = api.DuplicateEventRequest.parse(await readJson(c));
+    return c.json(await duplicate.duplicateEvent(deps.db, c.get("scope"), eventId, body, actor(c)), 201);
   });
 
   app.patch(`${ADMIN}/events/:eventId`, ...admin, can("ticketing.catalog.write"), async (c) => {
