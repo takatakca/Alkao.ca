@@ -305,6 +305,7 @@ The Operations app shows each event's shop link and its button code, ready to co
 | GET | `/v1/admin/…/orders?q=` | `orders.read` | Search by reference prefix, email prefix (case-insensitive) or part of the buyer's name. At least 2 characters; `%` and `_` are taken literally |
 | GET | `/v1/admin/…/sessions/:sessionId/attendance` | `scan` | `{ capacity, valid, admitted }`, the gate's live counter |
 | GET | `/health/ready` | none | `200` when the database answers within 2 s, `503` otherwise (for the load balancer). `/health` stays a plain liveness check |
+| GET | `/health/client` | none | Run 39: `{ ok, client }`, where `client` is `public`, `private` or `unknown`: whether ALKAO sees the caller's own public address behind the host's proxies (per-buyer rate limits depend on it, see `ALKAO_TRUSTED_PROXY_HOPS`). Never the address itself |
 
 The server logs one JSON line per request: method, **route pattern** (never ids, query
 strings or headers), status and duration. Set `ALKAO_LOG_REQUESTS=false` to turn it off.

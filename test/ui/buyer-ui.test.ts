@@ -40,11 +40,15 @@ afterAll(async () => {
 
 const typeId = (t: TenantFixture, code: string) => t.types.find((x) => x.code === code)!.id;
 
+// Each new session a quarter-hour after the previous one: the page labels sessions to the
+// minute, and two at the same minute could not be told apart (a random minute sometimes did).
+let sessionCount = 0;
 async function session(t: TenantFixture) {
+  sessionCount += 1;
   const { rows } = await db.pool.query<{ id: string }>(
     `INSERT INTO public.ticketing_sessions (client_id, brand_id, event_id, starts_at, capacity, status)
-     VALUES ($1, $2, $3, now() + interval '12 days' + (random() * interval '1 hour'), 40, 'on_sale') RETURNING id`,
-    [t.clientId, t.brandId, t.eventId],
+     VALUES ($1, $2, $3, date_trunc('minute', now()) + interval '12 days' + make_interval(mins => $4 * 15), 40, 'on_sale') RETURNING id`,
+    [t.clientId, t.brandId, t.eventId, sessionCount],
   );
   return rows[0]!.id;
 }

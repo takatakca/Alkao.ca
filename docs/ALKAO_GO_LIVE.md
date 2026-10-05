@@ -28,11 +28,15 @@ with `1` when anything is blocking, so it can also run in a deployment pipeline.
 
 ## 1. Infrastructure
 
+On MochaHost (cPanel), next to TAKATAK, follow
+[ALKAO_DEPLOY_MOCHAHOST.md](ALKAO_DEPLOY_MOCHAHOST.md) (Run 39). It covers the release,
+`.env`, the Supabase database, the cron job instead of the workers, and the Stripe webhook.
+
 | Item | Value |
 |---|---|
 | Database | A database **dedicated to ALKAO**. Never use the TAKATAK or FESTI-ICE database. Two ways: a dedicated Supabase project, migrated with `supabase db push`; or plain PostgreSQL 15+: run `supabase/tests/supabase_shim.sql` once (it creates the Supabase roles and `auth.uid()`), then `npm run db:migrate`. The migrations install the `pg_trgm` extension (bundled with PostgreSQL and available on Supabase) for the staff order search |
 | Auth | The **same Supabase project** as TAKATAK, so staff use their TAKATAK accounts. Set `SUPABASE_JWKS_URL` (or `SUPABASE_JWT_SECRET`), `SUPABASE_URL` and `SUPABASE_ANON_KEY` |
-| Processes | `npm start` (API, `/ops`, `/billets`, `/acheter`), `npm run worker:sweeper`, `npm run worker:email`, `npm run worker:cancellations` |
+| Processes | `npm start` (API, `/ops`, `/billets`, `/acheter`), `npm run worker:sweeper`, `npm run worker:email`, `npm run worker:cancellations`. On a host without long-running processes, one cron job every minute instead: `npm run cron` (Run 39) |
 | Public URL | HTTPS, e.g. `https://billets.example.ca`. Set it as `ALKAO_PUBLIC_URL` for both the server and the email worker |
 
 **Container image.** One image runs the API and every worker:

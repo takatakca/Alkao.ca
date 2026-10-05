@@ -38,7 +38,7 @@ import { exchangeOrder } from "../ops/exchange.js";
 import { mountOpsUi, type OpsUiConfig } from "./ops-ui.js";
 import { mountBuyerUi } from "./buyer-ui.js";
 import { mountShopUi } from "./shop-ui.js";
-import { clientIp } from "./client-ip.js";
+import { clientIp, ipKind } from "./client-ip.js";
 import * as delivery from "../delivery/db.js";
 import { orderEmailToken } from "../delivery/links.js";
 import * as cancellation from "../ops/cancellation.js";
@@ -216,6 +216,10 @@ export function createApp(deps: AppDeps) {
       return c.json({ ok: false, database: "down" }, 503);
     }
   });
+
+  // Run 39: whether ALKAO sees the caller's public address behind the host's proxies (per-buyer
+  // rate limits depend on it). Only the kind of address, never the address itself.
+  app.get("/health/client", (c) => c.json({ ok: true, client: ipKind(clientIp(c, deps.trustedProxyHops ?? 1)) }));
 
   // Run 24: platform health for monitoring (Prometheus text). Platform-wide counts only.
   app.get("/metrics", async (c) => {

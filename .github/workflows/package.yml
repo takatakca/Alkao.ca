@@ -1,0 +1,28 @@
+name: Package
+
+# Run 39: the ready-to-upload MochaHost release (docs/ALKAO_DEPLOY_MOCHAHOST.md), built on
+# Linux for every commit on main, or on demand. Download it from the run's Artifacts.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  mochahost:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: bash scripts/pack-artifact.sh var/artifacts
+      - uses: actions/upload-artifact@v4
+        with:
+          name: alkao-mochahost-${{ github.sha }}
+          path: var/artifacts/*.tar.gz
+          retention-days: 30
+          if-no-files-found: error

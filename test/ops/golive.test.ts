@@ -6,7 +6,8 @@ import { serve, type ServerType } from "@hono/node-server";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { listMigrations } from "../../src/db/migrate.js";
 import { checkDatabase, checkEnvironment, checkLive, type Check } from "../../src/ops/golive.js";
-import { testApp, type TestApp } from "../helpers/app.js";
+import { ipKind } from "../../src/api/client-ip.js";
+import { call, testApp, type TestApp } from "../helpers/app.js";
 import { createTestDatabase, type TestDatabase } from "../helpers/db.js";
 import { FakeGateway } from "../helpers/fake-gateway.js";
 import { seedTwoTenants, TEST_CREDENTIAL_SECRET, type SeedResult } from "../helpers/seed.js";
@@ -192,11 +193,25 @@ describe("go-live check: the running service", () => {
 
   it("checks HTTPS and HSTS behind the real address", async () => {
     app = ready({ publicUrl: "https://billets.alkao.test", paymentsMode: "test" });
-    const viaProxy: typeof fetch = async (input, init) => app.fetch(new Request(String(input).replace("https://billets.alkao.test", "http://localhost"), init));
-    const checks = await checkLive("https://billets.alkao.test", { fetch: viaProxy });
+    // The host's proxy in front, adding the buyer's address as the last X-Forwarded-For entry.
+    const viaProxy = (forwardedFor: string | null): typeof fetch => async (input, init) => {
+      const req = new Request(String(input).replace("https://billets.alkao.test", "http://localhost"), init);
+      if (forwardedFor) req.headers.set("x-forwarded-for", forwardedFor);
+      return app.fetch(req);
+    };
+    const checks = await checkLive("https://billets.alkao.test", { fetch: viaProxy("203.0.113.9") });
     expect(of(checks, "fail")).toEqual([]);
-    expect(of(checks, "ok")).toEqual(expect.arrayContaining(["Site en ligne : https://billets.alkao.test en HTTPS", "En-têtes de sécurité : HSTS actif"]));
+    expect(of(checks, "ok")).toEqual(expect.arrayContaining([
+      "Site en ligne : https://billets.alkao.test en HTTPS", "En-têtes de sécurité : HSTS actif",
+      "En-têtes de sécurité : ALKAO voit l'adresse de chaque acheteur (limites par acheteur)",
+    ]));
     expect(of(checks, "warn")).toEqual(["Paiements Stripe : Mode TEST : aucun vrai paiement, bandeau affiché aux acheteurs"]);
+
+    // Without the buyer's address (a wrong ALKAO_TRUSTED_PROXY_HOPS), every buyer would share one limit.
+    const blind = await checkLive("https://billets.alkao.test", { fetch: viaProxy(null) });
+    expect(of(blind, "warn")).toContain(
+      "En-têtes de sécurité : ALKAO ne voit pas l'adresse des acheteurs (unknown) : en pleine vente, tous partageraient la même limite de réservations",
+    );
   });
 
   it("names what a half-configured deployment is missing", async () => {
@@ -212,6 +227,16 @@ describe("go-live check: the running service", () => {
       `Boutique : ALKAO_PUBLIC_URL (https://ailleurs.alkao.test) n'est pas l'adresse vérifiée (${origin})`,
       "En-têtes de sécurité : /metrics coupé : aucune alerte possible",
     ]);
+  });
+
+  it("tells a buyer's public address from a proxy's or none", async () => {
+    expect(["203.0.113.9", "2001:db8::1", "::ffff:198.51.100.7"].map(ipKind)).toEqual(["public", "public", "public"]);
+    expect(["10.0.0.5", "172.20.1.1", "192.168.1.2", "127.0.0.1", "100.64.0.1", "::1", "fd00::1", "fe80::1"].map(ipKind)).toEqual(Array(8).fill("private"));
+    expect(["", "unknown"].map(ipKind)).toEqual(["unknown", "unknown"]);
+    const local = testApp(db.pool);
+    expect((await call(local, "GET", "/health/client", { headers: { "x-forwarded-for": "10.1.1.1, 203.0.113.9" } })).body).toEqual({ ok: true, client: "public" });
+    expect((await call(local, "GET", "/health/client", { headers: { "x-forwarded-for": "10.0.0.5" } })).body).toEqual({ ok: true, client: "private" });
+    expect((await call(local, "GET", "/health/client")).body).toEqual({ ok: true, client: "unknown" });
   });
 
   it("says when it cannot reach the service, or it is not served over HTTPS", async () => {

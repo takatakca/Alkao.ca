@@ -23,7 +23,9 @@
     "worker:cancellations": "tsx scripts/cancellation-worker.ts",
     "control:apply": "tsx scripts/control-apply.ts",
     "db:migrate": "tsx scripts/migrate.ts",
-    "check:golive": "tsx scripts/golive-check.ts"
+    "check:golive": "tsx scripts/golive-check.ts",
+    "cron": "tsx scripts/cron.ts",
+    "pack:mochahost": "bash scripts/pack-artifact.sh"
   },
   "dependencies": {
     "@hono/node-server": "^2.1.3",
