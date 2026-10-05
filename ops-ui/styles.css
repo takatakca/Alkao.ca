@@ -63,3 +63,8 @@ a.link, button.link { background: none; border: 0; color: var(--brand); padding:
 video.camera { width: 100%; max-width: 420px; border-radius: 12px; background: #000; }
 input.scan { font-size: 1.1rem; width: 100%; }
 .big { font-size: 1.6rem; font-variant-numeric: tabular-nums; }
+/* Run 21: the dashboard's "À traiter" list. */
+.attention { border-left: 4px solid var(--bad); }
+.attention h2 { margin-top: 0; }
+.attention h3 { font-size: 1rem; margin: 1rem 0 .3rem; }
+.attention ul { margin: 0; padding-left: 1.2rem; }

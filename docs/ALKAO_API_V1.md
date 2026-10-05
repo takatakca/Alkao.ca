@@ -347,6 +347,27 @@ buyer changes nothing.
 **Outside ALKAO.** The buyer's email also sits in the Client's Stripe account (the
 checkout) and in the email provider's logs. Those are the Client's to handle.
 
+### What waits on staff, and tickets cancelled without a refund (Run 21)
+
+| Method | Path | Permission | Result |
+|---|---|---|---|
+| GET | `/v1/admin/…/attention` | `orders.read` | `{ attention: { refunds, emails, disputes, outsideRefunds, cancellations, total } }`, up to 50 of each, each with what is needed to act |
+| POST | `/v1/admin/…/orders/:orderId/tickets/void` | `refunds.create` | `{ ticketIds, reason? }` → `{ voided }`. Cancels those tickets **without a refund**: the seats go back on sale and the QR codes stop working. Logged as `tickets.voided` |
+
+Each list keeps only what someone can still act on, so it empties as the work gets done.
+
+| List | What it holds |
+|---|---|
+| `refunds` | Pending refunds that Stripe failed on, or that have not settled after 15 minutes. Retried from the order |
+| `emails` | Emails that failed or were never sent. Ticket emails are listed while the session is still to come; refund and cancellation notices for 30 days. Anonymized buyers are left out |
+| `disputes` | Open Stripe disputes (Run 19) |
+| `outsideRefunds` | Refunds made in Stripe on orders whose tickets are still valid for a session to come |
+| `cancellations` | Cancelled sessions where some buyers could not be refunded |
+
+**Voiding tickets.** Tickets of the order and of its Flex exchange can be voided. A ticket
+already used at the gate, already void or belonging to another order is refused
+(`ticket_already_used`, `invalid_ticket`). The order's money and status are untouched.
+
 ### Role → permission
 
 | Role | catalog.read · inventory.read · holds.read | catalog.write | orders.read · buyers.read | audit.read |
