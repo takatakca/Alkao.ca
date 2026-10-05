@@ -35,7 +35,7 @@ versioned control contract.
 | `supabase/migrations` | Schema. Every `ticketing_*` table enables RLS in the migration that creates it |
 | `supabase/tests/supabase_shim.sql` | Local test stand-in for Supabase roles, `auth.uid()` and default grants |
 | `test/` | Domain, RLS, invariant and migration-rule tests |
-| `docs/` | Capability status, [API v1](docs/ALKAO_API_V1.md), [control contract v1](docs/ALKAO_CONTROL_CONTRACT_V1.md), [credentials and gates](docs/ALKAO_SCANNER_V1.md) |
+| `docs/` | Capability status, [API v1](docs/ALKAO_API_V1.md), [control contract v1](docs/ALKAO_CONTROL_CONTRACT_V1.md), [credentials and gates](docs/ALKAO_SCANNER_V1.md), [go-live](docs/ALKAO_GO_LIVE.md), [runbook](docs/ALKAO_RUNBOOK.md) |
 
 ## Run the checks
 
@@ -93,3 +93,10 @@ TAKATAK membership (set `SUPABASE_URL` and `SUPABASE_ANON_KEY`). See
 | Run 15 | Sales-rush stress tests through the real API: no overselling under 200 concurrent buyers, single fulfilment of duplicated webhooks, single payout for double-clicked refunds, exchanges and cancellations |
 | Run 16 | English for buyers: shop, `/billets` and emails in French by default or English on request (`?lang=en`, switch, browser), the buyer's language kept for later emails, `data-lang` on the website button |
 | Run 17 | Accessibility: axe-core WCAG 2.1 AA audit of every buyer and staff page in light and dark mode; dark-mode contrast fixed in all three apps |
+| Run 18 | Volume: indexed order search (reference, email, part of the name), period reports and email worker lookups stay on their indexes at tens of thousands of tickets |
+| Run 19 | Stripe disputes (chargebacks) and refunds made directly in Stripe: recorded, audited and shown to staff, with gate entry times as evidence; nothing moves on its own |
+| Run 20 | Québec Law 25: export a buyer's data, anonymize a buyer (owner, admin) without touching amounts, tickets or reports |
+| Run 21 | "À traiter": everything waiting on staff in one list; cancel tickets without a refund |
+| Run 22 | At the gate without a QR code: find the order by reference (no buyer data for gate staff), admit by hand under the scan rules |
+| Run 23 | Reminder email during the 24 hours before the session, on or off per Brand |
+| Run 24 | `GET /metrics` for monitoring (token, platform-wide counts only), retry button for stuck refunds, [incident runbook](docs/ALKAO_RUNBOOK.md) |

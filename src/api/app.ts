@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { Hono, type Context, type MiddlewareHandler } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import * as api from "../contracts/api-v1.js";
@@ -25,6 +25,7 @@ import * as credentialsDb from "../db/credentials.js";
 import { CredentialsService } from "../scanner/service.js";
 import { toCsv } from "../ops/csv.js";
 import * as attention from "../ops/attention.js";
+import * as metrics from "../ops/metrics.js";
 import * as reminders from "../delivery/reminders.js";
 import * as privacy from "../ops/privacy.js";
 import * as reports from "../ops/reports.js";
@@ -60,6 +61,8 @@ export interface AppDeps {
   trustedProxyHops?: number;
   /** Log one line per request (route pattern, status, duration). */
   logRequests?: boolean;
+  /** Bearer token for GET /metrics (Run 24); without it the route answers 404. */
+  metricsToken?: string | null;
   now?: () => Date;
 }
 
@@ -202,6 +205,18 @@ export function createApp(deps: AppDeps) {
     } catch {
       return c.json({ ok: false, database: "down" }, 503);
     }
+  });
+
+  // Run 24: platform health for monitoring (Prometheus text). Platform-wide counts only.
+  app.get("/metrics", async (c) => {
+    if (!deps.metricsToken) return fail(c, 404, "not_found");
+    const given = /^Bearer (.+)$/.exec(c.req.header("authorization") ?? "")?.[1] ?? "";
+    const digest = (v: string) => createHash("sha256").update(v).digest();
+    if (!timingSafeEqual(digest(given), digest(deps.metricsToken))) return fail(c, 401, "unauthorized");
+    return c.body(await metrics.collectMetrics(deps.db, now()), 200, {
+      "content-type": "text/plain; version=0.0.4; charset=utf-8",
+      "cache-control": "no-store",
+    });
   });
 
   // ── Control contract (TAKATAK → ALKAO) ───────────────────────────────────

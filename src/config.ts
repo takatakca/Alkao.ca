@@ -33,6 +33,8 @@ const EnvSchema = z.object({
   ALKAO_TRUSTED_PROXY_HOPS: z.coerce.number().int().min(0).max(5).default(1),
   ALKAO_HOLD_TTL_SECONDS: z.coerce.number().int().min(60).max(1800).default(600),
   ALKAO_PUBLIC_HOLDS_PER_MINUTE: z.coerce.number().int().min(1).max(1000).default(20),
+  /** Bearer token for GET /metrics (Run 24). Without it, /metrics does not exist. */
+  ALKAO_METRICS_TOKEN: z.string().min(32).optional(),
   PORT: z.coerce.number().int().min(1).max(65535).default(8787),
   NODE_ENV: z.string().optional(),
 });
@@ -50,6 +52,7 @@ export interface Config {
   opsUi: { supabaseUrl: string | null; supabaseAnonKey: string | null; frameAncestors: string[] };
   publicUrl: string | null;
   trustedProxyHops: number;
+  metricsToken: string | null;
   port: number;
 }
 
@@ -97,6 +100,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     },
     publicUrl: e.ALKAO_PUBLIC_URL ?? null,
     trustedProxyHops: e.ALKAO_TRUSTED_PROXY_HOPS,
+    metricsToken: e.ALKAO_METRICS_TOKEN ?? null,
     port: e.PORT,
   };
 }

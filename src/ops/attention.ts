@@ -64,14 +64,18 @@ export async function attentionList(db: Db, s: TenantScope, now = new Date()) {
     // Cancelled sessions whose buyers could not all be refunded.
     db.query(
       `SELECT c.session_id, c.event_id, se.starts_at, c.status,
-              count(*) FILTER (WHERE i.status = 'failed')::int AS failed,
+              count(*) FILTER (WHERE i.status = 'failed' AND NOT i.settled)::int AS failed,
               count(*) FILTER (WHERE i.status = 'pending')::int AS pending
        FROM public.ticketing_session_cancellations c
        JOIN public.ticketing_sessions se ON se.id = c.session_id
-       JOIN public.ticketing_session_cancellation_orders i ON i.cancellation_id = c.id
+       -- A failed item whose refund was then retried successfully from the order is settled.
+       CROSS JOIN LATERAL (
+         SELECT ci.status, EXISTS (SELECT 1 FROM public.ticketing_refunds r WHERE r.id = ci.refund_id AND r.status = 'succeeded') AS settled
+         FROM public.ticketing_session_cancellation_orders ci WHERE ci.cancellation_id = c.id
+       ) i
        WHERE c.client_id = $1 AND c.brand_id = $2
        GROUP BY c.session_id, c.event_id, se.starts_at, c.status
-       HAVING count(*) FILTER (WHERE i.status = 'failed') > 0
+       HAVING count(*) FILTER (WHERE i.status = 'failed' AND NOT i.settled) > 0
        ORDER BY se.starts_at LIMIT ${LIMIT}`,
       [s.clientId, s.brandId],
     ),

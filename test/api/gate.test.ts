@@ -27,6 +27,8 @@ afterAll(async () => {
 const UNGATED = new Set([
   "GET /health",
   "GET /health/ready",
+  // Run 24: protected by its own bearer token (404 without one), platform-wide counts only.
+  "GET /metrics",
   "POST /v1/control/events",
   "POST /v1/control/state",
   "POST /v1/webhooks/stripe",
