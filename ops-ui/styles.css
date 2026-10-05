@@ -72,3 +72,5 @@ input.scan { font-size: 1.1rem; width: 100%; }
 fieldset.days { display: flex; flex-wrap: wrap; gap: .5rem; border: 1px solid var(--line); border-radius: 8px; padding: .35rem .6rem; margin: 0; }
 fieldset.days legend { font-size: .8rem; color: var(--muted); padding: 0 .25rem; }
 form.card > h3 { font-size: .98rem; margin: 0 0 .6rem; }
+/* Run 35: "Vente à la porte", a link that looks like a button. */
+a.button { display: inline-block; padding: .5rem .9rem; border-radius: 8px; border: 1px solid var(--brand); background: var(--brand); color: var(--brand-ink); text-decoration: none; }

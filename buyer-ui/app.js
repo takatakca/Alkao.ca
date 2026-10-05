@@ -42,6 +42,7 @@ const T = {
     footer: "Billetterie ALKAO · Ce lien est personnel : ne le partagez pas.",
     other: "English",
     addToCalendar: "Ajouter à mon calendrier",
+    nextSale: "Nouvelle vente à la porte",
     calendarText: (ref, brand) => `${brand} · Commande ${ref}. Vos billets sont dans votre courriel de confirmation.`,
   },
   en: {
@@ -77,6 +78,7 @@ const T = {
     footer: "ALKAO Ticketing · This link is personal: do not share it.",
     other: "Français",
     addToCalendar: "Add to my calendar",
+    nextSale: "Next door sale",
     calendarText: (ref, brand) => `${brand} · Order ${ref}. Your tickets are in your confirmation email.`,
   },
 }[LANG];
@@ -84,7 +86,7 @@ const T = {
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const link = (() => {
   const p = new URLSearchParams(location.hash.slice(1));
-  const l = { c: p.get("c"), b: p.get("b"), o: p.get("o"), k: p.get("k") };
+  const l = { c: p.get("c"), b: p.get("b"), o: p.get("o"), k: p.get("k"), door: p.get("porte") === "1" };
   return UUID.test(l.c ?? "") && UUID.test(l.b ?? "") && UUID.test(l.o ?? "") && /^[A-Za-z0-9_-]{20,100}$/.test(l.k ?? "") ? l : null;
 })();
 const base = link && `/v1/public/clients/${link.c}/brands/${link.b}`;
@@ -205,6 +207,7 @@ function App() {
     ${valid.length > 0 && html`<p class="muted">${T.present(valid.length)}</p>`}
     ${o.tickets.map((t) => html`<${Ticket} t=${t} name=${names.get(t.ticketTypeId) ?? T.ticket} />`)}
     ${o.canChangeSession && valid.length > 0 && html`<${ChangeSession} order=${o} token=${link.k} />`}
+    ${link.door && html`<p class="noprint"><a class="button" href=${`/acheter/${link.c}/${link.b}/${o.event.id}?porte=1`}>${T.nextSale}</a></p>`}
     <footer>${T.footer}</footer>
   </main>`;
 }

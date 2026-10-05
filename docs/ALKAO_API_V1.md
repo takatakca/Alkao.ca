@@ -197,6 +197,26 @@ How it works:
 - **Event details:** `GET /v1/public/…/events/:eventId` now also returns `event.brand.name`
   and `event.venue` (name, city, timezone).
 
+**Door sales** (Run 35, owner decision, see [ALKAO_DECISIONS.md](ALKAO_DECISIONS.md)):
+
+- Staff open **Vente à la porte** on the event page in `/ops`. It opens
+  `/acheter/<clientId>/<brandId>/<eventId>?porte=1` on the phone or tablet in their hand.
+- **Payment and commission:**
+  - The payment is the shop's own Stripe Checkout, by card, on the Client's Stripe account,
+    so the TAKATAK commission applies exactly as online.
+  - There is no cash sale in V1, because the commission could not be collected
+    automatically.
+- **What door mode changes:**
+  - Only today's sessions are offered (venue time).
+  - "Retrouver mes billets" is hidden.
+  - The buyer's tickets show on screen as soon as Stripe confirms, with a
+    **Nouvelle vente à la porte** button for the next customer.
+- For short arrival slots, the next slot is minutes away, and the gate opens before it
+  starts (door hours), so the buyer can go straight in.
+- The tickets email is sent as for any order.
+- Door mode only filters what the public shop already shows. It gives no extra right and
+  needs no new route.
+
 ### Session cancellation (Run 10)
 
 When an organizer cancels a session (weather, ice), every buyer is refunded and told.

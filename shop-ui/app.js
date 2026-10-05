@@ -41,6 +41,8 @@ const T = {
     release: "Libérer mes places",
     step1: "1. Choisissez votre séance",
     noSessions: "Aucune séance en vente pour le moment.",
+    doorSale: "Vente à la porte",
+    noSessionsToday: "Aucune séance à vendre aujourd'hui.",
     full: "Complet",
     fewLeft: (n) => `Plus que ${n} places`,
     available: "Places disponibles",
@@ -107,6 +109,8 @@ const T = {
     release: "Release my seats",
     step1: "1. Choose your session",
     noSessions: "No session on sale right now.",
+    doorSale: "Door sale",
+    noSessionsToday: "No session to sell today.",
     full: "Sold out",
     fewLeft: (n) => `Only ${n} seats left`,
     available: "Seats available",
@@ -146,6 +150,11 @@ const T = {
 const switcher = html`<p class="lang"><button class="link" onClick=${() => switchLanguage(LANG === "en" ? "fr" : "en")}>${T.other}</button></p>`;
 
 const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
+// Run 35: door sales. The same shop and the same Stripe payment (so the same commission),
+// on the staff member's phone or tablet, showing only today's sessions. Card only.
+const DOOR = new URLSearchParams(location.search).get("porte") === "1";
+const dayIn = (date, tz) => new Intl.DateTimeFormat("en-CA", { timeZone: tz || "America/Toronto", dateStyle: "short" }).format(date);
+
 const route = (() => {
   const p = location.pathname;
   let m = new RegExp(`^/acheter/merci/(${UUID})/(${UUID})/(${UUID})$`).exec(p);
@@ -247,7 +256,9 @@ function EventShop({ config }) {
   const admissions = data.ticketTypes.filter((t) => t.kind === "admission");
   const addOns = data.ticketTypes.filter((t) => t.kind === "add_on");
   const wanted = items.reduce((n, i) => n + (data.ticketTypes.find((t) => t.id === i.ticketTypeId)?.kind === "admission" ? i.quantity : 0), 0);
-  const session = data.sessions.find((s) => s.id === sessionId);
+  const today = dayIn(new Date(), tz);
+  const sessions = DOOR ? data.sessions.filter((s) => dayIn(new Date(s.startsAt), tz) === today) : data.sessions;
+  const session = sessions.find((s) => s.id === sessionId);
   const set = (id, n) => setQty((q) => ({ ...q, [id]: Math.max(0, n) }));
 
   const reserve = async () => {
@@ -269,12 +280,12 @@ function EventShop({ config }) {
       body: {
         buyer: { email: who.email.trim(), fullName: who.fullName.trim() || null, phone: who.phone.trim() || null, language: LANG },
         successUrl: `${shop}/acheter/merci/${route.c}/${route.b}/${h.id}`,
-        cancelUrl: `${shop}/acheter/${route.c}/${route.b}/${route.eventId}#annule=${h.id}`,
+        cancelUrl: `${shop}/acheter/${route.c}/${route.b}/${route.eventId}${DOOR ? "?porte=1" : ""}#annule=${h.id}`,
       },
     });
-    save(h.id, { orderId: r.order.id, token: r.order.token, holdToken: h.token, buyer: who });
+    save(h.id, { orderId: r.order.id, token: r.order.token, holdToken: h.token, buyer: who, door: DOOR });
     if (r.checkoutUrl) location.assign(r.checkoutUrl);
-    else location.assign(`/billets#${new URLSearchParams({ c: route.c, b: route.b, o: r.order.id, k: r.order.token })}`);
+    else location.assign(`/billets#${new URLSearchParams({ c: route.c, b: route.b, o: r.order.id, k: r.order.token, ...(DOOR ? { porte: "1" } : {}) })}`);
   };
   const pay = async (e) => {
     e.preventDefault(); setBusy(true); setError(null);
@@ -295,7 +306,7 @@ function EventShop({ config }) {
 
   return html`<main>
     ${switcher}
-    <p class="brand">${ev.brand?.name ?? ""}</p>
+    <p class="brand">${ev.brand?.name ?? ""}${DOOR ? html` · <span class="badge">${T.doorSale}</span>` : ""}</p>
     <h1>${ev.title}</h1>
     ${ev.venue && html`<p class="muted">${ev.venue.name}${ev.venue.city ? `, ${ev.venue.city}` : ""}</p>`}
     ${ev.description && html`<p>${ev.description}</p>`}
@@ -303,8 +314,8 @@ function EventShop({ config }) {
 
     ${!hold && html`
       <h2>${T.step1}</h2>
-      ${data.sessions.length === 0 ? html`<p class="muted">${T.noSessions}</p>` : html`<div class="sessions">
-        ${data.sessions.map((s) => html`<button class="session" aria-pressed=${s.id === sessionId ? "true" : "false"} disabled=${s.available === 0} onClick=${() => setSessionId(s.id)}>
+      ${sessions.length === 0 ? html`<p class="muted">${DOOR ? T.noSessionsToday : T.noSessions}</p>` : html`<div class="sessions">
+        ${sessions.map((s) => html`<button class="session" aria-pressed=${s.id === sessionId ? "true" : "false"} disabled=${s.available === 0} onClick=${() => setSessionId(s.id)}>
           <span>${whenFr(s.startsAt, tz)}</span>
           <span class="muted">${s.available === 0 ? T.full : s.available <= 20 ? T.fewLeft(s.available) : T.available}</span></button>`)}
       </div>`}
@@ -345,7 +356,7 @@ function EventShop({ config }) {
         </div>
         ${hold.quote.totalCents > 0 && html`<p class="muted">${T.stripe}</p>`}
       </form>`}
-    ${!hold && html`<${FindTickets} />`}
+    ${!hold && !DOOR && html`<${FindTickets} />`}
     <footer>${T.footer}</footer>
   </main>`;
 }
@@ -388,7 +399,7 @@ function EventList() {
 function Thanks() {
   const s = saved(route.holdId);
   useEffect(() => {
-    if (s) location.replace(`/billets#${new URLSearchParams({ c: route.c, b: route.b, o: s.orderId, k: s.token })}`);
+    if (s) location.replace(`/billets#${new URLSearchParams({ c: route.c, b: route.b, o: s.orderId, k: s.token, ...(s.door ? { porte: "1" } : {}) })}`);
   }, []);
   if (s) return html`<main><p class="boot">${T.opening}</p></main>`;
   return html`<main><h1>${T.thanks}</h1><div class="alert ok" role="status">${T.confirming}</div></main>`;
