@@ -11,6 +11,7 @@ const JS = "text/javascript; charset=utf-8";
 const FILES: Record<string, { path: string; type: string }> = {
   "app.js": { path: join(UI_DIR, "app.js"), type: JS },
   "styles.css": { path: join(UI_DIR, "styles.css"), type: "text/css; charset=utf-8" },
+  "i18n.js": { path: join(UI_DIR, "i18n.js"), type: JS },
   "vendor/htm-preact.js": { path: join(dirname(require.resolve("htm")), "..", "preact", "standalone.mjs"), type: JS },
   "vendor/qrcode.mjs": { path: join(dirname(require.resolve("qrcode-generator")), "qrcode.mjs"), type: JS },
 };

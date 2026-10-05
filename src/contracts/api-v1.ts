@@ -134,6 +134,8 @@ export const CheckoutRequest = z.object({
     email: z.email().max(320),
     fullName: z.string().trim().min(1).max(200).nullish(),
     phone: z.string().trim().max(40).nullish(),
+    /** Language of the buyer's emails (Run 16). */
+    language: z.enum(["fr", "en"]).default("fr"),
   }),
   /** Must use an origin listed in the Brand's checkout settings. */
   successUrl: httpsUrl,

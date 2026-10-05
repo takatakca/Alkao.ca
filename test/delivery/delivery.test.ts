@@ -57,7 +57,7 @@ async function session(t: TenantFixture) {
   return rows[0]!.id;
 }
 
-async function buy(t: TenantFixture, items: Record<string, number>, buyer: { email: string; fullName?: string } = { email: "acheteur@example.com", fullName: "Marie Tremblay" }) {
+async function buy(t: TenantFixture, items: Record<string, number>, buyer: { email: string; fullName?: string; language?: "fr" | "en" } = { email: "acheteur@example.com", fullName: "Marie Tremblay" }) {
   const sessionId = await session(t);
   const h = await call(app, "POST", `${pub(t.clientId, t.brandId)}/holds`, {
     body: { sessionId, items: Object.entries(items).map(([code, quantity]) => ({ ticketTypeId: typeId(t, code), quantity })) },
@@ -339,5 +339,34 @@ describe("refund emails and personal links (Run 12)", () => {
     expect((await call(app, "GET", `${pub(f.clientId, f.brandId)}/orders/${o.orderId}`, { headers: { "x-alkao-order-token": o.token } })).status).toBe(200);
     const staff = await tokenFor(seed.users.havanaStaff);
     expect((await call(app, "POST", `${adm(f.clientId, f.brandId)}/orders/${o.orderId}/tickets-link/rotate`, { token: staff })).status).toBe(404);
+  });
+});
+
+describe("English emails (Run 16)", () => {
+  it("sends the tickets, refund and cancellation emails in the buyer's language", async () => {
+    const f = seed.festi;
+    const o = await buy(f, { GENERAL: 1 }, { email: "visitor@example.com", fullName: "Alex Visitor", language: "en" });
+    await deliver();
+    const tickets = sender.sent.at(-1)!;
+    expect(tickets.subject).toMatch(/^Your tickets — /);
+    expect(tickets.text).toContain("Hello Alex Visitor,");
+    expect(tickets.text).toContain("1 ticket");
+    expect(tickets.html).toContain('<html lang="en">');
+    expect(tickets.html).toContain("Show my tickets");
+    expect(tickets.text).toMatch(/(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)/);
+
+    const refund = refundEmail({ language: "en", brandName: "FESTI-ICE", buyerName: null, reference: "R-1", eventTitle: "Night skate", amountCents: 1500, reason: null, voidedTickets: 1, validTickets: 0, link: null });
+    expect(refund.subject).toBe("Refund of $15.00 — Night skate (R-1)");
+    expect(refund.text).toContain("1 ticket cancelled.");
+    const late = refundEmail({ language: "en", brandName: "FESTI-ICE", buyerName: null, reference: "R-2", eventTitle: "Night skate", amountCents: 4599, reason: "capacity_unavailable", voidedTickets: 0, validTickets: 0, link: null });
+    expect(late.text).toContain("The seats were no longer available");
+
+    const owner = await tokenFor(seed.users.festiOwner);
+    const { rows } = await db.pool.query(`SELECT session_id FROM public.ticketing_orders WHERE id = $1`, [o.orderId]);
+    await call(app, "POST", `${adm(f.clientId, f.brandId)}/sessions/${rows[0].session_id}/cancel`, { token: owner, body: {} });
+    await deliver();
+    const cancelled = sender.sent.at(-1)!;
+    expect(cancelled.subject).toMatch(/^Session cancelled — /);
+    expect(cancelled.text).toMatch(/You are refunded \$\d/);
   });
 });

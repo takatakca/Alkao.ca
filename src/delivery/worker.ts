@@ -34,6 +34,7 @@ interface DueRow {
   order_status: string;
   email: string;
   full_name: string | null;
+  language: "fr" | "en";
   brand_name: string;
   event_title: string;
   starts_at: Date;
@@ -60,7 +61,7 @@ export async function deliverTicketEmails(db: Db, cfg: DeliveryConfig, now = new
     const outcome = await withTransaction(db, async (tx) => {
       const { rows } = await tx.query<DueRow>(
         `SELECT x.id, x.client_id, x.brand_id, x.order_id, x.kind, x.attempts, x.created_at,
-                o.reference, o.status AS order_status, b.email, b.full_name, br.name AS brand_name,
+                o.reference, o.status AS order_status, b.email, b.full_name, b.language, br.name AS brand_name,
                 e.title AS event_title, s.starts_at, v.name AS venue_name, v.city, v.timezone,
                 (SELECT count(*)::int FROM public.ticketing_tickets t
                   WHERE t.order_id = o.id AND t.client_id = o.client_id AND t.brand_id = o.brand_id AND t.status = 'valid') AS valid_tickets,
@@ -112,7 +113,7 @@ export async function deliverTicketEmails(db: Db, cfg: DeliveryConfig, now = new
       };
       if (row.kind === "session_cancelled") {
         return send(sessionCancelledEmail({
-          brandName: row.brand_name, buyerName: row.full_name, reference: row.reference, eventTitle: row.event_title,
+          language: row.language, brandName: row.brand_name, buyerName: row.full_name, reference: row.reference, eventTitle: row.event_title,
           startsAt: row.starts_at, venueName: row.venue_name, city: row.city, timezone: row.timezone, refundedCents: row.cancel_refund_cents,
         }));
       }
@@ -123,7 +124,7 @@ export async function deliverTicketEmails(db: Db, cfg: DeliveryConfig, now = new
       };
       if (row.kind === "refund") {
         return send(refundEmail({
-          brandName: row.brand_name, buyerName: row.full_name, reference: row.reference, eventTitle: row.event_title,
+          language: row.language, brandName: row.brand_name, buyerName: row.full_name, reference: row.reference, eventTitle: row.event_title,
           amountCents: row.refund_amount_cents ?? 0, reason: row.refund_reason, voidedTickets: row.refund_voided ?? 0,
           validTickets: row.valid_tickets, link: row.valid_tickets > 0 ? await personalLink() : null,
         }));
@@ -132,6 +133,7 @@ export async function deliverTicketEmails(db: Db, cfg: DeliveryConfig, now = new
       const link = await personalLink();
       const content = ticketsEmail({
         kind: row.kind,
+        language: row.language,
         brandName: row.brand_name,
         buyerName: row.full_name,
         reference: row.reference,

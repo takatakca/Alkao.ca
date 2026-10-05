@@ -77,6 +77,8 @@ export interface BuyerInput {
   email: string;
   fullName?: string | null;
   phone?: string | null;
+  /** Emails in French (default) or English (Run 16). */
+  language?: "fr" | "en";
 }
 
 export interface CreateOrderInput extends TenantScope {
@@ -106,13 +108,14 @@ export async function createOrderFromHold(tx: Tx, input: CreateOrderInput, now =
     if (hold.status !== "active" || hold.expires_at <= now) throw new DomainError("hold_not_active");
 
     const { rows: buyers } = await tx.query<{ id: string }>(
-      `INSERT INTO public.ticketing_buyers (client_id, brand_id, email, full_name, phone)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO public.ticketing_buyers (client_id, brand_id, email, full_name, phone, language)
+       VALUES ($1, $2, $3, $4, $5, $6)
        ON CONFLICT (client_id, brand_id, email_normalized)
        DO UPDATE SET full_name = coalesce(EXCLUDED.full_name, ticketing_buyers.full_name),
-                     phone = coalesce(EXCLUDED.phone, ticketing_buyers.phone)
+                     phone = coalesce(EXCLUDED.phone, ticketing_buyers.phone),
+                     language = EXCLUDED.language
        RETURNING id`,
-      [input.clientId, input.brandId, input.buyer.email, input.buyer.fullName ?? null, input.buyer.phone ?? null],
+      [input.clientId, input.brandId, input.buyer.email, input.buyer.fullName ?? null, input.buyer.phone ?? null, input.buyer.language ?? "fr"],
     );
     const buyerId = buyers[0]!.id;
 

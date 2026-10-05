@@ -34,7 +34,7 @@ while Ticketing is off, and that a refused hold request writes nothing.
 
 | Method | Path | Body | Result |
 |---|---|---|---|
-| POST | `/holds/:holdId/checkout` | header `X-Alkao-Hold-Token`; `{ buyer: { email, fullName?, phone? }, successUrl, cancelUrl }` | `201 { order: { id, reference, token, status }, checkoutUrl }`. A free order is `paid` at once and `checkoutUrl` is `null`. Calling again for the same hold returns the same Checkout and rotates the order token. Errors: `422 return_url_not_allowed`, `409 payments_unavailable`, `409 hold_not_active`, `502 payment_provider_error` (safe to retry) |
+| POST | `/holds/:holdId/checkout` | header `X-Alkao-Hold-Token`; `{ buyer: { email, fullName?, phone?, language? }, successUrl, cancelUrl }` | `201 { order: { id, reference, token, status }, checkoutUrl }`. A free order is `paid` at once and `checkoutUrl` is `null`. Calling again for the same hold returns the same Checkout and rotates the order token. Errors: `422 return_url_not_allowed`, `409 payments_unavailable`, `409 hold_not_active`, `502 payment_provider_error` (safe to retry) |
 | GET | `/orders/:orderId` | header `X-Alkao-Order-Token` | Order status, lines, taxes and tickets, for the buyer's confirmation page. Each valid ticket has `credential`, its QR payload (Run 03, [format](ALKAO_SCANNER_V1.md)) |
 
 How a payment works:
@@ -268,6 +268,21 @@ The Operations app shows each event's shop link and its button code, ready to co
 
 The server logs one JSON line per request: method, **route pattern** (never ids, query
 strings or headers), status and duration. Set `ALKAO_LOG_REQUESTS=false` to turn it off.
+
+### English for buyers (Run 16)
+
+The shop, the `/billets` page and the buyer emails are in **French by default**, the
+Québec rule, and in **English on request**. Staff pages stay in French. The language is
+chosen as follows:
+
+1. `?lang=en` (or `?lang=fr`) in the address;
+2. otherwise, the visitor's last choice through the "English" / "Français" switch;
+3. otherwise, the browser's language.
+
+The shop sends `buyer.language` (`fr` or `en`, default `fr`) with the checkout, and ALKAO
+keeps it on the buyer. The tickets, refund and "session cancelled" emails follow that
+choice, including dates and amounts in the right format. The website button accepts
+`data-lang="en"`, which links to the English shop and shows "Buy tickets".
 
 ### Role → permission
 

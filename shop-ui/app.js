@@ -4,6 +4,136 @@
 //   /acheter/merci/<clientId>/<brandId>/<holdId>  back from Stripe → the buyer's tickets
 // Every price comes from the server; the page only sends what the buyer picked.
 import { html, render, useEffect, useRef, useState } from "/shop/vendor/htm-preact.js";
+import { localeOf, pickLanguage, switchLanguage } from "/shop/i18n.js";
+
+// Run 16: French by default, English on request (?lang=en, the switch, or the browser).
+const LANG = pickLanguage();
+document.documentElement.lang = LANG === "en" ? "en-CA" : "fr-CA";
+const T = {
+  fr: {
+    errors: {
+      ticketing_unavailable: "La billetterie de cet organisateur est fermée pour le moment.",
+      event_not_found: "Cet événement n'est pas en vente.",
+      sold_out: "Il ne reste plus assez de places pour cette séance.",
+      session_not_available: "Cette séance n'est plus en vente.",
+      hold_not_active: "Votre réservation a expiré. Recommencez votre sélection.",
+      hold_not_found: "Votre réservation a expiré. Recommencez votre sélection.",
+      rate_limited: "Trop de tentatives. Patientez une minute.",
+      payments_unavailable: "Le paiement en ligne n'est pas encore ouvert pour cet organisateur.",
+      payment_provider_error: "Le service de paiement ne répond pas. Réessayez.",
+      return_url_not_allowed: "Configuration de paiement incomplète chez l'organisateur.",
+      invalid_request: "Vérifiez vos informations.",
+    },
+    generic: "Une erreur est survenue. Réessayez dans un instant.",
+    v: {
+      above_maximum: (n, l) => `${n} : ${l} au maximum par commande.`,
+      below_minimum: (n, l) => `${n} : ${l} au minimum.`,
+      max_adults_exceeded: (n, l) => `${n} : ${l} adulte${l > 1 ? "s" : ""} au maximum dans la commande.`,
+      add_on_without_admission: (n) => `${n} s'ajoute à une entrée : choisissez d'abord vos billets.`,
+      add_on_quantity_mismatch: (n, l) => `${n} : choisissez-en ${l}, un par entrée.`,
+      order_too_large: () => "Commande trop grande.",
+      other: () => "Sélection invalide.",
+    },
+    loading: "Chargement…",
+    notFinished: "Paiement non terminé. Vos places sont encore réservées quelques minutes.",
+    resume: "Reprendre le paiement",
+    release: "Libérer mes places",
+    step1: "1. Choisissez votre séance",
+    noSessions: "Aucune séance en vente pour le moment.",
+    full: "Complet",
+    fewLeft: (n) => `Plus que ${n} places`,
+    available: "Places disponibles",
+    step2: "2. Vos billets",
+    free: "Gratuit",
+    perAdmission: " · option, une par entrée",
+    minimum: (n) => ` · minimum ${n}`,
+    remove: (n) => `Retirer ${n}`,
+    quantity: (n) => `Quantité ${n}`,
+    add: (n) => `Ajouter ${n}`,
+    gst: "TPS", qst: "TVQ",
+    total: "Total",
+    next: "Continuer",
+    step3: "3. Vos coordonnées",
+    heldFor: "Places réservées pendant ",
+    email: "Courriel (vos billets y seront envoyés)",
+    name: "Nom complet",
+    phone: "Téléphone (facultatif)",
+    getFree: "Obtenir mes billets",
+    pay: (m) => `Payer ${m}`,
+    change: "Modifier ma sélection",
+    stripe: "Paiement sécurisé par Stripe, directement à l'organisateur.",
+    footer: "Billetterie ALKAO",
+    shop: "Billetterie",
+    noEvents: "Aucun événement en vente pour le moment.",
+    opening: "Merci ! Ouverture de vos billets…",
+    thanks: "Merci !",
+    confirming: "Votre paiement est en cours de confirmation. Vos billets vous seront envoyés par courriel dans quelques minutes.",
+    badAddress: "Adresse de billetterie incomplète.",
+    other: "English",
+  },
+  en: {
+    errors: {
+      ticketing_unavailable: "This organizer's ticketing is closed for now.",
+      event_not_found: "This event is not on sale.",
+      sold_out: "Not enough seats are left for this session.",
+      session_not_available: "This session is no longer on sale.",
+      hold_not_active: "Your reservation expired. Please choose again.",
+      hold_not_found: "Your reservation expired. Please choose again.",
+      rate_limited: "Too many attempts. Please wait a minute.",
+      payments_unavailable: "Online payment is not open yet for this organizer.",
+      payment_provider_error: "The payment service is not responding. Please try again.",
+      return_url_not_allowed: "The organizer's payment setup is incomplete.",
+      invalid_request: "Please check your details.",
+    },
+    generic: "Something went wrong. Please try again in a moment.",
+    v: {
+      above_maximum: (n, l) => `${n}: at most ${l} per order.`,
+      below_minimum: (n, l) => `${n}: at least ${l}.`,
+      max_adults_exceeded: (n, l) => `${n}: at most ${l} adult${l > 1 ? "s" : ""} in the order.`,
+      add_on_without_admission: (n) => `${n} goes with an admission: choose your tickets first.`,
+      add_on_quantity_mismatch: (n, l) => `${n}: choose ${l}, one per admission.`,
+      order_too_large: () => "Order too large.",
+      other: () => "Invalid selection.",
+    },
+    loading: "Loading…",
+    notFinished: "Payment not completed. Your seats are still held for a few minutes.",
+    resume: "Resume payment",
+    release: "Release my seats",
+    step1: "1. Choose your session",
+    noSessions: "No session on sale right now.",
+    full: "Sold out",
+    fewLeft: (n) => `Only ${n} seats left`,
+    available: "Seats available",
+    step2: "2. Your tickets",
+    free: "Free",
+    perAdmission: " · option, one per admission",
+    minimum: (n) => ` · minimum ${n}`,
+    remove: (n) => `Remove ${n}`,
+    quantity: (n) => `Quantity ${n}`,
+    add: (n) => `Add ${n}`,
+    gst: "GST", qst: "QST",
+    total: "Total",
+    next: "Continue",
+    step3: "3. Your details",
+    heldFor: "Seats held for ",
+    email: "Email (your tickets will be sent there)",
+    name: "Full name",
+    phone: "Phone (optional)",
+    getFree: "Get my tickets",
+    pay: (m) => `Pay ${m}`,
+    change: "Change my selection",
+    stripe: "Secure payment by Stripe, directly to the organizer.",
+    footer: "ALKAO Ticketing",
+    shop: "Tickets",
+    noEvents: "No event on sale right now.",
+    opening: "Thank you! Opening your tickets…",
+    thanks: "Thank you!",
+    confirming: "Your payment is being confirmed. Your tickets will be emailed to you within a few minutes.",
+    badAddress: "Incomplete ticketing address.",
+    other: "Français",
+  },
+}[LANG];
+const switcher = html`<p class="lang"><button class="link" onClick=${() => switchLanguage(LANG === "en" ? "fr" : "en")}>${T.other}</button></p>`;
 
 const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
 const route = (() => {
@@ -21,8 +151,8 @@ const STORE = (holdId) => `alkao.checkout.${holdId}`;
 const saved = (holdId) => { try { return JSON.parse(sessionStorage.getItem(STORE(holdId)) ?? "null"); } catch { return null; } };
 const save = (holdId, value) => { try { sessionStorage.setItem(STORE(holdId), JSON.stringify(value)); } catch {} };
 
-const money = (cents) => (Number(cents ?? 0) / 100).toLocaleString("fr-CA", { style: "currency", currency: "CAD" });
-const whenFr = (iso, tz) => new Intl.DateTimeFormat("fr-CA", { dateStyle: "full", timeStyle: "short", timeZone: tz || "America/Toronto" }).format(new Date(iso));
+const money = (cents) => (Number(cents ?? 0) / 100).toLocaleString(localeOf(LANG), { style: "currency", currency: "CAD" });
+const whenFr = (iso, tz) => new Intl.DateTimeFormat(localeOf(LANG), { dateStyle: "full", timeStyle: "short", timeZone: tz || "America/Toronto" }).format(new Date(iso));
 
 class ApiError extends Error {
   constructor(status, code, details) { super(code); this.status = status; this.code = code; this.details = details; }
@@ -39,31 +169,19 @@ async function call(path, { method = "GET", body, headers = {} } = {}) {
   return data;
 }
 
-const ERRORS = {
-  ticketing_unavailable: "La billetterie de cet organisateur est fermée pour le moment.",
-  event_not_found: "Cet événement n'est pas en vente.",
-  sold_out: "Il ne reste plus assez de places pour cette séance.",
-  session_not_available: "Cette séance n'est plus en vente.",
-  hold_not_active: "Votre réservation a expiré. Recommencez votre sélection.",
-  hold_not_found: "Votre réservation a expiré. Recommencez votre sélection.",
-  rate_limited: "Trop de tentatives. Patientez une minute.",
-  payments_unavailable: "Le paiement en ligne n'est pas encore ouvert pour cet organisateur.",
-  payment_provider_error: "Le service de paiement ne répond pas. Réessayez.",
-  return_url_not_allowed: "Configuration de paiement incomplète chez l'organisateur.",
-  invalid_request: "Vérifiez vos informations.",
-};
-const errText = (e) => ERRORS[e?.code] ?? "Une erreur est survenue. Réessayez dans un instant.";
+const errText = (e) => T.errors[e?.code] ?? T.generic;
 
 function violationText(v, types) {
   const name = types.find((t) => t.id === v.ticketTypeId)?.name ?? "";
   switch (v.code) {
-    case "above_maximum": return `${name} : ${v.limit} au maximum par commande.`;
-    case "below_minimum": return `${name} : ${v.limit} au minimum.`;
-    case "max_adults_exceeded": return `${name} : ${v.limit} adulte${v.limit > 1 ? "s" : ""} au maximum dans la commande.`;
-    case "add_on_without_admission": return `${name} s'ajoute à une entrée : choisissez d'abord vos billets.`;
-    case "add_on_quantity_mismatch": return `${name} : choisissez-en ${v.limit}, un par entrée.`;
-    case "order_too_large": return "Commande trop grande.";
-    default: return "Sélection invalide.";
+    case "above_maximum":
+    case "below_minimum":
+    case "max_adults_exceeded":
+    case "add_on_without_admission":
+    case "add_on_quantity_mismatch":
+    case "order_too_large":
+      return T.v[v.code](name, v.limit);
+    default: return T.v.other();
   }
 }
 
@@ -113,7 +231,7 @@ function EventShop({ config }) {
   }, [JSON.stringify(items)]);
 
   if (error && !data) return html`<main><div class="alert bad" role="alert">${errText(error)}</div></main>`;
-  if (!data) return html`<main><p class="boot">Chargement…</p></main>`;
+  if (!data) return html`<main><p class="boot">${T.loading}</p></main>`;
   const ev = data.event;
   const tz = ev.venue?.timezone;
   const admissions = data.ticketTypes.filter((t) => t.kind === "admission");
@@ -139,7 +257,7 @@ function EventShop({ config }) {
       method: "POST",
       headers: { "x-alkao-hold-token": h.token },
       body: {
-        buyer: { email: who.email.trim(), fullName: who.fullName.trim() || null, phone: who.phone.trim() || null },
+        buyer: { email: who.email.trim(), fullName: who.fullName.trim() || null, phone: who.phone.trim() || null, language: LANG },
         successUrl: `${shop}/acheter/merci/${route.c}/${route.b}/${h.id}`,
         cancelUrl: `${shop}/acheter/${route.c}/${route.b}/${route.eventId}#annule=${h.id}`,
       },
@@ -158,14 +276,15 @@ function EventShop({ config }) {
     const drop = async () => { setBusy(true); await release({ id: notice.holdId, token: notice.holdToken }); sessionStorage.removeItem(STORE(notice.holdId)); setNotice(null); setBusy(false); load(); };
     return html`<main>
       <p class="brand">${ev.brand?.name ?? ""}</p><h1>${ev.title}</h1>
-      <div class="alert" role="status">Paiement non terminé. Vos places sont encore réservées quelques minutes.</div>
+      <div class="alert" role="status">${T.notFinished}</div>
       ${error && html`<div class="alert bad" role="alert">${errText(error)}</div>`}
-      <div class="actions"><button disabled=${busy} onClick=${resume}>Reprendre le paiement</button>
-        <button class="secondary" disabled=${busy} onClick=${drop}>Libérer mes places</button></div>
+      <div class="actions"><button disabled=${busy} onClick=${resume}>${T.resume}</button>
+        <button class="secondary" disabled=${busy} onClick=${drop}>${T.release}</button></div>
     </main>`;
   }
 
   return html`<main>
+    ${switcher}
     <p class="brand">${ev.brand?.name ?? ""}</p>
     <h1>${ev.title}</h1>
     ${ev.venue && html`<p class="muted">${ev.venue.name}${ev.venue.city ? `, ${ev.venue.city}` : ""}</p>`}
@@ -173,50 +292,50 @@ function EventShop({ config }) {
     ${error && html`<div class="alert bad" role="alert">${errText(error)}</div>`}
 
     ${!hold && html`
-      <h2>1. Choisissez votre séance</h2>
-      ${data.sessions.length === 0 ? html`<p class="muted">Aucune séance en vente pour le moment.</p>` : html`<div class="sessions">
+      <h2>${T.step1}</h2>
+      ${data.sessions.length === 0 ? html`<p class="muted">${T.noSessions}</p>` : html`<div class="sessions">
         ${data.sessions.map((s) => html`<button class="session" aria-pressed=${s.id === sessionId ? "true" : "false"} disabled=${s.available === 0} onClick=${() => setSessionId(s.id)}>
           <span>${whenFr(s.startsAt, tz)}</span>
-          <span class="muted">${s.available === 0 ? "Complet" : s.available <= 20 ? `Plus que ${s.available} places` : "Places disponibles"}</span></button>`)}
+          <span class="muted">${s.available === 0 ? T.full : s.available <= 20 ? T.fewLeft(s.available) : T.available}</span></button>`)}
       </div>`}
 
       ${sessionId && html`
-        <h2>2. Vos billets</h2>
+        <h2>${T.step2}</h2>
         <div class="card">
           ${[...admissions, ...addOns].map((t) => html`<div class="type">
-            <div><div class="name">${t.name}</div><div class="muted">${t.priceCents === 0 ? "Gratuit" : money(t.priceCents)}${t.kind === "add_on" ? " · option, une par entrée" : ""}${t.minQuantity > 1 ? ` · minimum ${t.minQuantity}` : ""}</div></div>
+            <div><div class="name">${t.name}</div><div class="muted">${t.priceCents === 0 ? T.free : money(t.priceCents)}${t.kind === "add_on" ? T.perAdmission : ""}${t.minQuantity > 1 ? T.minimum(t.minQuantity) : ""}</div></div>
             <div class="stepper">
-              <button class="secondary" aria-label=${`Retirer ${t.name}`} disabled=${!(qty[t.id] > 0)} onClick=${() => set(t.id, (qty[t.id] ?? 0) - 1)}>−</button>
-              <output aria-label=${`Quantité ${t.name}`}>${qty[t.id] ?? 0}</output>
-              <button class="secondary" aria-label=${`Ajouter ${t.name}`} disabled=${(qty[t.id] ?? 0) >= t.maxQuantity} onClick=${() => set(t.id, (qty[t.id] ?? 0) + 1)}>+</button>
+              <button class="secondary" aria-label=${T.remove(t.name)} disabled=${!(qty[t.id] > 0)} onClick=${() => set(t.id, (qty[t.id] ?? 0) - 1)}>−</button>
+              <output aria-label=${T.quantity(t.name)}>${qty[t.id] ?? 0}</output>
+              <button class="secondary" aria-label=${T.add(t.name)} disabled=${(qty[t.id] ?? 0) >= t.maxQuantity} onClick=${() => set(t.id, (qty[t.id] ?? 0) + 1)}>+</button>
             </div></div>`)}
         </div>
         ${violations.length > 0 && html`<div class="alert" role="alert"><ul class="violations">${violations.map((v) => html`<li>${violationText(v, data.ticketTypes)}</li>`)}</ul></div>`}
         ${quote && html`<div class="card"><table class="quote"><tbody>
           ${quote.lines.map((l) => html`<tr><td>${l.quantity} × ${l.name}</td><td class="num">${money(l.lineTotalCents)}</td></tr>`)}
-          ${quote.taxes.map((t) => html`<tr><td class="muted">${t.code === "GST" ? "TPS" : t.code === "QST" ? "TVQ" : t.labelFr}</td><td class="num muted">${money(t.amountCents)}</td></tr>`)}
-          <tr class="total"><td>Total</td><td class="num">${money(quote.totalCents)}</td></tr>
+          ${quote.taxes.map((t) => html`<tr><td class="muted">${t.code === "GST" ? T.gst : t.code === "QST" ? T.qst : t.labelFr}</td><td class="num muted">${money(t.amountCents)}</td></tr>`)}
+          <tr class="total"><td>${T.total}</td><td class="num">${money(quote.totalCents)}</td></tr>
         </tbody></table></div>`}
-        <div class="actions"><button disabled=${busy || !quote || violations.length > 0 || (session && wanted > session.available)} onClick=${reserve}>Continuer</button></div>`}`}
+        <div class="actions"><button disabled=${busy || !quote || violations.length > 0 || (session && wanted > session.available)} onClick=${reserve}>${T.next}</button></div>`}`}
 
     ${hold && html`
-      <h2>3. Vos coordonnées</h2>
-      <div class="alert" role="status">Places réservées pendant <${Countdown} until=${hold.expiresAtMs} onExpire=${() => { setHold(null); setError(new ApiError(409, "hold_not_active")); load(); }} />.</div>
+      <h2>${T.step3}</h2>
+      <div class="alert" role="status">${T.heldFor}<${Countdown} until=${hold.expiresAtMs} onExpire=${() => { setHold(null); setError(new ApiError(409, "hold_not_active")); load(); }} />.</div>
       <div class="card"><table class="quote"><tbody>
         <tr><td colspan="2"><strong>${whenFr(session?.startsAt ?? hold.quote?.startsAt ?? Date.now(), tz)}</strong></td></tr>
         ${hold.quote.lines.map((l) => html`<tr><td>${l.quantity} × ${l.name}</td><td class="num">${money(l.lineTotalCents)}</td></tr>`)}
-        <tr class="total"><td>Total</td><td class="num">${money(hold.quote.totalCents)}</td></tr></tbody></table></div>
+        <tr class="total"><td>${T.total}</td><td class="num">${money(hold.quote.totalCents)}</td></tr></tbody></table></div>
       <form class="card" onSubmit=${pay}>
-        <label>Courriel (vos billets y seront envoyés)<input type="email" required autocomplete="email" value=${buyer.email} onInput=${(e) => setBuyer({ ...buyer, email: e.target.value })} /></label>
-        <label>Nom complet<input required autocomplete="name" value=${buyer.fullName} onInput=${(e) => setBuyer({ ...buyer, fullName: e.target.value })} /></label>
-        <label>Téléphone (facultatif)<input type="tel" autocomplete="tel" value=${buyer.phone} onInput=${(e) => setBuyer({ ...buyer, phone: e.target.value })} /></label>
+        <label>${T.email}<input type="email" required autocomplete="email" value=${buyer.email} onInput=${(e) => setBuyer({ ...buyer, email: e.target.value })} /></label>
+        <label>${T.name}<input required autocomplete="name" value=${buyer.fullName} onInput=${(e) => setBuyer({ ...buyer, fullName: e.target.value })} /></label>
+        <label>${T.phone}<input type="tel" autocomplete="tel" value=${buyer.phone} onInput=${(e) => setBuyer({ ...buyer, phone: e.target.value })} /></label>
         <div class="actions">
-          <button type="submit" disabled=${busy}>${hold.quote.totalCents === 0 ? "Obtenir mes billets" : `Payer ${money(hold.quote.totalCents)}`}</button>
-          <button type="button" class="secondary" disabled=${busy} onClick=${async () => { await release(hold); setHold(null); load(); }}>Modifier ma sélection</button>
+          <button type="submit" disabled=${busy}>${hold.quote.totalCents === 0 ? T.getFree : T.pay(money(hold.quote.totalCents))}</button>
+          <button type="button" class="secondary" disabled=${busy} onClick=${async () => { await release(hold); setHold(null); load(); }}>${T.change}</button>
         </div>
-        ${hold.quote.totalCents > 0 && html`<p class="muted">Paiement sécurisé par Stripe, directement à l'organisateur.</p>`}
+        ${hold.quote.totalCents > 0 && html`<p class="muted">${T.stripe}</p>`}
       </form>`}
-    <footer>Billetterie ALKAO</footer>
+    <footer>${T.footer}</footer>
   </main>`;
 }
 
@@ -224,12 +343,12 @@ function EventShop({ config }) {
 function EventList() {
   const [state, setState] = useState(null);
   useEffect(() => { call(`/events`).then((d) => setState({ events: d.events }), (e) => setState({ error: e })); }, []);
-  if (!state) return html`<main><p class="boot">Chargement…</p></main>`;
+  if (!state) return html`<main><p class="boot">${T.loading}</p></main>`;
   if (state.error) return html`<main><div class="alert bad" role="alert">${errText(state.error)}</div></main>`;
-  return html`<main><h1>Billetterie</h1>
-    ${state.events.length === 0 ? html`<p class="muted">Aucun événement en vente pour le moment.</p>`
+  return html`<main>${switcher}<h1>${T.shop}</h1>
+    ${state.events.length === 0 ? html`<p class="muted">${T.noEvents}</p>`
       : html`<ul class="events card">${state.events.map((e) => html`<li><a href=${`/acheter/${route.c}/${route.b}/${e.id}`}>${e.title}</a></li>`)}</ul>`}
-    <footer>Billetterie ALKAO</footer></main>`;
+    <footer>${T.footer}</footer></main>`;
 }
 
 // ── Back from Stripe ────────────────────────────────────────────────────────
@@ -238,15 +357,15 @@ function Thanks() {
   useEffect(() => {
     if (s) location.replace(`/billets#${new URLSearchParams({ c: route.c, b: route.b, o: s.orderId, k: s.token })}`);
   }, []);
-  if (s) return html`<main><p class="boot">Merci ! Ouverture de vos billets…</p></main>`;
-  return html`<main><h1>Merci !</h1><div class="alert ok" role="status">Votre paiement est en cours de confirmation. Vos billets vous seront envoyés par courriel dans quelques minutes.</div></main>`;
+  if (s) return html`<main><p class="boot">${T.opening}</p></main>`;
+  return html`<main><h1>${T.thanks}</h1><div class="alert ok" role="status">${T.confirming}</div></main>`;
 }
 
 function App() {
   const [config, setConfig] = useState(null);
   useEffect(() => { fetch("/shop/config.json").then((r) => r.json()).then(setConfig, () => setConfig({})); }, []);
-  if (!route) return html`<main><div class="alert bad" role="alert">Adresse de billetterie incomplète.</div></main>`;
-  if (!config) return html`<main><p class="boot">Chargement…</p></main>`;
+  if (!route) return html`<main><div class="alert bad" role="alert">${T.badAddress}</div></main>`;
+  if (!config) return html`<main><p class="boot">${T.loading}</p></main>`;
   return route.page === "merci" ? html`<${Thanks} />` : route.page === "events" ? html`<${EventList} />` : html`<${EventShop} config=${config} />`;
 }
 
