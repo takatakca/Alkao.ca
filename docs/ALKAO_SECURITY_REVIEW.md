@@ -21,6 +21,19 @@ run. Every point below is covered by an automated test unless it says otherwise.
 | **Dependencies** | `npm audit --omit=dev`: 0 vulnerabilities |
 | **Secrets** | No real secret in the repository (scanned). Test secrets are labelled `test-only` |
 
+## Sales-rush safety (Run 15)
+
+`test/stress/rush.test.ts` drives the real API concurrently against real PostgreSQL:
+
+| Scenario | Proven |
+|---|---|
+| 200 buyers race for 50 seats (1 to 3 each) | Never oversold. Every refusal is a clean `409 sold_out` (no 500). The counters match the holds, then the tickets, after everyone pays at once |
+| Checkout double-clicked 6 times | One order, one Stripe Checkout session, one idempotency key |
+| The same Stripe webhook delivered 10 times at once | The order is fulfilled once, with exactly the bought number of tickets |
+| Full refund double-clicked 6 times | One refund, one Stripe payout, order `refunded` |
+| Flex Météo change clicked 5 times | Moved once; the others get `already_exchanged` |
+| 3 staff pushing a session cancellation at the same time | Each of the 6 buyers is refunded exactly once |
+
 ## Fixed in this run
 
 1. **Spoofable rate limit.** Hold creation was limited per IP taken from the *leftmost*
