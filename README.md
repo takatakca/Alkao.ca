@@ -107,3 +107,4 @@ TAKATAK membership (set `SUPABASE_URL` and `SUPABASE_ANON_KEY`). See
 | Run 29 | Sessions in bulk: a season of start times (dates, weekdays, every N minutes) in the venue's time, preview first, existing times skipped; upcoming sessions on sale or paused at once |
 | Run 30 | Audit journal for owners and admins (filters, paging that skips nothing, the actor's role) and each order's history; read through new indexes |
 | Run 31 | "Ajouter à mon calendrier" on the tickets page: an `.ics` file made in the browser, without the personal link |
+| Run 32 | Stripe test mode said out loud: a banner in the shop and a badge in `/ops` with `sk_test_` keys, gone with live keys |

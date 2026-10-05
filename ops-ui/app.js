@@ -959,7 +959,7 @@ function tokenSubject(token) {
   try { return JSON.parse(atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))).sub ?? null; } catch { return null; }
 }
 
-function Shell({ api, route, email, me, onLogout }) {
+function Shell({ api, route, email, me, testMode, onLogout }) {
   const prefix = `/c/${route.clientId}/b/${route.brandId}`;
   const base = `/v1/admin/clients/${route.clientId}/brands/${route.brandId}`;
   const [status] = useLoad(() => api(`${base}/status`), [base]);
@@ -979,7 +979,7 @@ function Shell({ api, route, email, me, onLogout }) {
     : html`<p>Page inconnue.</p>`;
   return html`
     <header class="top"><span class="logo">ALKAO</span><a class="where" href="#/">Changer d'espace</a>
-      ${status.data && html`<span class="badge">${status.data.role}</span>`}<span class="spacer"></span>
+      ${status.data && html`<span class="badge">${status.data.role}</span>`}${testMode}<span class="spacer"></span>
       <span class="muted">${email ?? ""}</span>${onLogout && html`<button class="secondary" onClick=${onLogout}>Déconnexion</button>`}</header>
     <nav class="tabs">${[...TABS, ...(JOURNAL_ROLES.includes(status.data?.role) ? [["journal", "Journal"]] : [])].map(([key, label]) => html`<a class=${tab === key ? "active" : ""} href=${`#${prefix}/${key}`}>${label}</a>`)}</nav>
     <main>${status.error ? html`<${Failure} error=${status.error} />` : body}</main>`;
@@ -1028,8 +1028,10 @@ function App() {
   const api = makeApi(getToken, embedded ? expired : logout);
   const onLogout = embedded ? null : logout;
   const route = parseRoute(hash);
-  return route ? html`<${Shell} api=${api} route=${route} email=${session.email} me=${tokenSubject(session.accessToken)} onLogout=${onLogout} />`
-    : html`<header class="top"><span class="logo">ALKAO</span><span class="spacer"></span>${onLogout && html`<button class="secondary" onClick=${onLogout}>Déconnexion</button>`}</header><${Workspaces} api=${api} />`;
+  // Run 32: with Stripe test keys, every screen says nothing is real.
+  const testMode = config.paymentsMode === "test" ? html`<span class="badge warn" role="status">Stripe en mode test : aucun paiement réel</span>` : null;
+  return route ? html`<${Shell} api=${api} route=${route} email=${session.email} me=${tokenSubject(session.accessToken)} testMode=${testMode} onLogout=${onLogout} />`
+    : html`<header class="top"><span class="logo">ALKAO</span>${testMode}<span class="spacer"></span>${onLogout && html`<button class="secondary" onClick=${onLogout}>Déconnexion</button>`}</header><${Workspaces} api=${api} />`;
 }
 
 render(html`<${App} />`, document.getElementById("app"));

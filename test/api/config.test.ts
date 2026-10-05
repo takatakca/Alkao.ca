@@ -22,4 +22,13 @@ describe("configuration hardening", () => {
     expect(() => loadConfig({ ...base, ALKAO_CONTROL_KEYS: "kid:short" })).toThrow();
     expect(() => loadConfig({ ...base, ALKAO_PUBLIC_URL: "http://billets.example.ca" })).toThrow();
   });
+
+  it("knows Stripe test keys from live keys (Run 32)", () => {
+    const webhook = { STRIPE_WEBHOOK_SECRET: "whsec_x" };
+    expect(loadConfig({ ...base, ...webhook, STRIPE_SECRET_KEY: "sk_test_abc" }).stripe?.mode).toBe("test");
+    expect(loadConfig({ ...base, ...webhook, STRIPE_SECRET_KEY: "rk_test_abc" }).stripe?.mode).toBe("test");
+    expect(loadConfig({ ...base, ...webhook, STRIPE_SECRET_KEY: "sk_live_abc" }).stripe?.mode).toBe("live");
+    expect(loadConfig(base).stripe).toBeNull();
+    expect(() => loadConfig({ ...base, ...webhook, STRIPE_SECRET_KEY: "pk_test_abc" })).toThrow();
+  });
 });

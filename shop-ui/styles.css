@@ -47,3 +47,5 @@ ul.events li a { display: block; padding: .9rem 1rem; text-decoration: none; }
 footer { color: var(--muted); font-size: .8rem; text-align: center; margin-top: 2rem; }
 .lang { text-align: right; margin: 0; }
 button.link { background: none; color: var(--muted); padding: .25rem 0; text-decoration: underline; font-weight: 400; border: 0; }
+/* Run 32: Stripe test mode. */
+.testmode p { margin: 0; padding: .55rem 1rem; text-align: center; font-weight: 600; background: var(--warn-bg, #fff4dc); color: var(--warn, #8a5a00); }

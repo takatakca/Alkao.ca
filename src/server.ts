@@ -15,6 +15,7 @@ const app = createApp({
   holdTtlSeconds: config.holdTtlSeconds,
   publicHoldsPerMinute: config.publicHoldsPerMinute,
   paymentGateway: config.stripe ? StripeGateway.fromSecretKey(config.stripe.secretKey, config.stripe.webhookSecret) : null,
+  paymentsMode: config.stripe?.mode ?? null,
   onboarding: config.onboarding,
   credentialMasterSecret: config.credentialMasterSecret,
   opsUi: config.opsUi,
@@ -26,6 +27,6 @@ const app = createApp({
 
 serve({ fetch: app.fetch, port: config.port }, (info) => {
   console.log(
-    `alkao listening on :${info.port} — operational API ${config.operationalApiEnabled ? "ENABLED" : "disabled (default)"}, payments ${config.stripe ? "configured" : "not configured"}`,
+    `alkao listening on :${info.port} — operational API ${config.operationalApiEnabled ? "ENABLED" : "disabled (default)"}, payments ${config.stripe ? `configured (Stripe ${config.stripe.mode.toUpperCase()} mode)` : "not configured"}`,
   );
 });

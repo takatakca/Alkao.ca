@@ -35,6 +35,7 @@ const T = {
       other: () => "Sélection invalide.",
     },
     loading: "Chargement…",
+    testMode: "Mode test : aucun paiement réel. Utilisez une carte de test Stripe.",
     notFinished: "Paiement non terminé. Vos places sont encore réservées quelques minutes.",
     resume: "Reprendre le paiement",
     release: "Libérer mes places",
@@ -100,6 +101,7 @@ const T = {
       other: () => "Invalid selection.",
     },
     loading: "Loading…",
+    testMode: "Test mode: no real payment. Use a Stripe test card.",
     notFinished: "Payment not completed. Your seats are still held for a few minutes.",
     resume: "Resume payment",
     release: "Release my seats",
@@ -397,7 +399,10 @@ function App() {
   useEffect(() => { fetch("/shop/config.json").then((r) => r.json()).then(setConfig, () => setConfig({})); }, []);
   if (!route) return html`<main><div class="alert bad" role="alert">${T.badAddress}</div></main>`;
   if (!config) return html`<main><p class="boot">${T.loading}</p></main>`;
-  return route.page === "merci" ? html`<${Thanks} />` : route.page === "events" ? html`<${EventList} />` : html`<${EventShop} config=${config} />`;
+  // Run 32: with Stripe test keys, buyers are told that nothing will be charged.
+  const testMode = config.paymentsMode === "test" && html`<header class="testmode"><p role="status">${T.testMode}</p></header>`;
+  const page = route.page === "merci" ? html`<${Thanks} />` : route.page === "events" ? html`<${EventList} />` : html`<${EventShop} config=${config} />`;
+  return html`${testMode}${page}`;
 }
 
 render(html`<${App} />`, document.getElementById("app"));

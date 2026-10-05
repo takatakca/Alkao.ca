@@ -12,6 +12,8 @@ export interface OpsUiConfig {
    * whose postMessage session handover the app accepts. Empty: no framing.
    */
   frameAncestors: string[];
+  /** Run 32: Stripe's mode, when payments are configured; "test" shows a banner. */
+  paymentsMode?: "test" | "live" | null;
 }
 
 const UI_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "ops-ui");
@@ -58,7 +60,10 @@ export function mountOpsUi(app: Hono<any>, cfg: OpsUiConfig): void {
 
   app.get("/ops", (c) => c.body(read(join(UI_DIR, "index.html")), 200, headers("text/html; charset=utf-8")));
   app.get("/ops/config.json", (c) =>
-    c.body(JSON.stringify({ supabaseUrl: cfg.supabaseUrl, supabaseAnonKey: cfg.supabaseAnonKey, embedOrigins: cfg.frameAncestors }), 200, headers("application/json")),
+    c.body(JSON.stringify({
+      supabaseUrl: cfg.supabaseUrl, supabaseAnonKey: cfg.supabaseAnonKey, embedOrigins: cfg.frameAncestors,
+      ...(cfg.paymentsMode ? { paymentsMode: cfg.paymentsMode } : {}),
+    }), 200, headers("application/json")),
   );
   for (const [name, file] of Object.entries(FILES)) {
     app.get(`/ops/${name}`, (c) => c.body(read(file.path), 200, headers(file.type)));

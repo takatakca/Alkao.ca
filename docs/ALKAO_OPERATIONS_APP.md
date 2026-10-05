@@ -21,6 +21,8 @@ TAKATAK V1 dashboard (menu "ALKAO — Billetterie"), with no second login. See
 The app shows exactly what the API allows. Permissions, Client isolation and the Ticketing
 gate are always enforced by the server, never by the interface.
 
+With Stripe test keys, every screen shows a **Stripe en mode test : aucun paiement réel** badge next to the logo (Run 32).
+
 ## Configuration
 
 | Variable | Use |

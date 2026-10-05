@@ -75,6 +75,11 @@ How it behaves:
    call the public API.
 5. Make a test purchase. You should see the payment on the Client's Stripe account, the
    tickets email, QR codes on `/billets`, and a scan at the gate.
+   - **With Stripe test keys** (`sk_test_…`), ALKAO says so everywhere (Run 32). The shop
+     shows a banner: "Mode test : aucun paiement réel". `/ops` shows a badge: "Stripe en
+     mode test". The startup log reads `Stripe TEST mode`.
+   - **Switching to live keys** (`sk_live_…`) removes the banner and the badge.
+   - **Before the first real sale**, check that the banner is gone from the shop.
 
 6. Set up monitoring before the first sale. Point the uptime service at `/health/ready`, set
    `ALKAO_METRICS_TOKEN`, and add the alerts listed in [ALKAO_RUNBOOK.md](ALKAO_RUNBOOK.md).
