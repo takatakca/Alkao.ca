@@ -5,7 +5,7 @@ const boolFlag = z
   .optional()
   .transform((v) => v === "true" || v === "1");
 
-const EnvSchema = z.object({
+export const EnvSchema = z.object({
   DATABASE_URL: z.string().min(1),
   /** Deployment switch. Off by default: merging or deploying ALKAO activates nothing. */
   ALKAO_OPERATIONAL_API_ENABLED: boolFlag,
@@ -74,6 +74,14 @@ export function parseControlKeys(raw: string | undefined): Map<string, string> {
   return keys;
 }
 
+/** The accepted ALKAO_OPS_FRAME_ANCESTORS origins; http://localhost for development only. */
+export function frameAncestorOrigins(raw: string | undefined, nodeEnv: string | undefined): string[] {
+  return (raw ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => /^https:\/\/[a-z0-9.-]+(:\d+)?$/.test(s) || (nodeEnv !== "production" && /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(s)));
+}
+
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const e = EnvSchema.parse(env);
   return {
@@ -98,11 +106,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     opsUi: {
       supabaseUrl: e.SUPABASE_URL ?? null,
       supabaseAnonKey: e.SUPABASE_ANON_KEY ?? null,
-      // http://localhost is accepted for development only.
-      frameAncestors: (e.ALKAO_OPS_FRAME_ANCESTORS ?? "")
-        .split(",")
-        .map((s) => s.trim())
-        .filter((s) => /^https:\/\/[a-z0-9.-]+(:\d+)?$/.test(s) || (e.NODE_ENV !== "production" && /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(s))),
+      frameAncestors: frameAncestorOrigins(e.ALKAO_OPS_FRAME_ANCESTORS, e.NODE_ENV),
     },
     publicUrl: e.ALKAO_PUBLIC_URL ?? null,
     trustedProxyHops: e.ALKAO_TRUSTED_PROXY_HOPS,

@@ -11,6 +11,7 @@ What to check and what to do when something goes wrong in service. For setup, se
 | The database answers | `GET /health/ready` (the load balancer's check) | `200`; `503` means the database is down or slow |
 | Background work | `GET /metrics` with `Authorization: Bearer $ALKAO_METRICS_TOKEN` (Prometheus text; Run 24) | see the alerts below |
 | What staff must handle | The Operations app's dashboard, "À traiter" (Run 21) | empty |
+| Everything at once, after a deploy or a settings change | `npm run check:golive` (Run 38; [go-live checklist](ALKAO_GO_LIVE.md)) | no ✘ |
 
 `/metrics` only exists when `ALKAO_METRICS_TOKEN` (at least 32 characters) is set. It holds
 platform-wide counts only, never a Client, Brand, buyer or amount.

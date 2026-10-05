@@ -22,7 +22,8 @@
     "worker:email": "tsx scripts/email-worker.ts",
     "worker:cancellations": "tsx scripts/cancellation-worker.ts",
     "control:apply": "tsx scripts/control-apply.ts",
-    "db:migrate": "tsx scripts/migrate.ts"
+    "db:migrate": "tsx scripts/migrate.ts",
+    "check:golive": "tsx scripts/golive-check.ts"
   },
   "dependencies": {
     "@hono/node-server": "^2.1.3",
