@@ -8,7 +8,7 @@ ALKAO off again: `ALKAO_OPERATIONAL_API_ENABLED=false`, or stop the processes.
 
 | Item | Value |
 |---|---|
-| Database | A database **dedicated to ALKAO**. Never use the TAKATAK or FESTI-ICE database. Two ways: a dedicated Supabase project, migrated with `supabase db push`; or plain PostgreSQL 15+: run `supabase/tests/supabase_shim.sql` once (it creates the Supabase roles and `auth.uid()`), then `npm run db:migrate` |
+| Database | A database **dedicated to ALKAO**. Never use the TAKATAK or FESTI-ICE database. Two ways: a dedicated Supabase project, migrated with `supabase db push`; or plain PostgreSQL 15+: run `supabase/tests/supabase_shim.sql` once (it creates the Supabase roles and `auth.uid()`), then `npm run db:migrate`. The migrations install the `pg_trgm` extension (bundled with PostgreSQL and available on Supabase) for the staff order search |
 | Auth | The **same Supabase project** as TAKATAK, so staff use their TAKATAK accounts. Set `SUPABASE_JWKS_URL` (or `SUPABASE_JWT_SECRET`), `SUPABASE_URL` and `SUPABASE_ANON_KEY` |
 | Processes | `npm start` (API, `/ops`, `/billets`, `/acheter`), `npm run worker:sweeper`, `npm run worker:email`, `npm run worker:cancellations` |
 | Public URL | HTTPS, e.g. `https://billets.example.ca`. Set it as `ALKAO_PUBLIC_URL` for both the server and the email worker |

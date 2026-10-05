@@ -287,21 +287,44 @@ export async function loadSession(q: Queryable, s: TenantScope, sessionId: strin
 /** LIKE pattern text with its wildcards escaped (the search is literal). */
 const likeLiteral = (text: string) => text.replace(/[\\%_]/g, (c) => `\\${c}`);
 
+const ORDER_LIST_COLUMNS = `o.id, o.reference, o.status, o.event_id, o.session_id, o.currency, o.subtotal_cents, o.tax_cents, o.total_cents,
+            o.refunded_cents, o.paid_at, o.created_at, o.exchange_of_order_id, b.email AS buyer_email, b.full_name AS buyer_name`;
+
 export const listOrders = (q: Queryable, s: TenantScope, limit: number, before?: string, search?: string) =>
-  many(
-    q,
-    `SELECT o.id, o.reference, o.status, o.event_id, o.session_id, o.currency, o.subtotal_cents, o.tax_cents, o.total_cents,
-            o.refunded_cents, o.paid_at, o.created_at, o.exchange_of_order_id, b.email AS buyer_email, b.full_name AS buyer_name
-     FROM public.ticketing_orders o
-     JOIN public.ticketing_buyers b ON b.id = o.buyer_id AND b.client_id = o.client_id AND b.brand_id = o.brand_id
-     WHERE o.client_id = $1 AND o.brand_id = $2 AND ($4::timestamptz IS NULL OR o.created_at < $4)
-       AND ($5::text IS NULL
-            OR o.reference ILIKE $5 || '%'
-            OR lower(b.email) LIKE lower($5) || '%'
-            OR b.full_name ILIKE '%' || $5 || '%')
-     ORDER BY o.created_at DESC LIMIT $3`,
-    [s.clientId, s.brandId, limit, before ?? null, search ? likeLiteral(search) : null],
-  );
+  search
+    ? // Each way of matching (reference prefix, email prefix, part of the name) has its own
+      // index (Run 18); each branch keeps only its latest matches before they are merged.
+      // References are upper case and emails are stored without spaces, so this matches
+      // exactly what a case-insensitive search on the raw values would.
+      many(
+        q,
+        `SELECT ${ORDER_LIST_COLUMNS}
+         FROM (
+           (SELECT r.id FROM public.ticketing_orders r
+            WHERE r.client_id = $1 AND r.brand_id = $2 AND ($4::timestamptz IS NULL OR r.created_at < $4)
+              AND r.reference LIKE upper($5) || '%'
+            ORDER BY r.created_at DESC LIMIT $3)
+           UNION
+           (SELECT m.id FROM public.ticketing_orders m
+            JOIN public.ticketing_buyers mb ON mb.id = m.buyer_id AND mb.client_id = m.client_id AND mb.brand_id = m.brand_id
+            WHERE m.client_id = $1 AND m.brand_id = $2 AND ($4::timestamptz IS NULL OR m.created_at < $4)
+              AND (mb.email_normalized LIKE lower($5) || '%' OR mb.full_name ILIKE '%' || $5 || '%')
+            ORDER BY m.created_at DESC LIMIT $3)
+         ) hit
+         JOIN public.ticketing_orders o ON o.id = hit.id AND o.client_id = $1 AND o.brand_id = $2
+         JOIN public.ticketing_buyers b ON b.id = o.buyer_id AND b.client_id = o.client_id AND b.brand_id = o.brand_id
+         ORDER BY o.created_at DESC LIMIT $3`,
+        [s.clientId, s.brandId, limit, before ?? null, likeLiteral(search)],
+      )
+    : many(
+        q,
+        `SELECT ${ORDER_LIST_COLUMNS}
+         FROM public.ticketing_orders o
+         JOIN public.ticketing_buyers b ON b.id = o.buyer_id AND b.client_id = o.client_id AND b.brand_id = o.brand_id
+         WHERE o.client_id = $1 AND o.brand_id = $2 AND ($4::timestamptz IS NULL OR o.created_at < $4)
+         ORDER BY o.created_at DESC LIMIT $3`,
+        [s.clientId, s.brandId, limit, before ?? null],
+      );
 
 export async function getOrder(q: Queryable, s: TenantScope, orderId: string): Promise<Row> {
   const order = await one(
