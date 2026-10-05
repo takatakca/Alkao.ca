@@ -30,7 +30,7 @@ async function issueOrderToken(tx: Tx, s: TenantScope, orderId: string): Promise
   await tx.query(
     `INSERT INTO public.ticketing_access_tokens (token_hash, client_id, brand_id, subject_type, subject_id)
      VALUES ($1, $2, $3, 'order', $4)
-     ON CONFLICT (subject_type, subject_id) DO UPDATE SET token_hash = EXCLUDED.token_hash, created_at = now()`,
+     ON CONFLICT (subject_type, subject_id, purpose) DO UPDATE SET token_hash = EXCLUDED.token_hash, created_at = now()`,
     [sha256(token), s.clientId, s.brandId, orderId],
   );
   return token;

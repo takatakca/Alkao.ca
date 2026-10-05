@@ -10,6 +10,7 @@ const STATUS_FR = {
   draft: "Brouillon", published: "Publié", cancelled: "Annulé", archived: "Archivé", on_sale: "En vente", paused: "En pause",
   closed: "Fermé", pending_payment: "En attente de paiement", paid: "Payée", partially_refunded: "Remboursée en partie",
   refunded: "Remboursée", expired: "Expirée", valid: "Valide", void: "Annulé", succeeded: "Réussi", pending: "En cours",
+  email_pending: "En attente d'envoi", email_sent: "Envoyé", email_skipped: "Non envoyé", email_failed: "Échec de l'envoi",
 };
 const fr = (s) => STATUS_FR[s] ?? s;
 const REASON_FR = {
@@ -114,6 +115,7 @@ const ERRORS_FR = {
   ticket_already_used: "Un billet est déjà entré : changement impossible.", session_not_available: "Séance non disponible.",
   payments_not_configured: "Paiements non configurés sur ce déploiement.", credentials_not_configured: "Codes QR non configurés sur ce déploiement.",
   invalid_request: "Données invalides.", conflict: "Existe déjà.", invalid_reference: "Référence invalide.",
+  order_has_no_valid_ticket: "Cette commande n'a plus de billet valide.", email_resend_limit: "Trop de renvois pour cette commande.",
 };
 const errText = (e) => (e instanceof ApiError ? ERRORS_FR[e.code] ?? `Erreur : ${e.code}` : String(e?.message ?? e));
 
@@ -130,8 +132,8 @@ function useLoad(fn, deps) {
 const Loading = () => html`<p class="muted">Chargement…</p>`;
 const Failure = ({ error }) => html`<div class="alert bad" role="alert">${errText(error)}</div>`;
 const Badge = ({ status }) => {
-  const tone = ["paid", "on_sale", "published", "valid", "succeeded", "active"].includes(status) ? "ok"
-    : ["void", "refunded", "cancelled", "expired"].includes(status) ? "bad" : "warn";
+  const tone = ["paid", "on_sale", "published", "valid", "succeeded", "active", "email_sent"].includes(status) ? "ok"
+    : ["void", "refunded", "cancelled", "expired", "email_failed"].includes(status) ? "bad" : "warn";
   return html`<span class="badge ${tone}">${fr(status)}</span>`;
 };
 
@@ -382,6 +384,7 @@ function OrderDetail({ api, base, orderId }) {
     setMessage(`Billets déplacés : nouvelle commande ${r.exchange.reference}.`); setSessions(null); reloadOrder();
   });
   const reissue = (ticketId) => act(async () => { await api(`${base}/tickets/${ticketId}/credential/reissue`, { method: "POST" }); setMessage("Nouveau code QR émis ; l'ancien ne fonctionne plus."); });
+  const resendEmail = act(async () => { await api(`${base}/orders/${orderId}/tickets-email`, { method: "POST" }); setMessage(`Billets renvoyés à ${o.buyerEmail}.`); reloadOrder(); });
   const toggle = (id) => setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
 
   return html`<h1>Commande ${o.reference} <${Badge} status=${o.status} /></h1>
@@ -392,6 +395,12 @@ function OrderDetail({ api, base, orderId }) {
     <table><thead><tr><th>Ligne</th><th class="num">Qté</th><th class="num">Prix</th><th class="num">Total</th></tr></thead>
       <tbody>${o.lines.map((l) => html`<tr><td>${l.nameSnapshot}</td><td class="num">${l.quantity}</td><td class="num">${money(l.unitPriceCents)}</td><td class="num">${money(l.lineTotalCents)}</td></tr>`)}
         ${o.taxes.map((t) => html`<tr><td class="muted">${t.code === "GST" ? "TPS" : "TVQ"}</td><td></td><td></td><td class="num">${money(t.amountCents)}</td></tr>`)}</tbody></table>
+    <h2>Courriel des billets</h2>
+    <div class="card"><div class="row">
+      ${(o.emails ?? []).length === 0 ? html`<span class="muted">Aucun courriel envoyé.</span>`
+        : o.emails.map((e) => html`<span><${Badge} status=${`email_${e.status}`} /> ${e.sentAt ? when(e.sentAt) : ""}${e.lastError && e.status !== "sent" ? html` <span class="muted">(${e.lastError})</span>` : ""}</span>`)}
+      ${["paid", "partially_refunded"].includes(o.status) && html`<button class="secondary" onClick=${resendEmail}>Renvoyer les billets par courriel</button>`}
+    </div></div>
     <h2>Billets</h2>
     <table><thead><tr><th></th><th>Billet</th><th>Statut</th><th></th></tr></thead>
       <tbody>${o.tickets.map((t) => html`<tr>

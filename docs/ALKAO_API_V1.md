@@ -128,6 +128,50 @@ Run `npm run worker:sweeper` (env `DATABASE_URL`, `ALKAO_SWEEP_INTERVAL_SECONDS`
 to expire lapsed holds and return their seats. Public availability already ignores lapsed
 holds even when the sweeper isn't running.
 
+### Buyer delivery (Run 06)
+
+When an order becomes paid, a database trigger queues a "your tickets" email in the same
+transaction, whichever path marked the order paid: the Stripe webhook, a free order, or a
+Flex Météo exchange order, which gets its own "Vos nouveaux billets" email.
+
+**Sending.** `npm run worker:email` sends the queue through Resend. The worker refuses to
+start without `RESEND_API_KEY`, `ALKAO_EMAIL_FROM`, `ALKAO_PUBLIC_URL` (HTTPS) and
+`ALKAO_CREDENTIAL_MASTER_SECRET`. Nothing is sent until it runs. Delivery rules:
+
+- One row per transaction with `FOR UPDATE SKIP LOCKED`: two workers never send the same email.
+- The idempotency key is the same across a crashed attempt and its retry.
+- Temporary failures (429, 5xx, network) are retried with backoff, 8 times at most.
+- Permanent 4xx failures stop at once (`failed`).
+- An email is **skipped**, never sent, if the order no longer has a valid ticket, or if it
+  waited more than `ALKAO_EMAIL_MAX_AGE_HOURS` (default 72). Starting the worker late never
+  sends old emails.
+
+**The link** is `ALKAO_PUBLIC_URL/billets#c=…&b=…&o=…&k=…`:
+
+- **Fragment only.** The order and its token sit after `#`, which browsers never send to a
+  server or in `Referer`.
+- **Derived, never stored.** The token comes from the server secret and the email id, and
+  only its SHA-256 is stored, as an order access token with purpose `email`. A resend or a
+  retry carries the same link.
+- **Independent of checkout.** The checkout token and the email link are separate:
+  rotating one never breaks the other.
+
+**`/billets`** is a static page with a strict CSP, `noindex`, and no data of its own. It shows:
+
+- the Brand, the event, the session and the venue;
+- one QR code per valid ticket, rendered in the browser and dark on white even in dark mode;
+- a clear notice for voided or replaced tickets;
+- the buyer's own **Flex Météo** change, when the order bought it.
+
+| Method | Path | Who | Result |
+|---|---|---|---|
+| GET | `/v1/public/…/orders/:orderId` | Buyer token | Now also `brand`, `event` (title, dates, venue), `exchangeOfOrderId`, `exchanged`, `canChangeSession` |
+| GET | `/v1/admin/…/orders/:orderId` | `orders.read` | Now also `emails`: kind, status, attempts, sentAt, lastError. Never the link |
+| POST | `/v1/admin/…/orders/:orderId/tickets-email` | `credentials.manage` | `202`: queue the tickets email again, with the same link. Audited. `409 order_has_no_valid_ticket`, `409 email_resend_limit` |
+
+`ticketing_email_outbox` holds personal data. It has RLS on, with no grants and no policy, so
+nobody reads it through the Data API.
+
 ### Role → permission
 
 | Role | catalog.read · inventory.read · holds.read | catalog.write | orders.read · buyers.read | audit.read |
@@ -158,6 +202,9 @@ manager only.
 | `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` | — | Platform key and the **Connect** webhook endpoint secret. Without both, payments stay off (`payments_unavailable`/`503`) |
 | `ALKAO_CREDENTIAL_MASTER_SECRET` | — | Secret (≥ 32 chars) from which each Client's QR signing keys are derived. Without it, there are no QR codes and scanning answers `503`. Changing it invalidates every QR code |
 | `ALKAO_STRIPE_ONBOARDING_REFRESH_URL` / `_RETURN_URL` | — | HTTPS pages (TAKATAK dashboard) where Stripe sends a Client admin during and after onboarding |
+| `ALKAO_PUBLIC_URL` | — | Public HTTPS origin of ALKAO, where buyers open `/billets` (email worker) |
+| `RESEND_API_KEY` / `ALKAO_EMAIL_FROM` | — | Email worker: Resend API key and the verified sender address (the Brand name is the display name) |
+| `ALKAO_EMAIL_MAX_AGE_HOURS` | `72` | Emails queued longer ago are skipped, never sent late |
 
 Stripe webhook events to send to `/v1/webhooks/stripe` (Connect endpoint, events on connected
 accounts): `checkout.session.completed`, `checkout.session.expired`,
