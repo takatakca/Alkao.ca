@@ -43,7 +43,7 @@ export class ResendEmailSender implements EmailSender {
           "content-type": "application/json",
           "idempotency-key": m.idempotencyKey,
         },
-        body: JSON.stringify({ from: `${displayName(m.fromName)} <${this.fromAddress}>`, to: [m.to], subject: m.subject, text: m.text, html: m.html }),
+        body: JSON.stringify({ from: `${displayName(m.fromName)} <${this.fromAddress}>`, to: [m.to], subject: m.subject.replace(/[\r\n]+/g, " ").slice(0, 300), text: m.text, html: m.html }),
         signal: AbortSignal.timeout(15_000),
       });
     } catch (error) {

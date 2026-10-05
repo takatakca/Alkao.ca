@@ -52,6 +52,8 @@ const STATUS_BY_CODE: Record<string, ContentfulStatusCode> = {
   email_resend_limit: 409,
   // Run 10
   use_session_cancellation: 409,
+  // Run 13
+  payload_too_large: 413,
   cancellation_not_found: 404,
   nothing_to_exchange: 409,
   ticket_already_used: 409,

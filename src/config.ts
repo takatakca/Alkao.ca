@@ -29,9 +29,12 @@ const EnvSchema = z.object({
   ALKAO_OPS_FRAME_ANCESTORS: z.string().optional(),
   /** Public HTTPS URL of this deployment: hosted shop return URLs and ticket links (Run 06/08). */
   ALKAO_PUBLIC_URL: z.url({ protocol: /^https$/ }).optional(),
+  /** Reverse proxies in front of ALKAO (load balancer = 1, CDN + load balancer = 2, none = 0). */
+  ALKAO_TRUSTED_PROXY_HOPS: z.coerce.number().int().min(0).max(5).default(1),
   ALKAO_HOLD_TTL_SECONDS: z.coerce.number().int().min(60).max(1800).default(600),
   ALKAO_PUBLIC_HOLDS_PER_MINUTE: z.coerce.number().int().min(1).max(1000).default(20),
   PORT: z.coerce.number().int().min(1).max(65535).default(8787),
+  NODE_ENV: z.string().optional(),
 });
 
 export interface Config {
@@ -46,6 +49,7 @@ export interface Config {
   credentialMasterSecret: string | null;
   opsUi: { supabaseUrl: string | null; supabaseAnonKey: string | null; frameAncestors: string[] };
   publicUrl: string | null;
+  trustedProxyHops: number;
   port: number;
 }
 
@@ -85,9 +89,14 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     opsUi: {
       supabaseUrl: e.SUPABASE_URL ?? null,
       supabaseAnonKey: e.SUPABASE_ANON_KEY ?? null,
-      frameAncestors: (e.ALKAO_OPS_FRAME_ANCESTORS ?? "").split(",").map((s) => s.trim()).filter((s) => /^(https:\/\/[a-z0-9.-]+|http:\/\/(localhost|127\.0\.0\.1))(:\d+)?$/.test(s)),
+      // http://localhost is accepted for development only.
+      frameAncestors: (e.ALKAO_OPS_FRAME_ANCESTORS ?? "")
+        .split(",")
+        .map((s) => s.trim())
+        .filter((s) => /^https:\/\/[a-z0-9.-]+(:\d+)?$/.test(s) || (e.NODE_ENV !== "production" && /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(s))),
     },
     publicUrl: e.ALKAO_PUBLIC_URL ?? null,
+    trustedProxyHops: e.ALKAO_TRUSTED_PROXY_HOPS,
     port: e.PORT,
   };
 }
