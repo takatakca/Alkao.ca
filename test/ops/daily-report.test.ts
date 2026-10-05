@@ -79,8 +79,8 @@ describe("the day-by-day report", () => {
     const window = await dailyReport(db.pool, scope(f), { from: "2026-02-27T00:00:00Z", to: "2026-03-03T00:00:00Z" });
     expect(window.timeZone).toBe("America/Toronto");
     expect(window.days).toEqual([
-      { day: "2026-02-28", orders: 1, subtotalCents: 1000, taxCents: 150, gstCents: 50, qstCents: 100, grossCents: 1150, refunds: 0, refundedCents: 0, commissionCents: 60, commissionRefundedCents: 0, netToClientCents: 1090 },
-      { day: "2026-03-01", orders: 1, subtotalCents: 1000, taxCents: 150, gstCents: 50, qstCents: 100, grossCents: 1150, refunds: 0, refundedCents: 0, commissionCents: 60, commissionRefundedCents: 0, netToClientCents: 1090 },
+      { day: "2026-02-28", orders: 1, subtotalCents: 1000, discountCents: 0, taxCents: 150, gstCents: 50, qstCents: 100, grossCents: 1150, refunds: 0, refundedCents: 0, commissionCents: 60, commissionRefundedCents: 0, netToClientCents: 1090 },
+      { day: "2026-03-01", orders: 1, subtotalCents: 1000, discountCents: 0, taxCents: 150, gstCents: 50, qstCents: 100, grossCents: 1150, refunds: 0, refundedCents: 0, commissionCents: 60, commissionRefundedCents: 0, netToClientCents: 1090 },
     ]);
     expect(window.totals).toMatchObject({ orders: 2, grossCents: 2300, gstCents: 100, qstCents: 200, netToClientCents: 2180 });
 
@@ -122,8 +122,9 @@ describe("the day-by-day report", () => {
     expect(res.status).toBe(200);
     expect(res.headers.get("content-disposition")).toBe('attachment; filename="alkao-ventes-par-jour.csv"');
     const lines = (await res.text()).trim().split("\r\n");
-    expect(lines[0]).toBe("day,orders,subtotal_cents,tax_cents,gst_cents,qst_cents,gross_cents,refunds,refunded_cents,commission_cents,commission_refunded_cents,net_to_client_cents");
-    expect(lines.slice(1)).toEqual(["2026-02-28,1,1000,150,50,100,1150,0,0,60,0,1090", "2026-03-01,1,1000,150,50,100,1150,0,0,60,0,1090"]);
+    // Run 36: discount_cents comes last, so the earlier columns keep their place.
+    expect(lines[0]).toBe("day,orders,subtotal_cents,tax_cents,gst_cents,qst_cents,gross_cents,refunds,refunded_cents,commission_cents,commission_refunded_cents,net_to_client_cents,discount_cents");
+    expect(lines.slice(1)).toEqual(["2026-02-28,1,1000,150,50,100,1150,0,0,60,0,1090,0", "2026-03-01,1,1000,150,50,100,1150,0,0,60,0,1090,0"]);
     const { rows } = await db.pool.query(`SELECT count(*)::int AS n FROM public.ticketing_audit_log WHERE action = 'reports.daily_exported'`);
     expect(rows[0].n).toBe(1);
 

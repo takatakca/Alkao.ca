@@ -552,6 +552,25 @@ describe("ALKAO Operations app", () => {
     expect(await staff.getByRole("link", { name: "Journal" }).count()).toBe(0);
   });
 
+  it("creates a promo code on the event page and switches it off (Run 36)", async () => {
+    const f = seed.festi;
+    const page = await signedIn(seed.users.festiOwner);
+    await page.goto(`${origin}/ops#/c/${f.clientId}/b/${f.brandId}/event/${f.eventId}`);
+    const form = page.getByRole("form", { name: "Nouveau code promo" });
+    await form.getByLabel("Code promo").fill("famille-10");
+    await form.getByLabel("Type de rabais").selectOption("amount");
+    await form.getByLabel("Rabais ($)").fill("10");
+    await form.getByLabel("Utilisations max. (facultatif)").fill("50");
+    await form.getByRole("button", { name: "Créer le code" }).click();
+    const row = page.getByRole("row").filter({ hasText: "FAMILLE-10" });
+    await row.waitFor();
+    expect(await row.getByRole("cell").nth(2).textContent()).toBe("0 / 50");
+    await row.getByRole("button", { name: "Désactiver" }).click();
+    await row.getByText("Désactivé").waitFor();
+    const { rows } = await db.pool.query(`SELECT kind, amount_cents, max_uses, active FROM public.ticketing_promo_codes WHERE code = 'FAMILLE-10'`);
+    expect(rows).toEqual([{ kind: "amount", amount_cents: 1000, max_uses: 50, active: false }]);
+  });
+
   it("hides money from gate staff", async () => {
     const page = await signedIn(seed.users.havanaStaff);
     await page.goto(`${origin}/ops#${brandPath()}/dashboard`);

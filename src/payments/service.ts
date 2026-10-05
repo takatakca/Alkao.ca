@@ -10,6 +10,7 @@ import { CHECKOUT_HOLD_GRACE_SECONDS, CHECKOUT_SESSION_SECONDS, orderStatusAfter
 import { quoteFromLines, type Quote } from "../domain/pricing.js";
 import { PaymentProviderError, type CheckoutLineItem, type PaymentGateway, type PaymentWebhookEvent } from "./gateway.js";
 import { voidAfterLostDispute } from "../ops/chargeback.js";
+import * as promoDb from "../db/promo.js";
 
 export interface PaymentsDeps {
   db: Db;
@@ -39,11 +40,21 @@ async function issueOrderToken(tx: Tx, s: TenantScope, orderId: string): Promise
   return token;
 }
 
-/** Stripe line items for an order: paid lines plus one line per tax, summing to the total. */
+/**
+ * Stripe line items for an order: paid lines plus one line per tax, summing to the total.
+ * Run 36: Stripe takes no negative line, so with a promo code the tickets are one line at
+ * the discounted subtotal, named with the code.
+ */
 function checkoutLineItems(quote: Quote): CheckoutLineItem[] {
-  const items: CheckoutLineItem[] = quote.lines
-    .filter((l) => l.unitPriceCents > 0)
-    .map((l) => ({ name: l.name, unitAmountCents: l.unitPriceCents, quantity: l.quantity }));
+  const items: CheckoutLineItem[] = quote.discountCents > 0
+    ? [{
+        name: `${quote.lines.filter((l) => l.unitPriceCents > 0).map((l) => `${l.quantity} × ${l.name}`).join(", ")} (code ${quote.promoCode})`.slice(0, 250),
+        unitAmountCents: quote.subtotalCents - quote.discountCents,
+        quantity: 1,
+      }].filter((l) => l.unitAmountCents > 0)
+    : quote.lines
+      .filter((l) => l.unitPriceCents > 0)
+      .map((l) => ({ name: l.name, unitAmountCents: l.unitPriceCents, quantity: l.quantity }));
   for (const t of quote.taxes) {
     if (t.amountCents > 0) {
       const pct = (t.ratePpm / 10_000).toLocaleString("fr-CA", { maximumFractionDigits: 3 });
@@ -121,7 +132,9 @@ export class PaymentsService {
       mapDbErrors(async () => {
         const hold = await payments.lockHoldForCheckout(tx, scope, holdId);
         if (!hold) throw new DomainError("hold_not_found");
-        const quote = quoteFromLines(hold.items, hold.taxRegion);
+        // Run 36: the code entered with the hold prices the order.
+        const promo = await promoDb.promoOfHold(tx, scope, holdId);
+        const quote = quoteFromLines(hold.items, hold.taxRegion, promo);
 
         const existing = await payments.findOrderForHold(tx, scope, holdId);
         if (existing) {
@@ -149,7 +162,11 @@ export class PaymentsService {
           }
         }
 
-        const order = await createOrderFromHold(tx, { ...scope, holdId, buyer: input.buyer, quote, commissionCents: commission }, now);
+        // A code switched off or past its dates since the hold refuses the order (the buyer can
+        // start again without it). Its last use is enforced by the database on insert.
+        const problem = promo ? promoDb.promoProblem(promo, now) : null;
+        if (problem && problem !== "used_up") throw new DomainError("promo_code_invalid", { reason: problem });
+        const order = await createOrderFromHold(tx, { ...scope, holdId, buyer: input.buyer, quote, commissionCents: commission, promoCodeId: promo?.id ?? null }, now);
         const orderToken = await issueOrderToken(tx, scope, order.id);
 
         if (quote.totalCents === 0) {

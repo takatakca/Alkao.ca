@@ -23,8 +23,14 @@ const T = {
       payment_provider_error: "Le service de paiement ne répond pas. Réessayez.",
       return_url_not_allowed: "Configuration de paiement incomplète chez l'organisateur.",
       invalid_request: "Vérifiez vos informations.",
+      promo_code_invalid: "Le code promo n'est plus valide. Changez votre sélection et retirez-le.",
     },
     generic: "Une erreur est survenue. Réessayez dans un instant.",
+    promo: {
+      label: "Code promo", apply: "Appliquer", remove: "Retirer le code", discount: (c) => `Rabais (${c})`,
+      unknown: "Ce code n'existe pas pour cet événement.", inactive: "Ce code n'est plus actif.",
+      not_started: "Ce code n'est pas encore valide.", ended: "Ce code a expiré.", used_up: "Ce code a atteint sa limite d'utilisations.",
+    },
     v: {
       above_maximum: (n, l) => `${n} : ${l} au maximum par commande.`,
       below_minimum: (n, l) => `${n} : ${l} au minimum.`,
@@ -91,8 +97,14 @@ const T = {
       payment_provider_error: "The payment service is not responding. Please try again.",
       return_url_not_allowed: "The organizer's payment setup is incomplete.",
       invalid_request: "Please check your details.",
+      promo_code_invalid: "The promo code is no longer valid. Change your selection and remove it.",
     },
     generic: "Something went wrong. Please try again in a moment.",
+    promo: {
+      label: "Promo code", apply: "Apply", remove: "Remove the code", discount: (c) => `Discount (${c})`,
+      unknown: "This code does not exist for this event.", inactive: "This code is no longer active.",
+      not_started: "This code is not valid yet.", ended: "This code has expired.", used_up: "This code has reached its limit.",
+    },
     v: {
       above_maximum: (n, l) => `${n}: at most ${l} per order.`,
       below_minimum: (n, l) => `${n}: at least ${l}.`,
@@ -226,6 +238,10 @@ function EventShop({ config }) {
   const [buyer, setBuyer] = useState({ email: "", fullName: "", phone: "" });
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState(null);
+  // Run 36: the code as typed, the code applied (checked by the server), and why it was refused.
+  const [promoInput, setPromoInput] = useState("");
+  const [promo, setPromo] = useState(null);
+  const [promoError, setPromoError] = useState(null);
   const seq = useRef(0);
 
   const load = () => call(`/events/${route.eventId}`).then(setData, setError);
@@ -242,12 +258,16 @@ function EventShop({ config }) {
   useEffect(() => {
     if (!data || items.length === 0) { setQuote(null); setViolations([]); return; }
     const n = ++seq.current;
-    const t = setTimeout(() => call(`/events/${route.eventId}/quote`, { method: "POST", body: { items } }).then(
+    const t = setTimeout(() => call(`/events/${route.eventId}/quote`, { method: "POST", body: { items, ...(promo ? { promoCode: promo } : {}) } }).then(
       (r) => { if (n === seq.current) { setQuote(r.quote); setViolations([]); } },
-      (e) => { if (n === seq.current) { setQuote(null); setViolations(e.code === "cart_invalid" ? e.details ?? [] : []); if (e.code !== "cart_invalid") setError(e); } },
+      (e) => {
+        if (n !== seq.current) return;
+        if (e.code === "promo_code_invalid") { setPromoError(e.details?.reason ?? "unknown"); setPromo(null); return; }
+        setQuote(null); setViolations(e.code === "cart_invalid" ? e.details ?? [] : []); if (e.code !== "cart_invalid") setError(e);
+      },
     ), 200);
     return () => clearTimeout(t);
-  }, [JSON.stringify(items)]);
+  }, [JSON.stringify(items), promo]);
 
   if (error && !data) return html`<main><div class="alert bad" role="alert">${errText(error)}</div></main>`;
   if (!data) return html`<main><p class="boot">${T.loading}</p></main>`;
@@ -264,11 +284,16 @@ function EventShop({ config }) {
   const reserve = async () => {
     setBusy(true); setError(null);
     try {
-      const r = await call(`/holds`, { method: "POST", body: { sessionId, items } });
+      const r = await call(`/holds`, { method: "POST", body: { sessionId, items, ...(promo ? { promoCode: promo } : {}) } });
       setHold({ ...r.hold, expiresAtMs: Date.parse(r.hold.expiresAt) });
-    } catch (e) { setError(e); if (e.code === "sold_out" || e.code === "session_not_available") load(); }
+    } catch (e) {
+      if (e.code === "promo_code_invalid") { setPromoError(e.details?.reason ?? "unknown"); setPromo(null); }
+      else setError(e);
+      if (e.code === "sold_out" || e.code === "session_not_available") load();
+    }
     finally { setBusy(false); }
   };
+  const applyPromo = (e) => { e.preventDefault(); setPromoError(null); setPromo(promoInput.trim() ? promoInput.trim().toUpperCase() : null); };
   const release = async (h) => {
     try { await call(`/holds/${h.id}`, { method: "DELETE", headers: { "x-alkao-hold-token": h.token } }); } catch {}
   };
@@ -332,8 +357,17 @@ function EventShop({ config }) {
             </div></div>`)}
         </div>
         ${violations.length > 0 && html`<div class="alert" role="alert"><ul class="violations">${violations.map((v) => html`<li>${violationText(v, data.ticketTypes)}</li>`)}</ul></div>`}
+        <form class="card promo" onSubmit=${applyPromo}>
+          <label>${T.promo.label}<input value=${promoInput} autocomplete="off" autocapitalize="characters" onInput=${(e) => setPromoInput(e.target.value)} /></label>
+          <div class="actions">
+            <button type="submit" class="secondary">${T.promo.apply}</button>
+            ${promo && html`<button type="button" class="secondary" onClick=${() => { setPromo(null); setPromoInput(""); setPromoError(null); }}>${T.promo.remove}</button>`}
+          </div>
+          ${promoError && html`<div class="alert" role="alert">${T.promo[promoError] ?? T.promo.unknown}</div>`}
+        </form>
         ${quote && html`<div class="card"><table class="quote"><tbody>
           ${quote.lines.map((l) => html`<tr><td>${l.quantity} × ${l.name}</td><td class="num">${money(l.lineTotalCents)}</td></tr>`)}
+          ${quote.discountCents > 0 && html`<tr><td>${T.promo.discount(quote.promoCode)}</td><td class="num">−${money(quote.discountCents)}</td></tr>`}
           ${quote.taxes.map((t) => html`<tr><td class="muted">${t.code === "GST" ? T.gst : t.code === "QST" ? T.qst : t.labelFr}</td><td class="num muted">${money(t.amountCents)}</td></tr>`)}
           <tr class="total"><td>${T.total}</td><td class="num">${money(quote.totalCents)}</td></tr>
         </tbody></table></div>`}
@@ -345,6 +379,7 @@ function EventShop({ config }) {
       <div class="card"><table class="quote"><tbody>
         <tr><td colspan="2"><strong>${whenFr(session?.startsAt ?? hold.quote?.startsAt ?? Date.now(), tz)}</strong></td></tr>
         ${hold.quote.lines.map((l) => html`<tr><td>${l.quantity} × ${l.name}</td><td class="num">${money(l.lineTotalCents)}</td></tr>`)}
+        ${hold.quote.discountCents > 0 && html`<tr><td>${T.promo.discount(hold.quote.promoCode)}</td><td class="num">−${money(hold.quote.discountCents)}</td></tr>`}
         <tr class="total"><td>${T.total}</td><td class="num">${money(hold.quote.totalCents)}</td></tr></tbody></table></div>
       <form class="card" onSubmit=${pay}>
         <label>${T.email}<input type="email" required autocomplete="email" value=${buyer.email} onInput=${(e) => setBuyer({ ...buyer, email: e.target.value })} /></label>

@@ -28,6 +28,8 @@ export interface CreateHoldInput extends TenantScope {
   admissions: number;
   items: HoldItemInput[];
   expiresAt: Date;
+  /** Run 36: the promo code the buyer entered, already checked as usable. */
+  promoCodeId?: string | null;
 }
 
 /** Expire active holds past their deadline; triggers return their capacity. */
@@ -45,10 +47,10 @@ export async function createHold(tx: Tx, input: CreateHoldInput, now = new Date(
   return mapDbErrors(async () => {
     await expireStaleHolds(tx, now, input.sessionId);
     const { rows } = await tx.query<{ id: string; expires_at: Date }>(
-      `INSERT INTO public.ticketing_holds (client_id, brand_id, event_id, session_id, quantity, expires_at)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO public.ticketing_holds (client_id, brand_id, event_id, session_id, quantity, expires_at, promo_code_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING id, expires_at`,
-      [input.clientId, input.brandId, input.eventId, input.sessionId, input.admissions, input.expiresAt],
+      [input.clientId, input.brandId, input.eventId, input.sessionId, input.admissions, input.expiresAt, input.promoCodeId ?? null],
     );
     const hold = rows[0]!;
     for (const item of input.items) {
@@ -86,6 +88,8 @@ export interface CreateOrderInput extends TenantScope {
   buyer: BuyerInput;
   quote: Quote;
   commissionCents: number;
+  /** Run 36: counts one use of the code (the database refuses it past the limit). */
+  promoCodeId?: string | null;
 }
 
 export interface CreatedOrder {
@@ -127,12 +131,13 @@ export async function createOrderFromHold(tx: Tx, input: CreateOrderInput, now =
         const { rows } = await tx.query<{ id: string; reference: string }>(
           `INSERT INTO public.ticketing_orders
              (client_id, brand_id, event_id, session_id, hold_id, buyer_id, reference,
-              subtotal_cents, tax_cents, total_cents, commission_cents)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+              subtotal_cents, tax_cents, total_cents, commission_cents, discount_cents, promo_code_id)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
            RETURNING id, reference`,
           [
             input.clientId, input.brandId, hold.event_id, hold.session_id, input.holdId, buyerId,
             newOrderReference(), q.subtotalCents, q.taxCents, q.totalCents, input.commissionCents,
+            q.discountCents, input.promoCodeId ?? null,
           ],
         );
         order = rows[0];
