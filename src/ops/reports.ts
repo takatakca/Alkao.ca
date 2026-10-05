@@ -2,7 +2,7 @@ import type { TenantScope } from "../db/commerce.js";
 import type { Db } from "../db/pool.js";
 
 /** Orders that took money (refunded ones included: they still show what was refunded). */
-const PAID = `o.status IN ('paid', 'partially_refunded', 'refunded')`;
+const PAID = `o.status IN ('paid', 'partially_refunded', 'refunded') AND o.exchange_of_order_id IS NULL`;
 
 export interface ReportFilter {
   eventId?: string | undefined;

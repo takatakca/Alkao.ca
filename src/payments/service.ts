@@ -348,7 +348,10 @@ export class PaymentsService {
         amount,
       );
       const { rows: valid } = await tx.query<{ id: string }>(
-        `SELECT id FROM public.ticketing_tickets WHERE order_id = $1 AND client_id = $2 AND brand_id = $3 AND status = 'valid'`,
+        // Tickets moved by a Flex exchange still belong to the paid order for refunds.
+        `SELECT id FROM public.ticketing_tickets
+         WHERE (order_id = $1 OR order_id IN (SELECT id FROM public.ticketing_orders WHERE exchange_of_order_id = $1))
+           AND client_id = $2 AND brand_id = $3 AND status = 'valid'`,
         [orderId, scope.clientId, scope.brandId],
       );
       const validIds = new Set(valid.map((t) => t.id));
@@ -444,7 +447,8 @@ export class PaymentsService {
       if (current.voidTicketIds.length > 0) {
         await tx.query(
           `UPDATE public.ticketing_tickets SET status = 'void', void_reason = 'refunded', voided_at = now()
-           WHERE id = ANY($1::uuid[]) AND order_id = $2 AND status = 'valid'`,
+           WHERE id = ANY($1::uuid[]) AND status = 'valid'
+             AND (order_id = $2 OR order_id IN (SELECT id FROM public.ticketing_orders WHERE exchange_of_order_id = $2))`,
           [current.voidTicketIds, current.orderId],
         );
       }

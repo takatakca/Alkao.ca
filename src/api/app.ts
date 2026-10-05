@@ -23,6 +23,7 @@ import * as credentialsDb from "../db/credentials.js";
 import { CredentialsService } from "../scanner/service.js";
 import { toCsv } from "../ops/csv.js";
 import * as reports from "../ops/reports.js";
+import { exchangeOrder } from "../ops/exchange.js";
 
 export const API_VERSION = "alkao.api.v1";
 
@@ -606,6 +607,31 @@ export function createApp(deps: AppDeps) {
         rows,
       ),
     );
+  });
+
+  // ── Run 04: Flex Météo session change ────────────────────────────────────
+  app.post(`${PUBLIC}/orders/:orderId/exchange`, publicGate, async (c) => {
+    const orderId = param(c, "orderId");
+    const token = c.req.header("x-alkao-order-token");
+    const scope = c.get("scope");
+    if (!orderId || !token || token.length > 100) return fail(c, 404, "order_not_found");
+    const { rowCount } = await deps.db.query(
+      `SELECT 1 FROM public.ticketing_access_tokens
+       WHERE token_hash = $1 AND subject_type = 'order' AND subject_id = $2 AND client_id = $3 AND brand_id = $4`,
+      [sha256(token), orderId, scope.clientId, scope.brandId],
+    );
+    if (!rowCount) return fail(c, 404, "order_not_found");
+    const body = api.ExchangeRequest.parse(await readJson(c));
+    const result = await exchangeOrder(deps.db, scope, orderId, body.sessionId, { type: "public", id: null }, now());
+    return c.json({ exchange: { orderId: result.exchangeOrderId, reference: result.reference, token: result.orderToken, tickets: result.ticketIds.length } }, 201);
+  });
+
+  app.post(`${ADMIN}/orders/:orderId/exchange`, ...admin, can("ticketing.credentials.manage"), async (c) => {
+    const orderId = param(c, "orderId");
+    if (!orderId) return fail(c, 404, "order_not_found");
+    const body = api.ExchangeRequest.parse(await readJson(c));
+    const result = await exchangeOrder(deps.db, c.get("scope"), orderId, body.sessionId, actor(c), now());
+    return c.json({ exchange: { orderId: result.exchangeOrderId, reference: result.reference, token: result.orderToken, tickets: result.ticketIds.length } }, 201);
   });
 
   return app;

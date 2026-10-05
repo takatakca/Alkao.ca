@@ -104,11 +104,11 @@ export async function seedTenant(db: Db, clientName: string, brandName: string, 
       const { rows } = await tx.query<{ id: string }>(
         `INSERT INTO public.ticketing_ticket_types
            (client_id, brand_id, event_id, code, name, kind, price_cents, min_quantity, max_quantity,
-            max_adults_in_order, counts_as_adult, add_on_scope, sort_order)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING id`,
+            max_adults_in_order, counts_as_adult, add_on_scope, sort_order, grants_session_change)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING id`,
         [
           clientId, brandId, eventId, t.code, t.name, t.kind, t.priceCents, t.minQuantity, t.maxQuantity,
-          t.maxAdultsInOrder, t.countsAsAdult, t.addOnScope, i,
+          t.maxAdultsInOrder, t.countsAsAdult, t.addOnScope, i, t.code === "FLEX_WEATHER",
         ],
       );
       types.push({ ...t, id: rows[0]!.id });

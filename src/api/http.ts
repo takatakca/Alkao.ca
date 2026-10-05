@@ -44,6 +44,11 @@ const STATUS_BY_CODE: Record<string, ContentfulStatusCode> = {
   refund_state_changed: 409,
   invalid_ticket: 422,
   credentials_not_configured: 503,
+  already_exchanged: 409,
+  order_not_exchangeable: 409,
+  flex_not_purchased: 409,
+  nothing_to_exchange: 409,
+  ticket_already_used: 409,
 };
 
 /** Domain error details safe to return to callers (never constraint or column names). */

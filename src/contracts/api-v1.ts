@@ -99,11 +99,14 @@ const ticketTypeFields = {
   addOnScope: z.enum(["per_admission"]).nullish(),
   active: z.boolean().default(true),
   sortOrder: z.number().int().min(0).max(10_000).default(0),
+  /** Add-ons only: buying it allows one session change (FESTI-ICE Flex Météo). */
+  grantsSessionChange: z.boolean().default(false),
 };
 export const CreateTicketType = z
   .object(ticketTypeFields)
   .refine((t) => t.minQuantity <= t.maxQuantity, { message: "minQuantity must not exceed maxQuantity" })
-  .refine((t) => (t.kind === "add_on") === Boolean(t.addOnScope), { message: "add-ons need addOnScope; admissions must not have one" });
+  .refine((t) => (t.kind === "add_on") === Boolean(t.addOnScope), { message: "add-ons need addOnScope; admissions must not have one" })
+  .refine((t) => !t.grantsSessionChange || t.kind === "add_on", { message: "only add-ons can grant a session change" });
 export const UpdateTicketType = z
   .object({
     name,
@@ -180,3 +183,5 @@ export const ReportQuery = z
   .refine((q) => !q.from || !q.to || Date.parse(q.from) < Date.parse(q.to), { message: "from must be before to" });
 
 export const AttendeesQuery = z.object({ sessionId: z.uuid() });
+
+export const ExchangeRequest = z.object({ sessionId: z.uuid() });

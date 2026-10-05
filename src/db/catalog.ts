@@ -23,7 +23,7 @@ const EVENT_COLUMNS =
   "id, venue_id, slug, title, description, status, sales_open_at, sales_close_at, admission_opens_before_minutes, admission_closes_after_minutes, created_at, updated_at";
 const SESSION_COLUMNS = "id, event_id, starts_at, ends_at, capacity, reserved_count, sold_count, status, created_at, updated_at";
 const TYPE_COLUMNS =
-  "id, event_id, code, name, description, kind, price_cents, min_quantity, max_quantity, max_adults_in_order, counts_as_adult, add_on_scope, active, sort_order, created_at, updated_at";
+  "id, event_id, code, name, description, kind, price_cents, min_quantity, max_quantity, max_adults_in_order, counts_as_adult, add_on_scope, grants_session_change, active, sort_order, created_at, updated_at";
 
 /** camelCase body field → column, for whitelisted updates. */
 function updateSet(fields: Record<string, unknown>, allowed: Record<string, string>, startAt: number) {
@@ -156,16 +156,17 @@ export const listTicketTypes = (q: Queryable, s: TenantScope, eventId: string) =
 export function createTicketType(q: Queryable, s: TenantScope, eventId: string, t: {
   code: string; name: string; description?: string | null; kind: string; priceCents: number; minQuantity: number; maxQuantity: number;
   maxAdultsInOrder?: number | null; countsAsAdult: boolean; addOnScope?: string | null; active: boolean; sortOrder: number;
+  grantsSessionChange?: boolean | undefined;
 }) {
   return mapDbErrors(() =>
     one(
       q,
       `INSERT INTO public.ticketing_ticket_types
          (client_id, brand_id, event_id, code, name, description, kind, price_cents, min_quantity, max_quantity,
-          max_adults_in_order, counts_as_adult, add_on_scope, active, sort_order)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING ${TYPE_COLUMNS}`,
+          max_adults_in_order, counts_as_adult, add_on_scope, active, sort_order, grants_session_change)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) RETURNING ${TYPE_COLUMNS}`,
       [s.clientId, s.brandId, eventId, t.code, t.name, t.description ?? null, t.kind, t.priceCents, t.minQuantity, t.maxQuantity,
-        t.maxAdultsInOrder ?? null, t.countsAsAdult, t.addOnScope ?? null, t.active, t.sortOrder],
+        t.maxAdultsInOrder ?? null, t.countsAsAdult, t.addOnScope ?? null, t.active, t.sortOrder, t.grantsSessionChange ?? false],
       "ticket_type_not_found",
     ),
   );
