@@ -18,7 +18,8 @@
     "qa": "npm run typecheck && npm run check:migrations && npm test",
     "start": "tsx src/server.ts",
     "contracts:generate": "tsx scripts/generate-contracts.ts",
-    "worker:sweeper": "tsx scripts/sweeper.ts"
+    "worker:sweeper": "tsx scripts/sweeper.ts",
+    "worker:email": "tsx scripts/email-worker.ts"
   },
   "dependencies": {
     "@hono/node-server": "^2.1.3",
@@ -26,6 +27,7 @@
     "htm": "^3.1.1",
     "jose": "^6.2.12",
     "pg": "^8.23.1",
+    "qrcode-generator": "^2.0.4",
     "stripe": "^23.0.0",
     "zod": "^4.6.5"
   },

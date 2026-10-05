@@ -47,6 +47,9 @@ const STATUS_BY_CODE: Record<string, ContentfulStatusCode> = {
   already_exchanged: 409,
   order_not_exchangeable: 409,
   flex_not_purchased: 409,
+  // Run 06
+  order_has_no_valid_ticket: 409,
+  email_resend_limit: 409,
   nothing_to_exchange: 409,
   ticket_already_used: 409,
 };

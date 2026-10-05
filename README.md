@@ -28,6 +28,7 @@ versioned control contract.
 | `src/payments` | Payment gateway interface, Stripe implementation, checkout, webhook and refund service |
 | `src/ops` | Hold sweeper, sales reports, CSV exports, Flex Météo exchange (Run 04) |
 | `ops-ui/` | Standalone Operations web app served at `/ops` (Preact + htm, no build step) |
+| `src/delivery`, `buyer-ui/` | Buyers' tickets email (outbox, Resend, worker) and the buyer's tickets page at `/billets` (Run 06) |
 | `src/credentials`, `src/scanner` | Ed25519 QR credentials (`ALK1`), derived per-Client keys, scanner manifest and gate scans |
 | `contracts/` | Published JSON Schema of `alkao.control.v1` (generated; drift-tested) |
 | `supabase/migrations` | Schema. Every `ticketing_*` table enables RLS in the migration that creates it |
@@ -50,6 +51,7 @@ Run the server (it starts **disabled**: `ALKAO_OPERATIONAL_API_ENABLED=false`):
 cp .env.example .env    # then fill DATABASE_URL, auth and control keys
 npm start
 npm run worker:sweeper  # expires lapsed holds every minute
+npm run worker:email    # sends buyers their tickets (needs RESEND_API_KEY, ALKAO_EMAIL_FROM, ALKAO_PUBLIC_URL)
 ```
 
 Operations app: open `http://localhost:8787/ops` and sign in with a Supabase account that has a
@@ -75,4 +77,6 @@ TAKATAK membership (set `SUPABASE_URL` and `SUPABASE_ANON_KEY`). See
 | Run 01 | PR 1 capability status · PR 2 domain, schema, RLS, invariants · PR 3 API contracts and entitlement gates |
 | Run 02 | Stripe Connect onboarding, checkout (direct charges, application fee), webhooks, refunds with the V1 commission policy |
 | Run 03 | Signed QR credentials (`ALK1`: stable ids and key id only), key rotation, scanner manifest, online and offline scans with single admission |
-| Run 04 | Operations: hold sweeper, sales reports, CSV exports, Flex Météo exchange, standalone Operations app (`/ops`). Next: embed it in the TAKATAK dashboard (separate run, writes to takatak-v1) |
+| Run 04 | Operations: hold sweeper, sales reports, CSV exports, Flex Météo exchange, standalone Operations app (`/ops`) |
+| Run 05 | `/ops` embedded in the TAKATAK dashboard: postMessage session handover. The TAKATAK side is an add-only PR, off by default, with no database change |
+| Run 06 | Buyers get their tickets: tickets email queued at payment (worker, retries, never twice), personal `/billets` page with QR codes and self-service Flex Météo |

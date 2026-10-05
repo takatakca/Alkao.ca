@@ -66,7 +66,7 @@ describe("ALKAO Operations app", () => {
   it("asks for credentials when signed out", async () => {
     const page = await (await browser.newContext()).newPage();
     await page.goto(`${origin}/ops`);
-    await expect(page.getByRole("button", { name: "Se connecter" }).isVisible()).resolves.toBe(true);
+    await page.getByRole("button", { name: "Se connecter" }).waitFor();
   });
 
   it("lets an owner pick a workspace and see the dashboard", async () => {
@@ -128,6 +128,15 @@ describe("ALKAO Operations app", () => {
     await page.getByRole("button", { name: "Rembourser", exact: true }).click();
     await page.getByRole("alert").waitFor();
     expect(await page.getByRole("alert").textContent()).toContain("Paiements non configurés");
+  });
+
+  it("shows the tickets email state and sends it again", async () => {
+    const page = await signedIn(seed.users.havanaOwner);
+    await page.goto(`${origin}/ops#${brandPath()}/order/${seed.havana.orderId}`);
+    await page.getByRole("heading", { name: "Courriel des billets" }).waitFor();
+    await page.getByRole("button", { name: "Renvoyer les billets par courriel" }).click();
+    await page.getByText("Billets renvoyés à", { exact: false }).waitFor();
+    await page.getByText("En attente d'envoi").waitFor();
   });
 
   it("scans tickets at the gate: accepted once, then already in", async () => {

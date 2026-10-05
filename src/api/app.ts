@@ -25,6 +25,8 @@ import { toCsv } from "../ops/csv.js";
 import * as reports from "../ops/reports.js";
 import { exchangeOrder } from "../ops/exchange.js";
 import { mountOpsUi, type OpsUiConfig } from "./ops-ui.js";
+import { mountBuyerUi } from "./buyer-ui.js";
+import * as delivery from "../delivery/db.js";
 
 export const API_VERSION = "alkao.api.v1";
 
@@ -426,7 +428,17 @@ export function createApp(deps: AppDeps) {
   app.get(`${ADMIN}/orders/:orderId`, ...admin, can("ticketing.orders.read"), async (c) => {
     const orderId = param(c, "orderId");
     if (!orderId) return fail(c, 404, "order_not_found");
-    return c.json({ order: await catalog.getOrder(deps.db, c.get("scope"), orderId) });
+    const scope = c.get("scope");
+    const [order, emails] = await Promise.all([catalog.getOrder(deps.db, scope, orderId), delivery.listOrderEmails(deps.db, scope, orderId)]);
+    return c.json({ order: { ...order, emails } });
+  });
+
+  // ── Run 06: send the buyer's tickets email again (same personal link) ──────────
+  app.post(`${ADMIN}/orders/:orderId/tickets-email`, ...admin, can("ticketing.credentials.manage"), async (c) => {
+    const orderId = param(c, "orderId");
+    if (!orderId) return fail(c, 404, "order_not_found");
+    const email = await withTransaction(deps.db, (tx) => delivery.requestTicketsEmail(tx, c.get("scope"), orderId, actor(c)));
+    return c.json({ email }, 202);
   });
 
   app.get(`${ADMIN}/audit`, ...admin, can("ticketing.audit.read"), async (c) => {
@@ -465,7 +477,9 @@ export function createApp(deps: AppDeps) {
     // QR payload per valid ticket (null for void tickets, or until credentials are configured).
     const payloads = await credentials.payloadsForOrder(scope, orderId);
     const tickets = (order.tickets as { id: string }[]).map((t) => ({ ...t, credential: payloads.get(t.id) ?? null }));
-    return c.json({ order: { ...publicOrder, tickets } });
+    // Run 06: what the buyer's ticket page shows (brand, event, session, venue, Flex option).
+    const context = await delivery.publicOrderContext(deps.db, scope, orderId);
+    return c.json({ order: { ...publicOrder, tickets, ...context } });
   });
 
   // ── Run 02: Stripe webhooks ──────────────────────────────────────────────
@@ -667,6 +681,7 @@ export function createApp(deps: AppDeps) {
   });
 
   mountOpsUi(app, deps.opsUi ?? { supabaseUrl: null, supabaseAnonKey: null, frameAncestors: [] });
+  mountBuyerUi(app);
 
   return app;
 }
