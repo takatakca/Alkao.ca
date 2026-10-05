@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createTestDatabase, type TestDatabase } from "../helpers/db.js";
-import { adm, call, controlRequest, pub, sendControl, testApp, tokenFor, type TestApp } from "../helpers/app.js";
+import { signControlPayload } from "../../src/api/control-signature.js";
+import { adm, call, CONTROL_KEY_ID, CONTROL_SECRET, controlRequest, pub, sendControl, testApp, tokenFor, type TestApp } from "../helpers/app.js";
 
 let db: TestDatabase;
 let app: TestApp;
@@ -125,5 +126,51 @@ describe("control contract application", () => {
       "control.entitlement_updated",
       "control.entitlement_updated",
     ]);
+  });
+});
+
+describe("control state (reconciliation)", () => {
+  const signedState = (body: Record<string, unknown>, secret?: string) => {
+    const raw = JSON.stringify({ contract: "alkao.control.v1", ...body });
+    const timestamp = Math.floor(Date.now() / 1000);
+    return {
+      body: raw,
+      headers: {
+        "x-alkao-key-id": CONTROL_KEY_ID,
+        "x-alkao-timestamp": String(timestamp),
+        "x-alkao-signature": signControlPayload(secret ?? CONTROL_SECRET, timestamp, raw),
+      },
+    };
+  };
+  const state = (body: Record<string, unknown>, secret?: string) => {
+    const r = signedState(body, secret);
+    return call(app, "POST", "/v1/control/state", { body: r.body, headers: r.headers });
+  };
+
+  it("returns what ALKAO holds, with versions, only to a signed caller", async () => {
+    const clientId = randomUUID();
+    const brandId = randomUUID();
+    const userId = randomUUID();
+    await sendControl(app, client(clientId, 10));
+    await sendControl(app, controlRequest("brand.upserted", { clientId, brandId, name: "Havana Resort", status: "active", version: 11 }));
+    await sendControl(app, controlRequest("membership.upserted", { clientId, userId, role: "manager", status: "active", version: 12 }));
+    await sendControl(app, controlRequest("entitlement.updated", { clientId, brandId, status: "active", version: 13 }));
+
+    const res = await state({ clientIds: [clientId] });
+    expect(res.status).toBe(200);
+    expect(res.body.clients).toEqual([
+      {
+        clientId, name: "Havana Resort", status: "active", timezone: "America/Toronto",
+        commission: { rateBps: 500, fixedCentsPerPaidAdmission: 50 }, version: 10,
+        brands: [{ brandId, name: "Havana Resort", status: "active", version: 11, entitlement: { status: "active", validFrom: null, validUntil: null, version: 13 } }],
+        members: [{ userId, role: "manager", status: "active", version: 12 }],
+      },
+    ]);
+    const all = await state({});
+    expect(all.body.clients.map((c: { clientId: string }) => c.clientId)).toContain(clientId);
+
+    expect((await call(app, "POST", "/v1/control/state", { body: JSON.stringify({ contract: "alkao.control.v1" }) })).status).toBe(401);
+    expect((await state({}, "y".repeat(40))).status).toBe(401);
+    expect((await state({ clientIds: ["nope"] })).status).toBe(400);
   });
 });

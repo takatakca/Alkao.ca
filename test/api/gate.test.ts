@@ -27,6 +27,7 @@ afterAll(async () => {
 const UNGATED = new Set([
   "GET /health",
   "POST /v1/control/events",
+  "POST /v1/control/state",
   "POST /v1/webhooks/stripe",
   "GET /v1/admin/clients/:clientId/brands/:brandId/status",
   // The caller's own memberships (no tenant id in the request).
