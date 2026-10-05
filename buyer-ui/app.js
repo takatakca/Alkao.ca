@@ -93,7 +93,15 @@ function App() {
   const [state, setState] = useState({ loading: true });
   useEffect(() => {
     if (!link) return setState({ error: "Lien incomplet. Ouvrez le lien reçu par courriel." });
-    call(`/orders/${link.o}`, { token: link.k }).then((d) => setState({ order: d.order }), (e) => setState({ error: message(e) }));
+    // Back from Stripe, the payment may still be confirming: check again for up to 2 minutes.
+    let tries = 0;
+    let timer;
+    const load = () => call(`/orders/${link.o}`, { token: link.k }).then(
+      (d) => { setState({ order: d.order }); if (d.order.status === "pending_payment" && ++tries < 40) timer = setTimeout(load, 3000); },
+      (e) => setState({ error: message(e) }),
+    );
+    load();
+    return () => clearTimeout(timer);
   }, []);
   if (state.loading) return html`<main><p class="boot">Chargement de vos billets…</p></main>`;
   if (state.error) return html`<main><h1>Mes billets</h1><div class="alert bad" role="alert">${state.error}</div></main>`;

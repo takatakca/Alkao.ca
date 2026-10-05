@@ -33,10 +33,11 @@ const UNGATED = new Set([
   "GET /v1/admin/me",
 ]);
 
-// Static files of the Operations app and the buyer's tickets page: no data, every call
-// goes through the gated API.
+// Static files of the Operations app, the buyer's tickets page and the hosted shop: no
+// data, every call goes through the gated API.
 const isOpsAsset = (path: string) =>
-  path === "/ops" || path.startsWith("/ops/") || path === "/billets" || path.startsWith("/billets/");
+  path === "/ops" || path.startsWith("/ops/") || path === "/billets" || path.startsWith("/billets/") ||
+  path.startsWith("/acheter/") || path.startsWith("/shop/");
 
 function routesOf(app: TestApp) {
   const seen = new Set<string>();
