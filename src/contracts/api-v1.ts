@@ -1,0 +1,116 @@
+import { z } from "zod";
+
+/**
+ * ALKAO API v1 request contracts. Unknown keys are stripped: a client can never send a
+ * price, a status it is not allowed to set, or a tenant id in a body.
+ */
+
+const id = z.uuid();
+const quantity = z.number().int().min(0).max(1000);
+const slug = z.string().regex(/^[a-z0-9]+(-[a-z0-9]+)*$/).max(80);
+const name = z.string().trim().min(1).max(200);
+const text = z.string().max(5000);
+const timestamp = z.iso.datetime({ offset: true });
+const cents = z.number().int().min(0).max(10_000_000);
+
+export const CartItems = z
+  .array(z.object({ ticketTypeId: id, quantity }))
+  .min(1)
+  .max(50);
+
+// ── Public (buyer-facing) ───────────────────────────────────────────────────
+export const QuoteRequest = z.object({ items: CartItems });
+
+export const CreateHoldRequest = z.object({
+  sessionId: id,
+  items: CartItems,
+});
+
+// ── Admin: catalog ──────────────────────────────────────────────────────────
+export const CreateVenue = z.object({
+  name,
+  addressLine1: z.string().max(200).nullish(),
+  city: z.string().max(100).nullish(),
+  region: z.string().max(100).nullish(),
+  postalCode: z.string().max(20).nullish(),
+  country: z.string().regex(/^[A-Z]{2}$/).default("CA"),
+  timezone: z.string().min(1).max(64).default("America/Toronto"),
+  taxRegion: z.enum(["CA-QC"]).default("CA-QC"),
+});
+export const UpdateVenue = CreateVenue.partial().refine((o) => Object.keys(o).length > 0, "empty update");
+
+export const CreateEvent = z
+  .object({
+    venueId: id,
+    slug,
+    title: name,
+    description: text.nullish(),
+    salesOpenAt: timestamp.nullish(),
+    salesCloseAt: timestamp.nullish(),
+  })
+  .refine((e) => !e.salesOpenAt || !e.salesCloseAt || Date.parse(e.salesOpenAt) < Date.parse(e.salesCloseAt), {
+    message: "salesOpenAt must be before salesCloseAt",
+  });
+export const UpdateEvent = z
+  .object({
+    title: name,
+    description: text.nullable(),
+    status: z.enum(["draft", "published", "cancelled", "archived"]),
+    salesOpenAt: timestamp.nullable(),
+    salesCloseAt: timestamp.nullable(),
+  })
+  .partial()
+  .refine((o) => Object.keys(o).length > 0, "empty update");
+
+export const CreateSession = z
+  .object({
+    startsAt: timestamp,
+    endsAt: timestamp.nullish(),
+    capacity: z.number().int().min(0).max(1_000_000),
+  })
+  .refine((s) => !s.endsAt || Date.parse(s.startsAt) < Date.parse(s.endsAt), { message: "endsAt must be after startsAt" });
+export const UpdateSession = z
+  .object({
+    capacity: z.number().int().min(0).max(1_000_000),
+    status: z.enum(["draft", "on_sale", "paused", "cancelled", "closed"]),
+    endsAt: timestamp.nullable(),
+  })
+  .partial()
+  .refine((o) => Object.keys(o).length > 0, "empty update");
+
+const ticketTypeFields = {
+  code: z.string().regex(/^[A-Z0-9_]{1,40}$/),
+  name,
+  description: text.nullish(),
+  kind: z.enum(["admission", "add_on"]).default("admission"),
+  priceCents: cents,
+  minQuantity: z.number().int().min(0).max(1000).default(0),
+  maxQuantity: z.number().int().min(1).max(1000),
+  maxAdultsInOrder: z.number().int().min(0).max(1000).nullish(),
+  countsAsAdult: z.boolean().default(false),
+  addOnScope: z.enum(["per_admission"]).nullish(),
+  active: z.boolean().default(true),
+  sortOrder: z.number().int().min(0).max(10_000).default(0),
+};
+export const CreateTicketType = z
+  .object(ticketTypeFields)
+  .refine((t) => t.minQuantity <= t.maxQuantity, { message: "minQuantity must not exceed maxQuantity" })
+  .refine((t) => (t.kind === "add_on") === Boolean(t.addOnScope), { message: "add-ons need addOnScope; admissions must not have one" });
+export const UpdateTicketType = z
+  .object({
+    name,
+    description: text.nullable(),
+    priceCents: cents,
+    minQuantity: ticketTypeFields.minQuantity,
+    maxQuantity: ticketTypeFields.maxQuantity,
+    maxAdultsInOrder: z.number().int().min(0).max(1000).nullable(),
+    active: z.boolean(),
+    sortOrder: z.number().int().min(0).max(10_000),
+  })
+  .partial()
+  .refine((o) => Object.keys(o).length > 0, "empty update");
+
+export const ListQuery = z.object({
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+  before: timestamp.optional(),
+});
