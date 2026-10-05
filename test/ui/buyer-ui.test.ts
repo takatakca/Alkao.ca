@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import type { AddressInfo } from "node:net";
 import { randomUUID } from "node:crypto";
 import { serve, type ServerType } from "@hono/node-server";
@@ -106,6 +106,23 @@ describe("buyer tickets page", () => {
     const srcs = await qrs.evaluateAll((els) => els.map((e) => e.getAttribute("src")));
     expect(srcs).toEqual(order.tickets.map((t: { credential: string }) => qrFor(t.credential)));
     expect(await page.getByRole("button", { name: "Voir les autres séances" }).count()).toBe(0);
+  });
+
+  it("offers the session as a calendar file, without the personal link (Run 31)", async () => {
+    const f = seed.festi;
+    const o = await buy(f, { GENERAL: 1 });
+    const order = (await call(app, "GET", `${pub(f.clientId, f.brandId)}/orders/${o.orderId}`, { headers: { "x-alkao-order-token": o.token } })).body.order;
+    const page = await open(linkFor(f, o));
+    const [download] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: "Ajouter à mon calendrier" }).click()]);
+    expect(download.suggestedFilename()).toBe(`${order.reference}.ics`);
+    const ics = readFileSync((await download.path())!, "utf8");
+    const unfolded = ics.replace(/\r\n /g, "");
+    expect(unfolded).toContain(`UID:${o.orderId}@alkao`);
+    expect(unfolded).toContain(`DTSTART:${new Date(order.event.startsAt).toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "")}`);
+    expect(unfolded).toContain(`SUMMARY:${order.event.title}`);
+    expect(unfolded).toContain(`Commande ${order.reference}`);
+    expect(ics).not.toContain(o.token);
+    expect(ics).not.toContain("/billets");
   });
 
   it("explains a wrong or incomplete link without revealing anything", async () => {

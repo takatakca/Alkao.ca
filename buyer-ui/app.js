@@ -4,6 +4,7 @@
 import { html, render, useEffect, useState } from "/billets/vendor/htm-preact.js";
 import qrcode from "/billets/vendor/qrcode.mjs";
 import { localeOf, pickLanguage, switchLanguage } from "/billets/i18n.js";
+import { calendarFile } from "/billets/calendar.js";
 
 const LANG = pickLanguage();
 document.documentElement.lang = LANG === "en" ? "en-CA" : "fr-CA";
@@ -40,6 +41,8 @@ const T = {
     ticket: "Billet",
     footer: "Billetterie ALKAO · Ce lien est personnel : ne le partagez pas.",
     other: "English",
+    addToCalendar: "Ajouter à mon calendrier",
+    calendarText: (ref, brand) => `${brand} · Commande ${ref}. Vos billets sont dans votre courriel de confirmation.`,
   },
   en: {
     errors: {
@@ -73,6 +76,8 @@ const T = {
     ticket: "Ticket",
     footer: "ALKAO Ticketing · This link is personal: do not share it.",
     other: "Français",
+    addToCalendar: "Add to my calendar",
+    calendarText: (ref, brand) => `${brand} · Order ${ref}. Your tickets are in your confirmation email.`,
   },
 }[LANG];
 
@@ -150,6 +155,18 @@ function ChangeSession({ order, token }) {
   </div>`;
 }
 
+// Run 31: an .ics file made here, from what the page shows; the personal link is not in it.
+function addToCalendar(o) {
+  const file = calendarFile({
+    orderId: o.id, title: o.event.title, startsAt: o.event.startsAt, endsAt: o.event.endsAt, venue: o.event.venue,
+    description: T.calendarText(o.reference, o.brand.name),
+  });
+  const url = URL.createObjectURL(new Blob([file], { type: "text/calendar;charset=utf-8" }));
+  const a = Object.assign(document.createElement("a"), { href: url, download: `${o.reference}.ics` });
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 const switcher = html`<p class="lang noprint"><button class="link" onClick=${() => switchLanguage(LANG === "en" ? "fr" : "en")}>${T.other}</button></p>`;
 
 function App() {
@@ -180,6 +197,7 @@ function App() {
       <p><strong>${whenFr(o.event.startsAt, tz)}</strong></p>
       <p>${o.event.venue.name}${o.event.venue.city ? `, ${o.event.venue.city}` : ""}</p>
       <p class="muted">${T.order} ${o.reference}${o.buyerName ? ` · ${o.buyerName}` : ""}</p>
+      ${valid.length > 0 && !o.exchanged && html`<p class="noprint"><button onClick=${() => addToCalendar(o)}>${T.addToCalendar}</button></p>`}
     </div>
     ${o.status === "pending_payment" && html`<div class="alert">${T.pending}</div>`}
     ${o.exchanged && html`<div class="alert">${T.replaced}</div>`}
