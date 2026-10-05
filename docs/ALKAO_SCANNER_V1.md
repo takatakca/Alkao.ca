@@ -63,6 +63,22 @@ starts if it has no end.
 
 The device then uploads its scans when it is back online.
 
+**In the Operations app (Run 09).** Scanner, then **Préparer le mode hors ligne**: the device
+stores the session's manifest. With no network, it checks each code itself:
+
+1. the `ALK1` format and the key id;
+2. the Ed25519 signature, through WebCrypto;
+3. revocation;
+4. whether the ticket was already admitted (manifest or this device);
+5. the gate window.
+
+Every attempt is queued in the device's storage and sent through `scans/batch`: every 15 s
+once online, or with **Synchroniser maintenant**. After a sync the device downloads a fresh
+manifest. The server stays the authority. When a ticket admitted offline turns out to have
+entered at another gate, it is counted and shown as a conflict ("aussi entré à une autre
+porte"); the gate log keeps a single admission. The manifest holds no buyer data, only
+credential ids and ticket type names.
+
 ## Scans
 
 | Route | Use |

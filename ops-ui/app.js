@@ -2,6 +2,7 @@
 // Plain ES modules, no build step. Every call goes to the gated ALKAO admin API with the
 // signed-in user's Supabase access token; the app itself holds no data.
 import { html, render, useEffect, useState, useCallback } from "/ops/vendor/htm-preact.js";
+import { loadOffline, newOfflineStore, offlineScan, saveOffline, syncOffline } from "/ops/offline.js";
 
 const SESSION_KEY = "alkao.ops.session";
 const money = (cents) => (Number(cents ?? 0) / 100).toLocaleString("fr-CA", { style: "currency", currency: "CAD" });
@@ -433,14 +434,47 @@ function Scanner({ api, base }) {
   const [last, setLast] = useState(null);
   const [error, setError] = useState(null);
   const [camera, setCamera] = useState(false);
+  const [offline, setOffline] = useState(null);
   const deviceId = (() => { let id = localStorage.getItem("alkao.ops.device"); if (!id) { id = `ops-${crypto.randomUUID().slice(0, 8)}`; localStorage.setItem("alkao.ops.device", id); } return id; })();
 
   useEffect(() => { if (eventId) api(`${base}/events/${eventId}/sessions`).then((r) => setSessions(r.sessions), setError); }, [eventId]);
-  useEffect(() => { if (sessionId) api(`${base}/sessions/${sessionId}/scanner-manifest`).then((r) => setManifest(r.manifest), setError); }, [sessionId]);
+  useEffect(() => {
+    if (!sessionId) return;
+    setOffline(loadOffline(sessionId));
+    api(`${base}/sessions/${sessionId}/scanner-manifest`).then((r) => setManifest(r.manifest), (err) => { if (!loadOffline(sessionId)) setError(err); });
+  }, [sessionId]);
+
+  // ── Offline mode (Run 09): the device checks QR codes itself and syncs later ──
+  const persist = (store) => { saveOffline(sessionId, store); setOffline(store ? { ...store } : null); };
+  const goOffline = async () => {
+    setError(null);
+    try { const r = await api(`${base}/sessions/${sessionId}/scanner-manifest`); setManifest(r.manifest); persist(newOfflineStore(r.manifest)); }
+    catch (err) { setError(err); }
+  };
+  const sync = async () => {
+    const store = loadOffline(sessionId); if (!store) return;
+    const send = async (scans) => (await api(`${base}/scanner/scans/batch`, { method: "POST", body: { sessionId, deviceId, scans } })).scans;
+    const done = await syncOffline(store, send);
+    if (done) { try { store.manifest = (await api(`${base}/sessions/${sessionId}/scanner-manifest`)).manifest; store.downloadedAt = Date.now(); store.localAdmitted = []; } catch {} }
+    persist(store);
+  };
+  const leaveOffline = async () => {
+    await sync();
+    const store = loadOffline(sessionId);
+    if (store?.queue.length && !confirm(`${store.queue.length} scan(s) pas encore synchronisés. Quitter quand même ?`)) return;
+    persist(null);
+  };
+  useEffect(() => {
+    if (!offline) return;
+    const t = setInterval(() => { if (navigator.onLine && loadOffline(sessionId)?.queue.length) void sync(); }, 15_000);
+    return () => clearInterval(t);
+  }, [Boolean(offline), sessionId]);
 
   const submit = async (value) => {
     const code = (value ?? payload).trim(); if (!code || !sessionId) return;
     setError(null); setPayload("");
+    const store = loadOffline(sessionId);
+    if (store) { const r = await offlineScan(store, code); persist(store); setLast({ ...r, offline: true }); return; }
     try { setLast((await api(`${base}/scanner/scans`, { method: "POST", body: { sessionId, payload: code, deviceId } })).scan); }
     catch (err) { setError(err); }
   };
@@ -471,6 +505,15 @@ function Scanner({ api, base }) {
         <option value="">—</option>${sessions.map((s) => html`<option value=${s.id}>${when(s.startsAt)}</option>`)}</select></label>
       ${manifest && html`<span class="muted">Portes : ${when(manifest.session.admission.opensAt)} → ${when(manifest.session.admission.closesAt)} · ${manifest.credentials.length} à entrer · ${manifest.admitted.length} entrés</span>`}
     </div>
+    ${sessionId && html`<div class="card row" aria-label="Mode hors ligne">
+      ${offline ? html`<span class="badge warn">Hors ligne</span>
+          <span class="muted">Liste du ${when(new Date(offline.downloadedAt).toISOString())} · ${offline.manifest.credentials.length} billets</span>
+          <span>${offline.queue.length} en attente de synchronisation</span>
+          ${offline.conflicts > 0 && html`<span class="badge bad">${offline.conflicts} billet(s) aussi entré(s) à une autre porte</span>`}
+          <button class="secondary" onClick=${sync}>Synchroniser maintenant</button>
+          <button class="secondary" onClick=${leaveOffline}>Quitter le mode hors ligne</button>`
+        : html`<span class="muted">Réseau instable à la porte ?</span><button class="secondary" onClick=${goOffline}>Préparer le mode hors ligne</button>`}
+    </div>`}
     ${sessionId && html`
       <form class="card" onSubmit=${(e) => { e.preventDefault(); submit(); }}>
         <label>Code du billet (lecteur ou saisie)<input class="scan" autofocus value=${payload} onInput=${(e) => setPayload(e.target.value)} placeholder="ALK1…" /></label>
@@ -482,6 +525,7 @@ function Scanner({ api, base }) {
       </form>
       ${last && html`<div class="scan-result ${tone}" role="status">${label}
         ${last.ticket && html`<small>${last.ticket.ticketTypeName}</small>`}
+        ${last.offline && html`<small>Vérifié sur l'appareil (hors ligne)</small>`}
         ${last.result === "already_admitted" && last.admittedAt && html`<small>Entré le ${when(last.admittedAt)}${last.admittedBy ? ` (${last.admittedBy})` : ""}</small>`}
       </div>`}`}`;
 }
