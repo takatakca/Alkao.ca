@@ -137,6 +137,7 @@ const ERRORS_FR = {
   order_has_no_valid_ticket: "Cette commande n'a plus de billet valide.", email_resend_limit: "Trop de renvois pour cette commande.",
   use_session_cancellation: "Des billets sont vendus : utilisez « Annuler la séance », qui rembourse les acheteurs.",
   invalid_ticket: "Un des billets cochés n'est plus valide.",
+  order_not_found: "Aucune commande avec cette référence.", ticket_not_found: "Billet introuvable.",
   buyer_has_upcoming_tickets: "L'acheteur a encore un billet pour une séance à venir : remboursez-le ou attendez la fin de la séance.",
   dispute_open: "Un litige Stripe est ouvert sur une de ses commandes : attendez qu'il soit réglé.",
   buyer_anonymized: "Cet acheteur a été anonymisé : il n'a plus d'adresse courriel.",
@@ -542,6 +543,8 @@ function Scanner({ api, base }) {
   const [camera, setCamera] = useState(false);
   const [offline, setOffline] = useState(null);
   const [attendance, setAttendance] = useState(null);
+  const [reference, setReference] = useState("");
+  const [found, setFound] = useState(null);
   const deviceId = (() => { let id = localStorage.getItem("alkao.ops.device"); if (!id) { id = `ops-${crypto.randomUUID().slice(0, 8)}`; localStorage.setItem("alkao.ops.device", id); } return id; })();
 
   useEffect(() => { if (eventId) api(`${base}/events/${eventId}/sessions`).then((r) => setSessions(r.sessions), setError); }, [eventId]);
@@ -596,6 +599,21 @@ function Scanner({ api, base }) {
     catch (err) { setError(err); }
   };
 
+  // Run 22: no QR code (phone dead, code unreadable): find the order by its reference.
+  const lookup = (ref) => api(`${base}/sessions/${sessionId}/lookup?reference=${encodeURIComponent(ref)}`).then((r) => r.order);
+  const findOrder = async (e) => {
+    e.preventDefault(); setError(null); setFound(null);
+    try { setFound(await lookup(reference.trim())); } catch (err) { setError(err); }
+  };
+  const admitTicket = (ticketId) => async () => {
+    setError(null);
+    try {
+      setLast((await api(`${base}/scanner/admit`, { method: "POST", body: { sessionId, ticketId, deviceId } })).scan);
+      refreshAttendance(); setFound(await lookup(found.reference));
+    } catch (err) { setError(err); }
+  };
+  useEffect(() => { setFound(null); setReference(""); }, [sessionId]);
+
   useEffect(() => {
     if (!camera || !("BarcodeDetector" in window)) return;
     let stream, stop = false, lastCode = "", video = document.querySelector("video.camera");
@@ -646,7 +664,20 @@ function Scanner({ api, base }) {
         ${last.ticket && html`<small>${last.ticket.ticketTypeName}</small>`}
         ${last.offline && html`<small>Vérifié sur l'appareil (hors ligne)</small>`}
         ${last.result === "already_admitted" && last.admittedAt && html`<small>Entré le ${when(last.admittedAt)}${last.admittedBy ? ` (${last.admittedBy})` : ""}</small>`}
-      </div>`}`}`;
+      </div>`}
+      ${offline ? html`<p class="muted">Sans code QR : recherche par référence disponible en ligne seulement.</p>` : html`
+      <form class="inline card" role="search" aria-label="Sans code QR" onSubmit=${findOrder}>
+        <label>Sans code QR : référence de la commande<input value=${reference} onInput=${(e) => setReference(e.target.value)} placeholder="K7PM-2QXA" autocomplete="off" /></label>
+        <button type="submit" class="secondary">Chercher</button>
+      </form>
+      ${found && html`<div class="card" aria-label="Commande trouvée">
+        <p><strong>${found.reference}</strong>${found.buyerName ? ` · ${found.buyerName}` : ""}</p>
+        ${found.otherSessions.length > 0 && html`<div class="alert warn">Billets aussi pour : ${found.otherSessions.map((x) => when(x.startsAt)).join(", ")}</div>`}
+        ${found.tickets.length === 0 ? html`<p class="muted">Aucun billet de cette commande pour cette séance.</p>` : html`
+        <table><thead><tr><th>Billet</th><th>Statut</th><th></th></tr></thead>
+          <tbody>${found.tickets.map((k) => html`<tr><td>${k.ticketTypeName}</td><td><${Badge} status=${k.status} /></td>
+            <td>${k.admittedAt ? `Entré le ${when(k.admittedAt)}` : k.status === "valid" ? html`<button onClick=${admitTicket(k.id)}>Faire entrer</button>` : ""}</td></tr>`)}</tbody></table>`}
+      </div>`}`}`}`;
 }
 
 // ── Payments ────────────────────────────────────────────────────────────────

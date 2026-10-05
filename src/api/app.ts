@@ -721,6 +721,25 @@ export function createApp(deps: AppDeps) {
     return c.json({ scan: outcome });
   });
 
+  // ── Run 22: at the gate without a QR code (phone dead, code unreadable) ──────
+  app.get(`${ADMIN}/sessions/:sessionId/lookup`, ...admin, can("ticketing.scan"), async (c) => {
+    const sessionId = param(c, "sessionId");
+    if (!sessionId) return fail(c, 404, "session_not_found");
+    const { reference } = api.GateLookupQuery.parse(c.req.query());
+    const withBuyer = roleHasPermission(c.get("role"), "ticketing.buyers.read");
+    return c.json({ order: await credentials.lookupByReference(c.get("scope"), sessionId, reference, withBuyer) });
+  });
+
+  app.post(`${ADMIN}/scanner/admit`, ...admin, can("ticketing.scan"), async (c) => {
+    const body = api.ManualAdmitRequest.parse(await readJson(c));
+    const outcome = await credentials.admitManually(
+      c.get("scope"),
+      { sessionId: body.sessionId, ticketId: body.ticketId, deviceId: body.deviceId ?? null },
+      c.get("userId"),
+    );
+    return c.json({ scan: outcome });
+  });
+
   app.post(`${ADMIN}/scanner/scans/batch`, ...admin, can("ticketing.scan"), async (c) => {
     const body = api.ScanBatchRequest.parse(await readJson(c));
     const results = await credentials.scanBatch(

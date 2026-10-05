@@ -166,6 +166,18 @@ export const ScanRequest = z.object({
   deviceId: deviceId.nullish(),
 });
 
+/** Run 22: find an order's tickets at the gate by its reference (e.g. "K7PM-2QXA"). */
+export const GateLookupQuery = z.object({
+  reference: z.string().trim().min(4).max(20),
+});
+
+/** Run 22: admit a ticket found by reference, without its QR code. */
+export const ManualAdmitRequest = z.object({
+  sessionId: z.uuid(),
+  ticketId: z.uuid(),
+  deviceId: deviceId.nullish(),
+});
+
 export const ScanBatchRequest = z.object({
   sessionId: z.uuid(),
   deviceId,

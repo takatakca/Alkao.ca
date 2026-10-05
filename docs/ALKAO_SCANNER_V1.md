@@ -98,3 +98,24 @@ ticket **at most once** across every gate. Under concurrent scans exactly one ge
 
 The buyer gets the QR payload for each valid ticket in `GET /v1/public/…/orders/:orderId`
 (`tickets[].credential`). The website or the confirmation email turns it into a QR code.
+
+## Without a QR code (Run 22)
+
+When a buyer's phone is dead or the code will not read, gate staff find the order by its
+reference (on the confirmation email) and let a ticket in by hand.
+
+| Method | Path | Permission | Result |
+|---|---|---|---|
+| GET | `/v1/admin/…/sessions/:sessionId/lookup?reference=` | `scan` | `{ order: { reference, tickets: [{ id, ticketTypeName, status, admittedAt }], otherSessions: [{ startsAt }] } }`. Only the tickets for this session. `otherSessions` says when the order's other valid tickets are for |
+| POST | `/v1/admin/…/scanner/admit` | `scan` | `{ sessionId, ticketId, deviceId? }` → `{ scan }`, the same outcome as a QR scan |
+
+- **Same rules as a scan.** A ticket enters at most once, only for this session, and only
+  while the doors are open. It is refused if cancelled (`revoked`, `wrong_session`,
+  `already_admitted`, `too_early`, `too_late`).
+- **Logged.** Each attempt is a scan from the device, and each manual entry is also written
+  to the audit log (`scan.manual_admission`, with the staff member and the device).
+- **No buyer data for the gate.** Gate staff see no buyer data. Roles that read buyers
+  (owner, admin, manager) also get `buyerName`, to check it against an ID.
+- **Flex changes.** The reference of the original order also finds the tickets it was moved
+  to by a session change.
+- **Online only.** It works online only. In offline mode the Scanner says so.
