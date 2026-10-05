@@ -406,6 +406,24 @@ describe("ALKAO Operations app", () => {
     expect(csv).toContain(`${today},`);
   });
 
+  it("duplicates an event, sessions a week later, and opens the copy (Run 28)", async () => {
+    const f = seed.festi;
+    const page = await signedIn(seed.users.festiOwner);
+    await page.goto(`${origin}/ops#/c/${f.clientId}/b/${f.brandId}/event/${f.eventId}`);
+    await page.getByRole("heading", { name: "Vendre en ligne" }).waitFor();
+    const answers = ["FESTI-ICE — édition suivante", "7"];
+    page.on("dialog", (d) => void d.accept(answers.shift()));
+    await page.getByRole("button", { name: "Dupliquer l'événement" }).click();
+    await page.getByRole("heading", { name: /^FESTI-ICE — édition suivante/ }).waitFor();
+    expect(page.url()).not.toContain(f.eventId);
+    const { rows } = await db.pool.query(
+      `SELECT e.status, count(s.id)::int AS sessions FROM public.ticketing_events e LEFT JOIN public.ticketing_sessions s ON s.event_id = e.id
+       WHERE e.title = 'FESTI-ICE — édition suivante' GROUP BY e.status`,
+    );
+    expect(rows).toEqual([{ status: "draft", sessions: expect.any(Number) }]);
+    expect(rows[0].sessions).toBeGreaterThan(0);
+  });
+
   it("hides money from gate staff", async () => {
     const page = await signedIn(seed.users.havanaStaff);
     await page.goto(`${origin}/ops#${brandPath()}/dashboard`);

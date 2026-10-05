@@ -430,6 +430,32 @@ cancelled, up to 10. It goes to the **same address**, with the usual personal li
 - **The shop:** "Vous avez déjà acheté ? Retrouvez vos billets" sits under the event list
   and on each event page, in French or English.
 
+### Duplicating an event (Run 28)
+
+| Method | Path | Permission | Result |
+|---|---|---|---|
+| POST | `/v1/admin/…/events/:eventId/duplicate` | `catalog.write` | `{ title?, shiftDays? }` → `201 { event: { id, slug, title, status: "draft" }, ticketTypes, sessions }` |
+
+This is for next week's evening, or next year's edition.
+
+**Always copied.** The copy is a **draft** at the same venue, with the same description, door
+hours and ticket types (prices, limits, Flex Météo option).
+
+**With `shiftDays`** (for example `7`, or `364` for the same weekday next year):
+
+- The sessions are copied, moved by that many days. Cancelled ones are skipped.
+- They are drafts with nothing sold or held.
+- The sales window moves by the same number of days.
+
+**Without `shiftDays`**, neither the sessions nor the sales window are copied.
+
+**Never copied:** orders, tickets or buyers. The original does not change.
+
+- The slug is the original's with `-copie`, then `-copie-2`, and so on.
+- The title defaults to the original's with " (copie)".
+- Logged as `event.duplicated`. In the Operations app, use **Dupliquer l'événement** on the
+  event page.
+
 ### Role → permission
 
 | Role | catalog.read · inventory.read · holds.read | catalog.write | orders.read · buyers.read | audit.read |

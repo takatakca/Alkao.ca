@@ -211,6 +211,13 @@ export const OrdersQuery = z.object({
   q: z.string().trim().min(2).max(120).optional(),
 });
 
+// ── Run 28: duplicate an event ─────────────────────────────────────────────
+export const DuplicateEventRequest = z.object({
+  title: z.string().trim().min(1).max(200).optional(),
+  /** Copy the sessions and the sales window, moved by this many days. Absent or null: neither is copied. */
+  shiftDays: z.number().int().min(-3660).max(3660).nullish(),
+});
+
 // ── Run 27: "Retrouver mes billets" ─────────────────────────────────────────
 export const FindTicketsRequest = z.object({ email: z.string().trim().max(320).pipe(z.email()) });
 

@@ -420,6 +420,17 @@ function EventDetail({ api, base, eventId }) {
     } });
     setTt({ ...tt, code: "", name: "", price: "" }); reloadTypes();
   });
+  // Run 28: next week's evening, next year's edition: a draft copy with the same ticket types.
+  const duplicate = act(async () => {
+    const title = prompt("Titre du nouvel événement", `${event.title} (copie)`);
+    if (title === null) return;
+    const days = prompt("Copier aussi les séances, décalées de combien de jours ? (7 = une semaine plus tard, 364 = même jour de la semaine l'an prochain ; vide = ne pas copier les séances)", "");
+    if (days === null) return;
+    const shiftDays = days.trim() === "" ? null : Number(days.trim());
+    if (shiftDays !== null && !Number.isInteger(shiftDays)) throw new Error("Nombre de jours invalide.");
+    const r = await api(`${base}/events/${eventId}/duplicate`, { method: "POST", body: { title: title.trim() || undefined, shiftDays } });
+    location.hash = `#/c/${clientId}/b/${brandId}/event/${r.event.id}`;
+  });
 
   return html`
     <h1>${event.title} <${Badge} status=${event.status} /></h1>
@@ -427,6 +438,7 @@ function EventDetail({ api, base, eventId }) {
     <div class="row card">
       ${event.status !== "published" && html`<button onClick=${setEventStatus("published")}>Publier</button>`}
       ${event.status === "published" && html`<button class="secondary" onClick=${setEventStatus("draft")}>Retirer de la vente publique</button>`}
+      <button class="secondary" onClick=${duplicate}>Dupliquer l'événement</button>
       <span class="muted">Portes : ${event.admissionOpensBeforeMinutes} min avant · ${event.admissionClosesAfterMinutes} min après</span>
     </div>
 
