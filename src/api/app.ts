@@ -29,6 +29,7 @@ import { mountOpsUi, type OpsUiConfig } from "./ops-ui.js";
 import { mountBuyerUi } from "./buyer-ui.js";
 import { mountShopUi } from "./shop-ui.js";
 import * as delivery from "../delivery/db.js";
+import { orderEmailToken } from "../delivery/links.js";
 import * as cancellation from "../ops/cancellation.js";
 
 export const API_VERSION = "alkao.api.v1";
@@ -483,6 +484,21 @@ export function createApp(deps: AppDeps) {
     const progress = sessionId ? await cancellation.getCancellation(deps.db, c.get("scope"), sessionId) : null;
     if (!progress) return fail(c, 404, "cancellation_not_found");
     return c.json({ cancellation: progress });
+  });
+
+  // ── Run 12: kill a personal link that leaked, and send the buyer a new one ──────
+  app.post(`${ADMIN}/orders/:orderId/tickets-link/rotate`, ...admin, can("ticketing.credentials.manage"), async (c) => {
+    const orderId = param(c, "orderId");
+    if (!orderId) return fail(c, 404, "order_not_found");
+    if (!deps.credentialMasterSecret) return fail(c, 503, "credentials_not_configured");
+    const scope = c.get("scope");
+    const email = await withTransaction(deps.db, async (tx) => {
+      const queued = await delivery.requestTicketsEmail(tx, scope, orderId, actor(c));
+      await orderEmailToken(tx, deps.credentialMasterSecret!, scope, orderId, true);
+      await catalog.writeAudit(tx, scope, actor(c), "order.tickets_link_rotated", { type: "order", id: orderId });
+      return queued;
+    });
+    return c.json({ email }, 202);
   });
 
   // ── Run 06: send the buyer's tickets email again (same personal link) ──────────

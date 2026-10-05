@@ -225,6 +225,39 @@ When an organizer cancels a session (weather, ice), every buyer is refunded and 
 - **Unattended.** `npm run worker:cancellations` finishes cancellations and retries without
   anyone keeping the page open.
 
+### Refund emails, personal links, website button (Run 12)
+
+**Refund email.** The buyer is emailed for every succeeded refund:
+
+- staff refunds, full or partial: the amount, the voided tickets, and a link to the tickets
+  that are still valid;
+- payments that arrived after the seats were gone: explained and refunded in full.
+
+An order refunded several times gets one email per refund. A session cancellation sends
+only its own "Séance annulée" email.
+
+**One personal link per order.** Every email of an order carries the same `/billets` link.
+Its token is derived from the server secret, the order id and a random nonce stored with the
+token's hash; the token itself is never stored.
+
+| Method | Path | Permission | Result |
+|---|---|---|---|
+| POST | `/v1/admin/…/orders/:orderId/tickets-link/rotate` | `credentials.manage` | `202`. The old link stops working at once, and a new email with a new link is queued. Audited. Reissue the QR codes too if they were shared |
+
+**Website button.** A Brand adds this tag to its own site:
+
+```html
+<script src="https://<alkao>/widget.js" data-client="<clientId>" data-brand="<brandId>" data-event="<eventId>" data-label="Acheter des billets" async></script>
+```
+
+It inserts a plain link to the ALKAO shop: no iframe, no cookie, no data. Options:
+
+- `data-target="_blank"` opens the shop in a new tab;
+- `data-color="#0b5cad"` sets the button colour;
+- `data-style="none"` lets the site style `.alkao-buy` itself.
+
+The Operations app shows each event's shop link and its button code, ready to copy.
+
 ### Role → permission
 
 | Role | catalog.read · inventory.read · holds.read | catalog.write | orders.read · buyers.read | audit.read |

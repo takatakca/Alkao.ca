@@ -56,6 +56,15 @@ export function mountShopUi(app: Hono<any>, cfg: { publicUrl: string | null }): 
     const body = page([c.req.param("clientId"), c.req.param("brandId")]);
     return body === null ? c.notFound() : c.body(body, 200, HEADERS("text/html; charset=utf-8"));
   });
+  // Run 12: the button for Brand websites. Loaded cross-origin by a <script> tag.
+  app.get("/widget.js", (c) =>
+    c.body(read(join(UI_DIR, "..", "widget", "widget.js")), 200, {
+      "content-type": "text/javascript; charset=utf-8",
+      "x-content-type-options": "nosniff",
+      "cross-origin-resource-policy": "cross-origin",
+      "cache-control": "public, max-age=300",
+    }),
+  );
   app.get("/shop/config.json", (c) => c.body(JSON.stringify({ publicUrl: cfg.publicUrl ? new URL(cfg.publicUrl).origin : null }), 200, HEADERS("application/json")));
   for (const [name, file] of Object.entries(FILES)) {
     app.get(`/shop/${name}`, (c) => c.body(read(file.path), 200, HEADERS(file.type)));

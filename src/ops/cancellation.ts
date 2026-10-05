@@ -192,7 +192,7 @@ export async function runCancellationBatch(db: Db, payments: PaymentsService, s:
            SELECT o.client_id, o.brand_id, o.event_id, o.id, 'session_cancelled'
            FROM public.ticketing_orders o
            WHERE (o.id = $1 OR o.exchange_of_order_id = $1) AND o.session_id = $2 AND o.client_id = $3 AND o.brand_id = $4
-           ON CONFLICT (order_id, kind) DO NOTHING`,
+           ON CONFLICT (order_id, kind, refund_id) DO NOTHING`,
           [item.order_id, sessionId, s.clientId, s.brandId],
         );
         return false;

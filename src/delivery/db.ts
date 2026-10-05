@@ -36,7 +36,7 @@ export async function requestTicketsEmail(tx: Tx, s: TenantScope, orderId: strin
   const { rows: queued } = await tx.query<{ id: string; attempts: number }>(
     `INSERT INTO public.ticketing_email_outbox (client_id, brand_id, event_id, order_id, kind)
      VALUES ($1, $2, $3, $4, $5)
-     ON CONFLICT (order_id, kind) DO UPDATE SET status = 'pending', next_attempt_at = now(), sent_at = NULL, last_error = NULL
+     ON CONFLICT (order_id, kind, refund_id) DO UPDATE SET status = 'pending', next_attempt_at = now(), sent_at = NULL, last_error = NULL
      WHERE ticketing_email_outbox.attempts < ${RESEND_LIMIT}
      RETURNING id, attempts`,
     [s.clientId, s.brandId, order.event_id, orderId, kind],
