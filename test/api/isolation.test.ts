@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { call, testApp, tokenFor, type TestApp } from "../helpers/app.js";
 import { createTestDatabase, type TestDatabase } from "../helpers/db.js";
 import { FakeGateway } from "../helpers/fake-gateway.js";
-import { seedTwoTenants, TEST_CREDENTIAL_SECRET, type SeedResult } from "../helpers/seed.js";
+import { seedAfterSale, seedTwoTenants, TEST_CREDENTIAL_SECRET, type SeedResult } from "../helpers/seed.js";
 
 /**
  * Security sweep (Run 13): every admin route that takes an id is called by Havana's owner,
@@ -16,6 +16,9 @@ let app: TestApp;
 beforeAll(async () => {
   db = await createTestDatabase();
   seed = await seedTwoTenants(db.pool);
+  // Run 25: FESTI-ICE also has a Stripe dispute and a refund made in Stripe, so the sweep
+  // watches those rows too.
+  await seedAfterSale(db.pool, seed.festi, seed.festi.orderId);
   app = testApp(db.pool, { paymentGateway: new FakeGateway(), credentialMasterSecret: TEST_CREDENTIAL_SECRET, publicUrl: "https://billets.alkao.test" });
 });
 
@@ -40,6 +43,12 @@ async function festiSnapshot() {
     tokens: await q(`SELECT token_hash FROM public.ticketing_access_tokens WHERE client_id = $1 ORDER BY token_hash`),
     cancellations: await q(`SELECT id FROM public.ticketing_session_cancellations WHERE client_id = $1`),
     audit: await q(`SELECT count(*)::int AS n FROM public.ticketing_audit_log WHERE client_id = $1`),
+    // Runs 19–23
+    buyers: await q(`SELECT id, email, full_name, phone, updated_at FROM public.ticketing_buyers WHERE client_id = $1 ORDER BY id`),
+    erasures: await q(`SELECT buyer_id FROM public.ticketing_buyer_erasures WHERE client_id = $1`),
+    disputes: await q(`SELECT id, status, updated_at FROM public.ticketing_payment_disputes WHERE client_id = $1 ORDER BY id`),
+    chargeRefunds: await q(`SELECT order_id, refunded_cents FROM public.ticketing_charge_refund_totals WHERE client_id = $1`),
+    settings: await q(`SELECT checkout_return_origins, reminder_emails FROM public.ticketing_brand_settings WHERE client_id = $1`),
   });
 }
 
@@ -62,6 +71,12 @@ describe("tenant isolation sweep", () => {
       "POST /orders/:orderId/refunds": {},
       "POST /orders/:orderId/exchange": { sessionId: f.sessionId },
       "POST /sessions/:sessionId/cancel": { reason: "pirate" },
+      // Runs 20–22: valid bodies and queries, so each reaches the database.
+      "POST /orders/:orderId/tickets/void": { ticketIds: [f.ticketIds[0]], reason: "pirate" },
+    };
+    const { rows: festiOrder } = await db.pool.query<{ reference: string }>(`SELECT reference FROM public.ticketing_orders WHERE id = $1`, [f.orderId]);
+    const queries: Record<string, string> = {
+      "GET /sessions/:sessionId/lookup": `?reference=${festiOrder[0]!.reference}`,
     };
     const owner = await tokenFor(seed.users.havanaOwner);
     const before = await festiSnapshot();
@@ -75,12 +90,26 @@ describe("tenant isolation sweep", () => {
       seen.add(`${r.method} ${rest}`);
       const path = `/v1/admin/clients/${h.clientId}/brands/${h.brandId}${rest.replace(/:([A-Za-z]+)/g, (_, name: string) => ids[name] ?? "00000000-0000-4000-8000-000000000000")}`;
       const key = `${r.method} ${rest}`;
-      const res = await call(app, r.method, path, { token: owner, ...(r.method === "GET" ? {} : { body: bodies[key] ?? {} }) });
+      const res = await call(app, r.method, `${path}${queries[key] ?? ""}`, { token: owner, ...(r.method === "GET" ? {} : { body: bodies[key] ?? {} }) });
       results.push(`${key} → ${res.status}`);
       expect(res.status, `${key} answered ${res.status}: ${JSON.stringify(res.body)}`).toBeGreaterThanOrEqual(400);
       expect([400, 403, 404, 409, 422]).toContain(res.status);
     }
-    expect(results.length).toBeGreaterThanOrEqual(20);
+    expect(results.length).toBeGreaterThanOrEqual(25);
+    for (const key of ["GET /orders/:orderId/buyer/export", "POST /orders/:orderId/buyer/anonymize", "POST /orders/:orderId/tickets/void", "GET /sessions/:sessionId/lookup"]) {
+      expect(results.some((r) => r.startsWith(`${key} → 404`)), `${key}: ${results.find((r) => r.startsWith(key))}`).toBe(true);
+    }
+
+    // Routes that take another Client's ids in the body rather than the path.
+    const base = `/v1/admin/clients/${h.clientId}/brands/${h.brandId}`;
+    for (const [path, body] of [
+      ["/scanner/admit", { sessionId: f.sessionId, ticketId: f.ticketIds[0] }],
+      ["/scanner/admit", { sessionId: h.sessionId, ticketId: f.ticketIds[0] }],
+      ["/scanner/scans", { sessionId: f.sessionId, payload: "ALK1.x.y.z" }],
+    ] as const) {
+      const res = await call(app, "POST", `${base}${path}`, { token: owner, body });
+      expect(res.status, `${path} ${JSON.stringify(body)} → ${res.status}`).toBe(404);
+    }
     expect(await festiSnapshot()).toBe(before);
   });
 
