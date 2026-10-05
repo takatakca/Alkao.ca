@@ -368,6 +368,28 @@ Each list keeps only what someone can still act on, so it empties as the work ge
 already used at the gate, already void or belonging to another order is refused
 (`ticket_already_used`, `invalid_ticket`). The order's money and status are untouched.
 
+### Reminder before the session (Run 23)
+
+Each buyer gets one reminder during the 24 hours before their session. It carries the
+time, the place and the personal tickets link, in the buyer's language.
+
+**When no reminder is queued.** One is not queued when:
+
+- the order was paid in the last 12 hours (the tickets email just went out);
+- the session is cancelled;
+- the order holds no valid ticket;
+- the buyer was anonymized;
+- the Brand turned reminders off.
+
+**When a queued one is dropped.** A queued reminder is dropped (`skipped`) if the session is
+cancelled or has already started when it would go out. The email worker queues reminders on
+each run, so there is nothing else to schedule.
+
+| Method | Path | Permission | Result |
+|---|---|---|---|
+| GET | `/v1/admin/…/settings/reminders` | `credentials.manage` | `{ reminders: { enabled } }`, `true` by default |
+| PUT | `/v1/admin/…/settings/reminders` | `credentials.manage` | `{ enabled }`. Logged as `settings.reminders_updated` |
+
 ### Role → permission
 
 | Role | catalog.read · inventory.read · holds.read | catalog.write | orders.read · buyers.read | audit.read |

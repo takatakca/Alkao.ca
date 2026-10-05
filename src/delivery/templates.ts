@@ -100,6 +100,41 @@ export function ticketsEmail(d: TicketsEmailData): Content {
   return { fromName: d.brandName, subject, text, html };
 }
 
+// ── Reminder before the session (Run 23) ────────────────────────────────────
+export type ReminderEmailData = Omit<TicketsEmailData, "kind">;
+
+const REMINDER = {
+  fr: {
+    title: "Votre séance approche",
+    intro: (ref: string) => `Petit rappel pour votre commande ${ref} : voici l'heure, le lieu et vos billets.`,
+    subject: (event: string, when: string) => `Rappel : ${event} — ${when}`,
+  },
+  en: {
+    title: "Your session is coming up",
+    intro: (ref: string) => `A quick reminder for your order ${ref}: here are the time, the place and your tickets.`,
+    subject: (event: string, when: string) => `Reminder: ${event} — ${when}`,
+  },
+};
+
+export function reminderEmail(d: ReminderEmailData): Content {
+  const l = d.language ?? "fr";
+  const t = TICKETS[l];
+  const r = REMINDER[l];
+  const when = fullDate(l, d.startsAt, d.timezone);
+  const where = d.city ? `${d.venueName}, ${d.city}` : d.venueName;
+  const count = t.count(d.validTickets);
+  const hello = t.hello(d.buyerName);
+  const intro = r.intro(d.reference);
+  const text = [hello, "", intro, "", d.eventTitle, when, where, count, "", `${t.linkLine}${d.link}`, "", t.advice, "", `${d.brandName} · ${FOOTER[l]}`].join("\n");
+  const html = layout(l, d.brandName, r.title, [
+    paragraph(`${esc(hello)}<br>${esc(intro)}`),
+    box(`<strong>${esc(d.eventTitle)}</strong><br>${esc(when)}<br>${esc(where)}<br>${esc(count)} · ${t.order} ${esc(d.reference)}`),
+    button(d.link, t.show),
+    note(esc(t.advice)),
+  ]);
+  return { fromName: d.brandName, subject: r.subject(d.eventTitle, when), text, html };
+}
+
 // ── Session cancelled ───────────────────────────────────────────────────────
 export interface SessionCancelledEmailData {
   language?: Language;

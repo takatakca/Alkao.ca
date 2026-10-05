@@ -34,6 +34,7 @@ export async function attentionList(db: Db, s: TenantScope, now = new Date()) {
        JOIN public.ticketing_buyers b ON b.id = o.buyer_id AND b.client_id = o.client_id AND b.brand_id = o.brand_id
        JOIN public.ticketing_sessions se ON se.id = o.session_id AND se.client_id = o.client_id AND se.brand_id = o.brand_id
        WHERE x.client_id = $1 AND x.brand_id = $2
+         AND x.kind <> 'reminder' -- a missed reminder needs no one's action
          AND (x.status = 'failed' OR (x.status = 'skipped' AND x.last_error = 'too_old'))
          AND NOT EXISTS (SELECT 1 FROM public.ticketing_buyer_erasures e WHERE e.buyer_id = b.id)
          AND CASE WHEN x.kind IN ('order_tickets', 'exchange_tickets')

@@ -239,11 +239,30 @@ function Dashboard({ api, base, prefix }) {
     <h2>Par type de billet</h2>
     <table><thead><tr><th>Code</th><th class="num">Quantité</th><th class="num">Revenu</th></tr></thead>
       <tbody>${ticketTypes.map((t) => html`<tr><td>${t.code}</td><td class="num">${t.quantity}</td><td class="num">${money(t.revenueCents)}</td></tr>`)}</tbody></table>
-    <p><button class="secondary" onClick=${() => download(api, `${base}/reports/orders.csv`, "alkao-commandes.csv")}>Exporter les commandes (CSV)</button></p>`;
+    <p><button class="secondary" onClick=${() => download(api, `${base}/reports/orders.csv`, "alkao-commandes.csv")}>Exporter les commandes (CSV)</button></p>
+    <${Reminders} api=${api} base=${base} />`;
+}
+
+// Run 23: the reminder email the buyers get the day before their session.
+function Reminders({ api, base }) {
+  const [state, reload] = useLoad(() => api(`${base}/settings/reminders`), [base]);
+  const [error, setError] = useState(null);
+  if (!state.data) return null; // loading, or a role that cannot change it
+  const on = state.data.reminders.enabled;
+  const toggle = async () => {
+    setError(null);
+    try { await api(`${base}/settings/reminders`, { method: "PUT", body: { enabled: !on } }); reload(); } catch (err) { setError(err); }
+  };
+  return html`<h2>Courriels aux acheteurs</h2>
+    <div class="card row">
+      ${error && html`<${Failure} error=${error} />`}
+      <span>Rappel la veille de la séance, avec le lien vers les billets : <strong>${on ? "activé" : "désactivé"}</strong></span>
+      <button class="secondary" onClick=${toggle}>${on ? "Désactiver" : "Activer"}</button>
+    </div>`;
 }
 
 // Run 21: everything that waits on staff, with a link to where it is handled.
-const EMAIL_KIND_FR = { order_tickets: "billets", exchange_tickets: "billets du changement de séance", session_cancelled: "annulation de séance", refund: "remboursement" };
+const EMAIL_KIND_FR = { order_tickets: "billets", exchange_tickets: "billets du changement de séance", session_cancelled: "annulation de séance", refund: "remboursement", reminder: "rappel" };
 function Attention({ a, prefix }) {
   const order = (id, reference) => html`<a href=${`#${prefix}/order/${id}`}>${reference}</a>`;
   const group = (title, items, line) => items.length > 0 && html`<h3>${title} (${items.length})</h3><ul>${items.map((x) => html`<li>${line(x)}</li>`)}</ul>`;
