@@ -284,16 +284,23 @@ export async function loadSession(q: Queryable, s: TenantScope, sessionId: strin
 }
 
 // ── Orders and audit (read-only in Run 01) ──────────────────────────────────
-export const listOrders = (q: Queryable, s: TenantScope, limit: number, before?: string) =>
+/** LIKE pattern text with its wildcards escaped (the search is literal). */
+const likeLiteral = (text: string) => text.replace(/[\\%_]/g, (c) => `\\${c}`);
+
+export const listOrders = (q: Queryable, s: TenantScope, limit: number, before?: string, search?: string) =>
   many(
     q,
     `SELECT o.id, o.reference, o.status, o.event_id, o.session_id, o.currency, o.subtotal_cents, o.tax_cents, o.total_cents,
-            o.refunded_cents, o.paid_at, o.created_at, b.email AS buyer_email, b.full_name AS buyer_name
+            o.refunded_cents, o.paid_at, o.created_at, o.exchange_of_order_id, b.email AS buyer_email, b.full_name AS buyer_name
      FROM public.ticketing_orders o
      JOIN public.ticketing_buyers b ON b.id = o.buyer_id AND b.client_id = o.client_id AND b.brand_id = o.brand_id
      WHERE o.client_id = $1 AND o.brand_id = $2 AND ($4::timestamptz IS NULL OR o.created_at < $4)
+       AND ($5::text IS NULL
+            OR o.reference ILIKE $5 || '%'
+            OR lower(b.email) LIKE lower($5) || '%'
+            OR b.full_name ILIKE '%' || $5 || '%')
      ORDER BY o.created_at DESC LIMIT $3`,
-    [s.clientId, s.brandId, limit, before ?? null],
+    [s.clientId, s.brandId, limit, before ?? null, search ? likeLiteral(search) : null],
   );
 
 export async function getOrder(q: Queryable, s: TenantScope, orderId: string): Promise<Row> {

@@ -258,6 +258,17 @@ It inserts a plain link to the ALKAO shop: no iframe, no cookie, no data. Option
 
 The Operations app shows each event's shop link and its button code, ready to copy.
 
+### Operations essentials (Run 14)
+
+| Method | Path | Permission | Result |
+|---|---|---|---|
+| GET | `/v1/admin/…/orders?q=` | `orders.read` | Search by reference prefix, email prefix (case-insensitive) or part of the buyer's name. At least 2 characters; `%` and `_` are taken literally |
+| GET | `/v1/admin/…/sessions/:sessionId/attendance` | `scan` | `{ capacity, valid, admitted }`, the gate's live counter |
+| GET | `/health/ready` | none | `200` when the database answers within 2 s, `503` otherwise (for the load balancer). `/health` stays a plain liveness check |
+
+The server logs one JSON line per request: method, **route pattern** (never ids, query
+strings or headers), status and duration. Set `ALKAO_LOG_REQUESTS=false` to turn it off.
+
 ### Role → permission
 
 | Role | catalog.read · inventory.read · holds.read | catalog.write | orders.read · buyers.read | audit.read |

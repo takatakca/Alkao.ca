@@ -188,3 +188,11 @@ export const ExchangeRequest = z.object({ sessionId: z.uuid() });
 
 // ── Run 10: session cancellation ────────────────────────────────────────────
 export const CancelSessionRequest = z.object({ reason: z.string().trim().max(500).nullish() });
+
+// ── Run 14: order search ────────────────────────────────────────────────────
+export const OrdersQuery = z.object({
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+  before: z.iso.datetime({ offset: true }).optional(),
+  /** Reference prefix, email prefix or part of the buyer's name. */
+  q: z.string().trim().min(2).max(120).optional(),
+});

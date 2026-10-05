@@ -165,9 +165,27 @@ describe("ALKAO Operations app", () => {
     await input.fill(qr);
     await input.press("Enter");
     await page.getByRole("status").getByText("ENTRÉE ACCEPTÉE").waitFor();
+    // Run 14: the live counter follows the gate.
+    await page.getByRole("status", { name: "Entrées" }).getByText("1 / 1").waitFor();
     await input.fill(qr);
     await input.press("Enter");
     await page.getByRole("status").getByText("DÉJÀ ENTRÉ").waitFor();
+  });
+
+  it("finds an order by its reference or the buyer's email", async () => {
+    const { rows } = await db.pool.query<{ reference: string; email: string }>(
+      `SELECT o.reference, b.email FROM public.ticketing_orders o JOIN public.ticketing_buyers b ON b.id = o.buyer_id WHERE o.id = $1`,
+      [seed.havana.orderId],
+    );
+    const page = await signedIn(seed.users.havanaOwner);
+    await page.goto(`${origin}/ops#${brandPath()}/orders`);
+    const box = page.getByLabel("Rechercher (référence, courriel ou nom)");
+    await box.fill(rows[0]!.reference);
+    await page.getByRole("button", { name: "Rechercher" }).click();
+    await page.getByRole("link", { name: rows[0]!.reference }).waitFor();
+    await box.fill("introuvable-xyz");
+    await page.getByRole("button", { name: "Rechercher" }).click();
+    await page.getByText("Aucune commande trouvée.").waitFor();
   });
 
   it("scans offline at the gate, then syncs and reports a ticket let in at two gates", async () => {

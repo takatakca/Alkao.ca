@@ -89,3 +89,4 @@ TAKATAK membership (set `SUPABASE_URL` and `SUPABASE_ANON_KEY`). See
 | Run 11 | Signed `POST /v1/control/state` for reconciliation: the TAKATAK sync reads what ALKAO holds and sends only the differences, removals included |
 | Run 12 | Refund emails (staff refunds, late payments), one rotatable personal link per order, `/widget.js` buy button for Brand websites |
 | Run 13 | Security review ([report](docs/ALKAO_SECURITY_REVIEW.md)): tenant isolation sweep over every route, body limits, API security headers, proxy-aware rate limiting, production-only HTTPS framing, offline list expiry |
+| Run 14 | Order search (reference, email, name), live gate counter, `/health/ready`, request logs without ids or PII, Docker image and local `docker compose` stack |
