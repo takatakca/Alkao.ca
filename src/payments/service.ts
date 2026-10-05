@@ -15,6 +15,8 @@ export interface PaymentsDeps {
   gateway: PaymentGateway | null;
   now: () => Date;
   onboarding: { refreshUrl: string; returnUrl: string } | null;
+  /** ALKAO's own public origin (the hosted shop): always allowed as a Checkout return URL. */
+  shopOrigin?: string | null;
 }
 
 export type Actor = { type: "user" | "system" | "public"; id: string | null };
@@ -140,7 +142,7 @@ export class PaymentsService {
         if (quote.totalCents > 0) {
           account = await payments.getPaymentAccount(tx, scope.clientId);
           if (!account?.chargesEnabled || !this.deps.gateway) throw new DomainError("payments_unavailable");
-          const origins = await payments.getCheckoutReturnOrigins(tx, scope);
+          const origins = [...(await payments.getCheckoutReturnOrigins(tx, scope)), ...(this.deps.shopOrigin ? [this.deps.shopOrigin] : [])];
           if (!isOriginAllowed(input.successUrl, origins) || !isOriginAllowed(input.cancelUrl, origins)) {
             throw new DomainError("return_url_not_allowed");
           }

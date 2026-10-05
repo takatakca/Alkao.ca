@@ -10,8 +10,8 @@ ALKAO off again: `ALKAO_OPERATIONAL_API_ENABLED=false`, or stop the processes.
 |---|---|
 | Database | A database **dedicated to ALKAO**. Never use the TAKATAK or FESTI-ICE database. Two ways: a dedicated Supabase project, migrated with `supabase db push`; or plain PostgreSQL 15+: run `supabase/tests/supabase_shim.sql` once (it creates the Supabase roles and `auth.uid()`), then `npm run db:migrate` |
 | Auth | The **same Supabase project** as TAKATAK, so staff use their TAKATAK accounts. Set `SUPABASE_JWKS_URL` (or `SUPABASE_JWT_SECRET`), `SUPABASE_URL` and `SUPABASE_ANON_KEY` |
-| Processes | `npm start` (API, `/ops`, `/billets`), `npm run worker:sweeper`, `npm run worker:email` |
-| Public URL | HTTPS, e.g. `https://billets.example.ca`. Set it as `ALKAO_PUBLIC_URL` |
+| Processes | `npm start` (API, `/ops`, `/billets`, `/acheter`), `npm run worker:sweeper`, `npm run worker:email` |
+| Public URL | HTTPS, e.g. `https://billets.example.ca`. Set it as `ALKAO_PUBLIC_URL` for both the server and the email worker |
 
 ## 2. Secrets
 
@@ -61,7 +61,9 @@ How it behaves:
    Brand's website origins allowed after payment.
 3. Staff create the venue, event, sessions and ticket types, then put sessions on sale and
    publish.
-4. Make a test purchase. You should see the payment on the Client's Stripe account, the
+4. Share the shop link `https://…/acheter/<clientId>/<brandId>`, or the Brand's own site can
+   call the public API.
+5. Make a test purchase. You should see the payment on the Client's Stripe account, the
    tickets email, QR codes on `/billets`, and a scan at the gate.
 
 ## 5. TAKATAK dashboard (optional, later)

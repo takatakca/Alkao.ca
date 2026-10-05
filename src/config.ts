@@ -27,6 +27,8 @@ const EnvSchema = z.object({
   SUPABASE_ANON_KEY: z.string().min(20).optional(),
   /** Origins allowed to embed /ops in an iframe (e.g. the TAKATAK dashboard), comma-separated. */
   ALKAO_OPS_FRAME_ANCESTORS: z.string().optional(),
+  /** Public HTTPS URL of this deployment: hosted shop return URLs and ticket links (Run 06/08). */
+  ALKAO_PUBLIC_URL: z.url({ protocol: /^https$/ }).optional(),
   ALKAO_HOLD_TTL_SECONDS: z.coerce.number().int().min(60).max(1800).default(600),
   ALKAO_PUBLIC_HOLDS_PER_MINUTE: z.coerce.number().int().min(1).max(1000).default(20),
   PORT: z.coerce.number().int().min(1).max(65535).default(8787),
@@ -43,6 +45,7 @@ export interface Config {
   onboarding: { refreshUrl: string; returnUrl: string } | null;
   credentialMasterSecret: string | null;
   opsUi: { supabaseUrl: string | null; supabaseAnonKey: string | null; frameAncestors: string[] };
+  publicUrl: string | null;
   port: number;
 }
 
@@ -84,6 +87,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       supabaseAnonKey: e.SUPABASE_ANON_KEY ?? null,
       frameAncestors: (e.ALKAO_OPS_FRAME_ANCESTORS ?? "").split(",").map((s) => s.trim()).filter((s) => /^(https:\/\/[a-z0-9.-]+|http:\/\/(localhost|127\.0\.0\.1))(:\d+)?$/.test(s)),
     },
+    publicUrl: e.ALKAO_PUBLIC_URL ?? null,
     port: e.PORT,
   };
 }

@@ -18,6 +18,7 @@ const app = createApp({
   onboarding: config.onboarding,
   credentialMasterSecret: config.credentialMasterSecret,
   opsUi: config.opsUi,
+  publicUrl: config.publicUrl,
 });
 
 serve({ fetch: app.fetch, port: config.port }, (info) => {

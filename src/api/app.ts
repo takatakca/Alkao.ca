@@ -26,6 +26,7 @@ import * as reports from "../ops/reports.js";
 import { exchangeOrder } from "../ops/exchange.js";
 import { mountOpsUi, type OpsUiConfig } from "./ops-ui.js";
 import { mountBuyerUi } from "./buyer-ui.js";
+import { mountShopUi } from "./shop-ui.js";
 import * as delivery from "../delivery/db.js";
 
 export const API_VERSION = "alkao.api.v1";
@@ -45,6 +46,8 @@ export interface AppDeps {
   credentialMasterSecret?: string | null;
   /** Standalone Operations web app served under /ops. */
   opsUi?: OpsUiConfig;
+  /** Public HTTPS URL of this ALKAO deployment (hosted shop, ticket links). */
+  publicUrl?: string | null;
   now?: () => Date;
 }
 
@@ -69,6 +72,7 @@ export function createApp(deps: AppDeps) {
     gateway: deps.paymentGateway ?? null,
     now,
     onboarding: deps.onboarding ?? null,
+    shopOrigin: deps.publicUrl ? new URL(deps.publicUrl).origin : null,
   });
   const credentials = new CredentialsService({ db: deps.db, masterSecret: deps.credentialMasterSecret ?? null, now });
   const app = new Hono<Env>();
@@ -190,8 +194,10 @@ export function createApp(deps: AppDeps) {
       catalog.listPublicSessions(deps.db, scope, eventId, now()),
     ]);
     const { status: _status, createdAt: _c, updatedAt: _u, ...publicDetails } = details;
+    // Run 08: what the hosted shop shows (Brand and venue names).
+    const place = await catalog.loadPublicEventPlace(deps.db, scope, eventId);
     return c.json({
-      event: { ...publicDetails, taxRegion: event.taxRegion },
+      event: { ...publicDetails, taxRegion: event.taxRegion, ...place },
       ticketTypes: types
         .filter((t) => t.active)
         .map(({ active: _a, ...t }) => t),
@@ -682,6 +688,7 @@ export function createApp(deps: AppDeps) {
 
   mountOpsUi(app, deps.opsUi ?? { supabaseUrl: null, supabaseAnonKey: null, frameAncestors: [] });
   mountBuyerUi(app);
+  mountShopUi(app, { publicUrl: deps.publicUrl ?? null });
 
   return app;
 }

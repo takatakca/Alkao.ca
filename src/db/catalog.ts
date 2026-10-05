@@ -224,6 +224,20 @@ export async function loadPublicEvent(q: Queryable, s: TenantScope, eventId: str
   return { id: r.id, status: r.status, salesOpenAt: r.sales_open_at, salesCloseAt: r.sales_close_at, taxRegion: r.tax_region };
 }
 
+/** Brand and venue shown on the hosted shop (Run 08). */
+export async function loadPublicEventPlace(q: Queryable, s: TenantScope, eventId: string) {
+  const { rows } = await q.query<{ brand_name: string; venue_name: string; city: string | null; timezone: string }>(
+    `SELECT br.name AS brand_name, v.name AS venue_name, v.city, v.timezone
+     FROM public.ticketing_events e
+     JOIN public.ticketing_brands br ON br.id = e.brand_id AND br.client_id = e.client_id
+     JOIN public.ticketing_venues v ON v.id = e.venue_id AND v.client_id = e.client_id AND v.brand_id = e.brand_id
+     WHERE e.id = $1 AND e.client_id = $2 AND e.brand_id = $3`,
+    [eventId, s.clientId, s.brandId],
+  );
+  const r = rows[0];
+  return r ? { brand: { name: r.brand_name }, venue: { name: r.venue_name, city: r.city, timezone: r.timezone } } : {};
+}
+
 export const listPublicEvents = (q: Queryable, s: TenantScope) =>
   many(
     q,

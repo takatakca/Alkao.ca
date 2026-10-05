@@ -172,6 +172,27 @@ start without `RESEND_API_KEY`, `ALKAO_EMAIL_FROM`, `ALKAO_PUBLIC_URL` (HTTPS) a
 `ticketing_email_outbox` holds personal data. It has RLS on, with no grants and no policy, so
 nobody reads it through the Data API.
 
+### Hosted ticket shop (Run 08)
+
+A Brand can sell with a plain link, without changing its website:
+
+| Page | Content |
+|---|---|
+| `/acheter/<clientId>/<brandId>` | The Brand's published events |
+| `/acheter/<clientId>/<brandId>/<eventId>` | Choose a session (live availability), then quantities per ticket type and add-on. The server prices the order, TPS and TVQ included, and explains cart rules in French. Then hold the seats (with a countdown), enter buyer details and pay with Stripe Checkout. Free orders go straight to the tickets |
+| `/acheter/merci/<clientId>/<brandId>/<holdId>` | Stripe's success page. It opens the buyer's `/billets`, which checks again while the payment confirms |
+
+How it works:
+
+- **Back without paying:** a buyer who leaves Stripe can resume the same payment, or free
+  the seats.
+- **Same API as any site:** the pages are static files with a strict CSP. Every price, rule
+  and seat comes from the public, gated API, the same API a Brand's own website would call.
+- **Return URLs:** ALKAO's own origin (`ALKAO_PUBLIC_URL`) is always an allowed Stripe
+  return URL, alongside the Brand's `checkoutReturnOrigins`. Any other origin is refused.
+- **Event details:** `GET /v1/public/…/events/:eventId` now also returns `event.brand.name`
+  and `event.venue` (name, city, timezone).
+
 ### Role → permission
 
 | Role | catalog.read · inventory.read · holds.read | catalog.write | orders.read · buyers.read | audit.read |
@@ -202,7 +223,7 @@ manager only.
 | `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` | — | Platform key and the **Connect** webhook endpoint secret. Without both, payments stay off (`payments_unavailable`/`503`) |
 | `ALKAO_CREDENTIAL_MASTER_SECRET` | — | Secret (≥ 32 chars) from which each Client's QR signing keys are derived. Without it, there are no QR codes and scanning answers `503`. Changing it invalidates every QR code |
 | `ALKAO_STRIPE_ONBOARDING_REFRESH_URL` / `_RETURN_URL` | — | HTTPS pages (TAKATAK dashboard) where Stripe sends a Client admin during and after onboarding |
-| `ALKAO_PUBLIC_URL` | — | Public HTTPS origin of ALKAO, where buyers open `/billets` (email worker) |
+| `ALKAO_PUBLIC_URL` | — | Public HTTPS origin of ALKAO: buyers' `/billets` links (email worker) and the hosted shop's Stripe return pages (server) |
 | `RESEND_API_KEY` / `ALKAO_EMAIL_FROM` | — | Email worker: Resend API key and the verified sender address (the Brand name is the display name) |
 | `ALKAO_EMAIL_MAX_AGE_HOURS` | `72` | Emails queued longer ago are skipped, never sent late |
 
