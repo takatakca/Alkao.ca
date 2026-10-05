@@ -105,3 +105,4 @@ TAKATAK membership (set `SUPABASE_URL` and `SUPABASE_ANON_KEY`). See
 | Run 27 | "Retrouver mes billets" on the shop: the tickets are sent again to the address that bought them; same answer whatever the address, rate-limited |
 | Run 28 | Duplicate an event: a draft copy with the same ticket types, and its sessions moved by N days when asked |
 | Run 29 | Sessions in bulk: a season of start times (dates, weekdays, every N minutes) in the venue's time, preview first, existing times skipped; upcoming sessions on sale or paused at once |
+| Run 30 | Audit journal for owners and admins (filters, paging that skips nothing, the actor's role) and each order's history; read through new indexes |
