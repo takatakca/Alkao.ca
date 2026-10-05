@@ -183,7 +183,9 @@ describe("ALKAO Operations embedded in the TAKATAK dashboard", () => {
 
   beforeAll(async () => {
     token = await tokenFor(seed.users.havanaOwner, { expiresIn: "30m" });
-    parent = createServer((_req, res) => {
+    const badToken = await tokenFor(seed.users.havanaOwner, { secret: "not-the-alkao-jwt-secret-0123456789abcdef", expiresIn: "30m" });
+    parent = createServer((req, res) => {
+      const accessToken = req.url === "/bad" ? badToken : token;
       res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
       res.end(`<!doctype html><title>TAKATAK</title><iframe id="f" src="${embedOrigin}/ops#/" style="width:1000px;height:700px"></iframe>
 <script>
@@ -195,7 +197,7 @@ describe("ALKAO Operations embedded in the TAKATAK dashboard", () => {
     sent++;
     // The first token is about to lapse, so ALKAO must ask for another before its first call.
     const expiresAt = Date.now() + (sent === 1 ? 30000 : 1800000);
-    e.source.postMessage({ type: "alkao.session", accessToken: ${JSON.stringify(token)}, expiresAt, email: "ops@takatak.ca" }, e.origin);
+    e.source.postMessage({ type: "alkao.session", accessToken: ${JSON.stringify(accessToken)}, expiresAt, email: "ops@takatak.ca" }, e.origin);
   });
 </script>`);
     });
@@ -238,6 +240,16 @@ describe("ALKAO Operations embedded in the TAKATAK dashboard", () => {
     await frame.getByText("Havana Resort — Événements").click();
     await frame.getByRole("heading", { name: "Tableau de bord" }).waitFor();
     expect(await page.evaluate(() => (globalThis as any).received)).toEqual(["alkao.ready", "alkao.session_expired"]);
+  });
+
+  it("stops asking when ALKAO rejects the TAKATAK token", async () => {
+    const page = await (await browser.newContext({ locale: "fr-CA" })).newPage();
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    await page.goto(`${parentOrigin}/bad`);
+    await page.frameLocator("#f").getByRole("alert").getByText("ALKAO n'accepte pas la session TAKATAK", { exact: false }).waitFor();
+    await page.waitForTimeout(500);
+    // ready, renewal of the lapsing token, one retry after the 401, then nothing.
+    expect(await page.evaluate(() => (globalThis as any).received)).toEqual(["alkao.ready", "alkao.session_expired", "alkao.session_expired"]);
   });
 
   it("refuses to render inside a page that is not allowed to frame it", async () => {

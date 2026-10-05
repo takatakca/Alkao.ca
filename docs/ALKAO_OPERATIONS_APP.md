@@ -63,6 +63,9 @@ The handover follows these rules:
   it and sign the user out of TAKATAK, so TAKATAK refreshes and sends the new access token.
 - **Memory only.** Embedded, the token is never written to storage.
 - **No login form, no logout button.** The TAKATAK session is the only session.
+- **No retry loop.** If the API rejects a token, ALKAO asks TAKATAK once more. If TAKATAK sends
+  the same token again, ALKAO stops and says that it does not accept the TAKATAK session.
+- **Stripe onboarding opens in a new tab,** because Stripe's pages cannot run inside a frame.
 - **No camera.** The TAKATAK dashboard sends `Permissions-Policy: camera=()`, so the embedded
   scanner works with a keyboard-wedge reader or a typed code. For camera scanning, open `/ops`
   directly on the gate device.

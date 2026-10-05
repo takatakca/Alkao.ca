@@ -70,6 +70,7 @@ function embedBridge(origins, onSession) {
   };
 }
 let bridge = null;
+let rejectedToken = null;
 
 async function supabaseToken(config, grant, body) {
   const res = await fetch(`${config.supabaseUrl}/auth/v1/token?grant_type=${grant}`, {
@@ -483,7 +484,17 @@ function Payments({ api, base }) {
   const [origins, setOrigins] = useState(null);
   const [error, setError] = useState(null);
   const [saved, setSaved] = useState(false);
-  const onboard = async () => { setError(null); try { window.location.assign((await api(`${base}/payments/onboarding`, { method: "POST" })).onboarding.url); } catch (err) { setError(err); } };
+  const [onboardingUrl, setOnboardingUrl] = useState(null);
+  // Stripe's onboarding cannot run inside a frame: embedded, it opens in a new tab.
+  const onboard = async () => {
+    setError(null);
+    try {
+      const url = (await api(`${base}/payments/onboarding`, { method: "POST" })).onboarding.url;
+      if (!embedded) return window.location.assign(url);
+      const tab = window.open(url, "_blank");
+      if (tab) tab.opener = null; else setOnboardingUrl(url);
+    } catch (err) { setError(err); }
+  };
   const save = async (e) => {
     e.preventDefault(); setError(null); setSaved(false);
     try {
@@ -495,6 +506,7 @@ function Payments({ api, base }) {
   const current = settings.data?.settings?.checkoutReturnOrigins ?? [];
   return html`<h1>Paiements (Stripe)</h1>
     ${error && html`<${Failure} error=${error} />`}
+    ${onboardingUrl && html`<div class="alert"><a href=${onboardingUrl} target="_blank" rel="noopener noreferrer">Ouvrir la configuration Stripe dans un nouvel onglet</a></div>`}
     ${account.loading ? html`<${Loading} />` : account.error ? html`<${Failure} error=${account.error} />` : html`<div class="card">
       ${a.connected ? html`<div class="row"><strong>Compte Stripe connecté</strong>
           <span class="badge ${a.chargesEnabled ? "ok" : "warn"}">${a.chargesEnabled ? "Paiements acceptés" : "Paiements pas encore activés"}</span>
@@ -549,10 +561,15 @@ function App() {
   const inFrame = window.parent !== window;
   const [session, setSession] = useState(inFrame ? null : loadSession());
   const [hash, setHash] = useState(location.hash || "#/");
+  const [refused, setRefused] = useState(false);
   useEffect(() => {
     fetch("/ops/config.json").then((r) => r.json()).then((c) => {
       embedded = inFrame && (c.embedOrigins ?? []).length > 0;
-      if (embedded) bridge = embedBridge(c.embedOrigins, (s) => { memorySession = s; setSession(s); });
+      // A token the API just rejected is not taken again: no 401 → renew → 401 loop.
+      if (embedded) bridge = embedBridge(c.embedOrigins, (s) => {
+        if (s.accessToken === rejectedToken) { setRefused(true); return; }
+        setRefused(false); memorySession = s; setSession(s);
+      });
       else if (inFrame) setSession(loadSession());
       setConfig(c);
     });
@@ -561,9 +578,10 @@ function App() {
   const update = (s) => { saveSession(s); setSession(s); };
   const logout = () => update(null);
   // Embedded: a rejected token means asking TAKATAK for a new one, never showing a login form.
-  const expired = () => { update(null); bridge.renew(); };
+  const expired = () => { rejectedToken = loadSession()?.accessToken ?? null; update(null); bridge.renew(); };
 
   if (!config) return html`<p class="boot">Chargement…</p>`;
+  if (!session && refused) return html`<div class="alert warn" role="alert">ALKAO n'accepte pas la session TAKATAK. Rechargez la page ; si le problème continue, contactez le support TAKATAK.</div>`;
   if (!session) return embedded ? html`<p class="boot">Connexion via TAKATAK…</p>` : html`<${Login} config=${config} onSession=${update} />`;
 
   const getToken = async () => {
