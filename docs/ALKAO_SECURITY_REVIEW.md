@@ -92,3 +92,33 @@ The first run found **colour contrast failures in dark mode** on every app: the
 green, red, orange and blue foregrounds kept their light-mode values. Each app now has a
 dark palette, and the suite reports zero violations. All controls are native buttons, links
 and labelled inputs, so keyboard use and screen readers work without extra code.
+
+## Runs 18–24 (Run 25)
+
+The routes added since the review, checked the same way.
+
+| Route | Permission | Tenant check |
+|---|---|---|
+| `GET /disputes`, `GET /attention` | `orders.read` | Every query filters by the URL's Client and Brand |
+| `GET /orders/:id/buyer/export`, `POST /orders/:id/buyer/anonymize` | `buyers.read`; `buyers.erase` (owner, admin) | The order is looked up in the URL's Client and Brand. Another Client's order is `404` |
+| `POST /orders/:id/tickets/void` | `refunds.create` | Only tickets of that order, or of its Flex exchange, in the URL's tenant |
+| `GET /sessions/:id/lookup`, `POST /scanner/admit` | `scan` | The session, order and ticket are each looked up in the URL's tenant. Gate staff get no buyer data |
+| `GET/PUT /settings/reminders` | `credentials.manage` | One row per Client and Brand |
+| `GET /metrics` | Its own bearer token, compared in constant time; `404` when no token is set | Platform-wide counts only, never a tenant id, name, email or amount |
+| Stripe `charge.dispute.*` and `charge.refunded` | Stripe signature | Matched to a payment by payment intent **and** connected account. A mismatch is audited and ignored |
+
+**Isolation sweep (`test/api/isolation.test.ts`).**
+
+- It now calls these routes with valid bodies and queries, so each reaches the database
+  instead of stopping at validation.
+- It also covers the routes that take another Client's ids in the body (`/scanner/admit`,
+  `/scanner/scans`).
+- Its FESTI-ICE snapshot now includes buyers, anonymizations, disputes, Stripe refund
+  totals and Brand settings.
+
+**Mutation check.** With the tenant filter removed from the buyer lookup, the sweep fails at
+once (`buyer/export answered 200`). With the filter restored, it passes.
+
+The new tables (`ticketing_payment_disputes`, `ticketing_charge_refund_totals`,
+`ticketing_buyer_erasures`) are server-only. RLS is on, with no policy and no grant, and the
+RLS catalog test lists them.
