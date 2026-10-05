@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import { Hono, type Context, type MiddlewareHandler } from "hono";
+import { bodyLimit } from "hono/body-limit";
 import * as api from "../contracts/api-v1.js";
 import { CONTROL_CONTRACT_VERSION, ControlEvent, ControlStateRequest } from "../contracts/control-v1.js";
 import * as catalog from "../db/catalog.js";
@@ -28,6 +29,7 @@ import { exchangeOrder } from "../ops/exchange.js";
 import { mountOpsUi, type OpsUiConfig } from "./ops-ui.js";
 import { mountBuyerUi } from "./buyer-ui.js";
 import { mountShopUi } from "./shop-ui.js";
+import { clientIp } from "./client-ip.js";
 import * as delivery from "../delivery/db.js";
 import { orderEmailToken } from "../delivery/links.js";
 import * as cancellation from "../ops/cancellation.js";
@@ -51,6 +53,8 @@ export interface AppDeps {
   opsUi?: OpsUiConfig;
   /** Public HTTPS URL of this ALKAO deployment (hosted shop, ticket links). */
   publicUrl?: string | null;
+  /** Reverse proxies in front of ALKAO whose X-Forwarded-For entry is trusted (default 1). */
+  trustedProxyHops?: number;
   now?: () => Date;
 }
 
@@ -82,6 +86,28 @@ export function createApp(deps: AppDeps) {
 
   app.onError((error, c) => errorResponse(c, error));
   app.notFound((c) => fail(c, 404, "not_found"));
+
+  // Run 13 hardening: bounded request bodies, and API responses that are never cached,
+  // sniffed or framed. Stripe events can be larger than our own requests.
+  const smallBodies = bodyLimit({ maxSize: 256 * 1024, onError: (c) => fail(c, 413, "payload_too_large") });
+  const webhookBodies = bodyLimit({ maxSize: 1024 * 1024, onError: (c) => fail(c, 413, "payload_too_large") });
+  app.use("*", (c, next) => (c.req.path === "/v1/webhooks/stripe" ? webhookBodies : smallBodies)(c, next));
+  const hsts = deps.publicUrl?.startsWith("https://") ?? false;
+  app.use("*", async (c, next) => {
+    await next();
+    if (hsts) c.header("strict-transport-security", "max-age=31536000; includeSubDomains");
+    if (!c.req.path.startsWith("/v1/") && c.req.path !== "/health") return;
+    c.header("x-content-type-options", "nosniff");
+    c.header("referrer-policy", "no-referrer");
+    c.header("x-frame-options", "DENY");
+    if (!c.res.headers.has("cache-control")) c.header("cache-control", "no-store");
+  });
+
+  /** A parent record from the URL exists in this exact Client and Brand (lists answer 404 otherwise). */
+  async function inScope(table: "ticketing_events" | "ticketing_sessions" | "ticketing_orders", id: string, s: TenantScope): Promise<boolean> {
+    const { rowCount } = await deps.db.query(`SELECT 1 FROM public.${table} WHERE id = $1 AND client_id = $2 AND brand_id = $3`, [id, s.clientId, s.brandId]);
+    return Boolean(rowCount);
+  }
 
   async function decide(clientId: string, brandId: string): Promise<GateDecision> {
     const records = await loadGateRecords(deps.db, clientId, brandId);
@@ -235,7 +261,7 @@ export function createApp(deps: AppDeps) {
 
   app.post(`${PUBLIC}/holds`, publicGate, async (c) => {
     const scope = c.get("scope");
-    const ip = (c.req.header("x-forwarded-for") ?? c.req.header("x-real-ip") ?? "unknown").split(",")[0]!.trim();
+    const ip = clientIp(c, deps.trustedProxyHops ?? 1);
     if (!holdLimiter.take(`${scope.clientId}:${ip}`, now().getTime())) return fail(c, 429, "rate_limited");
 
     const body = api.CreateHoldRequest.parse(await readJson(c));
@@ -384,7 +410,7 @@ export function createApp(deps: AppDeps) {
 
   app.get(`${ADMIN}/events/:eventId/sessions`, ...admin, can("ticketing.inventory.read"), async (c) => {
     const eventId = param(c, "eventId");
-    if (!eventId) return fail(c, 404, "event_not_found");
+    if (!eventId || !(await inScope("ticketing_events", eventId, c.get("scope")))) return fail(c, 404, "event_not_found");
     return c.json({ sessions: await catalog.listSessions(deps.db, c.get("scope"), eventId) });
   });
 
@@ -422,7 +448,7 @@ export function createApp(deps: AppDeps) {
 
   app.get(`${ADMIN}/events/:eventId/ticket-types`, ...admin, can("ticketing.catalog.read"), async (c) => {
     const eventId = param(c, "eventId");
-    if (!eventId) return fail(c, 404, "event_not_found");
+    if (!eventId || !(await inScope("ticketing_events", eventId, c.get("scope")))) return fail(c, 404, "event_not_found");
     return c.json({ ticketTypes: await catalog.listTicketTypes(deps.db, c.get("scope"), eventId) });
   });
 
@@ -592,7 +618,7 @@ export function createApp(deps: AppDeps) {
 
   app.get(`${ADMIN}/orders/:orderId/refunds`, ...admin, can("ticketing.orders.read"), async (c) => {
     const orderId = param(c, "orderId");
-    if (!orderId) return fail(c, 404, "order_not_found");
+    if (!orderId || !(await inScope("ticketing_orders", orderId, c.get("scope")))) return fail(c, 404, "order_not_found");
     return c.json({ refunds: await paymentsDb.listRefunds(deps.db, c.get("scope"), orderId) });
   });
 
@@ -639,7 +665,7 @@ export function createApp(deps: AppDeps) {
 
   app.get(`${ADMIN}/sessions/:sessionId/scans`, ...admin, can("ticketing.scan"), async (c) => {
     const sessionId = param(c, "sessionId");
-    if (!sessionId) return fail(c, 404, "session_not_found");
+    if (!sessionId || !(await inScope("ticketing_sessions", sessionId, c.get("scope")))) return fail(c, 404, "session_not_found");
     const q = api.ListQuery.parse(c.req.query());
     return c.json({ scans: await credentialsDb.listScans(deps.db, c.get("scope"), sessionId, q.limit) });
   });

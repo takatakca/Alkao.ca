@@ -19,6 +19,7 @@ const app = createApp({
   credentialMasterSecret: config.credentialMasterSecret,
   opsUi: config.opsUi,
   publicUrl: config.publicUrl,
+  trustedProxyHops: config.trustedProxyHops,
 });
 
 serve({ fetch: app.fetch, port: config.port }, (info) => {

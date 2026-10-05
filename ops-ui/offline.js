@@ -15,8 +15,18 @@ const b64u = (s) => {
   return Uint8Array.from(b, (c) => c.charCodeAt(0));
 };
 
-export function loadOffline(sessionId) {
-  try { return JSON.parse(localStorage.getItem(KEY(sessionId)) ?? "null"); } catch { return null; }
+// A stored list is dropped 24 h after its gates close, once everything is synced: a lost
+// device does not keep a session's credential list forever.
+const KEEP_AFTER_CLOSE_MS = 24 * 3600_000;
+export function loadOffline(sessionId, now = Date.now()) {
+  let store = null;
+  try { store = JSON.parse(localStorage.getItem(KEY(sessionId)) ?? "null"); } catch { return null; }
+  const closesAt = Date.parse(store?.manifest?.session?.admission?.closesAt ?? "");
+  if (store && store.queue.length === 0 && Number.isFinite(closesAt) && now > closesAt + KEEP_AFTER_CLOSE_MS) {
+    localStorage.removeItem(KEY(sessionId));
+    return null;
+  }
+  return store;
 }
 export function saveOffline(sessionId, store) {
   if (store) localStorage.setItem(KEY(sessionId), JSON.stringify(store)); else localStorage.removeItem(KEY(sessionId));
