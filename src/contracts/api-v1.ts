@@ -185,3 +185,6 @@ export const ReportQuery = z
 export const AttendeesQuery = z.object({ sessionId: z.uuid() });
 
 export const ExchangeRequest = z.object({ sessionId: z.uuid() });
+
+// ── Run 10: session cancellation ────────────────────────────────────────────
+export const CancelSessionRequest = z.object({ reason: z.string().trim().max(500).nullish() });

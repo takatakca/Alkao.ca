@@ -233,6 +233,32 @@ describe("ALKAO Operations app", () => {
     expect(admissions[0].n).toBe(1);
   });
 
+  it("cancels a session from the event page and shows the refunds", async () => {
+    const t = seed.havana;
+    const { rows } = await db.pool.query<{ id: string }>(
+      `INSERT INTO public.ticketing_sessions (client_id, brand_id, event_id, starts_at, capacity, status)
+       VALUES ($1, $2, $3, now() + interval '40 days', 20, 'on_sale') RETURNING id`,
+      [t.clientId, t.brandId, t.eventId],
+    );
+    const sessionId = rows[0]!.id;
+    const toddler = t.types.find((x) => x.code === "TODDLER")!.id;
+    const h = await call(app, "POST", `${pub(t.clientId, t.brandId)}/holds`, { body: { sessionId, items: [{ ticketTypeId: toddler, quantity: 1 }] } });
+    await call(app, "POST", `${pub(t.clientId, t.brandId)}/holds/${h.body.hold.id}/checkout`, {
+      headers: { "x-alkao-hold-token": h.body.hold.token },
+      body: { buyer: { email: "annule@example.com" }, successUrl: `${t.returnOrigin}/ok`, cancelUrl: `${t.returnOrigin}/ko` },
+    });
+    const page = await signedIn(seed.users.havanaOwner);
+    page.on("dialog", (d) => void d.accept("Tempête"));
+    await page.goto(`${origin}/ops#${brandPath()}/event/${t.eventId}`);
+    const { rows: s } = await db.pool.query<{ starts_at: Date }>(`SELECT starts_at FROM public.ticketing_sessions WHERE id = $1`, [sessionId]);
+    const label = new Date(s[0]!.starts_at).toLocaleString("fr-CA", { dateStyle: "medium", timeStyle: "short" });
+    await page.getByRole("row", { name: new RegExp(label) }).getByRole("button", { name: "Annuler la séance" }).click();
+    await page.getByText("Séance annulée : tout le monde est remboursé.").waitFor();
+    expect(await page.getByText("1 gratuite(s) annulée(s)", { exact: false }).isVisible()).toBe(true);
+    const { rows: after } = await db.pool.query(`SELECT status FROM public.ticketing_sessions WHERE id = $1`, [sessionId]);
+    expect(after).toEqual([{ status: "cancelled" }]);
+  });
+
   it("hides money from gate staff", async () => {
     const page = await signedIn(seed.users.havanaStaff);
     await page.goto(`${origin}/ops#${brandPath()}/dashboard`);

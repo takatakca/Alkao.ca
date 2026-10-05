@@ -117,6 +117,7 @@ const ERRORS_FR = {
   payments_not_configured: "Paiements non configurés sur ce déploiement.", credentials_not_configured: "Codes QR non configurés sur ce déploiement.",
   invalid_request: "Données invalides.", conflict: "Existe déjà.", invalid_reference: "Référence invalide.",
   order_has_no_valid_ticket: "Cette commande n'a plus de billet valide.", email_resend_limit: "Trop de renvois pour cette commande.",
+  use_session_cancellation: "Des billets sont vendus : utilisez « Annuler la séance », qui rembourse les acheteurs.",
 };
 const errText = (e) => (e instanceof ApiError ? ERRORS_FR[e.code] ?? `Erreur : ${e.code}` : String(e?.message ?? e));
 
@@ -282,6 +283,19 @@ function EventDetail({ api, base, eventId }) {
   const event = ev.data.event;
   const setEventStatus = (status) => act(async () => { await api(`${base}/events/${eventId}`, { method: "PATCH", body: { status } }); reloadEvent(); });
   const setSessionStatus = (id, status) => act(async () => { await api(`${base}/sessions/${id}`, { method: "PATCH", body: { status } }); reloadSessions(); });
+  // Run 10: cancel a session and refund every buyer, batch after batch, showing progress.
+  const [cancelling, setCancelling] = useState(null);
+  const cancelSession = (s) => act(async () => {
+    const reason = prompt(`Annuler la séance du ${when(s.startsAt)} ?\n${s.soldCount} billet(s) vendus : chaque acheteur sera remboursé en entier (commission TAKATAK comprise) et prévenu par courriel.\n\nMotif (facultatif) :`, "");
+    if (reason === null) return;
+    let r = await api(`${base}/sessions/${s.id}/cancel`, { method: "POST", body: { reason: reason.trim() || null } });
+    setCancelling(r.cancellation);
+    for (let i = 0; i < 200 && r.cancellation.status === "running" && r.cancellation.orders.pending > 0; i++) {
+      r = await api(`${base}/sessions/${s.id}/cancellation/continue`, { method: "POST" });
+      setCancelling(r.cancellation);
+    }
+    reloadSessions();
+  });
   const setCapacity = (id, current) => act(async () => {
     const value = prompt("Nouvelle capacité", String(current)); if (value === null) return;
     await api(`${base}/sessions/${id}`, { method: "PATCH", body: { capacity: Number(value) } }); reloadSessions();
@@ -323,7 +337,13 @@ function EventDetail({ api, base, eventId }) {
           ${s.status !== "on_sale" && html`<button onClick=${setSessionStatus(s.id, "on_sale")}>Mettre en vente</button>`}
           ${s.status === "on_sale" && html`<button class="secondary" onClick=${setSessionStatus(s.id, "paused")}>Pause</button>`}
           <button class="link" onClick=${act(() => download(api, `${base}/reports/attendees.csv?sessionId=${s.id}`, `alkao-participants-${s.id}.csv`))}>Participants (CSV)</button>
+          ${s.status !== "cancelled" && html`<button class="danger" onClick=${cancelSession(s)}>Annuler la séance</button>`}
         </td></tr>`)}</tbody></table>`}
+    ${cancelling && html`<div class="card" role="status" aria-label="Annulation de séance">
+      <strong>${cancelling.status === "completed" ? "Séance annulée : tout le monde est remboursé." : "Annulation en cours…"}</strong>
+      <p class="muted">${cancelling.orders.refunded} commande(s) remboursée(s) · ${money(cancelling.refundedCents)} · ${cancelling.orders.voided} gratuite(s) annulée(s)${cancelling.orders.pending ? ` · ${cancelling.orders.pending} en attente` : ""}</p>
+      ${cancelling.orders.failed > 0 && html`<div class="alert warn">${cancelling.orders.failed} remboursement(s) en échec : ${cancelling.failures.map((f) => f.reference).join(", ")}. Réessayez plus tard depuis la commande.</div>`}
+    </div>`}
 
     <h2>Types de billets</h2>
     <form class="inline card" onSubmit=${addType}>

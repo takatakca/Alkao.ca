@@ -50,6 +50,9 @@ const STATUS_BY_CODE: Record<string, ContentfulStatusCode> = {
   // Run 06
   order_has_no_valid_ticket: 409,
   email_resend_limit: 409,
+  // Run 10
+  use_session_cancellation: 409,
+  cancellation_not_found: 404,
   nothing_to_exchange: 409,
   ticket_already_used: 409,
 };
