@@ -199,6 +199,12 @@ export const OrdersQuery = z.object({
   q: z.string().trim().min(2).max(120).optional(),
 });
 
+// ── Run 21: cancel tickets without a refund ────────────────────────────────
+export const VoidTicketsRequest = z.object({
+  ticketIds: z.array(z.uuid()).min(1).max(1000),
+  reason: z.string().trim().max(500).nullish(),
+});
+
 // ── Run 19: disputes ────────────────────────────────────────────────────────
 export const DisputesQuery = z.object({
   /** "open" (default): disputes still waiting on the Client or the bank; "all": closed ones too. */

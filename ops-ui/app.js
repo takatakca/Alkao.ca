@@ -136,6 +136,7 @@ const ERRORS_FR = {
   invalid_request: "Données invalides.", conflict: "Existe déjà.", invalid_reference: "Référence invalide.",
   order_has_no_valid_ticket: "Cette commande n'a plus de billet valide.", email_resend_limit: "Trop de renvois pour cette commande.",
   use_session_cancellation: "Des billets sont vendus : utilisez « Annuler la séance », qui rembourse les acheteurs.",
+  invalid_ticket: "Un des billets cochés n'est plus valide.",
   buyer_has_upcoming_tickets: "L'acheteur a encore un billet pour une séance à venir : remboursez-le ou attendez la fin de la séance.",
   dispute_open: "Un litige Stripe est ouvert sur une de ses commandes : attendez qu'il soit réglé.",
   buyer_anonymized: "Cet acheteur a été anonymisé : il n'a plus d'adresse courriel.",
@@ -218,15 +219,13 @@ function Workspaces({ api }) {
 // ── Dashboard ───────────────────────────────────────────────────────────────
 function Dashboard({ api, base, prefix }) {
   const [state] = useLoad(() => api(`${base}/reports/sales`), [base]);
-  const [disputes] = useLoad(() => api(`${base}/disputes`), [base]);
+  const [todo] = useLoad(() => api(`${base}/attention`), [base]);
   if (state.loading) return html`<${Loading} />`;
   if (state.error) return html`<${Failure} error=${state.error} />`;
   const { totals, sessions, ticketTypes } = state.data.report;
-  const open = disputes.data?.disputes ?? [];
   return html`
     <h1>Tableau de bord</h1>
-    ${open.length > 0 && html`<div class="alert bad" role="alert"><strong>${open.length} litige${open.length > 1 ? "s" : ""} Stripe ouvert${open.length > 1 ? "s" : ""}</strong>
-      <ul>${open.map((d) => html`<li><a href=${`#${prefix}/order/${d.orderId}`}>${d.reference}</a> · ${d.buyerName ?? d.buyerEmail} · ${money(d.amountCents)} · ${DISPUTE_FR[d.status] ?? d.status}${d.evidenceDueBy ? ` · réponse avant le ${when(d.evidenceDueBy)}` : ""}</li>`)}</ul></div>`}
+    ${todo.data?.attention.total > 0 && html`<${Attention} a=${todo.data.attention} prefix=${prefix} />`}
     <div class="grid">
       ${[["Commandes", totals.orders, false], ["Ventes brutes", totals.grossCents, true], ["Taxes (TPS + TVQ)", totals.taxCents, true],
          ["Remboursé", totals.refundedCents, true], ["Commission TAKATAK", totals.commissionCents - totals.commissionRefundedCents, true],
@@ -240,6 +239,21 @@ function Dashboard({ api, base, prefix }) {
     <table><thead><tr><th>Code</th><th class="num">Quantité</th><th class="num">Revenu</th></tr></thead>
       <tbody>${ticketTypes.map((t) => html`<tr><td>${t.code}</td><td class="num">${t.quantity}</td><td class="num">${money(t.revenueCents)}</td></tr>`)}</tbody></table>
     <p><button class="secondary" onClick=${() => download(api, `${base}/reports/orders.csv`, "alkao-commandes.csv")}>Exporter les commandes (CSV)</button></p>`;
+}
+
+// Run 21: everything that waits on staff, with a link to where it is handled.
+const EMAIL_KIND_FR = { order_tickets: "billets", exchange_tickets: "billets du changement de séance", session_cancelled: "annulation de séance", refund: "remboursement" };
+function Attention({ a, prefix }) {
+  const order = (id, reference) => html`<a href=${`#${prefix}/order/${id}`}>${reference}</a>`;
+  const group = (title, items, line) => items.length > 0 && html`<h3>${title} (${items.length})</h3><ul>${items.map((x) => html`<li>${line(x)}</li>`)}</ul>`;
+  return html`<section class="card attention" aria-labelledby="todo-title">
+    <h2 id="todo-title">À traiter (${a.total})</h2>
+    ${group("Litiges Stripe ouverts", a.disputes, (d) => html`${order(d.orderId, d.reference)} · ${d.buyerName ?? d.buyerEmail} · ${money(d.amountCents)} · ${DISPUTE_FR[d.status] ?? d.status}${d.evidenceDueBy ? ` · réponse avant le ${when(d.evidenceDueBy)}` : ""}`)}
+    ${group("Remboursements bloqués chez Stripe", a.refunds, (r) => html`${order(r.orderId, r.reference)} · ${money(r.amountCents)} · depuis le ${when(r.createdAt)}${r.lastError ? ` · ${r.lastError}` : ""} — ouvrez la commande pour réessayer`)}
+    ${group("Courriels non reçus", a.emails, (e) => html`${order(e.orderId, e.reference)} · ${EMAIL_KIND_FR[e.kind] ?? e.kind} · ${e.buyerEmail}${e.lastError ? ` · ${e.lastError}` : ""}`)}
+    ${group("Remboursés dans Stripe, billets encore valides", a.outsideRefunds, (r) => html`${order(r.orderId, r.reference)} · ${money(r.outsideCents)} remboursés hors ALKAO`)}
+    ${group("Annulations de séance à reprendre", a.cancellations, (c) => html`<a href=${`#${prefix}/event/${c.eventId}`}>Séance du ${when(c.startsAt)}</a> · ${c.failed} remboursement${c.failed > 1 ? "s" : ""} en échec`)}
+  </section>`;
 }
 
 // ── Venues ──────────────────────────────────────────────────────────────────
@@ -455,6 +469,12 @@ function OrderDetail({ api, base, orderId }) {
   const reissue = (ticketId) => act(async () => { await api(`${base}/tickets/${ticketId}/credential/reissue`, { method: "POST" }); setMessage("Nouveau code QR émis ; l'ancien ne fonctionne plus."); });
   const resendEmail = act(async () => { await api(`${base}/orders/${orderId}/tickets-email`, { method: "POST" }); setMessage(`Billets renvoyés à ${o.buyerEmail}.`); reloadOrder(); });
   const toggle = (id) => setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
+  // Run 21: cancel the checked tickets without refunding them (after a dispute, a refund made in Stripe…).
+  const voidSelected = act(async () => {
+    if (!confirm(`Annuler ${selected.length} billet(s) sans remboursement ? Leurs codes QR ne fonctionneront plus et les places seront remises en vente.`)) return;
+    await api(`${base}/orders/${orderId}/tickets/void`, { method: "POST", body: { ticketIds: selected } });
+    setMessage(`${selected.length} billet(s) annulé(s) sans remboursement.`); setSelected([]); reloadOrder();
+  });
   // Run 20: the buyer's personal data on request (Québec Law 25).
   const exportBuyer = act(() => download(api, `${base}/orders/${orderId}/buyer/export`, `alkao-donnees-acheteur-${o.reference}.json`));
   const anonymize = act(async () => {
@@ -486,6 +506,7 @@ function OrderDetail({ api, base, orderId }) {
         <td>${t.status === "valid" && html`<input type="checkbox" aria-label="Annuler ce billet" checked=${selected.includes(t.id)} onChange=${() => toggle(t.id)} />`}</td>
         <td><code>${t.id.slice(0, 8)}</code></td><td><${Badge} status=${t.status} /></td><td>${t.admittedAt ? when(t.admittedAt) : "—"}</td>
         <td>${t.status === "valid" && html`<button class="link" onClick=${reissue(t.id)}>Réémettre le QR</button>`}</td></tr>`)}</tbody></table>
+    ${selected.length > 0 && html`<p><button class="secondary" onClick=${voidSelected}>Annuler les billets cochés sans remboursement</button></p>`}
     ${["paid", "partially_refunded"].includes(o.status) && html`
       <h2>Rembourser</h2>
       <form class="inline card" onSubmit=${refund}>

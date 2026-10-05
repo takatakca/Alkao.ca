@@ -24,6 +24,7 @@ import * as paymentsDb from "../db/payments.js";
 import * as credentialsDb from "../db/credentials.js";
 import { CredentialsService } from "../scanner/service.js";
 import { toCsv } from "../ops/csv.js";
+import * as attention from "../ops/attention.js";
 import * as privacy from "../ops/privacy.js";
 import * as reports from "../ops/reports.js";
 import { exchangeOrder } from "../ops/exchange.js";
@@ -517,6 +518,18 @@ export function createApp(deps: AppDeps) {
     // made directly in Stripe. Run 20: whether the buyer was anonymized.
     const tickets = (order.tickets as { id: string }[]).map((t) => ({ ...t, admittedAt: admissions.get(t.id) ?? null }));
     return c.json({ order: { ...order, tickets, emails, disputes, outsideRefundCents: outsideRefund.outsideCents, buyerAnonymizedAt } });
+  });
+
+  // ── Run 21: what waits on staff, and tickets cancelled without a refund ───────
+  app.get(`${ADMIN}/attention`, ...admin, can("ticketing.orders.read"), async (c) =>
+    c.json({ attention: await attention.attentionList(deps.db, c.get("scope"), now()) }),
+  );
+
+  app.post(`${ADMIN}/orders/:orderId/tickets/void`, ...admin, can("ticketing.refunds.create"), async (c) => {
+    const orderId = param(c, "orderId");
+    if (!orderId) return fail(c, 404, "order_not_found");
+    const body = api.VoidTicketsRequest.parse(await readJson(c));
+    return c.json(await attention.voidTickets(deps.db, c.get("scope"), orderId, { ticketIds: body.ticketIds, reason: body.reason ?? null }, actor(c)));
   });
 
   // ── Run 20: the buyer's personal data on request (Québec Law 25) ──────────────

@@ -294,10 +294,12 @@ describe("ALKAO Operations app", () => {
     await seedAfterSale(db.pool, f, order.orderId, 1000);
     const page = await signedIn(seed.users.festiOwner);
     await page.goto(`${origin}/ops#/c/${f.clientId}/b/${f.brandId}/dashboard`);
-    const notice = page.getByRole("alert").filter({ hasText: "litige Stripe ouvert" });
+    const notice = page.getByRole("region", { name: /^À traiter/ });
     await notice.waitFor();
+    expect(await notice.textContent()).toContain("Litiges Stripe ouverts (1)");
     expect(await notice.textContent()).toContain("Réponse attendue");
-    await notice.getByRole("link").click();
+    expect(await notice.textContent()).toContain("Remboursés dans Stripe, billets encore valides (1)");
+    await notice.getByRole("link").first().click();
     await page.getByRole("heading", { name: /^Commande / }).waitFor();
     const banner = page.getByRole("alert").filter({ hasText: "Litige Stripe (rétrofacturation)" });
     expect(await banner.textContent()).toContain("motif : fraude");
