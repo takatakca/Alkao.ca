@@ -162,6 +162,10 @@ start without `RESEND_API_KEY`, `ALKAO_EMAIL_FROM`, `ALKAO_PUBLIC_URL` (HTTPS) a
 - one QR code per valid ticket, rendered in the browser and dark on white even in dark mode;
 - a clear notice for voided or replaced tickets;
 - the buyer's own **Flex Météo** change, when the order bought it.
+- **Ajouter à mon calendrier** (Run 31): an `.ics` file built in the browser from what the
+  page shows (event, session times in UTC, venue and address, order reference). It never
+  contains the personal link or its token, because calendars are often synced and shared.
+  One entry per order (`UID` = order id), so adding it twice updates it.
 
 | Method | Path | Who | Result |
 |---|---|---|---|
