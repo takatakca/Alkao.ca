@@ -77,3 +77,18 @@ These are not testable from the code.
 - [ ] Set `ALKAO_TRUSTED_PROXY_HOPS` to the hosting's proxy depth.
 - [ ] Use Stripe live keys only after a full test-mode purchase, refund and cancellation.
 - [ ] Edge rate limiting on `/v1/public/*`.
+
+## Accessibility (Run 17)
+
+`test/a11y/axe.test.ts` runs axe-core (WCAG 2.1 A and AA rules) in Chromium, in both light
+and dark colour schemes. It covers:
+
+- **Buyer pages:** the event list, the event, the quantities with the quote, the buyer form,
+  and the tickets page.
+- **Staff pages:** sign-in, workspaces, dashboard, events, an event, venues, orders, an
+  order, the scanner, and payments.
+
+The first run found **colour contrast failures in dark mode** on every app: the
+green, red, orange and blue foregrounds kept their light-mode values. Each app now has a
+dark palette, and the suite reports zero violations. All controls are native buttons, links
+and labelled inputs, so keyboard use and screen readers work without extra code.
