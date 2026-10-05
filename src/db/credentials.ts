@@ -140,11 +140,13 @@ export async function getGateSession(q: Queryable, s: TenantScope, sessionId: st
 }
 
 export async function sessionCredentials(q: Queryable, s: TenantScope, sessionId: string) {
+  // A credential's ticket is always in the credential's session (composite key): saying so
+  // in the join lets the manifest read only this session's tickets (Run 18).
   const { rows } = await q.query<{ id: string; status: "active" | "revoked"; code: string; name: string; admitted: boolean }>(
     `SELECT c.id, c.status, tt.code, tt.name,
             EXISTS (SELECT 1 FROM public.ticketing_scans sc WHERE sc.ticket_id = c.ticket_id AND sc.result = 'admitted') AS admitted
      FROM public.ticketing_credentials c
-     JOIN public.ticketing_tickets t ON t.id = c.ticket_id AND t.client_id = c.client_id AND t.brand_id = c.brand_id
+     JOIN public.ticketing_tickets t ON t.id = c.ticket_id AND t.session_id = c.session_id AND t.client_id = c.client_id AND t.brand_id = c.brand_id
      JOIN public.ticketing_ticket_types tt ON tt.id = t.ticket_type_id AND tt.client_id = t.client_id AND tt.brand_id = t.brand_id
      WHERE c.session_id = $1 AND c.client_id = $2 AND c.brand_id = $3
      ORDER BY c.created_at, c.id`,
