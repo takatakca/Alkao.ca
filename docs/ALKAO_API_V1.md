@@ -296,9 +296,21 @@ After the sale, two things can happen on the Client's Stripe account without ALK
   Client, who answers from the Stripe dashboard.
 - **A refund made directly in the Stripe dashboard.**
 
-ALKAO records both from the webhooks and shows them to staff. **Neither moves money or
-cancels a ticket by itself.** The order keeps its status and its tickets stay valid until
-staff decide.
+ALKAO records both from the webhooks and shows them to staff. **Neither moves money.**
+While a dispute is open, the order keeps its status and its tickets stay valid: gate entry
+times are the Client's evidence.
+
+**A dispute the buyer wins** (Run 34, owner decision, see [ALKAO_DECISIONS.md](ALKAO_DECISIONS.md)):
+
+- **For the whole remaining amount:** every ticket of the order (and of its Flex exchange)
+  not yet used at the gate is cancelled (`void_reason = 'chargeback'`). Their QR codes stop
+  working and their seats go back on sale. A ticket already used stays as it is.
+  - The buyer is not emailed.
+  - It is logged as `tickets.voided` with `reason: "chargeback"` and the dispute id.
+- **For part of the order:** nothing is cancelled automatically, and
+  `payment.dispute_lost_partial` is logged. The order shows in "À traiter"
+  (`lostDisputes` in `GET /attention`) until staff cancel the tickets it covered from the
+  order page.
 
 | Method | Path | Permission | Result |
 |---|---|---|---|

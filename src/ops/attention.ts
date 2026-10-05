@@ -14,7 +14,7 @@ const STUCK_REFUND_MINUTES = 15;
 
 export async function attentionList(db: Db, s: TenantScope, now = new Date()) {
   const params = [s.clientId, s.brandId, now];
-  const [refunds, emails, disputes, outsideRefunds, cancellations] = await Promise.all([
+  const [refunds, emails, disputes, outsideRefunds, cancellations, lostDisputes] = await Promise.all([
     // Refunds Stripe has not settled: the buyer is still waiting for the money.
     db.query(
       `SELECT r.id AS refund_id, r.order_id, o.reference, r.amount_cents, r.last_error, r.created_at
@@ -79,6 +79,21 @@ export async function attentionList(db: Db, s: TenantScope, now = new Date()) {
        ORDER BY se.starts_at LIMIT ${LIMIT}`,
       [s.clientId, s.brandId],
     ),
+    // Run 34: disputes the buyer won while tickets of the order can still get someone in
+    // (a dispute for part of the order cancels nothing by itself).
+    db.query(
+      `SELECT d.order_id, o.reference, d.amount_cents, d.provider_updated_at AS lost_at
+       FROM public.ticketing_payment_disputes d
+       JOIN public.ticketing_orders o ON o.id = d.order_id AND o.client_id = d.client_id AND o.brand_id = d.brand_id
+       WHERE d.client_id = $1 AND d.brand_id = $2 AND d.status = 'lost'
+         AND EXISTS (SELECT 1 FROM public.ticketing_tickets k
+                     JOIN public.ticketing_sessions se ON se.id = k.session_id
+                     WHERE (k.order_id = o.id OR k.order_id IN (SELECT id FROM public.ticketing_orders WHERE exchange_of_order_id = o.id))
+                       AND k.status = 'valid' AND coalesce(se.ends_at, se.starts_at) > $3
+                       AND NOT EXISTS (SELECT 1 FROM public.ticketing_scans sc WHERE sc.ticket_id = k.id AND sc.result = 'admitted'))
+       ORDER BY d.provider_updated_at DESC LIMIT ${LIMIT}`,
+      params,
+    ),
   ]);
   const result = {
     refunds: refunds.rows.map(toApi),
@@ -86,6 +101,7 @@ export async function attentionList(db: Db, s: TenantScope, now = new Date()) {
     disputes,
     outsideRefunds: outsideRefunds.rows.map(toApi),
     cancellations: cancellations.rows.map(toApi),
+    lostDisputes: lostDisputes.rows.map(toApi),
   };
   return { ...result, total: Object.values(result).reduce((n, list) => n + list.length, 0) };
 }

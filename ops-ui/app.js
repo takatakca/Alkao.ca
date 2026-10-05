@@ -338,6 +338,7 @@ function Attention({ a, prefix }) {
     ${group("Remboursements bloqués chez Stripe", a.refunds, (r) => html`${order(r.orderId, r.reference)} · ${money(r.amountCents)} · depuis le ${when(r.createdAt)}${r.lastError ? ` · ${r.lastError}` : ""} — « Réessayer » sur la commande`)}
     ${group("Courriels non reçus", a.emails, (e) => html`${order(e.orderId, e.reference)} · ${EMAIL_KIND_FR[e.kind] ?? e.kind} · ${e.buyerEmail}${e.lastError ? ` · ${e.lastError}` : ""}`)}
     ${group("Remboursés dans Stripe, billets encore valides", a.outsideRefunds, (r) => html`${order(r.orderId, r.reference)} · ${money(r.outsideCents)} remboursés hors ALKAO`)}
+    ${group("Litiges perdus en partie : billets à annuler", a.lostDisputes ?? [], (d) => html`${order(d.orderId, d.reference)} · ${money(d.amountCents)} repris par la banque — annulez les billets concernés sur la commande`)}
     ${group("Annulations de séance à reprendre", a.cancellations, (c) => html`<a href=${`#${prefix}/event/${c.eventId}`}>Séance du ${when(c.startsAt)}</a> · ${c.failed} remboursement${c.failed > 1 ? "s" : ""} en échec`)}
   </section>`;
 }

@@ -7,8 +7,8 @@ import { seedTwoTenants, type SeedResult, type TenantFixture } from "../helpers/
 
 /**
  * Run 19: what Stripe reports after the sale. A chargeback, or a refund made directly in the
- * Client's Stripe dashboard, is recorded and shown to staff, but never moves money or
- * cancels a ticket by itself.
+ * Client's Stripe dashboard, is recorded and shown to staff, and never moves money.
+ * Run 34 (owner decision): a dispute the buyer wins cancels the tickets nobody has used.
  */
 let db: TestDatabase;
 let seed: SeedResult;
@@ -97,7 +97,8 @@ describe("disputes (chargebacks)", () => {
     expect((await disputes(t, seed.users.havanaOwner)).body.disputes.map((d: { reference: string }) => d.reference)).not.toContain(order.reference);
     expect((await disputes(t, seed.users.havanaOwner, "?status=all")).body.disputes.map((d: { reference: string }) => d.reference)).toContain(order.reference);
     expect(await audit(order.id)).toEqual(expect.arrayContaining(["payment.dispute_opened", "payment.dispute_updated", "payment.dispute_closed"]));
-    expect(await validTickets(order.id)).toBe(2);
+    // Run 34: lost for the whole order, so its unused tickets are cancelled (see below).
+    expect(await validTickets(order.id)).toBe(0);
   });
 
   it("a redelivered event is a duplicate; a foreign account or an unknown payment is ignored", async () => {
@@ -126,6 +127,79 @@ describe("disputes (chargebacks)", () => {
     expect((await disputes(seed.havana, seed.users.havanaStaff)).status).toBe(403);
     expect((await disputes(f, seed.users.havanaOwner)).status).toBe(404); // not a member: no such Brand
     expect((await getOrder(seed.havana, order.id)).status).toBe(404);
+  });
+});
+
+describe("a dispute the buyer wins (Run 34)", () => {
+  const attentionOf = async (t: TenantFixture) =>
+    (await call(app, "GET", `${adm(t.clientId, t.brandId)}/attention`, { token: await tokenFor(seed.users.havanaOwner) })).body.attention;
+  const ticketsOf = async (orderId: string) =>
+    (await db.pool.query<{ id: string; status: string; void_reason: string | null }>(
+      `SELECT id, status, void_reason FROM public.ticketing_tickets WHERE order_id = $1 ORDER BY id`, [orderId])).rows;
+  const sold = async (sessionId: string) =>
+    (await db.pool.query(`SELECT sold_count FROM public.ticketing_sessions WHERE id = $1`, [sessionId])).rows[0].sold_count as number;
+
+  it("cancels the tickets nobody has used and gives their seats back; a used ticket stays", async () => {
+    const t = seed.havana;
+    const order = await paidOrder(t);
+    const [used, unused] = await ticketsOf(order.id);
+    // One of the two already went through the gate.
+    const { rows: cred } = await db.pool.query<{ id: string }>(
+      `SELECT id FROM public.ticketing_credentials WHERE ticket_id = $1 AND status = 'active'`,
+      [used!.id],
+    );
+    await db.pool.query(
+      `INSERT INTO public.ticketing_scans (client_id, brand_id, event_id, session_id, credential_id, ticket_id, result, device_id, scanned_by, scanned_at, received_at)
+       SELECT k.client_id, k.brand_id, k.event_id, k.session_id, $2, k.id, 'admitted', 'gate-1', $3, now(), now() FROM public.ticketing_tickets k WHERE k.id = $1`,
+      [used!.id, cred[0]!.id, seed.users.havanaStaff],
+    );
+    const seatsBefore = await sold(t.sessionId);
+    const outboxBefore = (await db.pool.query(`SELECT count(*)::int AS n FROM public.ticketing_email_outbox WHERE order_id = $1`, [order.id])).rows[0].n;
+
+    const id = dp();
+    await stripe("charge.dispute.created", dispute(id, order.paymentIntentId, order.total), t, new Date(Date.now() - 30_000));
+    expect(await validTickets(order.id)).toBe(2); // open: nothing moves
+    await stripe("charge.dispute.closed", dispute(id, order.paymentIntentId, order.total, "lost"), t);
+
+    expect(await ticketsOf(order.id)).toEqual([
+      { id: used!.id, status: "valid", void_reason: null },
+      { id: unused!.id, status: "void", void_reason: "chargeback" },
+    ]);
+    expect(await sold(t.sessionId)).toBe(seatsBefore - 1);
+    const { rows: log } = await db.pool.query(`SELECT actor_type, data FROM public.ticketing_audit_log WHERE action = 'tickets.voided' AND entity_id = $1`, [order.id]);
+    expect(log).toEqual([{ actor_type: "system", data: { ticketIds: [unused!.id], reason: "chargeback", disputeId: id } }]);
+    // The buyer is not written to, and no money moves.
+    expect((await db.pool.query(`SELECT count(*)::int AS n FROM public.ticketing_email_outbox WHERE order_id = $1`, [order.id])).rows[0].n).toBe(outboxBefore);
+    expect(gateway.callsOf("refundPayment")).toEqual([]);
+    expect((await attentionOf(t)).lostDisputes.map((d: { reference: string }) => d.reference)).not.toContain(order.reference);
+  });
+
+  it("a dispute the Client wins cancels nothing", async () => {
+    const t = seed.festi;
+    const order = await paidOrder(t);
+    const id = dp();
+    await stripe("charge.dispute.created", dispute(id, order.paymentIntentId, order.total), t, new Date(Date.now() - 30_000));
+    await stripe("charge.dispute.closed", dispute(id, order.paymentIntentId, order.total, "won"), t);
+    expect(await validTickets(order.id)).toBe(2);
+  });
+
+  it("lost for part of the order, it cancels nothing by itself and waits in À traiter", async () => {
+    const t = seed.havana;
+    const owner = await tokenFor(seed.users.havanaOwner);
+    const order = await paidOrder(t);
+    const id = dp();
+    await stripe("charge.dispute.created", dispute(id, order.paymentIntentId, 500), t, new Date(Date.now() - 30_000));
+    await stripe("charge.dispute.closed", dispute(id, order.paymentIntentId, 500, "lost"), t);
+    expect(await validTickets(order.id)).toBe(2);
+    expect(await audit(order.id)).toContain("payment.dispute_lost_partial");
+    expect((await attentionOf(t)).lostDisputes).toEqual(expect.arrayContaining([expect.objectContaining({ orderId: order.id, reference: order.reference, amountCents: 500 })]));
+
+    // Staff cancel the ticket the bank took back: the order leaves the list once nothing usable remains.
+    const [first, second] = await ticketsOf(order.id);
+    await call(app, "POST", `${adm(t.clientId, t.brandId)}/orders/${order.id}/tickets/void`, { token: owner, body: { ticketIds: [first!.id], reason: "Litige perdu" } });
+    expect((await attentionOf(t)).lostDisputes.map((d: { reference: string }) => d.reference)).toContain(order.reference);
+    await call(app, "POST", `${adm(t.clientId, t.brandId)}/orders/${order.id}/tickets/void`, { token: owner, body: { ticketIds: [second!.id], reason: "Litige perdu" } });
+    expect((await attentionOf(t)).lostDisputes.map((d: { reference: string }) => d.reference)).not.toContain(order.reference);
   });
 });
 
