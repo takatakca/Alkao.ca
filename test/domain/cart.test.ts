@@ -114,3 +114,16 @@ describe("buildQuote", () => {
     expect(r.ok).toBe(false);
   });
 });
+
+describe("quoteFromLines", () => {
+  it("prices captured hold lines exactly like the catalog quote", async () => {
+    const { quoteFromLines } = await import("../../src/domain/index.js");
+    const r = buildQuote(FESTI_ICE_TYPES, cart({ GENERAL: 2, TODDLER: 1, FLEX_WEATHER: 3 }), "CA-QC");
+    if (!r.ok) throw new Error("quote");
+    const again = quoteFromLines(
+      r.quote.lines.map(({ lineTotalCents: _t, ...l }) => l),
+      "CA-QC",
+    );
+    expect(again).toEqual(r.quote);
+  });
+});

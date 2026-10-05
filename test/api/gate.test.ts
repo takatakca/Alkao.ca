@@ -22,7 +22,14 @@ afterAll(async () => {
   await db?.drop();
 });
 
-const UNGATED = new Set(["GET /health", "POST /v1/control/events", "GET /v1/admin/clients/:clientId/brands/:brandId/status"]);
+// The Stripe webhook is authenticated by Stripe's signature and must still settle (or
+// refund) checkouts opened while Ticketing was active.
+const UNGATED = new Set([
+  "GET /health",
+  "POST /v1/control/events",
+  "POST /v1/webhooks/stripe",
+  "GET /v1/admin/clients/:clientId/brands/:brandId/status",
+]);
 
 function routesOf(app: TestApp) {
   const seen = new Set<string>();

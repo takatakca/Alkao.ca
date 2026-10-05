@@ -114,3 +114,31 @@ export const ListQuery = z.object({
   limit: z.coerce.number().int().min(1).max(200).default(50),
   before: timestamp.optional(),
 });
+
+// ── Run 02: payments ────────────────────────────────────────────────────────
+const httpsUrl = z.url({ protocol: /^https$/ }).max(2000);
+
+export const CheckoutRequest = z.object({
+  buyer: z.object({
+    email: z.email().max(320),
+    fullName: z.string().trim().min(1).max(200).nullish(),
+    phone: z.string().trim().max(40).nullish(),
+  }),
+  /** Must use an origin listed in the Brand's checkout settings. */
+  successUrl: httpsUrl,
+  cancelUrl: httpsUrl,
+});
+
+export const CheckoutSettings = z.object({
+  checkoutReturnOrigins: z
+    .array(z.string().regex(/^https:\/\/[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+(:[0-9]{1,5})?$/))
+    .max(10),
+});
+
+export const RefundRequest = z.object({
+  /** Omitted: refund everything still refundable (and void every valid ticket). */
+  amountCents: z.number().int().min(1).max(100_000_000).optional(),
+  /** Tickets to void with a partial refund (their seats return to inventory). */
+  ticketIds: z.array(z.uuid()).max(1000).optional(),
+  reason: z.string().trim().max(500).nullish(),
+});

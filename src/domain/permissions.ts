@@ -10,6 +10,8 @@ export const TICKETING_PERMISSIONS = [
   "ticketing.orders.read",
   "ticketing.buyers.read",
   "ticketing.audit.read",
+  "ticketing.payments.manage",
+  "ticketing.refunds.create",
 ] as const;
 export type TicketingPermission = (typeof TICKETING_PERMISSIONS)[number];
 
@@ -23,15 +25,16 @@ const MANAGE: TicketingPermission[] = [
   "ticketing.catalog.write",
   "ticketing.orders.read",
   "ticketing.buyers.read",
+  "ticketing.refunds.create",
 ];
 
 /**
- * Role → Ticketing permissions. Matches the RLS policies: buyer data and order money for
- * owner/admin/manager; audit for owner/admin.
+ * Role → Ticketing permissions. Matches the RLS policies: buyer data, order money and
+ * refunds for owner/admin/manager; audit and the Client's Stripe account for owner/admin.
  */
 const ROLE_PERMISSIONS: Record<WorkspaceRole, ReadonlySet<TicketingPermission>> = {
-  owner: new Set<TicketingPermission>([...MANAGE, "ticketing.audit.read"]),
-  admin: new Set<TicketingPermission>([...MANAGE, "ticketing.audit.read"]),
+  owner: new Set<TicketingPermission>([...MANAGE, "ticketing.audit.read", "ticketing.payments.manage"]),
+  admin: new Set<TicketingPermission>([...MANAGE, "ticketing.audit.read", "ticketing.payments.manage"]),
   manager: new Set<TicketingPermission>(MANAGE),
   editor: new Set<TicketingPermission>([...READ_CATALOG, "ticketing.catalog.write"]),
   staff: new Set<TicketingPermission>(READ_CATALOG),

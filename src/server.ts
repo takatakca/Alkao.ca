@@ -3,6 +3,7 @@ import { createSupabaseJwtVerifier } from "./api/auth.js";
 import { createApp } from "./api/app.js";
 import { loadConfig } from "./config.js";
 import { createPool } from "./db/pool.js";
+import { StripeGateway } from "./payments/stripe-gateway.js";
 
 const config = loadConfig();
 const db = createPool(config.databaseUrl);
@@ -13,10 +14,12 @@ const app = createApp({
   controlKeys: config.controlKeys,
   holdTtlSeconds: config.holdTtlSeconds,
   publicHoldsPerMinute: config.publicHoldsPerMinute,
+  paymentGateway: config.stripe ? StripeGateway.fromSecretKey(config.stripe.secretKey, config.stripe.webhookSecret) : null,
+  onboarding: config.onboarding,
 });
 
 serve({ fetch: app.fetch, port: config.port }, (info) => {
   console.log(
-    `alkao listening on :${info.port} — operational API ${config.operationalApiEnabled ? "ENABLED" : "disabled (default)"}`,
+    `alkao listening on :${info.port} — operational API ${config.operationalApiEnabled ? "ENABLED" : "disabled (default)"}, payments ${config.stripe ? "configured" : "not configured"}`,
   );
 });

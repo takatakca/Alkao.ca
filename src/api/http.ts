@@ -34,7 +34,19 @@ const STATUS_BY_CODE: Record<string, ContentfulStatusCode> = {
   unknown_brand: 409,
   brand_client_mismatch: 409,
   invalid_reference: 422,
+  payments_not_configured: 503,
+  payments_unavailable: 409,
+  return_url_not_allowed: 422,
+  payment_provider_error: 502,
+  refund_provider_error: 502,
+  refund_in_progress: 409,
+  order_not_refundable: 409,
+  refund_state_changed: 409,
+  invalid_ticket: 422,
 };
+
+/** Domain error details safe to return to callers (never constraint or column names). */
+const DETAILS_ALLOWED = new Set(["refund_provider_error", "refund_exceeds_paid"]);
 
 /** Map any thrown error to a stable JSON error. Unknown errors never leak details. */
 export function errorResponse(c: Context, error: unknown) {
@@ -44,7 +56,7 @@ export function errorResponse(c: Context, error: unknown) {
   const domain = toDomainError(error);
   if (domain instanceof DomainError) {
     const status = STATUS_BY_CODE[domain.code] ?? (domain.code.endsWith("_not_found") ? 404 : 422);
-    return fail(c, status, domain.code);
+    return DETAILS_ALLOWED.has(domain.code) ? fail(c, status, domain.code, domain.details) : fail(c, status, domain.code);
   }
   console.error("alkao: unhandled error", error);
   return fail(c, 500, "internal_error");

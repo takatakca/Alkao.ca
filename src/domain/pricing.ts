@@ -28,6 +28,37 @@ export type QuoteResult =
   | { ok: true; quote: Quote }
   | { ok: false; violations: CartViolation[] };
 
+export interface PricedLineInput {
+  ticketTypeId: string;
+  code: string;
+  name: string;
+  kind: TicketKind;
+  quantity: number;
+  unitPriceCents: Cents;
+}
+
+/**
+ * Totals for lines that were already validated (a hold's items, with the prices captured
+ * when the hold was created). Never call this on unvalidated client input.
+ */
+export function quoteFromLines(input: readonly PricedLineInput[], taxRegion: TaxRegion): Quote {
+  const lines: QuoteLine[] = input.map((l) => ({ ...l, lineTotalCents: l.unitPriceCents * l.quantity }));
+  const subtotalCents = lines.reduce((n, l) => n + l.lineTotalCents, 0);
+  const taxes = computeTaxes(taxRegion, subtotalCents);
+  const taxCents = taxes.reduce((n, t) => n + t.amountCents, 0);
+  const admissionLines = lines.filter((l) => l.kind === "admission");
+  return {
+    currency: "CAD",
+    lines,
+    admissions: admissionLines.reduce((n, l) => n + l.quantity, 0),
+    paidAdmissions: admissionLines.filter((l) => l.unitPriceCents > 0).reduce((n, l) => n + l.quantity, 0),
+    subtotalCents,
+    taxes,
+    taxCents,
+    totalCents: subtotalCents + taxCents,
+  };
+}
+
 /** Price a cart from the server-side catalog. Client-sent prices are never used. */
 export function buildQuote(
   types: readonly TicketTypeRule[],
@@ -38,39 +69,19 @@ export function buildQuote(
   const validation = validateCart(types, items, limits);
   if (!validation.ok) return validation;
 
-  const lines: QuoteLine[] = validation.lines.map(({ type, quantity }) => ({
-    ticketTypeId: type.id,
-    code: type.code,
-    name: type.name,
-    kind: type.kind,
-    quantity,
-    unitPriceCents: type.priceCents,
-    lineTotalCents: type.priceCents * quantity,
-  }));
-
-  const subtotalCents = lines.reduce((n, l) => n + l.lineTotalCents, 0);
-  const taxes = computeTaxes(taxRegion, subtotalCents);
-  const taxCents = taxes.reduce((n, t) => n + t.amountCents, 0);
-  const totalCents = subtotalCents + taxCents;
-  if (totalCents > MAX_ORDER_CENTS) {
-    return { ok: false, violations: [{ code: "order_too_large", limit: MAX_ORDER_CENTS, actual: totalCents }] };
+  const quote = quoteFromLines(
+    validation.lines.map(({ type, quantity }) => ({
+      ticketTypeId: type.id,
+      code: type.code,
+      name: type.name,
+      kind: type.kind,
+      quantity,
+      unitPriceCents: type.priceCents,
+    })),
+    taxRegion,
+  );
+  if (quote.totalCents > MAX_ORDER_CENTS) {
+    return { ok: false, violations: [{ code: "order_too_large", limit: MAX_ORDER_CENTS, actual: quote.totalCents }] };
   }
-
-  const paidAdmissions = lines
-    .filter((l) => l.kind === "admission" && l.unitPriceCents > 0)
-    .reduce((n, l) => n + l.quantity, 0);
-
-  return {
-    ok: true,
-    quote: {
-      currency: "CAD",
-      lines,
-      admissions: validation.admissions,
-      paidAdmissions,
-      subtotalCents,
-      taxes,
-      taxCents,
-      totalCents,
-    },
-  };
+  return { ok: true, quote };
 }
