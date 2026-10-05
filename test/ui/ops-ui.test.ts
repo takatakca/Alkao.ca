@@ -170,6 +170,69 @@ describe("ALKAO Operations app", () => {
     await page.getByRole("status").getByText("DÉJÀ ENTRÉ").waitFor();
   });
 
+  it("scans offline at the gate, then syncs and reports a ticket let in at two gates", async () => {
+    const t = seed.havana;
+    const { rows } = await db.pool.query<{ id: string }>(
+      `INSERT INTO public.ticketing_sessions (client_id, brand_id, event_id, starts_at, capacity, status)
+       VALUES ($1, $2, $3, now() + interval '20 minutes', 20, 'on_sale') RETURNING id`,
+      [t.clientId, t.brandId, t.eventId],
+    );
+    const sessionId = rows[0]!.id;
+    const toddler = t.types.find((x) => x.code === "TODDLER")!.id;
+    const buyOne = async () => {
+      const h = await call(app, "POST", `${pub(t.clientId, t.brandId)}/holds`, { body: { sessionId, items: [{ ticketTypeId: toddler, quantity: 1 }] } });
+      const co = await call(app, "POST", `${pub(t.clientId, t.brandId)}/holds/${h.body.hold.id}/checkout`, {
+        headers: { "x-alkao-hold-token": h.body.hold.token },
+        body: { buyer: { email: "porte@example.com" }, successUrl: `${t.returnOrigin}/ok`, cancelUrl: `${t.returnOrigin}/ko` },
+      });
+      const order = await call(app, "GET", `${pub(t.clientId, t.brandId)}/orders/${co.body.order.id}`, { headers: { "x-alkao-order-token": co.body.order.token } });
+      return order.body.order.tickets[0] as { id: string; credential: string };
+    };
+    const first = await buyOne();
+    const second = await buyOne();
+
+    const page = await signedIn(seed.users.havanaStaff);
+    await page.goto(`${origin}/ops#${brandPath()}/scanner`);
+    await page.getByLabel("Événement").selectOption({ label: "Havana Resort — Événements 2026-2027" });
+    await page.locator(`option[value="${sessionId}"]`).waitFor({ state: "attached" });
+    await page.getByLabel("Séance").selectOption(sessionId);
+    await page.getByRole("button", { name: "Préparer le mode hors ligne" }).click();
+    await page.getByText("0 en attente de synchronisation").waitFor();
+
+    await page.context().setOffline(true);
+    const input = page.getByLabel("Code du billet (lecteur ou saisie)");
+    const scan = async (code: string, expected: string) => {
+      await input.fill(code);
+      await input.press("Enter");
+      await page.getByRole("status").getByText(expected).waitFor();
+    };
+    await scan(first.credential, "ENTRÉE ACCEPTÉE");
+    expect(await page.getByText("Vérifié sur l'appareil (hors ligne)").isVisible()).toBe(true);
+    await scan(first.credential, "DÉJÀ ENTRÉ");
+    const forged = first.credential.slice(0, -2) + (first.credential.endsWith("AA") ? "BA" : "AA");
+    await scan(forged, "FAUX BILLET");
+    await scan(second.credential, "ENTRÉE ACCEPTÉE");
+    await page.getByText("4 en attente de synchronisation").waitFor();
+    // Nothing reached the server yet.
+    const logged = async () => (await db.pool.query(`SELECT result, offline FROM public.ticketing_scans WHERE session_id = $1 ORDER BY id`, [sessionId])).rows;
+    expect(await logged()).toEqual([]);
+
+    // Meanwhile another gate, online, lets the second ticket in.
+    const owner = await tokenFor(seed.users.havanaOwner);
+    const other = await call(app, "POST", `/v1/admin/clients/${t.clientId}/brands/${t.brandId}/scanner/scans`, { token: owner, body: { sessionId, payload: second.credential, deviceId: "porte-nord" } });
+    expect(other.body.scan.result).toBe("admitted");
+
+    await page.context().setOffline(false);
+    await page.getByRole("button", { name: "Synchroniser maintenant" }).click();
+    await page.getByText("0 en attente de synchronisation").waitFor();
+    await page.getByText("1 billet(s) aussi entré(s) à une autre porte").waitFor();
+    const results = (await logged()).map((r: { result: string }) => r.result);
+    expect(results.filter((r: string) => r === "admitted")).toHaveLength(2);
+    expect(results).toContain("invalid_signature");
+    const { rows: admissions } = await db.pool.query(`SELECT count(*)::int AS n FROM public.ticketing_scans WHERE ticket_id = $1 AND result = 'admitted'`, [second.id]);
+    expect(admissions[0].n).toBe(1);
+  });
+
   it("hides money from gate staff", async () => {
     const page = await signedIn(seed.users.havanaStaff);
     await page.goto(`${origin}/ops#${brandPath()}/dashboard`);

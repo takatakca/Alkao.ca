@@ -14,7 +14,7 @@ TAKATAK V1 dashboard (menu "ALKAO — Billetterie"), with no second login. See
 | Événements | Create, publish or unpublish; sessions (create, put on sale or pause, capacity); ticket types, including Flex add-ons; attendees CSV per session | editor (read: everyone) |
 | Lieux | Venues | editor |
 | Commandes | List, detail (lines, TPS/TVQ, tickets), full or partial refund (with ticket voiding, automatic retry), Flex session change, QR reissue | manager |
-| Scanner | Event and session, gate window, keyboard-wedge scanner or typed code, camera (BarcodeDetector) when the browser supports it; big, colour-coded results | staff |
+| Scanner | Event and session, gate window, keyboard-wedge scanner or typed code, camera (BarcodeDetector) when the browser supports it; big, colour-coded results; **offline mode** for gates with a weak network (signature checked on the device, scans synced later, double entries reported) | staff |
 | Paiements | Stripe account status, onboarding, sites allowed after payment | owner, admin |
 
 The app shows exactly what the API allows. Permissions, Client isolation and the Ticketing
