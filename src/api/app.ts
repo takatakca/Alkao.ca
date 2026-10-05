@@ -31,6 +31,7 @@ import * as metrics from "../ops/metrics.js";
 import * as reminders from "../delivery/reminders.js";
 import * as privacy from "../ops/privacy.js";
 import * as reports from "../ops/reports.js";
+import * as journal from "../ops/journal.js";
 import * as sessionBatch from "../ops/session-batch.js";
 import { exchangeOrder } from "../ops/exchange.js";
 import { mountOpsUi, type OpsUiConfig } from "./ops-ui.js";
@@ -677,9 +678,16 @@ export function createApp(deps: AppDeps) {
     return c.json({ email }, 202);
   });
 
+  // Run 30: filters (action family, entity) and paging that never skips same-instant entries.
   app.get(`${ADMIN}/audit`, ...admin, can("ticketing.audit.read"), async (c) => {
-    const q = api.ListQuery.parse(c.req.query());
-    return c.json({ entries: await catalog.listAudit(deps.db, c.get("scope"), q.limit, q.before) });
+    const q = api.AuditQuery.parse(c.req.query());
+    return c.json({ entries: await journal.listJournal(deps.db, c.get("scope"), q) });
+  });
+
+  app.get(`${ADMIN}/orders/:orderId/history`, ...admin, can("ticketing.audit.read"), async (c) => {
+    const orderId = param(c, "orderId");
+    if (!orderId) return fail(c, 404, "order_not_found");
+    return c.json({ entries: await journal.orderHistory(deps.db, c.get("scope"), orderId) });
   });
 
   // ── Run 02: checkout and order status (public) ───────────────────────────

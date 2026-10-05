@@ -120,7 +120,7 @@ describe.each(["light", "dark"] as const)("accessibility (%s)", (scheme) => {
     expect(problems).toEqual([]);
   }, 60_000);
 
-  it("staff pages: sign-in, workspaces, dashboard, event, orders, order, scanner, payments", async () => {
+  it("staff pages: sign-in, workspaces, dashboard, event, orders, order, scanner, payments, journal", async () => {
     const h = seed.havana;
     const prefix = `/c/${h.clientId}/b/${h.brandId}`;
     const problems: string[] = [];
@@ -144,6 +144,7 @@ describe.each(["light", "dark"] as const)("accessibility (%s)", (scheme) => {
     await visit(`${prefix}/order/${h.orderId}`, () => page.getByRole("heading", { name: "Courriel des billets" }).waitFor(), "order");
     await visit(`${prefix}/scanner`, () => page.getByRole("heading", { name: "Scanner" }).waitFor(), "scanner");
     await visit(`${prefix}/payments`, () => page.getByRole("heading", { name: "Paiements (Stripe)" }).waitFor(), "payments");
+    await visit(`${prefix}/journal`, () => page.getByRole("cell", { name: "Commande payée" }).first().waitFor(), "journal");
     expect(problems).toEqual([]);
   }, 90_000);
 });

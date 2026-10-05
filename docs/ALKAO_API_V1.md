@@ -69,7 +69,7 @@ How a payment works:
 | PATCH | `/ticket-types/:ticketTypeId` | `catalog.write` |
 | GET | `/orders?limit&before` | `orders.read` |
 | GET | `/orders/:orderId` | `orders.read` (buyer, lines, taxes, tickets) |
-| GET | `/audit?limit&before` | `audit.read` |
+| GET | `/audit?limit&before&beforeId&action&entityType&entityId` | `audit.read` (filters and `actorRole`: Run 30) |
 | POST | `/payments/onboarding` | `payments.manage`: creates the Client's Stripe Standard account (CA) on the first call and returns a Stripe onboarding link |
 | GET | `/payments/account` | `payments.manage`: connection status (`chargesEnabled`, `payoutsEnabled`, `detailsSubmitted`) |
 | GET / PUT | `/payments/settings` | `payments.manage`: `checkoutReturnOrigins`, the HTTPS origins of the Brand's site allowed as Checkout return URLs |
@@ -498,6 +498,50 @@ from 17:00 to 20:30, every evening.
 - **Créer plusieurs séances…**: preview first, then **Créer N séance(s)**.
 - **Ouvrir les ventes des brouillons à venir**, **Suspendre toutes les ventes à venir** and
   **Reprendre les ventes suspendues**.
+
+### Audit journal and order history (Run 30)
+
+| Method | Path | Permission | Result |
+|---|---|---|---|
+| GET | `/v1/admin/…/audit` | `audit.read` | `200 { entries: [{ id, brandId, actorType, actorId, actorRole, action, entityType, entityId, data, createdAt }] }`, newest first |
+| GET | `/v1/admin/…/orders/:orderId/history` | `audit.read` | `200 { entries }`, oldest first, at most 500 |
+
+This only reads the log; nothing in it changes.
+
+**`/audit` filters**, each optional:
+
+| Parameter | Meaning |
+|---|---|
+| `action` | One action (`order.paid`) or a family of actions (`order`, `refund`, `payment`…). `order` does not match `orders.…` |
+| `entityType`, `entityId` | What the entry is about |
+| `beforeId` | The id of the last entry already shown. The next page starts right after it |
+| `before` | Unchanged: strictly earlier than this time |
+
+- **Use `beforeId` for paging.** `before` can skip entries written in the same transaction,
+  because the database keeps microseconds and JSON times keep milliseconds. With
+  `beforeId`, the exact time is read from the database. An id from another Client returns
+  nothing.
+- **`actorRole`** is the role the person holds today in the Client (`null` if they left or
+  the actor is not a person). Names and emails stay in TAKATAK.
+
+**`/orders/:orderId/history`** gathers, for one order:
+
+- the order's own entries (paid, emails, link replaced, tickets cancelled, exchanged, disputes,
+  refunds made in Stripe);
+- its refunds (`data.orderId`);
+- the exchange that created it (`data.exchangeOrderId`);
+- its tickets (QR code reissued, let in without a QR code);
+- its buyer (exported, anonymized).
+
+Another Client's entries never appear, even when they name the same id.
+
+**Indexes:** the migration `20261017000100_alkao_audit_lookup.sql` adds indexes only, and the
+history reads through them. A test checks this with 30 000 entries.
+
+**In the Operations app:**
+
+- A **Journal** tab, for owners and admins only. It has a filter by family and **Plus ancien**.
+- An **Historique** section on each order.
 
 ### Role → permission
 

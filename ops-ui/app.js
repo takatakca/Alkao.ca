@@ -1,7 +1,7 @@
 // ALKAO Operations — standalone web app (Run 04, step 1).
 // Plain ES modules, no build step. Every call goes to the gated ALKAO admin API with the
 // signed-in user's Supabase access token; the app itself holds no data.
-import { html, render, useEffect, useState, useCallback } from "/ops/vendor/htm-preact.js";
+import { html, render, useEffect, useState, useCallback, useRef } from "/ops/vendor/htm-preact.js";
 import { loadOffline, newOfflineStore, offlineScan, saveOffline, syncOffline } from "/ops/offline.js";
 
 const SESSION_KEY = "alkao.ops.session";
@@ -580,7 +580,7 @@ function Orders({ api, base, prefix }) {
         <td><${Badge} status=${o.status} /></td><td class="num">${money(o.totalCents)}</td><td class="num">${money(o.refundedCents)}</td><td>${when(o.paidAt)}</td></tr>`)}</tbody></table>`;
 }
 
-function OrderDetail({ api, base, orderId }) {
+function OrderDetail({ api, base, orderId, role, me }) {
   const [order, reloadOrder] = useLoad(() => api(`${base}/orders/${orderId}`), [base, orderId]);
   const [refunds, reloadRefunds] = useLoad(() => api(`${base}/orders/${orderId}/refunds`), [base, orderId]);
   const [amount, setAmount] = useState("");
@@ -675,7 +675,77 @@ function OrderDetail({ api, base, orderId }) {
     <h2>Remboursements</h2>
     ${refunds.loading ? html`<${Loading} />` : html`<table><thead><tr><th>Date</th><th>Statut</th><th class="num">Montant</th><th class="num">Commission rendue</th><th>Motif</th><th></th></tr></thead>
       <tbody>${(refunds.data?.refunds ?? []).map((r) => html`<tr><td>${when(r.createdAt)}</td><td><${Badge} status=${r.status} /></td><td class="num">${money(r.amountCents)}</td><td class="num">${money(r.commissionRefundCents)}</td><td>${r.reason ?? ""}${r.lastError ? html` <span class="muted">(${r.lastError})</span>` : ""}</td>
-        <td>${r.status === "pending" && html`<button class="secondary" onClick=${retryRefund(r.id)}>Réessayer</button>`}</td></tr>`)}</tbody></table>`}`;
+        <td>${r.status === "pending" && html`<button class="secondary" onClick=${retryRefund(r.id)}>Réessayer</button>`}</td></tr>`)}</tbody></table>`}
+    ${(role === "owner" || role === "admin") && html`<h2>Historique</h2><${OrderHistory} api=${api} base=${base} orderId=${orderId} me=${me} />`}`;
+}
+
+// ── Journal (Run 30) ────────────────────────────────────────────────────────
+const ACTION_FR = {
+  "venue.created": "Lieu créé", "venue.updated": "Lieu modifié",
+  "event.created": "Événement créé", "event.updated": "Événement modifié", "event.duplicated": "Événement dupliqué",
+  "session.created": "Séance créée", "session.updated": "Séance modifiée", "session.cancelled": "Séance annulée",
+  "session.cancellation_completed": "Annulation de séance terminée",
+  "sessions.batch_created": "Séances créées en lot", "sessions.status_batch_changed": "Séances mises en vente ou en pause en lot",
+  "ticket_type.created": "Type de billet créé", "ticket_type.updated": "Type de billet modifié",
+  "order.paid": "Commande payée", "order.expired": "Commande expirée", "order.paid_unfulfillable": "Payée sans place disponible : remboursée",
+  "order.exchanged": "Changement de séance (Flex)", "order.tickets_email_requested": "Billets envoyés par courriel",
+  "order.tickets_link_rotated": "Lien des billets remplacé",
+  "refund.requested": "Remboursement demandé", "refund.succeeded": "Remboursement effectué",
+  "tickets.voided": "Billets annulés sans remboursement",
+  "payment.account_mismatch": "Paiement sur un compte Stripe inattendu", "payment.amount_mismatch": "Montant payé inattendu",
+  "payment.unexpected_completion": "Paiement terminé après expiration", "payment.dispute_opened": "Litige Stripe ouvert",
+  "payment.dispute_updated": "Litige Stripe mis à jour", "payment.dispute_closed": "Litige Stripe clos", "payment.outside_refund": "Remboursement fait dans Stripe",
+  "payments.account_created": "Compte Stripe créé", "payments.settings_updated": "Réglages de paiement modifiés",
+  "buyer.exported": "Données de l'acheteur exportées", "buyer.anonymized": "Acheteur anonymisé",
+  "credentials.key_rotated": "Clé des codes QR remplacée", "credentials.reissued": "Code QR réémis", "scan.manual_admission": "Entrée sans code QR",
+  "reports.daily_exported": "Rapport par jour exporté", "reports.attendees_exported": "Liste des participants exportée", "reports.orders_exported": "Commandes exportées",
+  "settings.reminders_updated": "Courriels de rappel modifiés",
+};
+const ROLE_FR = { owner: "propriétaire", admin: "administrateur", manager: "gestionnaire", editor: "éditeur", staff: "personnel", viewer: "lecteur" };
+const FAMILIES = [["", "Tout"], ["order", "Commandes"], ["refund", "Remboursements"], ["payment", "Paiements Stripe"], ["tickets", "Billets annulés"],
+  ["buyer", "Données personnelles"], ["session", "Séances"], ["event", "Événements"], ["reports", "Exports"], ["control", "Synchronisation TAKATAK"]];
+const actionText = (a) => ACTION_FR[a] ?? (a.startsWith("control.") ? `Synchronisation TAKATAK (${a.slice(8)})` : a);
+const actorText = (e, me) => e.actorType === "user" ? `${e.actorId === me ? "Vous" : "Personnel"}${e.actorRole ? ` (${ROLE_FR[e.actorRole] ?? e.actorRole})` : ""}`
+  : e.actorType === "public" ? "Acheteur" : e.actorType === "control" ? "TAKATAK" : "ALKAO";
+function AuditRows({ entries, me, prefix }) {
+  const orderOf = (e) => e.entityType === "order" ? e.entityId : e.data?.orderId ?? null;
+  return html`<table><thead><tr><th>Quand</th><th>Qui</th><th>Quoi</th><th></th></tr></thead>
+    <tbody>${entries.map((e) => html`<tr><td>${when(e.createdAt)}</td><td>${actorText(e, me)}</td><td>${actionText(e.action)}${e.data?.reason ? html` <span class="muted">— ${e.data.reason}</span>` : ""}</td>
+      <td>${prefix && orderOf(e) ? html`<a href=${`#${prefix}/order/${orderOf(e)}`}>Commande</a>` : prefix && e.entityType === "event" && e.entityId ? html`<a href=${`#${prefix}/event/${e.entityId}`}>Événement</a>` : ""}</td></tr>`)}</tbody></table>`;
+}
+
+function Journal({ api, base, prefix, me }) {
+  const [family, setFamily] = useState("");
+  const [entries, setEntries] = useState([]);
+  const [more, setMore] = useState(false);
+  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const PAGE = 50;
+  const latest = useRef(0); // a slower, older answer never mixes into a newer filter
+  const load = async (after) => {
+    const n = ++latest.current;
+    setError(null); setLoading(true);
+    try {
+      const r = await api(`${base}/audit?limit=${PAGE}${family ? `&action=${family}` : ""}${after ? `&beforeId=${after}` : ""}`);
+      if (n !== latest.current) return;
+      setEntries((list) => (after ? [...list, ...r.entries] : r.entries)); setMore(r.entries.length === PAGE);
+    } catch (err) { if (n === latest.current) setError(err); }
+    if (n === latest.current) setLoading(false);
+  };
+  useEffect(() => { setEntries([]); load(null); }, [base, family]);
+  return html`<h1>Journal</h1>
+    <p class="muted">Qui a fait quoi, et quand. Les noms restent dans TAKATAK : ALKAO garde le rôle de la personne.</p>
+    <div class="row card"><label>Afficher<select value=${family} onChange=${(e) => { setEntries([]); setMore(false); setLoading(true); setFamily(e.target.value); }}>${FAMILIES.map(([v, label]) => html`<option value=${v}>${label}</option>`)}</select></label></div>
+    ${error && html`<${Failure} error=${error} />`}
+    ${entries.length > 0 ? html`<${AuditRows} entries=${entries} me=${me} prefix=${prefix} />` : !loading && !error && html`<p class="muted">Rien pour l'instant.</p>`}
+    ${loading ? html`<${Loading} />` : more && html`<p><button class="secondary" onClick=${() => load(entries[entries.length - 1].id)}>Plus ancien</button></p>`}`;
+}
+
+function OrderHistory({ api, base, orderId, me }) {
+  const [state] = useLoad(() => api(`${base}/orders/${orderId}/history`), [base, orderId]);
+  if (state.loading) return html`<${Loading} />`;
+  if (state.error) return html`<${Failure} error=${state.error} />`;
+  return state.data.entries.length ? html`<${AuditRows} entries=${state.data.entries} me=${me} />` : html`<p class="muted">Rien d'enregistré.</p>`;
 }
 
 // ── Scanner ─────────────────────────────────────────────────────────────────
@@ -875,13 +945,21 @@ function Payments({ api, base }) {
 
 // ── Shell and routing ───────────────────────────────────────────────────────
 const TABS = [["dashboard", "Tableau de bord"], ["events", "Événements"], ["venues", "Lieux"], ["orders", "Commandes"], ["scanner", "Scanner"], ["payments", "Paiements"]];
+// Run 30: the journal needs audit.read (owner, admin).
+const JOURNAL_ROLES = ["owner", "admin"];
 
 function parseRoute(hash) {
   const m = /^#\/c\/([0-9a-f-]{36})\/b\/([0-9a-f-]{36})\/([a-z]+)(?:\/([0-9a-f-]{36}))?$/.exec(hash);
   return m ? { clientId: m[1], brandId: m[2], page: m[3], id: m[4] } : null;
 }
 
-function Shell({ api, route, email, onLogout }) {
+// Run 30: the signed-in person's id, read from the token, so the journal can say "Vous".
+// Display only: the API checks the token itself.
+function tokenSubject(token) {
+  try { return JSON.parse(atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))).sub ?? null; } catch { return null; }
+}
+
+function Shell({ api, route, email, me, onLogout }) {
   const prefix = `/c/${route.clientId}/b/${route.brandId}`;
   const base = `/v1/admin/clients/${route.clientId}/brands/${route.brandId}`;
   const [status] = useLoad(() => api(`${base}/status`), [base]);
@@ -894,7 +972,8 @@ function Shell({ api, route, email, onLogout }) {
     : page === "event" ? html`<${EventDetail} api=${api} base=${base} eventId=${route.id} />`
     : page === "venues" ? html`<${Venues} api=${api} base=${base} />`
     : page === "orders" ? html`<${Orders} api=${api} base=${base} prefix=${prefix} />`
-    : page === "order" ? html`<${OrderDetail} api=${api} base=${base} orderId=${route.id} />`
+    : page === "order" ? html`<${OrderDetail} api=${api} base=${base} orderId=${route.id} role=${status.data?.role} me=${me} />`
+    : page === "journal" ? html`<${Journal} api=${api} base=${base} prefix=${prefix} me=${me} />`
     : page === "scanner" ? html`<${Scanner} api=${api} base=${base} />`
     : page === "payments" ? html`<${Payments} api=${api} base=${base} />`
     : html`<p>Page inconnue.</p>`;
@@ -902,7 +981,7 @@ function Shell({ api, route, email, onLogout }) {
     <header class="top"><span class="logo">ALKAO</span><a class="where" href="#/">Changer d'espace</a>
       ${status.data && html`<span class="badge">${status.data.role}</span>`}<span class="spacer"></span>
       <span class="muted">${email ?? ""}</span>${onLogout && html`<button class="secondary" onClick=${onLogout}>Déconnexion</button>`}</header>
-    <nav class="tabs">${TABS.map(([key, label]) => html`<a class=${tab === key ? "active" : ""} href=${`#${prefix}/${key}`}>${label}</a>`)}</nav>
+    <nav class="tabs">${[...TABS, ...(JOURNAL_ROLES.includes(status.data?.role) ? [["journal", "Journal"]] : [])].map(([key, label]) => html`<a class=${tab === key ? "active" : ""} href=${`#${prefix}/${key}`}>${label}</a>`)}</nav>
     <main>${status.error ? html`<${Failure} error=${status.error} />` : body}</main>`;
 }
 
@@ -949,7 +1028,7 @@ function App() {
   const api = makeApi(getToken, embedded ? expired : logout);
   const onLogout = embedded ? null : logout;
   const route = parseRoute(hash);
-  return route ? html`<${Shell} api=${api} route=${route} email=${session.email} onLogout=${onLogout} />`
+  return route ? html`<${Shell} api=${api} route=${route} email=${session.email} me=${tokenSubject(session.accessToken)} onLogout=${onLogout} />`
     : html`<header class="top"><span class="logo">ALKAO</span><span class="spacer"></span>${onLogout && html`<button class="secondary" onClick=${onLogout}>Déconnexion</button>`}</header><${Workspaces} api=${api} />`;
 }
 

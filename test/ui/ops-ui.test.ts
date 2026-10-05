@@ -4,7 +4,7 @@ import type { AddressInfo } from "node:net";
 import { serve, type ServerType } from "@hono/node-server";
 import { chromium, type Browser, type Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { call, pub, testApp, tokenFor, type TestApp } from "../helpers/app.js";
+import { adm, call, pub, testApp, tokenFor, type TestApp } from "../helpers/app.js";
 import { createTestDatabase, type TestDatabase } from "../helpers/db.js";
 import { seedAfterSale, seedPaidOrder, seedTwoTenants, TEST_CREDENTIAL_SECRET, type SeedResult } from "../helpers/seed.js";
 
@@ -450,6 +450,41 @@ describe("ALKAO Operations app", () => {
     page.on("dialog", (d) => void d.accept());
     await page.getByRole("button", { name: "Ouvrir les ventes des brouillons à venir" }).click();
     await expect.poll(() => countIn("on_sale")).toBe(16);
+  });
+
+  it("shows who did what in the journal and on the order, to owners only (Run 30)", async () => {
+    const h = seed.havana;
+    // Something this owner did: the journal says "Vous".
+    const owner = await tokenFor(seed.users.havanaOwner);
+    const sent = await call(app, "POST", `${adm(h.clientId, h.brandId)}/orders/${h.orderId}/tickets-email`, { token: owner });
+    expect(sent.status).toBe(202);
+    // And something that is not about an order, for the filter to leave out.
+    expect((await call(app, "POST", `${adm(h.clientId, h.brandId)}/venues`, { token: owner, body: { name: "Salle du journal" } })).status).toBe(201);
+    const page = await signedIn(seed.users.havanaOwner);
+    // The filtered answer comes late, as on a busy network: the page must not show stale rows meanwhile.
+    await page.route("**/audit?*action=order*", async (r) => { await new Promise((ok) => setTimeout(ok, 400)); await r.continue(); });
+    await page.goto(`${origin}/ops#${brandPath()}/dashboard`);
+    await page.getByRole("link", { name: "Journal" }).click();
+    await page.getByRole("heading", { name: "Journal" }).waitFor();
+    // Everything first (catalog, sessions, orders…), then only orders.
+    await page.getByRole("cell", { name: "Lieu créé" }).first().waitFor();
+    await page.getByLabel("Afficher").selectOption({ label: "Commandes" });
+    // Never the unfiltered rows while the filtered ones load.
+    await expect.poll(() => page.locator("tbody tr td:nth-child(3)").allTextContents()).not.toContain("Lieu créé");
+    await page.getByRole("cell", { name: "Commande payée" }).first().waitFor();
+    const mine = page.getByRole("row").filter({ hasText: "Billets envoyés par courriel" }).first();
+    expect(await mine.getByRole("cell").nth(1).textContent()).toBe("Vous (propriétaire)");
+    const actions = await page.locator("tbody tr td:nth-child(3)").allTextContents();
+    expect(actions.length).toBeGreaterThan(0);
+    expect(actions.every((a) => /^(Commande|Billets|Lien|Changement|Payée)/.test(a))).toBe(true);
+    await page.getByRole("link", { name: "Commande", exact: true }).first().click();
+    await page.getByRole("heading", { name: "Historique" }).waitFor();
+    await page.getByRole("cell", { name: "Commande payée" }).waitFor();
+
+    const staff = await signedIn(seed.users.havanaStaff);
+    await staff.goto(`${origin}/ops#${brandPath()}/scanner`);
+    await staff.getByRole("heading", { name: "Scanner" }).waitFor();
+    expect(await staff.getByRole("link", { name: "Journal" }).count()).toBe(0);
   });
 
   it("hides money from gate staff", async () => {

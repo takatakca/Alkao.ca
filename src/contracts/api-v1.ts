@@ -218,6 +218,19 @@ export const DuplicateEventRequest = z.object({
   shiftDays: z.number().int().min(-3660).max(3660).nullish(),
 });
 
+// ── Run 30: the audit journal ───────────────────────────────────────────────
+export const AuditQuery = ListQuery.extend({
+  /**
+   * The id of the last entry already shown: the next page starts right after it. Unlike
+   * `before`, entries written in the same instant (one transaction) are never skipped.
+   */
+  beforeId: z.coerce.number().int().positive().optional(),
+  /** An action ("order.paid") or a family of actions ("order", "refund"…). */
+  action: z.string().regex(/^[a-z_]+(\.[a-z_]+)*$/).max(80).optional(),
+  entityType: z.string().regex(/^[a-z_]+$/).max(40).optional(),
+  entityId: z.string().min(1).max(100).optional(),
+});
+
 // ── Run 29: sessions in bulk ────────────────────────────────────────────────
 const localDate = z.iso.date();
 const localTime = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
