@@ -6,3 +6,4 @@ coverage/
 !.env.example
 .local-postgres/
 *.log
+var/

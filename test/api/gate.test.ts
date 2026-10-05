@@ -27,6 +27,8 @@ afterAll(async () => {
 const UNGATED = new Set([
   "GET /health",
   "GET /health/ready",
+  // Run 39: the kind of the caller's address only (public, private or unknown).
+  "GET /health/client",
   // Run 24: protected by its own bearer token (404 without one), platform-wide counts only.
   "GET /metrics",
   "POST /v1/control/events",

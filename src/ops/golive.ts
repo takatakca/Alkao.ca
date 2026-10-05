@@ -296,6 +296,13 @@ export async function checkLive(
   else if (hook.status === 503) out.push(fail(area.stripe, "Webhook coupé : paiements non configurés"));
   else out.push(fail(area.stripe, `Webhook répond ${hook.status} au lieu de 400`, "Vérifiez que /v1/webhooks/stripe arrive bien à ALKAO (proxy, chemin)."));
 
+  // Per-buyer rate limits need the buyer's own address, not the host proxy's.
+  const seen = (await json(await get("/health/client")))?.client;
+  if (seen === "public") out.push(ok(area.security, "ALKAO voit l'adresse de chaque acheteur (limites par acheteur)"));
+  else if (local) out.push(ok(area.security, "Adresse des acheteurs : non vérifiable en essai local"));
+  else out.push(warn(area.security, `ALKAO ne voit pas l'adresse des acheteurs (${String(seen ?? "pas de réponse")}) : en pleine vente, tous partageraient la même limite de réservations`,
+    "Réglez ALKAO_TRUSTED_PROXY_HOPS (0 sans proxy, 1 derrière un proxy, 2 avec un CDN devant), redémarrez, puis relancez cette vérification."));
+
   const ops = await json(await get("/ops/config.json"));
   const embed = Array.isArray(ops?.embedOrigins) ? (ops.embedOrigins as string[]) : [];
   out.push(ops?.supabaseUrl && ops?.supabaseAnonKey
