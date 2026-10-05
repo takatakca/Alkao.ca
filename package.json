@@ -2,7 +2,7 @@
   "name": "alkao",
   "version": "0.1.0",
   "private": true,
-  "description": "ALKAO — TAKATAK Ticket Hub: standalone multi-tenant ticketing engine.",
+  "description": "ALKAO \u2014 TAKATAK Ticket Hub: standalone multi-tenant ticketing engine.",
   "type": "module",
   "engines": {
     "node": "22.x"
@@ -17,7 +17,8 @@
     "test:db": "vitest run test/db",
     "qa": "npm run typecheck && npm run check:migrations && npm test",
     "start": "tsx src/server.ts",
-    "contracts:generate": "tsx scripts/generate-contracts.ts"
+    "contracts:generate": "tsx scripts/generate-contracts.ts",
+    "worker:sweeper": "tsx scripts/sweeper.ts"
   },
   "dependencies": {
     "@hono/node-server": "^2.1.3",

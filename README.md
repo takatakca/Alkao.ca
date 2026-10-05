@@ -26,6 +26,7 @@ versioned control contract.
 | `src/contracts` | API v1 request schemas and the `alkao.control.v1` contract |
 | `src/api` | Hono app: public, admin and control routes, gates, auth, signatures |
 | `src/payments` | Payment gateway interface, Stripe implementation, checkout, webhook and refund service |
+| `src/ops` | Hold sweeper, sales reports, CSV exports (Run 04) |
 | `src/credentials`, `src/scanner` | Ed25519 QR credentials (`ALK1`), derived per-Client keys, scanner manifest and gate scans |
 | `contracts/` | Published JSON Schema of `alkao.control.v1` (generated; drift-tested) |
 | `supabase/migrations` | Schema. Every `ticketing_*` table enables RLS in the migration that creates it |
@@ -47,6 +48,7 @@ Run the server (it starts **disabled**: `ALKAO_OPERATIONAL_API_ENABLED=false`):
 ```bash
 cp .env.example .env    # then fill DATABASE_URL, auth and control keys
 npm start
+npm run worker:sweeper  # expires lapsed holds every minute
 ```
 
 ## Security rules (frozen)
@@ -68,4 +70,4 @@ npm start
 | Run 01 | PR 1 capability status · PR 2 domain, schema, RLS, invariants · PR 3 API contracts and entitlement gates |
 | Run 02 | Stripe Connect onboarding, checkout (direct charges, application fee), webhooks, refunds with the V1 commission policy |
 | Run 03 | Signed QR credentials (`ALK1`: stable ids and key id only), key rotation, scanner manifest, online and offline scans with single admission |
-| Run 04 | Operations UI in the TAKATAK dashboard |
+| Run 04 | Operations: hold sweeper, sales reports, CSV exports (backend done); Operations UI (to decide) |

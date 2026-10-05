@@ -169,3 +169,14 @@ export const ScanBatchRequest = z.object({
     .min(1)
     .max(500),
 });
+
+// ── Run 04: operations ──────────────────────────────────────────────────────
+export const ReportQuery = z
+  .object({
+    eventId: z.uuid().optional(),
+    from: timestamp.optional(),
+    to: timestamp.optional(),
+  })
+  .refine((q) => !q.from || !q.to || Date.parse(q.from) < Date.parse(q.to), { message: "from must be before to" });
+
+export const AttendeesQuery = z.object({ sessionId: z.uuid() });

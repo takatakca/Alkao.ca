@@ -239,10 +239,16 @@ export const listPublicEvents = (q: Queryable, s: TenantScope) =>
 export const listPublicSessions = (q: Queryable, s: TenantScope, eventId: string, now: Date) =>
   many(
     q,
-    `SELECT id, starts_at, ends_at, GREATEST(capacity - reserved_count - sold_count, 0) AS available
-     FROM public.ticketing_sessions
-     WHERE event_id = $1 AND client_id = $2 AND brand_id = $3 AND status = 'on_sale' AND starts_at > $4
-     ORDER BY starts_at`,
+    // Holds past their deadline still count in reserved_count until swept; never show them as taken.
+    `SELECT s.id, s.starts_at, s.ends_at,
+            GREATEST(s.capacity - s.sold_count - (s.reserved_count - coalesce(lapsed.quantity, 0)), 0) AS available
+     FROM public.ticketing_sessions s
+     LEFT JOIN LATERAL (
+       SELECT sum(h.quantity)::int AS quantity FROM public.ticketing_holds h
+       WHERE h.session_id = s.id AND h.status = 'active' AND h.expires_at <= $4
+     ) lapsed ON true
+     WHERE s.event_id = $1 AND s.client_id = $2 AND s.brand_id = $3 AND s.status = 'on_sale' AND s.starts_at > $4
+     ORDER BY s.starts_at`,
     [eventId, s.clientId, s.brandId, now],
   );
 

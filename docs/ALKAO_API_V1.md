@@ -93,6 +93,21 @@ the database checks that the order's refunded totals equal the sum of its refund
 
 Every admin write is recorded in `ticketing_audit_log` in the same transaction.
 
+### Operations (Run 04)
+
+| Method | Path | Permission | Result |
+|---|---|---|---|
+| GET | `/reports/sales?eventId&from&to` | `orders.read` | Gross, subtotal, taxes (GST/QST), TAKATAK commission, refunds and **net to the Client** (before Stripe processing fees); sessions (capacity, sold, held, available, admitted); revenue per ticket type. Dates filter on payment time |
+| GET | `/reports/attendees.csv?sessionId` | `buyers.read` | One row per ticket: order reference, ticket type, buyer, status, admission time. Audited |
+| GET | `/reports/orders.csv?eventId&from&to` | `buyers.read` | One row per paid, partially refunded or refunded order, with money columns in cents. Audited |
+
+The CSV exports neutralize spreadsheet formulas: a cell starting with `= + - @` gets a leading
+apostrophe, because buyer names are untrusted input.
+
+Run `npm run worker:sweeper` (env `DATABASE_URL`, `ALKAO_SWEEP_INTERVAL_SECONDS`, default 60)
+to expire lapsed holds and return their seats. Public availability already ignores lapsed
+holds even when the sweeper isn't running.
+
 ### Role → permission
 
 | Role | catalog.read · inventory.read · holds.read | catalog.write | orders.read · buyers.read | audit.read |
