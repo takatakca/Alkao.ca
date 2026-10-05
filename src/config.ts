@@ -82,7 +82,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     opsUi: {
       supabaseUrl: e.SUPABASE_URL ?? null,
       supabaseAnonKey: e.SUPABASE_ANON_KEY ?? null,
-      frameAncestors: (e.ALKAO_OPS_FRAME_ANCESTORS ?? "").split(",").map((s) => s.trim()).filter((s) => /^https:\/\/[a-z0-9.-]+(:\d+)?$/.test(s)),
+      frameAncestors: (e.ALKAO_OPS_FRAME_ANCESTORS ?? "").split(",").map((s) => s.trim()).filter((s) => /^(https:\/\/[a-z0-9.-]+|http:\/\/(localhost|127\.0\.0\.1))(:\d+)?$/.test(s)),
     },
     port: e.PORT,
   };

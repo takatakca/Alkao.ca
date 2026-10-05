@@ -25,12 +25,51 @@ const SCAN_FR = {
 };
 
 // ── Session (Supabase Auth) ─────────────────────────────────────────────────
+// Embedded in the TAKATAK dashboard, the session lives in memory only and comes from the
+// parent page (see embedBridge); standalone, it lives in sessionStorage.
+let embedded = false;
+let memorySession = null;
 function loadSession() {
+  if (embedded) return memorySession;
   try { return JSON.parse(sessionStorage.getItem(SESSION_KEY) ?? "null"); } catch { return null; }
 }
 function saveSession(s) {
+  if (embedded) { memorySession = s; return; }
   if (s) sessionStorage.setItem(SESSION_KEY, JSON.stringify(s)); else sessionStorage.removeItem(SESSION_KEY);
 }
+
+// ── Embedded in the TAKATAK dashboard ───────────────────────────────────────
+// The parent hands over the signed-in user's access token by postMessage: ALKAO says
+// `alkao.ready` (and `alkao.session_expired` when the token is about to lapse), the parent
+// answers `alkao.session`. No refresh token ever crosses: refreshing here would rotate it and
+// sign the user out of TAKATAK. Only messages from the parent window, from an origin listed
+// in ALKAO_OPS_FRAME_ANCESTORS, are accepted.
+function embedBridge(origins, onSession) {
+  let parentOrigin = null;
+  const waiters = [];
+  addEventListener("message", (e) => {
+    if (e.source !== window.parent || !origins.includes(e.origin)) return;
+    const d = e.data;
+    if (d?.type !== "alkao.session" || typeof d.accessToken !== "string" || !Number.isFinite(d.expiresAt)) return;
+    parentOrigin = e.origin;
+    const s = { accessToken: d.accessToken, refreshToken: null, expiresAt: d.expiresAt, email: typeof d.email === "string" ? d.email : null };
+    onSession(s);
+    for (const resolve of waiters.splice(0)) resolve(s);
+  });
+  const hinted = location.ancestorOrigins?.[0] ?? (document.referrer ? new URL(document.referrer).origin : null);
+  const post = (type) => {
+    for (const o of parentOrigin ? [parentOrigin] : origins.includes(hinted) ? [hinted] : origins) window.parent.postMessage({ type }, o);
+  };
+  post("alkao.ready");
+  return {
+    /** Ask the parent for a fresh token; resolves with it, or null after 10 s. */
+    renew() {
+      post("alkao.session_expired");
+      return new Promise((resolve) => { waiters.push(resolve); setTimeout(() => resolve(null), 10_000); });
+    },
+  };
+}
+let bridge = null;
 
 async function supabaseToken(config, grant, body) {
   const res = await fetch(`${config.supabaseUrl}/auth/v1/token?grant_type=${grant}`, {
@@ -500,35 +539,50 @@ function Shell({ api, route, email, onLogout }) {
   return html`
     <header class="top"><span class="logo">ALKAO</span><a class="where" href="#/">Changer d'espace</a>
       ${status.data && html`<span class="badge">${status.data.role}</span>`}<span class="spacer"></span>
-      <span class="muted">${email ?? ""}</span><button class="secondary" onClick=${onLogout}>Déconnexion</button></header>
+      <span class="muted">${email ?? ""}</span>${onLogout && html`<button class="secondary" onClick=${onLogout}>Déconnexion</button>`}</header>
     <nav class="tabs">${TABS.map(([key, label]) => html`<a class=${tab === key ? "active" : ""} href=${`#${prefix}/${key}`}>${label}</a>`)}</nav>
     <main>${status.error ? html`<${Failure} error=${status.error} />` : body}</main>`;
 }
 
 function App() {
   const [config, setConfig] = useState(null);
-  const [session, setSession] = useState(loadSession());
+  const inFrame = window.parent !== window;
+  const [session, setSession] = useState(inFrame ? null : loadSession());
   const [hash, setHash] = useState(location.hash || "#/");
-  useEffect(() => { fetch("/ops/config.json").then((r) => r.json()).then(setConfig); }, []);
+  useEffect(() => {
+    fetch("/ops/config.json").then((r) => r.json()).then((c) => {
+      embedded = inFrame && (c.embedOrigins ?? []).length > 0;
+      if (embedded) bridge = embedBridge(c.embedOrigins, (s) => { memorySession = s; setSession(s); });
+      else if (inFrame) setSession(loadSession());
+      setConfig(c);
+    });
+  }, []);
   useEffect(() => { const on = () => setHash(location.hash || "#/"); addEventListener("hashchange", on); return () => removeEventListener("hashchange", on); }, []);
   const update = (s) => { saveSession(s); setSession(s); };
   const logout = () => update(null);
+  // Embedded: a rejected token means asking TAKATAK for a new one, never showing a login form.
+  const expired = () => { update(null); bridge.renew(); };
 
   if (!config) return html`<p class="boot">Chargement…</p>`;
-  if (!session) return html`<${Login} config=${config} onSession=${update} />`;
+  if (!session) return embedded ? html`<p class="boot">Connexion via TAKATAK…</p>` : html`<${Login} config=${config} onSession=${update} />`;
 
   const getToken = async () => {
     const s = loadSession();
+    if (embedded) {
+      if (s && s.expiresAt - Date.now() >= 60_000) return s.accessToken;
+      return (await bridge.renew())?.accessToken ?? s?.accessToken;
+    }
     if (s?.refreshToken && config.supabaseUrl && s.expiresAt - Date.now() < 60_000) {
       try { const fresh = await supabaseToken(config, "refresh_token", { refresh_token: s.refreshToken }); update({ ...fresh, email: s.email }); return fresh.accessToken; }
       catch { logout(); }
     }
     return s?.accessToken;
   };
-  const api = makeApi(getToken, logout);
+  const api = makeApi(getToken, embedded ? expired : logout);
+  const onLogout = embedded ? null : logout;
   const route = parseRoute(hash);
-  return route ? html`<${Shell} api=${api} route=${route} email=${session.email} onLogout=${logout} />`
-    : html`<header class="top"><span class="logo">ALKAO</span><span class="spacer"></span><button class="secondary" onClick=${logout}>Déconnexion</button></header><${Workspaces} api=${api} />`;
+  return route ? html`<${Shell} api=${api} route=${route} email=${session.email} onLogout=${onLogout} />`
+    : html`<header class="top"><span class="logo">ALKAO</span><span class="spacer"></span>${onLogout && html`<button class="secondary" onClick=${onLogout}>Déconnexion</button>`}</header><${Workspaces} api=${api} />`;
 }
 
 render(html`<${App} />`, document.getElementById("app"));

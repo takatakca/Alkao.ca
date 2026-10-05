@@ -1,4 +1,5 @@
 import { existsSync } from "node:fs";
+import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { serve, type ServerType } from "@hono/node-server";
 import { chromium, type Browser, type Page } from "playwright-core";
@@ -59,7 +60,7 @@ describe("ALKAO Operations app", () => {
     const csp = res.headers.get("content-security-policy")!;
     expect(csp).toContain("script-src 'self'");
     expect(csp).toContain("frame-ancestors 'none'");
-    expect(await (await fetch(`${origin}/ops/config.json`)).json()).toEqual({ supabaseUrl: null, supabaseAnonKey: null });
+    expect(await (await fetch(`${origin}/ops/config.json`)).json()).toEqual({ supabaseUrl: null, supabaseAnonKey: null, embedOrigins: [] });
   });
 
   it("asks for credentials when signed out", async () => {
@@ -165,6 +166,87 @@ describe("ALKAO Operations app", () => {
     await page.goto(`${origin}/ops#${brandPath()}/dashboard`);
     await page.getByRole("alert").waitFor();
     expect(await page.getByRole("alert").textContent()).toContain("Votre rôle ne permet pas cette action.");
+  });
+
+  it("ran without script errors", () => {
+    expect(pageErrors).toEqual([]);
+  });
+});
+
+describe("ALKAO Operations embedded in the TAKATAK dashboard", () => {
+  // A stand-in TAKATAK page on another origin frames /ops and answers its postMessage handshake.
+  let parent: Server;
+  let parentOrigin: string;
+  let embedServer: ServerType;
+  let embedOrigin: string;
+  let token: string;
+
+  beforeAll(async () => {
+    token = await tokenFor(seed.users.havanaOwner, { expiresIn: "30m" });
+    parent = createServer((_req, res) => {
+      res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+      res.end(`<!doctype html><title>TAKATAK</title><iframe id="f" src="${embedOrigin}/ops#/" style="width:1000px;height:700px"></iframe>
+<script>
+  window.received = [];
+  let sent = 0;
+  addEventListener("message", (e) => {
+    if (e.origin !== ${JSON.stringify(embedOrigin)} || e.source !== document.getElementById("f").contentWindow) return;
+    window.received.push(e.data.type);
+    sent++;
+    // The first token is about to lapse, so ALKAO must ask for another before its first call.
+    const expiresAt = Date.now() + (sent === 1 ? 30000 : 1800000);
+    e.source.postMessage({ type: "alkao.session", accessToken: ${JSON.stringify(token)}, expiresAt, email: "ops@takatak.ca" }, e.origin);
+  });
+</script>`);
+    });
+    await new Promise<void>((r) => parent.listen(0, "127.0.0.1", r));
+    // "localhost" vs "127.0.0.1": two distinct origins on the same machine.
+    parentOrigin = `http://localhost:${(parent.address() as AddressInfo).port}`;
+    const embedApp = testApp(db.pool, { opsUi: { supabaseUrl: null, supabaseAnonKey: null, frameAncestors: [parentOrigin] } });
+    embedServer = await new Promise<ServerType>((resolve) => {
+      const s = serve({ fetch: embedApp.fetch, port: 0, hostname: "127.0.0.1" }, () => resolve(s));
+    });
+    embedOrigin = `http://127.0.0.1:${(embedServer.address() as AddressInfo).port}`;
+  }, 60_000);
+
+  afterAll(async () => {
+    await new Promise((r) => embedServer?.close(r));
+    await new Promise((r) => parent?.close(r));
+  });
+
+  it("allows only the configured parent to frame it", async () => {
+    const res = await fetch(`${embedOrigin}/ops`);
+    expect(res.headers.get("content-security-policy")).toContain(`frame-ancestors ${parentOrigin}`);
+    expect(await (await fetch(`${embedOrigin}/ops/config.json`)).json()).toMatchObject({ embedOrigins: [parentOrigin] });
+  });
+
+  it("signs in with the token handed over by TAKATAK and asks again when it lapses", async () => {
+    const page = await (await browser.newContext({ locale: "fr-CA" })).newPage();
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    await page.goto(`${parentOrigin}/`);
+    const frame = page.frameLocator("#f");
+    await frame.getByRole("heading", { name: "Choisir un espace" }).waitFor();
+    expect(await page.evaluate(() => (globalThis as any).received)).toEqual(["alkao.ready", "alkao.session_expired"]);
+    // No login form, no logout: the TAKATAK session is the only session.
+    expect(await frame.getByRole("button", { name: "Se connecter" }).count()).toBe(0);
+    expect(await frame.getByRole("button", { name: "Déconnexion" }).count()).toBe(0);
+
+    // A message that does not come from the parent window is ignored: a forged token would be
+    // rejected by the API and make ALKAO ask TAKATAK again.
+    const inner = page.frames().find((f) => f.url().startsWith(embedOrigin))!;
+    await inner.evaluate(() => (globalThis as any).postMessage({ type: "alkao.session", accessToken: "forged", expiresAt: Date.now() + 9e6 }, "*"));
+    await frame.getByText("Havana Resort — Événements").click();
+    await frame.getByRole("heading", { name: "Tableau de bord" }).waitFor();
+    expect(await page.evaluate(() => (globalThis as any).received)).toEqual(["alkao.ready", "alkao.session_expired"]);
+  });
+
+  it("refuses to render inside a page that is not allowed to frame it", async () => {
+    const page = await (await browser.newContext()).newPage();
+    await page.goto(`${origin}/health`);
+    await page.setContent(`<iframe id="f" src="${embedOrigin}/ops#/"></iframe>`);
+    await page.waitForTimeout(500);
+    const inner = page.frames().find((f) => f.url().startsWith(embedOrigin));
+    expect(await inner?.locator("#app").count().catch(() => 0) ?? 0).toBe(0);
   });
 
   it("ran without script errors", () => {

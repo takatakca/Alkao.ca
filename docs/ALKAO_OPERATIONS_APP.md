@@ -1,8 +1,9 @@
 # ALKAO Operations app (`/ops`)
 
 This is step 1 of the owner's decision: a standalone ALKAO web app. It keeps working for a
-Client that leaves the full GROUPE TAKATAK package. Step 2, embedding it in the TAKATAK V1
-dashboard, is a separate run that will be authorized to write to `takatak-v1`.
+Client that leaves the full GROUPE TAKATAK package. Step 2 embeds the same app in the
+TAKATAK V1 dashboard (menu "ALKAO — Billetterie"), with no second login. See
+[Embedding in the TAKATAK dashboard](#embedding-in-the-takatak-dashboard).
 
 ## What staff can do
 
@@ -24,7 +25,7 @@ gate are always enforced by the server, never by the interface.
 | Variable | Use |
 |---|---|
 | `SUPABASE_URL`, `SUPABASE_ANON_KEY` | Sign-in with Supabase Auth (email and password), the same accounts as TAKATAK. Both values are public by design |
-| `ALKAO_OPS_FRAME_ANCESTORS` | HTTPS origins allowed to embed `/ops` in an iframe (the TAKATAK dashboard in step 2). Empty: no embedding |
+| `ALKAO_OPS_FRAME_ANCESTORS` | Origins allowed to embed `/ops` in an iframe, comma-separated: the TAKATAK dashboard, e.g. `https://app.takatak.ca`. HTTPS only, plus `http://localhost` for development. Empty: no embedding |
 
 Without Supabase settings, the sign-in screen asks for an access token. This is for
 development only.
@@ -37,5 +38,34 @@ development only.
   and is refreshed through Supabase.
 - **No build step:** Preact and htm are served from `node_modules` (`/ops/vendor/htm-preact.js`).
   No third-party CDN is loaded at runtime.
+- **Embedded:** see below.
 - **Tested end to end** (`test/ui`) with a real server and a real Chromium: sign-in, workspace,
   catalog, order, refund error, gate scanning, and role limits.
+
+## Embedding in the TAKATAK dashboard
+
+The TAKATAK page `/dashboard/ticketing` frames `/ops` and hands over the user's Supabase
+session, so staff sign in once, in TAKATAK.
+
+| Step | Sender → receiver | Message |
+|---|---|---|
+| 1 | ALKAO → TAKATAK | `{ type: "alkao.ready" }` |
+| 2 | TAKATAK → ALKAO | `{ type: "alkao.session", accessToken, expiresAt, email }` (`expiresAt` in ms) |
+| 3 | ALKAO → TAKATAK | `{ type: "alkao.session_expired" }`, less than a minute before `expiresAt`, or when the API answers 401 |
+| 4 | TAKATAK → ALKAO | a fresh `alkao.session` |
+
+The handover follows these rules:
+
+- **Origins:** both sides check the origin. ALKAO accepts a session only from its parent
+  window, and only from an origin in `ALKAO_OPS_FRAME_ANCESTORS`, the same list that
+  `frame-ancestors` uses. TAKATAK posts only to the ALKAO origin, and only to its own iframe.
+- **Access token only.** The refresh token never crosses. Refreshing inside ALKAO would rotate
+  it and sign the user out of TAKATAK, so TAKATAK refreshes and sends the new access token.
+- **Memory only.** Embedded, the token is never written to storage.
+- **No login form, no logout button.** The TAKATAK session is the only session.
+- **No camera.** The TAKATAK dashboard sends `Permissions-Policy: camera=()`, so the embedded
+  scanner works with a keyboard-wedge reader or a typed code. For camera scanning, open `/ops`
+  directly on the gate device.
+
+Embedding is a convenience, not a security boundary. Every call still carries the user's own
+token to the gated admin API.
