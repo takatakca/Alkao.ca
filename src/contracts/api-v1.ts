@@ -211,6 +211,9 @@ export const OrdersQuery = z.object({
   q: z.string().trim().min(2).max(120).optional(),
 });
 
+// ── Run 27: "Retrouver mes billets" ─────────────────────────────────────────
+export const FindTicketsRequest = z.object({ email: z.string().trim().max(320).pipe(z.email()) });
+
 // ── Run 23: reminder email before the session ──────────────────────────────
 export const ReminderSettings = z.object({ enabled: z.boolean() });
 

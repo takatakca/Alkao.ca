@@ -411,6 +411,25 @@ Client before Stripe's fees. This is the total minus refunds minus the net commi
   month, since the start) and an event filter. Both drive the totals, the by-day table and
   the two CSV exports.
 
+### "Retrouver mes billets" (Run 27)
+
+| Method | Path | Gate | Result |
+|---|---|---|---|
+| POST | `/v1/public/…/tickets/resend` | Ticketing gate | `{ email }` → `202 { ok: true }`, **always the same answer**, so it never reveals whether an address bought anything |
+
+For a buyer who lost the email. ALKAO sends the tickets email again for each of that
+buyer's orders that still matter: valid tickets for a session that is neither over nor
+cancelled, up to 10. It goes to the **same address**, with the usual personal link.
+
+- **Never written to:** anonymized buyers, and other Brands' buyers.
+- **Rate limits:** 5 requests per caller per 10 minutes (`429 rate_limited`), and 3 sends
+  per address per hour. Past that, the request is answered the same and does nothing, so
+  nobody can flood an inbox.
+- **Audit:** each order re-sent is logged as `order.tickets_email_requested` with the
+  `public` actor.
+- **The shop:** "Vous avez déjà acheté ? Retrouvez vos billets" sits under the event list
+  and on each event page, in French or English.
+
 ### Role → permission
 
 | Role | catalog.read · inventory.read · holds.read | catalog.write | orders.read · buyers.read | audit.read |

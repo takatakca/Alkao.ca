@@ -21,7 +21,7 @@ const RESEND_LIMIT = 50;
  * Queue the order's tickets email again (same personal link). Creates the row for an order
  * paid before email existed. Only orders with a valid ticket.
  */
-export async function requestTicketsEmail(tx: Tx, s: TenantScope, orderId: string, actor: { type: "user"; id: string | null }) {
+export async function requestTicketsEmail(tx: Tx, s: TenantScope, orderId: string, actor: { type: "user" | "public"; id: string | null }) {
   const { rows } = await tx.query<{ event_id: string; status: string; exchange_of_order_id: string | null; valid: number; anonymized: boolean }>(
     `SELECT o.event_id, o.status, o.exchange_of_order_id,
             (SELECT count(*)::int FROM public.ticketing_tickets t
