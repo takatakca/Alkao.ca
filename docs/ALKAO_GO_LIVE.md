@@ -4,6 +4,28 @@ ALKAO is a separate deployment. Turning it on changes nothing in TAKATAK V1, FES
 any other running system. Every step below is additive and can be undone by turning
 ALKAO off again: `ALKAO_OPERATIONAL_API_ENABLED=false`, or stop the processes.
 
+## 0. Check it with one command (Run 38)
+
+`npm run check:golive` says what is missing or wrong, in French, before and after each
+step below. It only reads: it never writes to the database, Stripe or anything else, and
+it never prints a secret, only whether it is set.
+
+```bash
+# Where ALKAO runs, with its settings: the settings and the database.
+npm run check:golive
+# From any computer: the running service, and optionally one Brand's shop.
+npm run check:golive -- --url https://billets.example.ca --client <clientId> --brand <brandId>
+```
+
+| Part | What it checks |
+|---|---|
+| Settings | Every value the server would refuse at startup (an empty value counts). Control keys, staff sign-in, Stripe keys and their mode, onboarding URLs, the QR secret, the public URL, the email worker, the metrics token, the TAKATAK embed origins. Secrets that look like placeholders are refused |
+| Database | It answers. Every migration is applied (ALKAO's runner or the Supabase CLI), and none is unknown to this code. Supabase roles and `pg_trgm` are present. **The same RLS and grant rules as the tests, on the real database:** RLS on every `ticketing_*` table, read-only policies for `authenticated` only, nothing for `anon`, no access to `alkao_private`. Clients, Brands and staff are set up, Ticketing is active, and Stripe is finished for each Client that sells. The workers are not behind (sweeper, emails, cancellations, refunds) |
+| Running service | HTTPS and HSTS, `/health` and `/health/ready`. `ALKAO_PUBLIC_URL` matches the address. Stripe is in live or test mode, and the webhook refuses unsigned calls (it is probed with an unsigned call, which Stripe's signature check refuses before anything is read). `/ops` sign-in, the `/billets` security headers, and `/metrics` protected by its token. With `--client` and `--brand`: Ticketing is active, events are published, and the shop link works |
+
+Each line is ✔ (fine), ⚠ (advice, e.g. Stripe test mode) or ✘ (blocking). The command exits
+with `1` when anything is blocking, so it can also run in a deployment pipeline.
+
 ## 1. Infrastructure
 
 | Item | Value |
@@ -73,7 +95,8 @@ How it behaves:
    publish.
 4. Share the shop link `https://…/acheter/<clientId>/<brandId>`, or the Brand's own site can
    call the public API.
-5. Make a test purchase. You should see the payment on the Client's Stripe account, the
+5. Run `npm run check:golive -- --url https://… --client … --brand …` until nothing is
+   blocking, then make a test purchase. You should see the payment on the Client's Stripe account, the
    tickets email, QR codes on `/billets`, and a scan at the gate.
    - **With Stripe test keys** (`sk_test_…`), ALKAO says so everywhere (Run 32). The shop
      shows a banner: "Mode test : aucun paiement réel". `/ops` shows a badge: "Stripe en

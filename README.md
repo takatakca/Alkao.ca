@@ -54,6 +54,7 @@ npm start
 npm run worker:sweeper  # expires lapsed holds every minute
 npm run worker:email    # sends buyers their tickets (needs RESEND_API_KEY, ALKAO_EMAIL_FROM, ALKAO_PUBLIC_URL)
 npm run worker:cancellations  # finishes session cancellations and retries refunds (needs Stripe)
+npm run check:golive    # read-only go-live check: settings, database, and --url for the running service
 ```
 
 Operations app: open `http://localhost:8787/ops` and sign in with a Supabase account that has a
@@ -113,3 +114,4 @@ TAKATAK membership (set `SUPABASE_URL` and `SUPABASE_ANON_KEY`). See
 | Run 35 | Door sales: "Vente à la porte" opens the shop on the staff device, today's sessions only, card through Stripe (same commission), tickets on screen, next sale |
 | Run 36 | Promo codes per event: percentage or amount off before taxes (commission on the discounted subtotal), uses counted by the database, dates, on or off; shop field, staff screen, reports |
 | Run 37 | "Billet ouvert": an admission type whose date the buyer can change as often as needed, with the whole group, until a ticket has entered; a seat is always held; off by default per type |
+| Run 38 | `npm run check:golive`: one read-only go-live check of the settings, the database (migrations, RLS and grants, setup, workers) and the running service (HTTPS, Stripe mode and webhook, sign-in, a Brand's shop), in French, never printing a secret |
