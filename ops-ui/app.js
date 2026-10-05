@@ -378,10 +378,20 @@ function EventDetail({ api, base, eventId }) {
 
 // ── Orders ──────────────────────────────────────────────────────────────────
 function Orders({ api, base, prefix }) {
-  const [state] = useLoad(() => api(`${base}/orders?limit=100`), [base]);
-  if (state.loading) return html`<${Loading} />`;
-  if (state.error) return html`<${Failure} error=${state.error} />`;
+  // Run 14: find an order by reference, email or name (at the gate, on the phone).
+  const [query, setQuery] = useState("");
+  const [search, setSearch] = useState("");
+  const [state] = useLoad(() => api(`${base}/orders?limit=100${search ? `&q=${encodeURIComponent(search)}` : ""}`), [base, search]);
+  const form = html`<form class="inline card" role="search" onSubmit=${(e) => { e.preventDefault(); setSearch(query.trim().length >= 2 ? query.trim() : ""); }}>
+      <label>Rechercher (référence, courriel ou nom)<input type="search" value=${query} onInput=${(e) => setQuery(e.target.value)} /></label>
+      <button type="submit">Rechercher</button>
+      ${search && html`<button type="button" class="secondary" onClick=${() => { setQuery(""); setSearch(""); }}>Tout afficher</button>`}
+    </form>`;
+  if (state.loading) return html`<h1>Commandes</h1>${form}<${Loading} />`;
+  if (state.error) return html`<h1>Commandes</h1>${form}<${Failure} error=${state.error} />`;
   return html`<h1>Commandes</h1>
+    ${form}
+    ${state.data.orders.length === 0 && html`<p class="muted">Aucune commande trouvée.</p>`}
     <table><thead><tr><th>Référence</th><th>Acheteur</th><th>Statut</th><th class="num">Total</th><th class="num">Remboursé</th><th>Payée le</th></tr></thead>
       <tbody>${state.data.orders.map((o) => html`<tr>
         <td><a href=${`#${prefix}/order/${o.id}`}>${o.reference}</a></td><td>${o.buyerName ?? ""} <span class="muted">${o.buyerEmail}</span></td>
@@ -468,6 +478,7 @@ function Scanner({ api, base }) {
   const [error, setError] = useState(null);
   const [camera, setCamera] = useState(false);
   const [offline, setOffline] = useState(null);
+  const [attendance, setAttendance] = useState(null);
   const deviceId = (() => { let id = localStorage.getItem("alkao.ops.device"); if (!id) { id = `ops-${crypto.randomUUID().slice(0, 8)}`; localStorage.setItem("alkao.ops.device", id); } return id; })();
 
   useEffect(() => { if (eventId) api(`${base}/events/${eventId}/sessions`).then((r) => setSessions(r.sessions), setError); }, [eventId]);
@@ -503,12 +514,22 @@ function Scanner({ api, base }) {
     return () => clearInterval(t);
   }, [Boolean(offline), sessionId]);
 
+  // Run 14: live gate counter, refreshed every 10 s and after each scan (online only).
+  const refreshAttendance = () => { if (sessionId && !loadOffline(sessionId)) api(`${base}/sessions/${sessionId}/attendance`).then((r) => setAttendance(r.attendance), () => {}); };
+  useEffect(() => {
+    setAttendance(null);
+    if (!sessionId) return;
+    refreshAttendance();
+    const t = setInterval(refreshAttendance, 10_000);
+    return () => clearInterval(t);
+  }, [sessionId]);
+
   const submit = async (value) => {
     const code = (value ?? payload).trim(); if (!code || !sessionId) return;
     setError(null); setPayload("");
     const store = loadOffline(sessionId);
     if (store) { const r = await offlineScan(store, code); persist(store); setLast({ ...r, offline: true }); return; }
-    try { setLast((await api(`${base}/scanner/scans`, { method: "POST", body: { sessionId, payload: code, deviceId } })).scan); }
+    try { setLast((await api(`${base}/scanner/scans`, { method: "POST", body: { sessionId, payload: code, deviceId } })).scan); refreshAttendance(); }
     catch (err) { setError(err); }
   };
 
@@ -538,6 +559,8 @@ function Scanner({ api, base }) {
         <option value="">—</option>${sessions.map((s) => html`<option value=${s.id}>${when(s.startsAt)}</option>`)}</select></label>
       ${manifest && html`<span class="muted">Portes : ${when(manifest.session.admission.opensAt)} → ${when(manifest.session.admission.closesAt)} · ${manifest.credentials.length} à entrer · ${manifest.admitted.length} entrés</span>`}
     </div>
+    ${attendance && html`<div class="card row" role="status" aria-label="Entrées">
+      <strong class="big">${attendance.admitted} / ${attendance.valid}</strong><span class="muted">entrés · ${Math.max(attendance.valid - attendance.admitted, 0)} attendus · capacité ${attendance.capacity}</span></div>`}
     ${sessionId && html`<div class="card row" aria-label="Mode hors ligne">
       ${offline ? html`<span class="badge warn">Hors ligne</span>
           <span class="muted">Liste du ${when(new Date(offline.downloadedAt).toISOString())} · ${offline.manifest.credentials.length} billets</span>

@@ -58,3 +58,4 @@ a.link, button.link { background: none; border: 0; color: var(--brand); padding:
 .scan-result small { display: block; font-size: 1rem; font-weight: 500; margin-top: .4rem; }
 video.camera { width: 100%; max-width: 420px; border-radius: 12px; background: #000; }
 input.scan { font-size: 1.1rem; width: 100%; }
+.big { font-size: 1.6rem; font-variant-numeric: tabular-nums; }

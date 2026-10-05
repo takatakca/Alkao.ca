@@ -20,6 +20,7 @@ const app = createApp({
   opsUi: config.opsUi,
   publicUrl: config.publicUrl,
   trustedProxyHops: config.trustedProxyHops,
+  logRequests: process.env.ALKAO_LOG_REQUESTS !== "false",
 });
 
 serve({ fetch: app.fetch, port: config.port }, (info) => {

@@ -26,6 +26,7 @@ afterAll(async () => {
 // refund) checkouts opened while Ticketing was active.
 const UNGATED = new Set([
   "GET /health",
+  "GET /health/ready",
   "POST /v1/control/events",
   "POST /v1/control/state",
   "POST /v1/webhooks/stripe",

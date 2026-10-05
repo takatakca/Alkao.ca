@@ -13,6 +13,16 @@ ALKAO off again: `ALKAO_OPERATIONAL_API_ENABLED=false`, or stop the processes.
 | Processes | `npm start` (API, `/ops`, `/billets`, `/acheter`), `npm run worker:sweeper`, `npm run worker:email`, `npm run worker:cancellations` |
 | Public URL | HTTPS, e.g. `https://billets.example.ca`. Set it as `ALKAO_PUBLIC_URL` for both the server and the email worker |
 
+**Container image.** One image runs the API and every worker:
+
+- `docker build -t alkao .` builds it from the `Dockerfile`; only production dependencies
+  are installed, and it runs as the `node` user.
+- A `HEALTHCHECK` calls `/health/ready`.
+- The default command is the API. A worker uses the same image with
+  `node --import tsx scripts/<worker>.ts`.
+- `docker compose up` starts a local stack: PostgreSQL, migrations, the API and the sweeper.
+  `--profile workers` adds the email and cancellation workers.
+
 ## 2. Secrets
 
 Generate long random values, for example with `openssl rand -base64 48`.

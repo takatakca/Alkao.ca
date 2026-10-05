@@ -1,0 +1,68 @@
+# Local full stack for trying ALKAO end to end: docker compose up
+# Production uses a managed PostgreSQL (or a dedicated Supabase project) and real secrets.
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_PASSWORD: alkao-local-only
+      POSTGRES_DB: alkao
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d alkao"]
+      interval: 5s
+      retries: 20
+    volumes:
+      - alkao-db:/var/lib/postgresql/data
+
+  migrate:
+    build: .
+    depends_on:
+      db: { condition: service_healthy }
+    environment:
+      DATABASE_URL: postgres://postgres:alkao-local-only@db:5432/alkao
+    # Plain PostgreSQL needs the Supabase roles and auth.uid() first (see docs/ALKAO_GO_LIVE.md).
+    command: >
+      sh -c "node -e \"const {Client}=require('pg');const fs=require('fs');const c=new Client({connectionString:process.env.DATABASE_URL});c.connect().then(()=>c.query(fs.readFileSync('supabase/tests/supabase_shim.sql','utf8'))).then(()=>c.end())\"
+             && node --import tsx scripts/migrate.ts"
+    restart: "no"
+
+  api:
+    build: .
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://postgres:alkao-local-only@db:5432/alkao
+    ports: ["8787:8787"]
+
+  sweeper:
+    build: .
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://postgres:alkao-local-only@db:5432/alkao
+    command: ["node", "--import", "tsx", "scripts/sweeper.ts"]
+
+  # Need Resend (email) and Stripe (cancellations): docker compose --profile workers up
+  email:
+    build: .
+    profiles: ["workers"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://postgres:alkao-local-only@db:5432/alkao
+    command: ["node", "--import", "tsx", "scripts/email-worker.ts"]
+
+  cancellations:
+    build: .
+    profiles: ["workers"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://postgres:alkao-local-only@db:5432/alkao
+    command: ["node", "--import", "tsx", "scripts/cancellation-worker.ts"]
+
+volumes:
+  alkao-db:

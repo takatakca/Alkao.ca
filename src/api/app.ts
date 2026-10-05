@@ -55,6 +55,8 @@ export interface AppDeps {
   publicUrl?: string | null;
   /** Reverse proxies in front of ALKAO whose X-Forwarded-For entry is trusted (default 1). */
   trustedProxyHops?: number;
+  /** Log one line per request (route pattern, status, duration). */
+  logRequests?: boolean;
   now?: () => Date;
 }
 
@@ -84,6 +86,14 @@ export function createApp(deps: AppDeps) {
   const credentials = new CredentialsService({ db: deps.db, masterSecret: deps.credentialMasterSecret ?? null, now });
   const app = new Hono<Env>();
 
+  // Run 14: one JSON line per request, with the route pattern only (no ids, query or headers).
+  if (deps.logRequests) {
+    app.use("*", async (c, next) => {
+      const started = Date.now();
+      await next();
+      console.log(JSON.stringify({ t: new Date().toISOString(), method: c.req.method, route: c.req.routePath, status: c.res.status, ms: Date.now() - started }));
+    });
+  }
   app.onError((error, c) => errorResponse(c, error));
   app.notFound((c) => fail(c, 404, "not_found"));
 
@@ -181,6 +191,15 @@ export function createApp(deps: AppDeps) {
 
   // ── Health ───────────────────────────────────────────────────────────────
   app.get("/health", (c) => c.json({ ok: true, service: "alkao", api: API_VERSION, control: CONTROL_CONTRACT_VERSION }));
+  // Run 14: readiness for the load balancer — the database answers within 2 s.
+  app.get("/health/ready", async (c) => {
+    try {
+      await Promise.race([deps.db.query("SELECT 1"), new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 2000))]);
+      return c.json({ ok: true, database: "up" });
+    } catch {
+      return c.json({ ok: false, database: "down" }, 503);
+    }
+  });
 
   // ── Control contract (TAKATAK → ALKAO) ───────────────────────────────────
   /** HMAC-signed control request: the parsed JSON body and the key id, or an error response. */
@@ -477,8 +496,8 @@ export function createApp(deps: AppDeps) {
   });
 
   app.get(`${ADMIN}/orders`, ...admin, can("ticketing.orders.read"), async (c) => {
-    const q = api.ListQuery.parse(c.req.query());
-    return c.json({ orders: await catalog.listOrders(deps.db, c.get("scope"), q.limit, q.before) });
+    const q = api.OrdersQuery.parse(c.req.query());
+    return c.json({ orders: await catalog.listOrders(deps.db, c.get("scope"), q.limit, q.before, q.q) });
   });
 
   app.get(`${ADMIN}/orders/:orderId`, ...admin, can("ticketing.orders.read"), async (c) => {
@@ -661,6 +680,22 @@ export function createApp(deps: AppDeps) {
       c.get("userId"),
     );
     return c.json({ scans: results });
+  });
+
+  // Run 14: the gate's live counter (cheap: counts only).
+  app.get(`${ADMIN}/sessions/:sessionId/attendance`, ...admin, can("ticketing.scan"), async (c) => {
+    const sessionId = param(c, "sessionId");
+    const scope = c.get("scope");
+    if (!sessionId || !(await inScope("ticketing_sessions", sessionId, scope))) return fail(c, 404, "session_not_found");
+    const { rows } = await deps.db.query<{ capacity: number; valid: number; admitted: number }>(
+      `SELECT s.capacity,
+              (SELECT count(*)::int FROM public.ticketing_tickets t WHERE t.session_id = s.id AND t.client_id = s.client_id AND t.brand_id = s.brand_id AND t.status = 'valid') AS valid,
+              (SELECT count(DISTINCT x.ticket_id)::int FROM public.ticketing_scans x
+                 WHERE x.session_id = s.id AND x.client_id = s.client_id AND x.brand_id = s.brand_id AND x.result = 'admitted') AS admitted
+       FROM public.ticketing_sessions s WHERE s.id = $1 AND s.client_id = $2 AND s.brand_id = $3`,
+      [sessionId, scope.clientId, scope.brandId],
+    );
+    return c.json({ attendance: rows[0] });
   });
 
   app.get(`${ADMIN}/sessions/:sessionId/scans`, ...admin, can("ticketing.scan"), async (c) => {
