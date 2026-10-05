@@ -12,6 +12,9 @@ export const TICKETING_PERMISSIONS = [
   "ticketing.audit.read",
   "ticketing.payments.manage",
   "ticketing.refunds.create",
+  "ticketing.scan",
+  "ticketing.credentials.manage",
+  "ticketing.keys.manage",
 ] as const;
 export type TicketingPermission = (typeof TICKETING_PERMISSIONS)[number];
 
@@ -26,6 +29,8 @@ const MANAGE: TicketingPermission[] = [
   "ticketing.orders.read",
   "ticketing.buyers.read",
   "ticketing.refunds.create",
+  "ticketing.scan",
+  "ticketing.credentials.manage",
 ];
 
 /**
@@ -33,11 +38,12 @@ const MANAGE: TicketingPermission[] = [
  * refunds for owner/admin/manager; audit and the Client's Stripe account for owner/admin.
  */
 const ROLE_PERMISSIONS: Record<WorkspaceRole, ReadonlySet<TicketingPermission>> = {
-  owner: new Set<TicketingPermission>([...MANAGE, "ticketing.audit.read", "ticketing.payments.manage"]),
-  admin: new Set<TicketingPermission>([...MANAGE, "ticketing.audit.read", "ticketing.payments.manage"]),
+  owner: new Set<TicketingPermission>([...MANAGE, "ticketing.audit.read", "ticketing.payments.manage", "ticketing.keys.manage"]),
+  admin: new Set<TicketingPermission>([...MANAGE, "ticketing.audit.read", "ticketing.payments.manage", "ticketing.keys.manage"]),
   manager: new Set<TicketingPermission>(MANAGE),
   editor: new Set<TicketingPermission>([...READ_CATALOG, "ticketing.catalog.write"]),
-  staff: new Set<TicketingPermission>(READ_CATALOG),
+  // Gate staff scan tickets; they never see buyer data.
+  staff: new Set<TicketingPermission>([...READ_CATALOG, "ticketing.scan"]),
   viewer: new Set<TicketingPermission>(READ_CATALOG),
 };
 

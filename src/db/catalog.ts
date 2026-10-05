@@ -19,7 +19,8 @@ export function toApi<T extends Row>(row: T): Row {
 }
 
 const VENUE_COLUMNS = "id, name, address_line1, city, region, postal_code, country, timezone, tax_region, created_at, updated_at";
-const EVENT_COLUMNS = "id, venue_id, slug, title, description, status, sales_open_at, sales_close_at, created_at, updated_at";
+const EVENT_COLUMNS =
+  "id, venue_id, slug, title, description, status, sales_open_at, sales_close_at, admission_opens_before_minutes, admission_closes_after_minutes, created_at, updated_at";
 const SESSION_COLUMNS = "id, event_id, starts_at, ends_at, capacity, reserved_count, sold_count, status, created_at, updated_at";
 const TYPE_COLUMNS =
   "id, event_id, code, name, description, kind, price_cents, min_quantity, max_quantity, max_adults_in_order, counts_as_adult, add_on_scope, active, sort_order, created_at, updated_at";
@@ -88,13 +89,17 @@ export const getEvent = (q: Queryable, s: TenantScope, eventId: string) =>
 
 export function createEvent(q: Queryable, s: TenantScope, e: {
   venueId: string; slug: string; title: string; description?: string | null; salesOpenAt?: string | null; salesCloseAt?: string | null;
+  admissionOpensBeforeMinutes?: number | undefined; admissionClosesAfterMinutes?: number | undefined;
 }) {
   return mapDbErrors(() =>
     one(
       q,
-      `INSERT INTO public.ticketing_events (client_id, brand_id, venue_id, slug, title, description, sales_open_at, sales_close_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING ${EVENT_COLUMNS}`,
-      [s.clientId, s.brandId, e.venueId, e.slug, e.title, e.description ?? null, e.salesOpenAt ?? null, e.salesCloseAt ?? null],
+      `INSERT INTO public.ticketing_events
+         (client_id, brand_id, venue_id, slug, title, description, sales_open_at, sales_close_at,
+          admission_opens_before_minutes, admission_closes_after_minutes)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, coalesce($9, 60), coalesce($10, 120)) RETURNING ${EVENT_COLUMNS}`,
+      [s.clientId, s.brandId, e.venueId, e.slug, e.title, e.description ?? null, e.salesOpenAt ?? null, e.salesCloseAt ?? null,
+        e.admissionOpensBeforeMinutes ?? null, e.admissionClosesAfterMinutes ?? null],
       "event_not_found",
     ),
   );
@@ -103,6 +108,7 @@ export function createEvent(q: Queryable, s: TenantScope, e: {
 export function updateEvent(q: Queryable, s: TenantScope, eventId: string, fields: Record<string, unknown>) {
   const set = updateSet(fields, {
     title: "title", description: "description", status: "status", salesOpenAt: "sales_open_at", salesCloseAt: "sales_close_at",
+    admissionOpensBeforeMinutes: "admission_opens_before_minutes", admissionClosesAfterMinutes: "admission_closes_after_minutes",
   }, 4);
   return mapDbErrors(() =>
     one(q, `UPDATE public.ticketing_events SET ${set.sql} WHERE id = $1 AND client_id = $2 AND brand_id = $3 RETURNING ${EVENT_COLUMNS}`,

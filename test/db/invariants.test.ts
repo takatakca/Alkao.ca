@@ -233,7 +233,7 @@ describe("tenant integrity", () => {
     // account per Client) and provider/control inboxes.
     const clientLevel = new Set([
       "ticketing_clients", "ticketing_brands", "ticketing_memberships", "ticketing_control_events", "ticketing_audit_log",
-      "ticketing_payment_accounts", "ticketing_payment_events",
+      "ticketing_payment_accounts", "ticketing_payment_events", "ticketing_credential_keys",
     ]);
     const { rows } = await db.pool.query<{ table_name: string; column_name: string; is_nullable: string }>(
       `SELECT table_name, column_name, is_nullable FROM information_schema.columns

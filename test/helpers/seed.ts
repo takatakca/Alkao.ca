@@ -4,6 +4,8 @@ import { withTransaction, type Db } from "../../src/db/pool.js";
 import { applyRefund, buildQuote, computeCommission } from "../../src/domain/index.js";
 import { insertPayment, insertPaymentAccount, insertRefund, markPaymentPaid, setCheckoutReturnOrigins } from "../../src/db/payments.js";
 import type { TicketTypeRule } from "../../src/domain/catalog.js";
+import { insertScan } from "../../src/db/credentials.js";
+import { CredentialsService } from "../../src/scanner/service.js";
 import { FESTI_ICE_TYPES } from "../fixtures/festi-ice.js";
 
 export interface TenantFixture {
@@ -50,6 +52,8 @@ export async function seedTwoTenants(db: Db): Promise<SeedResult> {
   const festi = await seedTenant(db, "FESTI-ICE", "FESTI-ICE", 300);
   await seedPaymentLedger(db, havana);
   await seedPaymentLedger(db, festi);
+  await seedGateActivity(db, havana, users.havanaStaff);
+  await seedGateActivity(db, festi, users.festiOwner);
 
   await db.query(
     `INSERT INTO public.ticketing_memberships (client_id, user_id, role, status) VALUES
@@ -205,5 +209,21 @@ export async function seedPaymentLedger(db: Db, t: TenantFixture): Promise<void>
       [order.id, outcome.refundedAfterCents, outcome.commissionRefundedAfterCents],
     );
     await tx.query(`UPDATE public.ticketing_refunds SET status = 'succeeded', stripe_refund_id = $2 WHERE id = $1`, [refund.id, `re_seed${randomUUID().replaceAll("-", "").slice(0, 16)}`]);
+  });
+}
+
+export const TEST_CREDENTIAL_SECRET = "test-only-credential-master-secret-0123456789";
+
+/** A signing key and one logged scan per tenant (credentials come from the ticket trigger). */
+export async function seedGateActivity(db: Db, t: TenantFixture, scannedBy: string): Promise<void> {
+  await new CredentialsService({ db, masterSecret: TEST_CREDENTIAL_SECRET, now: () => new Date() }).ensureActiveKey(t.clientId);
+  const { rows } = await db.query<{ id: string; ticket_id: string }>(
+    `SELECT id, ticket_id FROM public.ticketing_credentials WHERE ticket_id = $1`,
+    [t.ticketIds[0]],
+  );
+  await insertScan(db, {
+    clientId: t.clientId, brandId: t.brandId, eventId: t.eventId, sessionId: t.sessionId,
+    credentialId: rows[0]!.id, ticketId: rows[0]!.ticket_id, result: "too_early",
+    deviceId: "seed-gate", scannedBy, scannedAt: new Date(), offline: false,
   });
 }

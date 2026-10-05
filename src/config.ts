@@ -20,6 +20,8 @@ const EnvSchema = z.object({
   STRIPE_WEBHOOK_SECRET: z.string().regex(/^whsec_/).optional(),
   ALKAO_STRIPE_ONBOARDING_REFRESH_URL: z.url({ protocol: /^https$/ }).optional(),
   ALKAO_STRIPE_ONBOARDING_RETURN_URL: z.url({ protocol: /^https$/ }).optional(),
+  /** Secret from which each Client's Ed25519 credential keys are derived (Run 03). Never stored. */
+  ALKAO_CREDENTIAL_MASTER_SECRET: z.string().min(32).optional(),
   ALKAO_HOLD_TTL_SECONDS: z.coerce.number().int().min(60).max(1800).default(600),
   ALKAO_PUBLIC_HOLDS_PER_MINUTE: z.coerce.number().int().min(1).max(1000).default(20),
   PORT: z.coerce.number().int().min(1).max(65535).default(8787),
@@ -34,6 +36,7 @@ export interface Config {
   publicHoldsPerMinute: number;
   stripe: { secretKey: string; webhookSecret: string } | null;
   onboarding: { refreshUrl: string; returnUrl: string } | null;
+  credentialMasterSecret: string | null;
   port: number;
 }
 
@@ -69,6 +72,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       e.ALKAO_STRIPE_ONBOARDING_REFRESH_URL && e.ALKAO_STRIPE_ONBOARDING_RETURN_URL
         ? { refreshUrl: e.ALKAO_STRIPE_ONBOARDING_REFRESH_URL, returnUrl: e.ALKAO_STRIPE_ONBOARDING_RETURN_URL }
         : null,
+    credentialMasterSecret: e.ALKAO_CREDENTIAL_MASTER_SECRET ?? null,
     port: e.PORT,
   };
 }

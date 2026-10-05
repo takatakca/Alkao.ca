@@ -40,6 +40,10 @@ const TRIGGER_CODES = new Set([
   "refund_fields_immutable",
   "refund_invalid_transition",
   "order_refund_ledger_mismatch",
+  "credential_key_immutable",
+  "credential_key_invalid_transition",
+  "credential_fields_immutable",
+  "credential_revocation_is_final",
 ]);
 
 /** Translate a PostgreSQL error into a DomainError, or return null if it is not one of ours. */
