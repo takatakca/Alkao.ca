@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import { writeAudit } from "../db/catalog.js";
 import type { TenantScope } from "../db/commerce.js";
 import * as creds from "../db/credentials.js";
-import { withTransaction, type Db } from "../db/pool.js";
+import { withTransaction, type Db, type Tx } from "../db/pool.js";
 import { derivePrivateKey, publicKeyB64, signMessage, verifyMessage } from "../credentials/keys.js";
 import { buildPayload, parsePayload, signedPart, uuidToB64 } from "../credentials/payload.js";
 import { DomainError } from "../domain/errors.js";
@@ -41,6 +41,8 @@ export interface ScanInput {
   scannedAt?: Date | undefined;
   offline: boolean;
 }
+
+type ScanLog = (result: ScanResult, credentialId?: string | null, ticketId?: string | null) => Promise<void>;
 
 const newKid = () => `k${BigInt(`0x${randomBytes(8).toString("hex")}`).toString(36).padStart(10, "0").slice(-10)}`;
 
@@ -195,32 +197,101 @@ export class CredentialsService {
         await log("unknown_credential");
         return { result: "unknown_credential" };
       }
-      const ticket = { id: credential.ticketId, ticketTypeCode: credential.ticketTypeCode, ticketTypeName: credential.ticketTypeName };
-      const base = { credentialId: credential.id, ticket };
-      const decide = async (result: ScanResult, extra: Partial<ScanOutcome> = {}): Promise<ScanOutcome> => {
-        await log(result, credential.id, credential.ticketId);
-        return { result, ...base, ...extra };
-      };
+      return this.decide(tx, session, credential, at, log);
+    });
+  }
 
-      if (credential.status === "revoked") return decide("revoked");
-      if (credential.sessionId !== session.id) return decide("wrong_session", { ticketSession: { id: credential.sessionId } });
+  /** The gate's rules, once the credential is known: one admission, this session, door hours. */
+  private async decide(tx: Tx, session: creds.GateSession, credential: creds.CredentialRow, at: Date, log: ScanLog): Promise<ScanOutcome> {
+    const ticket = { id: credential.ticketId, ticketTypeCode: credential.ticketTypeCode, ticketTypeName: credential.ticketTypeName };
+    const base = { credentialId: credential.id, ticket };
+    const decide = async (result: ScanResult, extra: Partial<ScanOutcome> = {}): Promise<ScanOutcome> => {
+      await log(result, credential.id, credential.ticketId);
+      return { result, ...base, ...extra };
+    };
 
-      const previous = await creds.findAdmission(tx, credential.ticketId);
-      if (previous) return decide("already_admitted", { admittedAt: previous.scannedAt, admittedBy: previous.deviceId });
-      if (at < session.opensAt) return decide("too_early");
-      if (at > session.closesAt) return decide("too_late");
+    if (credential.status === "revoked") return decide("revoked");
+    if (credential.sessionId !== session.id) return decide("wrong_session", { ticketSession: { id: credential.sessionId } });
 
-      await tx.query("SAVEPOINT admit");
-      try {
-        await log("admitted", credential.id, credential.ticketId);
-        await tx.query("RELEASE SAVEPOINT admit");
-        return { result: "admitted", ...base, admittedAt: at };
-      } catch (error) {
-        await tx.query("ROLLBACK TO SAVEPOINT admit");
-        if ((error as { constraint?: string }).constraint !== "ticketing_scans_one_admission") throw error;
-        const winner = await creds.findAdmission(tx, credential.ticketId);
-        return decide("already_admitted", { admittedAt: winner?.scannedAt, admittedBy: winner?.deviceId ?? null });
+    const previous = await creds.findAdmission(tx, credential.ticketId);
+    if (previous) return decide("already_admitted", { admittedAt: previous.scannedAt, admittedBy: previous.deviceId });
+    if (at < session.opensAt) return decide("too_early");
+    if (at > session.closesAt) return decide("too_late");
+
+    await tx.query("SAVEPOINT admit");
+    try {
+      await log("admitted", credential.id, credential.ticketId);
+      await tx.query("RELEASE SAVEPOINT admit");
+      return { result: "admitted", ...base, admittedAt: at };
+    } catch (error) {
+      await tx.query("ROLLBACK TO SAVEPOINT admit");
+      if ((error as { constraint?: string }).constraint !== "ticketing_scans_one_admission") throw error;
+      const winner = await creds.findAdmission(tx, credential.ticketId);
+      return decide("already_admitted", { admittedAt: winner?.scannedAt, admittedBy: winner?.deviceId ?? null });
+    }
+  }
+
+  /**
+   * Run 22: the tickets of an order found by its reference at the gate (phone dead, code
+   * unreadable). Only what the gate needs: ticket type, status, entry time, and which other
+   * sessions the order holds tickets for. The buyer's name only for roles that read buyers.
+   */
+  async lookupByReference(scope: TenantScope, sessionId: string, reference: string, withBuyer: boolean) {
+    const session = await creds.getGateSession(this.deps.db, scope, sessionId);
+    if (!session) throw new DomainError("session_not_found");
+    const { rows: orders } = await this.deps.db.query<{ id: string; reference: string; buyer_name: string | null }>(
+      `SELECT o.id, o.reference, b.full_name AS buyer_name FROM public.ticketing_orders o
+       JOIN public.ticketing_buyers b ON b.id = o.buyer_id AND b.client_id = o.client_id AND b.brand_id = o.brand_id
+       WHERE o.reference = upper($1) AND o.client_id = $2 AND o.brand_id = $3`,
+      [reference.trim(), scope.clientId, scope.brandId],
+    );
+    const order = orders[0];
+    if (!order) throw new DomainError("order_not_found");
+    // The order's own tickets and, after a Flex change, those of its exchange order.
+    const { rows } = await this.deps.db.query<{ id: string; session_id: string; starts_at: Date; status: string; name: string; admitted_at: Date | null }>(
+      `SELECT k.id, k.session_id, se.starts_at, k.status, tt.name,
+              (SELECT sc.scanned_at FROM public.ticketing_scans sc WHERE sc.ticket_id = k.id AND sc.result = 'admitted') AS admitted_at
+       FROM public.ticketing_tickets k
+       JOIN public.ticketing_sessions se ON se.id = k.session_id AND se.client_id = k.client_id AND se.brand_id = k.brand_id
+       JOIN public.ticketing_ticket_types tt ON tt.id = k.ticket_type_id AND tt.client_id = k.client_id AND tt.brand_id = k.brand_id
+       WHERE k.client_id = $2 AND k.brand_id = $3
+         AND (k.order_id = $1 OR k.order_id IN (SELECT id FROM public.ticketing_orders WHERE exchange_of_order_id = $1))
+       ORDER BY tt.sort_order, k.created_at, k.id`,
+      [order.id, scope.clientId, scope.brandId],
+    );
+    const here = rows.filter((r) => r.session_id === session.id);
+    const elsewhere = [...new Map(rows.filter((r) => r.session_id !== session.id && r.status === "valid").map((r) => [r.session_id, r.starts_at])).values()];
+    return {
+      reference: order.reference,
+      ...(withBuyer ? { buyerName: order.buyer_name } : {}),
+      tickets: here.map((r) => ({ id: r.id, ticketTypeName: r.name, status: r.status, admittedAt: r.admitted_at })),
+      otherSessions: elsewhere.sort((a, b) => a.getTime() - b.getTime()).map((startsAt) => ({ startsAt })),
+    };
+  }
+
+  /**
+   * Run 22: let a ticket in without its QR code, after staff found it by order reference.
+   * The same rules as a scan, logged as a scan from this device, and in the audit log.
+   */
+  async admitManually(scope: TenantScope, input: { sessionId: string; ticketId: string; deviceId: string | null }, scannedBy: string): Promise<ScanOutcome> {
+    const session = await creds.getGateSession(this.deps.db, scope, input.sessionId);
+    if (!session) throw new DomainError("session_not_found");
+    const at = this.deps.now();
+    return withTransaction(this.deps.db, async (tx) => {
+      const credential = await creds.credentialForTicket(tx, scope, input.ticketId);
+      if (!credential) throw new DomainError("ticket_not_found");
+      const log: ScanLog = (result, credentialId = null, ticketId = null) =>
+        creds.insertScan(tx, {
+          ...scope, eventId: session.eventId, sessionId: session.id, credentialId, ticketId, result,
+          deviceId: input.deviceId, scannedBy, scannedAt: at, offline: false,
+        });
+      const outcome = await this.decide(tx, session, credential, at, log);
+      if (outcome.result === "admitted") {
+        await writeAudit(tx, scope, { type: "user", id: scannedBy }, "scan.manual_admission", { type: "ticket", id: input.ticketId }, {
+          sessionId: session.id, deviceId: input.deviceId,
+        });
       }
+      return outcome;
     });
   }
 

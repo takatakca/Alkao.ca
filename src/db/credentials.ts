@@ -66,7 +66,7 @@ export interface CredentialRow {
   ticketTypeName: string;
 }
 
-export async function getCredential(q: Queryable, s: TenantScope, credentialId: string): Promise<CredentialRow | null> {
+async function oneCredential(q: Queryable, s: TenantScope, where: string, id: string): Promise<CredentialRow | null> {
   const { rows } = await q.query<{
     id: string; ticket_id: string; session_id: string; event_id: string; status: CredentialRow["status"]; revoke_reason: string | null; code: string; name: string;
   }>(
@@ -74,14 +74,21 @@ export async function getCredential(q: Queryable, s: TenantScope, credentialId: 
      FROM public.ticketing_credentials c
      JOIN public.ticketing_tickets t ON t.id = c.ticket_id AND t.client_id = c.client_id AND t.brand_id = c.brand_id
      JOIN public.ticketing_ticket_types tt ON tt.id = t.ticket_type_id AND tt.client_id = t.client_id AND tt.brand_id = t.brand_id
-     WHERE c.id = $1 AND c.client_id = $2 AND c.brand_id = $3`,
-    [credentialId, s.clientId, s.brandId],
+     WHERE ${where} AND c.client_id = $2 AND c.brand_id = $3
+     ORDER BY (c.status = 'active') DESC, c.created_at DESC
+     LIMIT 1`,
+    [id, s.clientId, s.brandId],
   );
   const r = rows[0];
   return r
     ? { id: r.id, ticketId: r.ticket_id, sessionId: r.session_id, eventId: r.event_id, status: r.status, revokeReason: r.revoke_reason, ticketTypeCode: r.code, ticketTypeName: r.name }
     : null;
 }
+
+export const getCredential = (q: Queryable, s: TenantScope, credentialId: string) => oneCredential(q, s, "c.id = $1", credentialId);
+
+/** Run 22: a ticket's current credential (the active one, else its latest revoked one). */
+export const credentialForTicket = (q: Queryable, s: TenantScope, ticketId: string) => oneCredential(q, s, "c.ticket_id = $1", ticketId);
 
 /** Active credential per valid ticket of an order. */
 export async function activeCredentialsForOrder(q: Queryable, s: TenantScope, orderId: string): Promise<Map<string, string>> {

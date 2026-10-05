@@ -14,7 +14,7 @@ TAKATAK V1 dashboard (menu "ALKAO — Billetterie"), with no second login. See
 | Événements | Create, publish or unpublish; sessions (create, put on sale or pause, capacity); ticket types, including Flex add-ons; attendees CSV per session | editor (read: everyone) |
 | Lieux | Venues | editor |
 | Commandes | List, detail (lines, TPS/TVQ, tickets and when each entered), full or partial refund (with ticket voiding, automatic retry), Flex session change, QR reissue. A Stripe dispute or a refund made directly in Stripe shows as a notice on the order (Run 19). On a buyer's request (Law 25): export their data; anonymize them (owner, admin) (Run 20). Cancel checked tickets without a refund (Run 21) | manager |
-| Scanner | Event and session, gate window, keyboard-wedge scanner or typed code, camera (BarcodeDetector) when the browser supports it; big, colour-coded results; **offline mode** for gates with a weak network (signature checked on the device, scans synced later, double entries reported) | staff |
+| Scanner | Event and session, gate window, keyboard-wedge scanner or typed code, camera (BarcodeDetector) when the browser supports it; big, colour-coded results; **offline mode** for gates with a weak network (signature checked on the device, scans synced later, double entries reported); **without a QR code**: find the order by its reference and let a ticket in, same rules as a scan (Run 22) | staff |
 | Paiements | Stripe account status, onboarding, sites allowed after payment | owner, admin |
 
 The app shows exactly what the API allows. Permissions, Client isolation and the Ticketing

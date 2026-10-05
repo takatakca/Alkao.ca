@@ -172,6 +172,32 @@ describe("ALKAO Operations app", () => {
     await page.getByRole("status").getByText("DÉJÀ ENTRÉ").waitFor();
   });
 
+  it("lets a ticket in without its QR code, found by the order reference (Run 22)", async () => {
+    const t = seed.havana;
+    const { rows } = await db.pool.query<{ id: string }>(
+      `INSERT INTO public.ticketing_sessions (client_id, brand_id, event_id, starts_at, capacity, status)
+       VALUES ($1, $2, $3, now() + interval '20 minutes', 20, 'on_sale') RETURNING id`,
+      [t.clientId, t.brandId, t.eventId],
+    );
+    const sessionId = rows[0]!.id;
+    const order = await seedPaidOrder(db.pool, { ...t, sessionId }, "sans-qr@example.com");
+    const { rows: o } = await db.pool.query<{ reference: string }>(`SELECT reference FROM public.ticketing_orders WHERE id = $1`, [order.orderId]);
+
+    const page = await signedIn(seed.users.havanaStaff);
+    await page.goto(`${origin}/ops#${brandPath()}/scanner`);
+    await page.getByLabel("Événement").selectOption({ label: "Havana Resort — Événements 2026-2027" });
+    await page.locator(`option[value="${sessionId}"]`).waitFor({ state: "attached" });
+    await page.getByLabel("Séance").selectOption(sessionId);
+    await page.getByLabel("Sans code QR : référence de la commande").fill(o[0]!.reference.toLowerCase());
+    await page.getByRole("button", { name: "Chercher" }).click();
+    const found = page.getByLabel("Commande trouvée");
+    await found.getByText(o[0]!.reference).waitFor();
+    expect(await found.textContent()).not.toContain("sans-qr@example.com");
+    await found.getByRole("button", { name: "Faire entrer" }).first().click();
+    await page.getByRole("status").getByText("ENTRÉE ACCEPTÉE").waitFor();
+    await found.getByText("Entré le", { exact: false }).first().waitFor();
+  });
+
   it("finds an order by its reference or the buyer's email", async () => {
     const { rows } = await db.pool.query<{ reference: string; email: string }>(
       `SELECT o.reference, b.email FROM public.ticketing_orders o JOIN public.ticketing_buyers b ON b.id = o.buyer_id WHERE o.id = $1`,
