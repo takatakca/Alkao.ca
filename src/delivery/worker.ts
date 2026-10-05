@@ -1,7 +1,7 @@
 import { withTransaction, type Db } from "../db/pool.js";
 import { EmailSendError, type EmailMessage, type EmailSender } from "./email.js";
-import { emailLinkToken, ticketsUrl, tokenHash } from "./links.js";
-import { sessionCancelledEmail, ticketsEmail } from "./templates.js";
+import { orderEmailToken, ticketsUrl } from "./links.js";
+import { refundEmail, sessionCancelledEmail, ticketsEmail } from "./templates.js";
 
 export interface DeliveryConfig {
   sender: EmailSender;
@@ -27,7 +27,7 @@ interface DueRow {
   client_id: string;
   brand_id: string;
   order_id: string;
-  kind: "order_tickets" | "exchange_tickets" | "session_cancelled";
+  kind: "order_tickets" | "exchange_tickets" | "session_cancelled" | "refund";
   attempts: number;
   created_at: Date;
   reference: string;
@@ -42,6 +42,9 @@ interface DueRow {
   timezone: string;
   valid_tickets: number;
   cancel_refund_cents: number;
+  refund_amount_cents: number | null;
+  refund_reason: string | null;
+  refund_voided: number | null;
 }
 
 /**
@@ -63,8 +66,10 @@ export async function deliverTicketEmails(db: Db, cfg: DeliveryConfig, now = new
                   WHERE t.order_id = o.id AND t.client_id = o.client_id AND t.brand_id = o.brand_id AND t.status = 'valid') AS valid_tickets,
                 coalesce((SELECT i.amount_cents FROM public.ticketing_session_cancellation_orders i
                   WHERE i.order_id = coalesce(o.exchange_of_order_id, o.id) AND i.client_id = o.client_id AND i.brand_id = o.brand_id
-                  ORDER BY i.created_at DESC LIMIT 1), 0)::int AS cancel_refund_cents
+                  ORDER BY i.created_at DESC LIMIT 1), 0)::int AS cancel_refund_cents,
+                r.amount_cents AS refund_amount_cents, r.reason AS refund_reason, cardinality(r.void_ticket_ids) AS refund_voided
          FROM public.ticketing_email_outbox x
+         LEFT JOIN public.ticketing_refunds r ON r.id = x.refund_id AND r.client_id = x.client_id AND r.brand_id = x.brand_id
          JOIN public.ticketing_orders o ON o.id = x.order_id AND o.client_id = x.client_id AND o.brand_id = x.brand_id
          JOIN public.ticketing_buyers b ON b.id = o.buyer_id AND b.client_id = o.client_id AND b.brand_id = o.brand_id
          JOIN public.ticketing_brands br ON br.id = x.brand_id AND br.client_id = x.client_id
@@ -111,15 +116,20 @@ export async function deliverTicketEmails(db: Db, cfg: DeliveryConfig, now = new
           startsAt: row.starts_at, venueName: row.venue_name, city: row.city, timezone: row.timezone, refundedCents: row.cancel_refund_cents,
         }));
       }
+      const personalLink = async () => {
+        const scope = { clientId: row.client_id, brandId: row.brand_id };
+        const token = await orderEmailToken(tx, cfg.credentialMasterSecret, scope, row.order_id);
+        return ticketsUrl(cfg.publicUrl, { ...scope, orderId: row.order_id, token });
+      };
+      if (row.kind === "refund") {
+        return send(refundEmail({
+          brandName: row.brand_name, buyerName: row.full_name, reference: row.reference, eventTitle: row.event_title,
+          amountCents: row.refund_amount_cents ?? 0, reason: row.refund_reason, voidedTickets: row.refund_voided ?? 0,
+          validTickets: row.valid_tickets, link: row.valid_tickets > 0 ? await personalLink() : null,
+        }));
+      }
       if (!["paid", "partially_refunded"].includes(row.order_status) || row.valid_tickets === 0) return skip("no_valid_ticket");
-
-      const token = emailLinkToken(cfg.credentialMasterSecret, row.id);
-      await tx.query(
-        `INSERT INTO public.ticketing_access_tokens (token_hash, client_id, brand_id, subject_type, subject_id, purpose)
-         VALUES ($1, $2, $3, 'order', $4, 'email')
-         ON CONFLICT (subject_type, subject_id, purpose) DO UPDATE SET token_hash = EXCLUDED.token_hash`,
-        [tokenHash(token), row.client_id, row.brand_id, row.order_id],
-      );
+      const link = await personalLink();
       const content = ticketsEmail({
         kind: row.kind,
         brandName: row.brand_name,
@@ -131,7 +141,7 @@ export async function deliverTicketEmails(db: Db, cfg: DeliveryConfig, now = new
         city: row.city,
         timezone: row.timezone,
         validTickets: row.valid_tickets,
-        link: ticketsUrl(cfg.publicUrl, { clientId: row.client_id, brandId: row.brand_id, orderId: row.order_id, token }),
+        link,
       });
       return send(content);
     });

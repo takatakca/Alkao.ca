@@ -276,15 +276,21 @@ function EventDetail({ api, base, eventId }) {
   const [error, setError] = useState(null);
   const [sess, setSess] = useState({ startsAt: "", capacity: 100 });
   const [tt, setTt] = useState({ code: "", name: "", price: "", maxQuantity: 10, minQuantity: 0, kind: "admission", countsAsAdult: true, grantsSessionChange: false });
+  const [cancelling, setCancelling] = useState(null);
+  const [copied, setCopied] = useState(false);
   const act = (fn) => async (e) => { e?.preventDefault?.(); setError(null); try { await fn(); } catch (err) { setError(err); } };
 
   if (ev.loading) return html`<${Loading} />`;
   if (ev.error) return html`<${Failure} error=${ev.error} />`;
   const event = ev.data.event;
+  // Run 12: where this event is sold.
+  const [, , clientId, , brandId] = base.split("/").slice(2);
+  const shopUrl = `${location.origin}/acheter/${clientId}/${brandId}/${eventId}`;
+  const widgetCode = `<script src="${location.origin}/widget.js" data-client="${clientId}" data-brand="${brandId}" data-event="${eventId}" data-label="Acheter des billets" async></script>`;
+  const copyWidget = () => navigator.clipboard?.writeText(widgetCode).then(() => setCopied(true), () => setCopied(false));
   const setEventStatus = (status) => act(async () => { await api(`${base}/events/${eventId}`, { method: "PATCH", body: { status } }); reloadEvent(); });
   const setSessionStatus = (id, status) => act(async () => { await api(`${base}/sessions/${id}`, { method: "PATCH", body: { status } }); reloadSessions(); });
   // Run 10: cancel a session and refund every buyer, batch after batch, showing progress.
-  const [cancelling, setCancelling] = useState(null);
   const cancelSession = (s) => act(async () => {
     const reason = prompt(`Annuler la séance du ${when(s.startsAt)} ?\n${s.soldCount} billet(s) vendus : chaque acheteur sera remboursé en entier (commission TAKATAK comprise) et prévenu par courriel.\n\nMotif (facultatif) :`, "");
     if (reason === null) return;
@@ -321,6 +327,13 @@ function EventDetail({ api, base, eventId }) {
       ${event.status !== "published" && html`<button onClick=${setEventStatus("published")}>Publier</button>`}
       ${event.status === "published" && html`<button class="secondary" onClick=${setEventStatus("draft")}>Retirer de la vente publique</button>`}
       <span class="muted">Portes : ${event.admissionOpensBeforeMinutes} min avant · ${event.admissionClosesAfterMinutes} min après</span>
+    </div>
+
+    <h2>Vendre en ligne</h2>
+    <div class="card">
+      <p>Lien de la billetterie : <a href=${shopUrl} target="_blank" rel="noopener">${shopUrl}</a></p>
+      <label>Bouton pour votre site (copiez ce code dans la page)<textarea rows="3" readonly onFocus=${(e) => e.target.select()}>${widgetCode}</textarea></label>
+      <div class="row"><button class="secondary" onClick=${copyWidget}>Copier le code</button>${copied && html`<span class="badge ok">Copié</span>`}</div>
     </div>
 
     <h2>Séances</h2>

@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { EmailSendError, ResendEmailSender, type EmailMessage, type EmailSender } from "../../src/delivery/email.js";
 import { emailLinkToken } from "../../src/delivery/links.js";
-import { ticketsEmail } from "../../src/delivery/templates.js";
+import { refundEmail, ticketsEmail } from "../../src/delivery/templates.js";
 import { deliverTicketEmails } from "../../src/delivery/worker.js";
 import { adm, call, pub, testApp, tokenFor, type TestApp } from "../helpers/app.js";
 import { createTestDatabase, type TestDatabase } from "../helpers/db.js";
@@ -179,11 +179,13 @@ describe("tickets email", () => {
     expect(m.text).toContain("vendredi 15 janvier 2027");
   });
 
-  it("derives a stable link token per email, unrelated to the QR keys", () => {
-    const id = randomUUID();
-    expect(emailLinkToken(TEST_CREDENTIAL_SECRET, id)).toBe(emailLinkToken(TEST_CREDENTIAL_SECRET, id));
-    expect(emailLinkToken(TEST_CREDENTIAL_SECRET, id)).not.toBe(emailLinkToken(TEST_CREDENTIAL_SECRET, randomUUID()));
-    expect(emailLinkToken(TEST_CREDENTIAL_SECRET, id)).toMatch(/^[A-Za-z0-9_-]{43}$/);
+  it("derives one link token per order and nonce, unrelated to the QR keys", () => {
+    const order = randomUUID();
+    const nonce = Buffer.alloc(16, 7);
+    expect(emailLinkToken(TEST_CREDENTIAL_SECRET, order, nonce)).toBe(emailLinkToken(TEST_CREDENTIAL_SECRET, order, Buffer.alloc(16, 7)));
+    expect(emailLinkToken(TEST_CREDENTIAL_SECRET, order, nonce)).not.toBe(emailLinkToken(TEST_CREDENTIAL_SECRET, order, Buffer.alloc(16, 8)));
+    expect(emailLinkToken(TEST_CREDENTIAL_SECRET, order, nonce)).not.toBe(emailLinkToken(TEST_CREDENTIAL_SECRET, randomUUID(), nonce));
+    expect(emailLinkToken(TEST_CREDENTIAL_SECRET, order, nonce)).toMatch(/^[A-Za-z0-9_-]{43}$/);
   });
 
   it("is queued for the new tickets after a Flex Météo change", async () => {
@@ -272,5 +274,70 @@ describe("Resend sender", () => {
     expect((await err(fakeFetch(429, {}))).retryable).toBe(true);
     expect((await err(fakeFetch(422, { name: "validation_error" }))).retryable).toBe(false);
     expect((await err((async () => { throw new TypeError("fetch failed"); }) as typeof fetch)).retryable).toBe(true);
+  });
+});
+
+describe("refund emails and personal links (Run 12)", () => {
+  it("tells the buyer about each refund and keeps the same personal link", async () => {
+    const f = seed.festi;
+    const o = await buy(f, { GENERAL: 2 });
+    await deliver();
+    const first = linkOf(sender.sent.at(-1)!);
+    const owner = await tokenFor(seed.users.festiOwner);
+    const detail = await call(app, "GET", `${adm(f.clientId, f.brandId)}/orders/${o.orderId}`, { token: owner });
+    const ticket = detail.body.order.tickets[0].id;
+    const refund = await call(app, "POST", `${adm(f.clientId, f.brandId)}/orders/${o.orderId}/refunds`, { token: owner, body: { amountCents: 1500, ticketIds: [ticket] } });
+    expect(refund.status).toBe(201);
+
+    expect(await deliver()).toMatchObject({ sent: 1 });
+    const m = sender.sent.at(-1)!;
+    expect(m.subject).toMatch(/^Remboursement de 15,00\s\$ — /);
+    expect(m.text).toContain("1 billet annulé.");
+    expect(m.text).toContain("Vos 1 autre billet reste valide");
+    expect(linkOf(m).k).toBe(first.k); // one link per order: the first email still works
+    const viaFirst = await call(app, "GET", `${pub(f.clientId, f.brandId)}/orders/${o.orderId}`, { headers: { "x-alkao-order-token": first.k } });
+    expect(viaFirst.status).toBe(200);
+  });
+
+  it("explains a payment that arrived after the seats were gone", () => {
+    const m = refundEmail({
+      brandName: "FESTI-ICE", buyerName: null, reference: "R-9", eventTitle: "Patin de nuit", amountCents: 4599,
+      reason: "capacity_unavailable", voidedTickets: 0, validTickets: 0, link: null,
+    });
+    expect(m.text).toContain("Les places n'étaient plus disponibles");
+    expect(m.text).toContain("45,99");
+    expect(m.html).not.toContain("Afficher mes billets");
+  });
+
+  it("does not send a refund email for a session cancellation (it has its own)", async () => {
+    const f = seed.festi;
+    const o = await buy(f, { GENERAL: 1 });
+    await deliver();
+    const { rows } = await db.pool.query(`SELECT id FROM public.ticketing_refunds WHERE order_id = $1`, [o.orderId]);
+    expect(rows).toEqual([]);
+    const owner = await tokenFor(seed.users.festiOwner);
+    const { rows: s } = await db.pool.query(`SELECT session_id FROM public.ticketing_orders WHERE id = $1`, [o.orderId]);
+    await call(app, "POST", `${adm(f.clientId, f.brandId)}/sessions/${s[0].session_id}/cancel`, { token: owner, body: {} });
+    expect((await outbox(o.orderId)).map((r: { kind: string }) => r.kind).sort()).toEqual(["order_tickets", "session_cancelled"]);
+  });
+
+  it("lets staff kill a leaked link and send a new one", async () => {
+    const f = seed.festi;
+    const o = await buy(f, { GENERAL: 1 });
+    await deliver();
+    const leaked = linkOf(sender.sent.at(-1)!);
+    const owner = await tokenFor(seed.users.festiOwner);
+    const rotated = await call(app, "POST", `${adm(f.clientId, f.brandId)}/orders/${o.orderId}/tickets-link/rotate`, { token: owner });
+    expect(rotated.status).toBe(202);
+    const dead = await call(app, "GET", `${pub(f.clientId, f.brandId)}/orders/${o.orderId}`, { headers: { "x-alkao-order-token": leaked.k } });
+    expect(dead.status).toBe(404);
+    expect(await deliver()).toMatchObject({ sent: 1 });
+    const fresh = linkOf(sender.sent.at(-1)!);
+    expect(fresh.k).not.toBe(leaked.k);
+    expect((await call(app, "GET", `${pub(f.clientId, f.brandId)}/orders/${o.orderId}`, { headers: { "x-alkao-order-token": fresh.k } })).status).toBe(200);
+    // The checkout token is a separate link and keeps working.
+    expect((await call(app, "GET", `${pub(f.clientId, f.brandId)}/orders/${o.orderId}`, { headers: { "x-alkao-order-token": o.token } })).status).toBe(200);
+    const staff = await tokenFor(seed.users.havanaStaff);
+    expect((await call(app, "POST", `${adm(f.clientId, f.brandId)}/orders/${o.orderId}/tickets-link/rotate`, { token: staff })).status).toBe(404);
   });
 });

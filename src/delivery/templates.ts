@@ -99,3 +99,43 @@ export function sessionCancelledEmail(d: SessionCancelledEmailData): Omit<EmailM
 </td></tr></table></body></html>`;
   return { fromName: d.brandName, subject, text, html };
 }
+
+export interface RefundEmailData {
+  brandName: string;
+  buyerName: string | null;
+  reference: string;
+  eventTitle: string;
+  amountCents: number;
+  /** capacity_unavailable: paid after the seats were gone. */
+  reason: string | null;
+  voidedTickets: number;
+  validTickets: number;
+  /** The buyer's tickets page, when some tickets are still valid. */
+  link: string | null;
+}
+
+/** "Remboursement" (Run 12): sent for every succeeded refund, except session cancellations. */
+export function refundEmail(d: RefundEmailData): Omit<EmailMessage, "to" | "idempotencyKey"> {
+  const hello = d.buyerName ? `Bonjour ${d.buyerName},` : "Bonjour,";
+  const lateSeats = d.reason === "capacity_unavailable";
+  const what = lateSeats
+    ? `Les places n'étaient plus disponibles au moment où votre paiement a été confirmé pour ${d.eventTitle}. Vous êtes remboursé en entier : ${cad(d.amountCents)}.`
+    : `${d.brandName} vous a remboursé ${cad(d.amountCents)} pour votre commande ${d.reference} (${d.eventTitle}).`;
+  const delay = "Le remboursement apparaît habituellement sur la carte utilisée d'ici 5 à 10 jours ouvrables.";
+  const tickets = d.voidedTickets > 0 ? `${d.voidedTickets} billet${d.voidedTickets > 1 ? "s" : ""} annulé${d.voidedTickets > 1 ? "s" : ""}.` : "";
+  const still = d.validTickets > 0 && d.link ? `Vos ${d.validTickets} autre${d.validTickets > 1 ? "s" : ""} billet${d.validTickets > 1 ? "s restent valides" : " reste valide"} : ${d.link}` : "";
+  const subject = `Remboursement de ${cad(d.amountCents)} — ${d.eventTitle} (${d.reference})`;
+  const text = [hello, "", what, delay, ...(tickets ? ["", tickets] : []), ...(still ? ["", still] : []), "", `${d.brandName} · Billetterie ALKAO`].join("\n");
+  const html = `<!doctype html><html lang="fr"><body style="margin:0;background:#f5f5f4;font-family:Arial,Helvetica,sans-serif;color:#1c1917">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:24px 12px">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:12px;padding:28px">
+<tr><td style="font-size:13px;color:#57534e;padding-bottom:12px">${esc(d.brandName)}</td></tr>
+<tr><td style="font-size:22px;font-weight:bold;padding-bottom:16px">Remboursement de ${esc(cad(d.amountCents))}</td></tr>
+<tr><td style="font-size:15px;line-height:1.5;padding-bottom:16px">${esc(hello)}<br>${esc(what)}</td></tr>
+<tr><td style="font-size:14px;line-height:1.6;padding:12px 16px;background:#fafaf9;border-radius:8px">${esc(delay)}${tickets ? `<br>${esc(tickets)}` : ""}<br><span style="color:#57534e">Commande ${esc(d.reference)}</span></td></tr>
+${still ? `<tr><td align="center" style="padding:24px 0"><a href="${esc(d.link!)}" style="display:inline-block;background:#1c1917;color:#ffffff;text-decoration:none;font-weight:bold;padding:14px 24px;border-radius:8px">Afficher mes billets</a></td></tr>` : ""}
+</table>
+<p style="font-size:12px;color:#78716c">Billetterie ALKAO</p>
+</td></tr></table></body></html>`;
+  return { fromName: d.brandName, subject, text, html };
+}

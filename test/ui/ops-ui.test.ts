@@ -102,7 +102,7 @@ describe("ALKAO Operations app", () => {
     await page.getByRole("button", { name: "Mettre en vente" }).click();
     await page.getByRole("button", { name: "Pause" }).waitFor();
 
-    await page.getByLabel("Code").fill("ADULTE");
+    await page.getByLabel("Code", { exact: true }).fill("ADULTE");
     await page.getByLabel("Nom", { exact: true }).fill("Adulte");
     await page.getByLabel("Prix ($)").fill("24,95");
     await page.getByRole("button", { name: "Ajouter", exact: true }).click();
@@ -257,6 +257,16 @@ describe("ALKAO Operations app", () => {
     expect(await page.getByText("1 gratuite(s) annulée(s)", { exact: false }).isVisible()).toBe(true);
     const { rows: after } = await db.pool.query(`SELECT status FROM public.ticketing_sessions WHERE id = $1`, [sessionId]);
     expect(after).toEqual([{ status: "cancelled" }]);
+  });
+
+  it("gives the shop link and the website button code for an event", async () => {
+    const t = seed.havana;
+    const page = await signedIn(seed.users.havanaOwner);
+    await page.goto(`${origin}/ops#${brandPath()}/event/${t.eventId}`);
+    await page.getByRole("heading", { name: "Vendre en ligne" }).waitFor();
+    expect(await page.getByRole("link", { name: `${origin}/acheter/${t.clientId}/${t.brandId}/${t.eventId}` }).isVisible()).toBe(true);
+    const code = await page.getByLabel("Bouton pour votre site (copiez ce code dans la page)").inputValue();
+    expect(code).toBe(`<script src="${origin}/widget.js" data-client="${t.clientId}" data-brand="${t.brandId}" data-event="${t.eventId}" data-label="Acheter des billets" async></script>`);
   });
 
   it("hides money from gate staff", async () => {

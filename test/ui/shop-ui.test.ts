@@ -183,6 +183,27 @@ describe("hosted ticket shop", () => {
     expect((await attempt(`${PUBLIC_URL}/acheter/merci/${f.clientId}/${f.brandId}/${hold.body.hold.id}`)).status).toBe(201);
   });
 
+  it("puts a buy button on a Brand's own website", async () => {
+    const f = seed.festi;
+    const res = await fetch(`${origin}/widget.js`);
+    expect(res.headers.get("content-type")).toContain("text/javascript");
+    expect(res.headers.get("cross-origin-resource-policy")).toBe("cross-origin");
+    const page = await (await browser.newContext({ locale: "fr-CA" })).newPage();
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    await page.setContent(`<!doctype html><title>festi-ice.ca</title><main>
+      <p>Billets en vente</p>
+      <script src="${origin}/widget.js" data-client="${f.clientId}" data-brand="${f.brandId}" data-event="${f.eventId}" data-label="Réserver ma place"></script>
+      <script src="${origin}/widget.js" data-client="festi" data-brand="${f.brandId}"></script>
+    </main>`);
+    const button = page.getByRole("link", { name: "Réserver ma place" });
+    await button.waitFor();
+    expect(await button.getAttribute("href")).toBe(`${origin}/acheter/${f.clientId}/${f.brandId}/${f.eventId}`);
+    expect(await page.locator("a.alkao-buy").count()).toBe(1); // the malformed tag adds nothing
+    await button.click();
+    await page.waitForURL(`${origin}/acheter/${f.clientId}/${f.brandId}/${f.eventId}`);
+    await page.getByRole("heading", { level: 1 }).waitFor();
+  });
+
   it("ran without script errors", () => {
     expect(pageErrors).toEqual([]);
   });
