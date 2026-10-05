@@ -25,6 +25,7 @@ import * as credentialsDb from "../db/credentials.js";
 import { CredentialsService } from "../scanner/service.js";
 import { toCsv } from "../ops/csv.js";
 import * as attention from "../ops/attention.js";
+import * as reminders from "../delivery/reminders.js";
 import * as privacy from "../ops/privacy.js";
 import * as reports from "../ops/reports.js";
 import { exchangeOrder } from "../ops/exchange.js";
@@ -518,6 +519,21 @@ export function createApp(deps: AppDeps) {
     // made directly in Stripe. Run 20: whether the buyer was anonymized.
     const tickets = (order.tickets as { id: string }[]).map((t) => ({ ...t, admittedAt: admissions.get(t.id) ?? null }));
     return c.json({ order: { ...order, tickets, emails, disputes, outsideRefundCents: outsideRefund.outsideCents, buyerAnonymizedAt } });
+  });
+
+  // ── Run 23: the reminder email before the session, on or off per Brand ────────
+  app.get(`${ADMIN}/settings/reminders`, ...admin, can("ticketing.credentials.manage"), async (c) =>
+    c.json({ reminders: { enabled: await reminders.getReminderSetting(deps.db, c.get("scope")) } }),
+  );
+
+  app.put(`${ADMIN}/settings/reminders`, ...admin, can("ticketing.credentials.manage"), async (c) => {
+    const body = api.ReminderSettings.parse(await readJson(c));
+    const enabled = await withTransaction(deps.db, async (tx) => {
+      const saved = await reminders.setReminderSetting(tx, c.get("scope"), body.enabled);
+      await catalog.writeAudit(tx, c.get("scope"), actor(c), "settings.reminders_updated", { type: "brand_settings", id: null }, { enabled: saved });
+      return saved;
+    });
+    return c.json({ reminders: { enabled } });
   });
 
   // ── Run 21: what waits on staff, and tickets cancelled without a refund ───────

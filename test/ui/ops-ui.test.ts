@@ -356,6 +356,20 @@ describe("ALKAO Operations app", () => {
     expect(await page.getByText("loi25@example.com").count()).toBe(0);
   });
 
+  it("turns the reminder email off and on from the dashboard (Run 23)", async () => {
+    const f = seed.festi;
+    const page = await signedIn(seed.users.festiOwner);
+    await page.goto(`${origin}/ops#/c/${f.clientId}/b/${f.brandId}/dashboard`);
+    await page.getByRole("heading", { name: "Courriels aux acheteurs" }).waitFor();
+    await page.getByText("activé", { exact: true }).waitFor();
+    await page.getByRole("button", { name: "Désactiver" }).click();
+    await page.getByText("désactivé", { exact: true }).waitFor();
+    const { rows } = await db.pool.query(`SELECT reminder_emails FROM public.ticketing_brand_settings WHERE client_id = $1 AND brand_id = $2`, [f.clientId, f.brandId]);
+    expect(rows).toEqual([{ reminder_emails: false }]);
+    await page.getByRole("button", { name: "Activer" }).click();
+    await page.getByText("activé", { exact: true }).waitFor();
+  });
+
   it("hides money from gate staff", async () => {
     const page = await signedIn(seed.users.havanaStaff);
     await page.goto(`${origin}/ops#${brandPath()}/dashboard`);

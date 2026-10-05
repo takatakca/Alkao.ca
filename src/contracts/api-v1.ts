@@ -211,6 +211,9 @@ export const OrdersQuery = z.object({
   q: z.string().trim().min(2).max(120).optional(),
 });
 
+// ── Run 23: reminder email before the session ──────────────────────────────
+export const ReminderSettings = z.object({ enabled: z.boolean() });
+
 // ── Run 21: cancel tickets without a refund ────────────────────────────────
 export const VoidTicketsRequest = z.object({
   ticketIds: z.array(z.uuid()).min(1).max(1000),

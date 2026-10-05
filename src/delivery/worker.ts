@@ -1,7 +1,8 @@
 import { withTransaction, type Db } from "../db/pool.js";
 import { EmailSendError, type EmailMessage, type EmailSender } from "./email.js";
 import { orderEmailToken, ticketsUrl } from "./links.js";
-import { refundEmail, sessionCancelledEmail, ticketsEmail } from "./templates.js";
+import { queueReminders } from "./reminders.js";
+import { refundEmail, reminderEmail, sessionCancelledEmail, ticketsEmail } from "./templates.js";
 
 export interface DeliveryConfig {
   sender: EmailSender;
@@ -27,7 +28,7 @@ interface DueRow {
   client_id: string;
   brand_id: string;
   order_id: string;
-  kind: "order_tickets" | "exchange_tickets" | "session_cancelled" | "refund";
+  kind: "order_tickets" | "exchange_tickets" | "session_cancelled" | "refund" | "reminder";
   attempts: number;
   created_at: Date;
   reference: string;
@@ -44,6 +45,7 @@ interface DueRow {
   valid_tickets: number;
   cancel_refund_cents: number;
   buyer_anonymized: boolean;
+  session_status: string;
   refund_amount_cents: number | null;
   refund_reason: string | null;
   refund_voided: number | null;
@@ -70,7 +72,8 @@ export async function deliverTicketEmails(db: Db, cfg: DeliveryConfig, now = new
                   WHERE i.order_id = coalesce(o.exchange_of_order_id, o.id) AND i.client_id = o.client_id AND i.brand_id = o.brand_id
                   ORDER BY i.created_at DESC LIMIT 1), 0)::int AS cancel_refund_cents,
                 r.amount_cents AS refund_amount_cents, r.reason AS refund_reason, cardinality(r.void_ticket_ids) AS refund_voided,
-                EXISTS (SELECT 1 FROM public.ticketing_buyer_erasures be WHERE be.buyer_id = b.id) AS buyer_anonymized
+                EXISTS (SELECT 1 FROM public.ticketing_buyer_erasures be WHERE be.buyer_id = b.id) AS buyer_anonymized,
+                s.status AS session_status
          FROM public.ticketing_email_outbox x
          LEFT JOIN public.ticketing_refunds r ON r.id = x.refund_id AND r.client_id = x.client_id AND r.brand_id = x.brand_id
          JOIN public.ticketing_orders o ON o.id = x.order_id AND o.client_id = x.client_id AND o.brand_id = x.brand_id
@@ -134,6 +137,16 @@ export async function deliverTicketEmails(db: Db, cfg: DeliveryConfig, now = new
         }));
       }
       if (!["paid", "partially_refunded"].includes(row.order_status) || row.valid_tickets === 0) return skip("no_valid_ticket");
+      if (row.kind === "reminder") {
+        // Run 23: too late once the session has started, pointless if it was cancelled.
+        if (row.session_status === "cancelled") return skip("session_cancelled");
+        if (row.starts_at.getTime() <= now.getTime()) return skip("session_started");
+        return send(reminderEmail({
+          language: row.language, brandName: row.brand_name, buyerName: row.full_name, reference: row.reference, eventTitle: row.event_title,
+          startsAt: row.starts_at, venueName: row.venue_name, city: row.city, timezone: row.timezone, validTickets: row.valid_tickets,
+          link: await personalLink(),
+        }));
+      }
       const link = await personalLink();
       const content = ticketsEmail({
         kind: row.kind,
@@ -164,6 +177,8 @@ export function startEmailWorker(db: Db, cfg: DeliveryConfig, intervalMs: number
     if (running) return;
     running = true;
     try {
+      const queued = await queueReminders(db);
+      if (queued > 0) log(`alkao email: ${queued} reminder(s) queued`);
       const r = await deliverTicketEmails(db, cfg);
       if (r.sent + r.skipped + r.retried + r.failed > 0) log(`alkao email: ${JSON.stringify(r)}`);
     } catch (error) {
