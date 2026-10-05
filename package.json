@@ -15,7 +15,9 @@
     "test": "vitest run",
     "test:domain": "vitest run test/domain",
     "test:db": "vitest run test/db",
-    "qa": "npm run typecheck && npm run check:migrations && npm test"
+    "qa": "npm run typecheck && npm run check:migrations && npm test",
+    "start": "tsx src/server.ts",
+    "contracts:generate": "tsx scripts/generate-contracts.ts"
   },
   "dependencies": {
     "@hono/node-server": "^2.1.3",

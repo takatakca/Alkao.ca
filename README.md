@@ -13,7 +13,7 @@ versioned control contract.
 
 - Node 22 and TypeScript (strict)
 - PostgreSQL with Supabase-compatible RLS; SQL migrations in `supabase/migrations`
-- `pg`, Zod, Hono (API, PR 3)
+- Hono HTTP API (`alkao.api.v1`), `pg`, Zod, `jose` (Supabase Auth tokens)
 - Vitest, tested against local ephemeral PostgreSQL only
 
 ## Layout
@@ -21,11 +21,14 @@ versioned control contract.
 | Path | Contents |
 |---|---|
 | `src/domain` | Pure rules: money, Québec taxes, cart rules, quotes, commission and refund policy, state machines, entitlement gate, role permissions |
-| `src/db` | Pool, transactions, migration runner, inventory and order primitives |
+| `src/db` | Pool, transactions, migration runner, inventory/order primitives, catalog, control-contract projections |
+| `src/contracts` | API v1 request schemas and the `alkao.control.v1` contract |
+| `src/api` | Hono app: public, admin and control routes, gates, auth, signatures |
+| `contracts/` | Published JSON Schema of `alkao.control.v1` (generated; drift-tested) |
 | `supabase/migrations` | Schema. Every `ticketing_*` table enables RLS in the migration that creates it |
 | `supabase/tests/supabase_shim.sql` | Local test stand-in for Supabase roles, `auth.uid()` and default grants |
 | `test/` | Domain, RLS, invariant and migration-rule tests |
-| `docs/` | Capability status and architecture decisions |
+| `docs/` | Capability status, [API v1](docs/ALKAO_API_V1.md), [control contract v1](docs/ALKAO_CONTROL_CONTRACT_V1.md) |
 
 ## Run the checks
 
@@ -34,6 +37,13 @@ npm ci
 npm run db:local:start   # ephemeral PostgreSQL on 127.0.0.1:54329
 npm run qa               # typecheck + static migration RLS rules + all tests
 npm run db:local:stop
+```
+
+Run the server (it starts **disabled**: `ALKAO_OPERATIONAL_API_ENABLED=false`):
+
+```bash
+cp .env.example .env    # then fill DATABASE_URL, auth and control keys
+npm start
 ```
 
 ## Security rules (frozen)

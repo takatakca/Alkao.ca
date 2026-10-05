@@ -55,11 +55,21 @@ export async function createTestDatabase(): Promise<TestDatabase> {
     url: url.toString(),
     pool,
     async drop() {
+      // pool.end() resolves before its sockets close; wait for the backends to go away
+      // instead of killing them (a killed, closing client raises an unhandled error).
       await pool.end();
       const a = new pg.Client({ connectionString: ADMIN_URL });
       await a.connect();
       try {
-        await a.query(`DROP DATABASE IF EXISTS ${name} WITH (FORCE)`);
+        for (let attempt = 0; ; attempt++) {
+          try {
+            await a.query(attempt < 50 ? `DROP DATABASE IF EXISTS ${name}` : `DROP DATABASE IF EXISTS ${name} WITH (FORCE)`);
+            break;
+          } catch (error) {
+            if ((error as { code?: string }).code !== "55006" || attempt >= 50) throw error;
+            await new Promise((r) => setTimeout(r, 20));
+          }
+        }
       } finally {
         await a.end();
       }
