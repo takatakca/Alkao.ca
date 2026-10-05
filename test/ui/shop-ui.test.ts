@@ -204,6 +204,48 @@ describe("hosted ticket shop", () => {
     await page.getByRole("heading", { level: 1 }).waitFor();
   });
 
+  it("serves English buyers in English, from the shop to their tickets (Run 16)", async () => {
+    const h = seed.havana;
+    const s = await session(h, 25);
+    const context = await browser.newContext({ locale: "en-US" });
+    const page = await context.newPage();
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    await page.goto(`${origin}/acheter/${h.clientId}/${h.brandId}/${h.eventId}`);
+    await page.getByRole("heading", { name: "1. Choose your session" }).waitFor();
+    const label = new Intl.DateTimeFormat("en-CA", { dateStyle: "full", timeStyle: "short", timeZone: "America/Toronto" }).format(
+      (await db.pool.query(`SELECT starts_at FROM public.ticketing_sessions WHERE id = $1`, [s.id])).rows[0].starts_at,
+    );
+    await page.getByRole("button", { name: new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")) }).click();
+    const toddler = h.types.find((x) => x.code === "TODDLER")!;
+    await page.getByRole("button", { name: `Add ${toddler.name}`, exact: true }).click();
+    await page.getByRole("cell", { name: "Total" }).waitFor();
+    await page.getByRole("button", { name: "Continue" }).click();
+    await page.getByLabel("Email (your tickets will be sent there)").fill("tourist@example.com");
+    await page.getByLabel("Full name").fill("Sam Tourist");
+    await page.getByRole("button", { name: "Get my tickets" }).click();
+    await page.waitForURL(/\/billets#/);
+    await page.getByText("Show each ticket's QR code at the entrance", { exact: false }).waitFor();
+    expect(await page.getByRole("img", { name: /^QR code of ticket / }).count()).toBe(1);
+    const { rows } = await db.pool.query(`SELECT language FROM public.ticketing_buyers WHERE email = 'tourist@example.com'`);
+    expect(rows).toEqual([{ language: "en" }]);
+
+    // The switch goes back to French, and ?lang= wins over the browser.
+    await page.getByRole("button", { name: "Français" }).click();
+    await page.getByText("Présentez le code QR de chaque billet", { exact: false }).waitFor();
+    const forced = await context.newPage();
+    await forced.goto(`${origin}/acheter/${h.clientId}/${h.brandId}/${h.eventId}?lang=en`);
+    await forced.getByRole("heading", { name: "1. Choose your session" }).waitFor();
+  });
+
+  it("puts an English buy button on a Brand's site with data-lang", async () => {
+    const f = seed.festi;
+    const page = await (await browser.newContext({ locale: "fr-CA" })).newPage();
+    await page.setContent(`<!doctype html><script src="${origin}/widget.js" data-client="${f.clientId}" data-brand="${f.brandId}" data-lang="en"></script>`);
+    const button = page.getByRole("link", { name: "Buy tickets" });
+    await button.waitFor();
+    expect(await button.getAttribute("href")).toBe(`${origin}/acheter/${f.clientId}/${f.brandId}?lang=en`);
+  });
+
   it("ran without script errors", () => {
     expect(pageErrors).toEqual([]);
   });
