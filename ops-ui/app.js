@@ -44,6 +44,28 @@ const SCAN_FR = {
   malformed: ["bad", "CODE ILLISIBLE"],
 };
 
+// Run 33: the gate hears and feels the answer, with eyes on the line rather than the screen.
+// One short high beep when the ticket is let in; two low beeps for anything else.
+let audio = null;
+function gateSignal(tone) {
+  const ok = tone === "ok";
+  try { navigator.vibrate?.(ok ? 80 : [120, 80, 120]); } catch {}
+  try {
+    audio ??= new AudioContext();
+    void audio.resume?.();
+    for (const at of ok ? [0] : [0, 0.25]) {
+      const osc = audio.createOscillator();
+      const gain = audio.createGain();
+      osc.type = "sine"; osc.frequency.value = ok ? 880 : 220; gain.gain.value = 0.25;
+      osc.connect(gain).connect(audio.destination);
+      const t = audio.currentTime + at;
+      osc.start(t); osc.stop(t + (ok ? 0.12 : 0.18));
+    }
+  } catch {}
+}
+const SOUND_KEY = "alkao.ops.gate-sound";
+const soundWanted = () => { try { return localStorage.getItem(SOUND_KEY) !== "off"; } catch { return true; } };
+
 // ── Session (Supabase Auth) ─────────────────────────────────────────────────
 // Embedded in the TAKATAK dashboard, the session lives in memory only and comes from the
 // parent page (see embedBridge); standalone, it lives in sessionStorage.
@@ -763,6 +785,8 @@ function Scanner({ api, base }) {
   const [attendance, setAttendance] = useState(null);
   const [reference, setReference] = useState("");
   const [found, setFound] = useState(null);
+  const [sound, setSound] = useState(soundWanted);
+  const toggleSound = (on) => { setSound(on); try { localStorage.setItem(SOUND_KEY, on ? "on" : "off"); } catch {} };
   const deviceId = (() => { let id = localStorage.getItem("alkao.ops.device"); if (!id) { id = `ops-${crypto.randomUUID().slice(0, 8)}`; localStorage.setItem("alkao.ops.device", id); } return id; })();
 
   useEffect(() => { if (eventId) api(`${base}/events/${eventId}/sessions`).then((r) => setSessions(r.sessions), setError); }, [eventId]);
@@ -848,6 +872,7 @@ function Scanner({ api, base }) {
   }, [camera, sessionId]);
 
   const [tone, label] = last ? SCAN_FR[last.result] ?? ["bad", last.result] : [];
+  useEffect(() => { if (last && sound) gateSignal(tone); }, [last]);
   return html`<h1>Scanner</h1>
     ${error && html`<${Failure} error=${error} />`}
     <div class="inline card row">
@@ -874,6 +899,7 @@ function Scanner({ api, base }) {
         <div class="row">
           <button type="submit">Valider</button>
           ${"BarcodeDetector" in window && html`<button type="button" class="secondary" onClick=${() => setCamera(!camera)}>${camera ? "Arrêter la caméra" : "Utiliser la caméra"}</button>`}
+          <label class="check"><input type="checkbox" checked=${sound} onChange=${(e) => toggleSound(e.target.checked)} /> Son et vibration</label>
         </div>
         ${camera && html`<video class="camera" muted playsinline></video>`}
       </form>
