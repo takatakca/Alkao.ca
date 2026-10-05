@@ -287,7 +287,9 @@ function Dashboard({ api, base, prefix }) {
     <div class="grid">
       ${[["Commandes", totals.orders, false], ["Ventes brutes", totals.grossCents, true], ["Taxes (TPS + TVQ)", totals.taxCents, true],
          ["Remboursé", totals.refundedCents, true], ["Commission TAKATAK", totals.commissionCents - totals.commissionRefundedCents, true],
-         ["Net client (avant frais Stripe)", totals.netToClientCents, true]]
+         ["Net client (avant frais Stripe)", totals.netToClientCents, true],
+         // Run 36: shown once a promo code has been used in the period.
+         ...(Number(totals.discountCents) > 0 ? [["Rabais (codes promo)", totals.discountCents, true]] : [])]
         .map(([label, v, isMoney]) => html`<div class="kpi"><div class="label">${label}</div><div class="value">${isMoney ? money(v) : v}</div></div>`)}
     </div>
     <h2>Séances</h2>
@@ -450,6 +452,42 @@ function SessionBatch({ api, base, eventId, onDone }) {
   </form>`;
 }
 
+// Run 36: promo codes for one event (a percentage or an amount off, before taxes).
+function PromoCodes({ api, base, eventId }) {
+  const [state, reload] = useLoad(() => api(`${base}/events/${eventId}/promo-codes`), [base, eventId]);
+  const [f, setF] = useState({ code: "", kind: "percent", value: "", maxUses: "", endsAt: "" });
+  const [error, setError] = useState(null);
+  const act = (fn) => async (e) => { e?.preventDefault?.(); setError(null); try { await fn(); reload(); } catch (err) { setError(err); } };
+  const create = act(async () => {
+    const value = Number(f.value.replace(",", "."));
+    await api(`${base}/events/${eventId}/promo-codes`, { method: "POST", body: {
+      code: f.code.trim().toUpperCase(), kind: f.kind,
+      ...(f.kind === "percent" ? { percent: Math.round(value) } : { amountCents: Math.round(value * 100) }),
+      maxUses: f.maxUses === "" ? null : Number(f.maxUses),
+      endsAt: f.endsAt ? new Date(f.endsAt).toISOString() : null,
+    } });
+    setF({ code: "", kind: f.kind, value: "", maxUses: "", endsAt: "" });
+  });
+  const toggle = (p) => act(() => api(`${base}/promo-codes/${p.id}`, { method: "PATCH", body: { active: !p.active } }));
+  const list = state.data?.promoCodes ?? [];
+  return html`<h2>Codes promo</h2>
+    ${error && html`<${Failure} error=${error} />`}
+    <form class="inline card" aria-label="Nouveau code promo" onSubmit=${create}>
+      <label>Code promo<input required pattern="[A-Za-z0-9-]{3,32}" value=${f.code} onInput=${(e) => setF({ ...f, code: e.target.value })} /></label>
+      <label>Type de rabais<select value=${f.kind} onChange=${(e) => setF({ ...f, kind: e.target.value })}><option value="percent">Pourcentage</option><option value="amount">Montant</option></select></label>
+      <label>${f.kind === "percent" ? "Rabais (%)" : "Rabais ($)"}<input required inputmode="decimal" value=${f.value} onInput=${(e) => setF({ ...f, value: e.target.value })} /></label>
+      <label>Utilisations max. (facultatif)<input type="number" min="1" value=${f.maxUses} onInput=${(e) => setF({ ...f, maxUses: e.target.value })} /></label>
+      <label>Fin (facultatif)<input type="datetime-local" value=${f.endsAt} onInput=${(e) => setF({ ...f, endsAt: e.target.value })} /></label>
+      <button type="submit">Créer le code</button>
+    </form>
+    <p class="muted">Le rabais s'applique avant les taxes ; la commission TAKATAK est calculée sur le montant réduit.</p>
+    ${state.loading ? html`<${Loading} />` : list.length === 0 ? html`<p class="muted">Aucun code.</p>` : html`<table><thead><tr><th>Code</th><th>Rabais</th><th class="num">Utilisé</th><th>Fin</th><th>Statut</th><th></th></tr></thead>
+      <tbody>${list.map((p) => html`<tr><td><code>${p.code}</code></td><td>${p.kind === "percent" ? `${p.percent} %` : money(p.amountCents)}</td>
+        <td class="num">${p.usedCount}${p.maxUses ? ` / ${p.maxUses}` : ""}</td><td>${p.endsAt ? when(p.endsAt) : "—"}</td>
+        <td><span class="badge ${p.active ? "ok" : "bad"}">${p.active ? "Actif" : "Désactivé"}</span></td>
+        <td><button class="secondary" onClick=${toggle(p)}>${p.active ? "Désactiver" : "Réactiver"}</button></td></tr>`)}</tbody></table>`}`;
+}
+
 function EventDetail({ api, base, eventId }) {
   const [ev, reloadEvent] = useLoad(() => api(`${base}/events/${eventId}`), [base, eventId]);
   const [sessions, reloadSessions] = useLoad(() => api(`${base}/events/${eventId}/sessions`), [base, eventId]);
@@ -564,6 +602,8 @@ function EventDetail({ api, base, eventId }) {
       ${cancelling.orders.failed > 0 && html`<div class="alert warn">${cancelling.orders.failed} remboursement(s) en échec : ${cancelling.failures.map((f) => f.reference).join(", ")}. Réessayez plus tard depuis la commande.</div>`}
     </div>`}
 
+    <${PromoCodes} api=${api} base=${base} eventId=${eventId} />
+
     <h2>Types de billets</h2>
     <form class="inline card" onSubmit=${addType}>
       <label>Code<input required pattern="[A-Za-z0-9_]{1,40}" value=${tt.code} onInput=${(e) => setTt({ ...tt, code: e.target.value })} /></label>
@@ -662,7 +702,7 @@ function OrderDetail({ api, base, orderId, role, me }) {
     ${o.outsideRefundCents > 0 && html`<div class="alert warn">Remboursé directement dans Stripe, hors ALKAO : <strong>${money(o.outsideRefundCents)}</strong>.
       ALKAO n'a annulé aucun billet et ses rapports ne comptent pas ce montant.</div>`}
     <div class="card"><div class="row"><strong>${o.buyerName ?? ""}</strong><span class="muted">${o.buyerEmail}</span><span class="muted">${o.buyerPhone ?? ""}</span></div>
-      <p class="muted">Payée le ${when(o.paidAt)} · Total ${money(o.totalCents)} · Remboursé ${money(o.refundedCents)} · Commission ${money(o.commissionCents - o.commissionRefundedCents)}</p></div>
+      <p class="muted">Payée le ${when(o.paidAt)} · Total ${money(o.totalCents)}${o.discountCents > 0 ? ` (rabais ${money(o.discountCents)}, code ${o.promoCode})` : ""} · Remboursé ${money(o.refundedCents)} · Commission ${money(o.commissionCents - o.commissionRefundedCents)}</p></div>
     <table><thead><tr><th>Ligne</th><th class="num">Qté</th><th class="num">Prix</th><th class="num">Total</th></tr></thead>
       <tbody>${o.lines.map((l) => html`<tr><td>${l.nameSnapshot}</td><td class="num">${l.quantity}</td><td class="num">${money(l.unitPriceCents)}</td><td class="num">${money(l.lineTotalCents)}</td></tr>`)}
         ${o.taxes.map((t) => html`<tr><td class="muted">${t.code === "GST" ? "TPS" : "TVQ"}</td><td></td><td></td><td class="num">${money(t.amountCents)}</td></tr>`)}</tbody></table>

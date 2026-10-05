@@ -31,6 +31,7 @@ import * as metrics from "../ops/metrics.js";
 import * as reminders from "../delivery/reminders.js";
 import * as privacy from "../ops/privacy.js";
 import * as reports from "../ops/reports.js";
+import * as promoDb from "../db/promo.js";
 import * as journal from "../ops/journal.js";
 import * as sessionBatch from "../ops/session-batch.js";
 import { exchangeOrder } from "../ops/exchange.js";
@@ -300,7 +301,9 @@ export function createApp(deps: AppDeps) {
     if (!eventId || !event) return fail(c, 404, "event_not_found");
     const body = api.QuoteRequest.parse(await readJson(c));
     const rules = await catalog.loadTicketTypeRules(deps.db, scope, eventId);
-    const result = buildQuote(rules, body.items, event.taxRegion);
+    // Run 36: a promo code the buyer can use now, or promo_code_invalid with the reason.
+    const promo = body.promoCode ? await promoDb.usablePromo(deps.db, scope, eventId, body.promoCode, now()) : null;
+    const result = buildQuote(rules, body.items, event.taxRegion, undefined, promo);
     if (!result.ok) return fail(c, 422, "cart_invalid", result.violations);
     return c.json({ quote: result.quote });
   });
@@ -330,7 +333,8 @@ export function createApp(deps: AppDeps) {
     if (!isSessionSellable(event, session, now())) return fail(c, 409, "session_not_available");
 
     const rules = await catalog.loadTicketTypeRules(deps.db, scope, session.eventId);
-    const result = buildQuote(rules, body.items, event.taxRegion);
+    const promo = body.promoCode ? await promoDb.usablePromo(deps.db, scope, session.eventId, body.promoCode, now()) : null;
+    const result = buildQuote(rules, body.items, event.taxRegion, undefined, promo);
     if (!result.ok) return fail(c, 422, "cart_invalid", result.violations);
     const quote = result.quote;
 
@@ -346,6 +350,7 @@ export function createApp(deps: AppDeps) {
           admissions: quote.admissions,
           items: quote.lines.map((l) => ({ ticketTypeId: l.ticketTypeId, quantity: l.quantity, unitPriceCents: l.unitPriceCents })),
           expiresAt,
+          promoCodeId: promo?.id ?? null,
         },
         now(),
       );
@@ -491,6 +496,29 @@ export function createApp(deps: AppDeps) {
       return s;
     });
     return c.json({ session }, 201);
+  });
+
+  // Run 36: promo codes, per event.
+  app.get(`${ADMIN}/events/:eventId/promo-codes`, ...admin, can("ticketing.catalog.read"), async (c) => {
+    const eventId = param(c, "eventId");
+    if (!eventId || !(await inScope("ticketing_events", eventId, c.get("scope")))) return fail(c, 404, "event_not_found");
+    return c.json({ promoCodes: await promoDb.listPromoCodes(deps.db, c.get("scope"), eventId) });
+  });
+
+  app.post(`${ADMIN}/events/:eventId/promo-codes`, ...admin, can("ticketing.catalog.write"), async (c) => {
+    const eventId = param(c, "eventId");
+    if (!eventId) return fail(c, 404, "event_not_found");
+    const body = api.CreatePromoCode.parse(await readJson(c));
+    const promoCode = await withTransaction(deps.db, (tx) => promoDb.createPromoCode(tx, c.get("scope"), eventId, body, actor(c)));
+    return c.json({ promoCode }, 201);
+  });
+
+  app.patch(`${ADMIN}/promo-codes/:promoCodeId`, ...admin, can("ticketing.catalog.write"), async (c) => {
+    const id = param(c, "promoCodeId");
+    if (!id) return fail(c, 404, "promo_code_not_found");
+    const body = api.UpdatePromoCode.parse(await readJson(c));
+    const promoCode = await withTransaction(deps.db, (tx) => promoDb.updatePromoCode(tx, c.get("scope"), id, body, actor(c)));
+    return c.json({ promoCode });
   });
 
   // Run 29: a season of sessions at once (every N minutes, on chosen weekdays, venue time).
@@ -896,8 +924,9 @@ export function createApp(deps: AppDeps) {
       c,
       "alkao-ventes-par-jour.csv",
       toCsv(
-        ["day", "orders", "subtotal_cents", "tax_cents", "gst_cents", "qst_cents", "gross_cents", "refunds", "refunded_cents", "commission_cents", "commission_refunded_cents", "net_to_client_cents"],
-        report.days.map((d) => [d.day, d.orders, d.subtotalCents, d.taxCents, d.gstCents, d.qstCents, d.grossCents, d.refunds, d.refundedCents, d.commissionCents, d.commissionRefundedCents, d.netToClientCents]),
+        // Run 36: discount_cents last, so earlier columns keep their place.
+        ["day", "orders", "subtotal_cents", "tax_cents", "gst_cents", "qst_cents", "gross_cents", "refunds", "refunded_cents", "commission_cents", "commission_refunded_cents", "net_to_client_cents", "discount_cents"],
+        report.days.map((d) => [d.day, d.orders, d.subtotalCents, d.taxCents, d.gstCents, d.qstCents, d.grossCents, d.refunds, d.refundedCents, d.commissionCents, d.commissionRefundedCents, d.netToClientCents, d.discountCents]),
       ),
     );
   });
@@ -921,7 +950,7 @@ export function createApp(deps: AppDeps) {
       c,
       "alkao-orders.csv",
       toCsv(
-        ["order_reference", "status", "paid_at", "buyer_email", "subtotal_cents", "tax_cents", "total_cents", "refunded_cents", "commission_cents", "commission_refunded_cents"],
+        ["order_reference", "status", "paid_at", "buyer_email", "subtotal_cents", "tax_cents", "total_cents", "refunded_cents", "commission_cents", "commission_refunded_cents", "discount_cents", "promo_code"],
         rows,
       ),
     );

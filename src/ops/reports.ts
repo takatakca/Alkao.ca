@@ -34,6 +34,7 @@ export async function salesReport(db: Db, s: TenantScope, f: ReportFilter) {
     db.query(
       `SELECT count(*)::int AS orders,
               coalesce(sum(o.subtotal_cents), 0)::bigint AS "subtotalCents",
+              coalesce(sum(o.discount_cents), 0)::bigint AS "discountCents",
               coalesce(sum(o.tax_cents), 0)::bigint AS "taxCents",
               coalesce(sum(o.total_cents), 0)::bigint AS "grossCents",
               coalesce(sum(o.refunded_cents), 0)::bigint AS "refundedCents",
@@ -108,7 +109,8 @@ export async function dailyReport(db: Db, s: TenantScope, f: ReportFilter) {
   const [sales, taxes, refunds] = await Promise.all([
     db.query(
       `SELECT to_char((o.paid_at AT TIME ZONE $3)::date, 'YYYY-MM-DD') AS day, count(*)::int AS orders,
-              sum(o.subtotal_cents)::bigint AS subtotal, sum(o.tax_cents)::bigint AS tax, sum(o.total_cents)::bigint AS gross,
+              sum(o.subtotal_cents)::bigint AS subtotal, sum(o.discount_cents)::bigint AS discount,
+              sum(o.tax_cents)::bigint AS tax, sum(o.total_cents)::bigint AS gross,
               sum(o.commission_cents)::bigint AS commission
        FROM public.ticketing_orders o
        WHERE o.client_id = $1 AND o.brand_id = $2 AND ${PAID}${paid.sql}
@@ -137,12 +139,12 @@ export async function dailyReport(db: Db, s: TenantScope, f: ReportFilter) {
   const row = (day: string) => {
     let r = days.get(day);
     if (!r) {
-      r = { day, orders: 0, subtotalCents: 0, taxCents: 0, gstCents: 0, qstCents: 0, grossCents: 0, refunds: 0, refundedCents: 0, commissionCents: 0, commissionRefundedCents: 0, netToClientCents: 0 };
+      r = { day, orders: 0, subtotalCents: 0, discountCents: 0, taxCents: 0, gstCents: 0, qstCents: 0, grossCents: 0, refunds: 0, refundedCents: 0, commissionCents: 0, commissionRefundedCents: 0, netToClientCents: 0 };
       days.set(day, r);
     }
     return r;
   };
-  for (const x of sales.rows) Object.assign(row(x.day), { orders: x.orders, subtotalCents: Number(x.subtotal), taxCents: Number(x.tax), grossCents: Number(x.gross), commissionCents: Number(x.commission) });
+  for (const x of sales.rows) Object.assign(row(x.day), { orders: x.orders, subtotalCents: Number(x.subtotal), discountCents: Number(x.discount), taxCents: Number(x.tax), grossCents: Number(x.gross), commissionCents: Number(x.commission) });
   for (const x of taxes.rows) {
     if (x.code === "GST") row(x.day).gstCents += Number(x.amount);
     else if (x.code === "QST") row(x.day).qstCents += Number(x.amount);
@@ -155,7 +157,7 @@ export async function dailyReport(db: Db, s: TenantScope, f: ReportFilter) {
       for (const k of Object.keys(t) as (keyof typeof t)[]) t[k] += r[k];
       return t;
     },
-    { orders: 0, subtotalCents: 0, taxCents: 0, gstCents: 0, qstCents: 0, grossCents: 0, refunds: 0, refundedCents: 0, commissionCents: 0, commissionRefundedCents: 0, netToClientCents: 0 },
+    { orders: 0, subtotalCents: 0, discountCents: 0, taxCents: 0, gstCents: 0, qstCents: 0, grossCents: 0, refunds: 0, refundedCents: 0, commissionCents: 0, commissionRefundedCents: 0, netToClientCents: 0 },
   );
   return { currency: "CAD", timeZone, filter: { eventId: f.eventId ?? null, from: f.from ?? null, to: f.to ?? null }, days: rows, totals };
 }
@@ -163,7 +165,10 @@ export async function dailyReport(db: Db, s: TenantScope, f: ReportFilter) {
 export interface DailyRow {
   day: string;
   orders: number;
+  /** At list price; gross = subtotal − discount + taxes. */
   subtotalCents: number;
+  /** Run 36: taken off by promo codes, before taxes. */
+  discountCents: number;
   /** All taxes; TPS (GST) and TVQ (QST) are also given apart. */
   taxCents: number;
   gstCents: number;
@@ -195,7 +200,8 @@ export async function ordersRows(db: Db, s: TenantScope, f: ReportFilter) {
   const w = where(f, 3);
   const { rows } = await db.query(
     `SELECT o.reference, o.status, o.paid_at, b.email, o.subtotal_cents, o.tax_cents, o.total_cents,
-            o.refunded_cents, o.commission_cents, o.commission_refunded_cents
+            o.refunded_cents, o.commission_cents, o.commission_refunded_cents, o.discount_cents,
+            (SELECT p.code FROM public.ticketing_promo_codes p WHERE p.id = o.promo_code_id) AS promo_code
      FROM public.ticketing_orders o
      JOIN public.ticketing_buyers b ON b.id = o.buyer_id AND b.client_id = o.client_id AND b.brand_id = o.brand_id
      WHERE o.client_id = $1 AND o.brand_id = $2 AND ${PAID}${w.sql}
@@ -204,6 +210,6 @@ export async function ordersRows(db: Db, s: TenantScope, f: ReportFilter) {
   );
   return rows.map((r) => [
     r.reference, r.status, r.paid_at, r.email, r.subtotal_cents, r.tax_cents, r.total_cents,
-    r.refunded_cents, r.commission_cents, r.commission_refunded_cents,
+    r.refunded_cents, r.commission_cents, r.commission_refunded_cents, r.discount_cents, r.promo_code ?? "",
   ]);
 }

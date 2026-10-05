@@ -19,11 +19,15 @@ export const CartItems = z
   .max(50);
 
 // ── Public (buyer-facing) ───────────────────────────────────────────────────
-export const QuoteRequest = z.object({ items: CartItems });
+/** Run 36: an optional promo code, as the buyer typed it (case and spaces do not matter). */
+const promoCode = z.string().trim().min(1).max(40).optional();
+
+export const QuoteRequest = z.object({ items: CartItems, promoCode });
 
 export const CreateHoldRequest = z.object({
   sessionId: id,
   items: CartItems,
+  promoCode,
 });
 
 // ── Admin: catalog ──────────────────────────────────────────────────────────
@@ -230,6 +234,29 @@ export const AuditQuery = ListQuery.extend({
   entityType: z.string().regex(/^[a-z_]+$/).max(40).optional(),
   entityId: z.string().min(1).max(100).optional(),
 });
+
+// ── Run 36: promo codes ─────────────────────────────────────────────────────
+const promoWindow = {
+  startsAt: timestamp.nullish(),
+  endsAt: timestamp.nullish(),
+  maxUses: z.number().int().min(1).max(1_000_000).nullish(),
+};
+export const CreatePromoCode = z
+  .object({
+    code: z.string().trim().toUpperCase().regex(/^[A-Z0-9-]{3,32}$/),
+    kind: z.enum(["percent", "amount"]),
+    percent: z.number().int().min(1).max(100).nullish(),
+    amountCents: z.number().int().min(1).max(10_000_000).nullish(),
+    ...promoWindow,
+  })
+  .refine((p) => (p.kind === "percent" ? p.percent != null && p.amountCents == null : p.amountCents != null && p.percent == null), {
+    message: "percent for kind percent, amountCents for kind amount", path: ["kind"],
+  })
+  .refine((p) => !p.startsAt || !p.endsAt || Date.parse(p.startsAt) < Date.parse(p.endsAt), { message: "endsAt must be after startsAt", path: ["endsAt"] });
+export const UpdatePromoCode = z
+  .object({ active: z.boolean(), ...promoWindow })
+  .partial()
+  .refine((o) => Object.keys(o).length > 0, "empty update");
 
 // ── Run 29: sessions in bulk ────────────────────────────────────────────────
 const localDate = z.iso.date();

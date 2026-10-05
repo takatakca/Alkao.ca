@@ -53,6 +53,8 @@ export function toDomainError(error: unknown): DomainError | null {
   if (!e || typeof e !== "object" || typeof e.code !== "string") return null;
   if (e.code === "23514") {
     if (e.constraint === "ticketing_sessions_capacity_ck") return new DomainError("sold_out");
+    // Run 36: the code's last use went to another buyer first.
+    if (e.constraint === "ticketing_promo_codes_uses_ck") return new DomainError("promo_code_invalid", { reason: "used_up" });
     if (e.message && TRIGGER_CODES.has(e.message)) return new DomainError(e.message);
     return new DomainError("constraint_violation", { constraint: e.constraint });
   }

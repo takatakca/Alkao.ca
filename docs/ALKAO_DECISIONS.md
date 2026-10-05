@@ -33,6 +33,10 @@ While the dispute is open, nothing changes. If the Client wins, nothing changes.
 - **Taxes and commission:** TPS and TVQ are computed on the discounted subtotal, and so is
   the TAKATAK commission rate. The fixed commission per paid ticket still applies. An order
   made free by a code is a free order, with no commission.
+- **Uses:** counted by the database when an order is created with the code, and given back if
+  that order expires unpaid. A refund does not give the use back.
+- **To stop using codes:** switch them off on the event page. Orders already made keep their
+  discount.
 
 ## 3. Door sales (Run 35)
 

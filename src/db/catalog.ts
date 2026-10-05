@@ -331,7 +331,8 @@ export async function getOrder(q: Queryable, s: TenantScope, orderId: string): P
     q,
     `SELECT o.id, o.reference, o.status, o.event_id, o.session_id, o.currency, o.subtotal_cents, o.tax_cents, o.total_cents,
             o.commission_cents, o.refunded_cents, o.commission_refunded_cents, o.paid_at, o.created_at,
-            b.email AS buyer_email, b.full_name AS buyer_name, b.phone AS buyer_phone
+            b.email AS buyer_email, b.full_name AS buyer_name, b.phone AS buyer_phone,
+            o.discount_cents, (SELECT p.code FROM public.ticketing_promo_codes p WHERE p.id = o.promo_code_id) AS promo_code
      FROM public.ticketing_orders o
      JOIN public.ticketing_buyers b ON b.id = o.buyer_id AND b.client_id = o.client_id AND b.brand_id = o.brand_id
      WHERE o.id = $1 AND o.client_id = $2 AND o.brand_id = $3`,
