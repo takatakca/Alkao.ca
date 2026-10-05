@@ -24,6 +24,7 @@ import * as paymentsDb from "../db/payments.js";
 import * as credentialsDb from "../db/credentials.js";
 import { CredentialsService } from "../scanner/service.js";
 import { toCsv } from "../ops/csv.js";
+import * as privacy from "../ops/privacy.js";
 import * as reports from "../ops/reports.js";
 import { exchangeOrder } from "../ops/exchange.js";
 import { mountOpsUi, type OpsUiConfig } from "./ops-ui.js";
@@ -504,17 +505,38 @@ export function createApp(deps: AppDeps) {
     const orderId = param(c, "orderId");
     if (!orderId) return fail(c, 404, "order_not_found");
     const scope = c.get("scope");
-    const [order, emails, disputes, outsideRefund, admissions] = await Promise.all([
+    const [order, emails, disputes, outsideRefund, admissions, buyerAnonymizedAt] = await Promise.all([
       catalog.getOrder(deps.db, scope, orderId),
       delivery.listOrderEmails(deps.db, scope, orderId),
       paymentsDb.orderDisputes(deps.db, scope, orderId),
       paymentsDb.outsideRefund(deps.db, scope, orderId),
       credentialsDb.admissionsForOrder(deps.db, scope, orderId),
+      privacy.buyerAnonymizedAt(deps.db, scope, orderId),
     ]);
     // Run 19: when each ticket entered (evidence for a dispute), chargebacks, and refunds
-    // made directly in Stripe.
+    // made directly in Stripe. Run 20: whether the buyer was anonymized.
     const tickets = (order.tickets as { id: string }[]).map((t) => ({ ...t, admittedAt: admissions.get(t.id) ?? null }));
-    return c.json({ order: { ...order, tickets, emails, disputes, outsideRefundCents: outsideRefund.outsideCents } });
+    return c.json({ order: { ...order, tickets, emails, disputes, outsideRefundCents: outsideRefund.outsideCents, buyerAnonymizedAt } });
+  });
+
+  // ── Run 20: the buyer's personal data on request (Québec Law 25) ──────────────
+  app.get(`${ADMIN}/orders/:orderId/buyer/export`, ...admin, can("ticketing.buyers.read"), async (c) => {
+    const orderId = param(c, "orderId");
+    if (!orderId) return fail(c, 404, "order_not_found");
+    const scope = c.get("scope");
+    const data = await privacy.exportBuyerData(deps.db, scope, orderId, now());
+    await catalog.writeAudit(deps.db, scope, actor(c), "buyer.exported", { type: "order", id: orderId }, { orders: data.orders.length });
+    return c.body(JSON.stringify(data, null, 2), 200, {
+      "content-type": "application/json; charset=utf-8",
+      "content-disposition": `attachment; filename="alkao-donnees-acheteur-${data.exportedAt.slice(0, 10)}.json"`,
+      "cache-control": "no-store",
+    });
+  });
+
+  app.post(`${ADMIN}/orders/:orderId/buyer/anonymize`, ...admin, can("ticketing.buyers.erase"), async (c) => {
+    const orderId = param(c, "orderId");
+    if (!orderId) return fail(c, 404, "order_not_found");
+    return c.json(await privacy.anonymizeBuyer(deps.db, c.get("scope"), orderId, actor(c), now()));
   });
 
   app.get(`${ADMIN}/disputes`, ...admin, can("ticketing.orders.read"), async (c) => {

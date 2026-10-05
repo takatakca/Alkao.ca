@@ -43,6 +43,7 @@ interface DueRow {
   timezone: string;
   valid_tickets: number;
   cancel_refund_cents: number;
+  buyer_anonymized: boolean;
   refund_amount_cents: number | null;
   refund_reason: string | null;
   refund_voided: number | null;
@@ -68,7 +69,8 @@ export async function deliverTicketEmails(db: Db, cfg: DeliveryConfig, now = new
                 coalesce((SELECT i.amount_cents FROM public.ticketing_session_cancellation_orders i
                   WHERE i.order_id = coalesce(o.exchange_of_order_id, o.id) AND i.client_id = o.client_id AND i.brand_id = o.brand_id
                   ORDER BY i.created_at DESC LIMIT 1), 0)::int AS cancel_refund_cents,
-                r.amount_cents AS refund_amount_cents, r.reason AS refund_reason, cardinality(r.void_ticket_ids) AS refund_voided
+                r.amount_cents AS refund_amount_cents, r.reason AS refund_reason, cardinality(r.void_ticket_ids) AS refund_voided,
+                EXISTS (SELECT 1 FROM public.ticketing_buyer_erasures be WHERE be.buyer_id = b.id) AS buyer_anonymized
          FROM public.ticketing_email_outbox x
          LEFT JOIN public.ticketing_refunds r ON r.id = x.refund_id AND r.client_id = x.client_id AND r.brand_id = x.brand_id
          JOIN public.ticketing_orders o ON o.id = x.order_id AND o.client_id = x.client_id AND o.brand_id = x.brand_id
@@ -90,6 +92,8 @@ export async function deliverTicketEmails(db: Db, cfg: DeliveryConfig, now = new
         return "skipped" as const;
       };
       if (now.getTime() - row.created_at.getTime() > maxAgeMs) return skip("too_old");
+      // Run 20: an anonymized buyer has no address left; never write to it.
+      if (row.buyer_anonymized) return skip("buyer_anonymized");
       const send = async (content: Omit<EmailMessage, "to" | "idempotencyKey">) => {
         try {
           const messageId = await cfg.sender.send({ ...content, to: row.email, idempotencyKey: `alkao-email-${row.id}-${row.attempts}` });

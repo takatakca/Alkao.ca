@@ -315,6 +315,38 @@ How ALKAO reads the events:
   `payment.outside_refund`).
 - Sales reports count only ALKAO's own refunds.
 
+### A buyer's personal data on request: Québec Law 25 (Run 20)
+
+When a buyer asks the Client what it holds about them, or asks to be forgotten:
+
+| Method | Path | Permission | Result |
+|---|---|---|---|
+| GET | `/v1/admin/…/orders/:orderId/buyer/export` | `buyers.read` | JSON download (`alkao.buyer-export.v1`) with everything ALKAO holds about this order's buyer for the Brand: identity, every order (amounts, session, venue), tickets with their entry time, refunds and emails sent. Logged as `buyer.exported` |
+| POST | `/v1/admin/…/orders/:orderId/buyer/anonymize` | `buyers.erase` (owner, admin) | `{ anonymizedAt, alreadyAnonymized }`. Irreversible |
+
+**What anonymizing does.** Personal data in ALKAO lives on the buyer row only. Anonymizing:
+
+- replaces the email with `anonyme-<buyer id>@anonyme.invalid`, an address that can never receive mail;
+- clears the name and the phone;
+- clears the staff notes on the buyer's refunds;
+- drops queued emails and stops any later email to the buyer (`buyer_anonymized`);
+- deletes the personal ticket links.
+
+Orders, amounts, taxes, commission, tickets and gate scans stay, so reports remain exact. The
+order shows `buyerAnonymizedAt`. The audit entry `buyer.anonymized` names only the buyer row.
+
+**When it is refused (`409`).** While the buyer still needs to be reachable:
+
+- `buyer_has_upcoming_tickets`: a valid ticket for a session that has not ended;
+- `refund_in_progress`: a refund in progress;
+- `dispute_open`: an open Stripe dispute.
+
+Refund or cancel first, or wait until the session is over. Asking again for an anonymized
+buyer changes nothing.
+
+**Outside ALKAO.** The buyer's email also sits in the Client's Stripe account (the
+checkout) and in the email provider's logs. Those are the Client's to handle.
+
 ### Role → permission
 
 | Role | catalog.read · inventory.read · holds.read | catalog.write | orders.read · buyers.read | audit.read |
@@ -325,6 +357,7 @@ How ALKAO reads the events:
 Run 02 adds `payments.manage` (owner, admin) and `refunds.create` (owner, admin, manager).
 Run 03 adds `scan` (owner, admin, manager, staff), `credentials.manage` (owner, admin, manager)
 and `keys.manage` (owner, admin). Its routes are listed in [ALKAO_SCANNER_V1.md](ALKAO_SCANNER_V1.md).
+Run 20 adds `buyers.erase` (owner, admin).
 | editor | ✓ | ✓ | | |
 | staff, viewer | ✓ | | | |
 

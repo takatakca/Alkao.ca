@@ -22,15 +22,17 @@ const RESEND_LIMIT = 50;
  * paid before email existed. Only orders with a valid ticket.
  */
 export async function requestTicketsEmail(tx: Tx, s: TenantScope, orderId: string, actor: { type: "user"; id: string | null }) {
-  const { rows } = await tx.query<{ event_id: string; status: string; exchange_of_order_id: string | null; valid: number }>(
+  const { rows } = await tx.query<{ event_id: string; status: string; exchange_of_order_id: string | null; valid: number; anonymized: boolean }>(
     `SELECT o.event_id, o.status, o.exchange_of_order_id,
             (SELECT count(*)::int FROM public.ticketing_tickets t
-              WHERE t.order_id = o.id AND t.client_id = o.client_id AND t.brand_id = o.brand_id AND t.status = 'valid') AS valid
+              WHERE t.order_id = o.id AND t.client_id = o.client_id AND t.brand_id = o.brand_id AND t.status = 'valid') AS valid,
+            EXISTS (SELECT 1 FROM public.ticketing_buyer_erasures e WHERE e.buyer_id = o.buyer_id) AS anonymized
      FROM public.ticketing_orders o WHERE o.id = $1 AND o.client_id = $2 AND o.brand_id = $3 FOR UPDATE`,
     [orderId, s.clientId, s.brandId],
   );
   const order = rows[0];
   if (!order) throw new DomainError("order_not_found");
+  if (order.anonymized) throw new DomainError("buyer_anonymized"); // Run 20: no address left
   if (!["paid", "partially_refunded"].includes(order.status) || order.valid === 0) throw new DomainError("order_has_no_valid_ticket");
   const kind = order.exchange_of_order_id ? "exchange_tickets" : "order_tickets";
   const { rows: queued } = await tx.query<{ id: string; attempts: number }>(

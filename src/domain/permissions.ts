@@ -15,6 +15,8 @@ export const TICKETING_PERMISSIONS = [
   "ticketing.scan",
   "ticketing.credentials.manage",
   "ticketing.keys.manage",
+  /** Run 20: anonymize a buyer on request (Québec Law 25). Irreversible: owner and admin only. */
+  "ticketing.buyers.erase",
 ] as const;
 export type TicketingPermission = (typeof TICKETING_PERMISSIONS)[number];
 
@@ -38,8 +40,8 @@ const MANAGE: TicketingPermission[] = [
  * refunds for owner/admin/manager; audit and the Client's Stripe account for owner/admin.
  */
 const ROLE_PERMISSIONS: Record<WorkspaceRole, ReadonlySet<TicketingPermission>> = {
-  owner: new Set<TicketingPermission>([...MANAGE, "ticketing.audit.read", "ticketing.payments.manage", "ticketing.keys.manage"]),
-  admin: new Set<TicketingPermission>([...MANAGE, "ticketing.audit.read", "ticketing.payments.manage", "ticketing.keys.manage"]),
+  owner: new Set<TicketingPermission>([...MANAGE, "ticketing.audit.read", "ticketing.payments.manage", "ticketing.keys.manage", "ticketing.buyers.erase"]),
+  admin: new Set<TicketingPermission>([...MANAGE, "ticketing.audit.read", "ticketing.payments.manage", "ticketing.keys.manage", "ticketing.buyers.erase"]),
   manager: new Set<TicketingPermission>(MANAGE),
   editor: new Set<TicketingPermission>([...READ_CATALOG, "ticketing.catalog.write"]),
   // Gate staff scan tickets; they never see buyer data.
