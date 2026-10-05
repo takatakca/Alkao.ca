@@ -52,6 +52,31 @@ export type PaymentWebhookEvent =
     }
   | { kind: "checkout.expired"; eventId: string; accountId: string | null; sessionId: string }
   | { kind: "account.updated"; eventId: string; accountId: string | null; status: ConnectedAccountStatus }
+  | {
+      /** Run 19: a chargeback opened, changed or closed on a payment (charge.dispute.*). */
+      kind: "dispute";
+      eventId: string;
+      accountId: string | null;
+      occurredAt: Date;
+      disputeId: string;
+      paymentIntentId: string | null;
+      amountCents: number;
+      currency: string;
+      reason: string;
+      status: string;
+      evidenceDueBy: Date | null;
+    }
+  | {
+      /** Run 19: a charge was refunded, by ALKAO or directly in Stripe (charge.refunded). */
+      kind: "charge.refunded";
+      eventId: string;
+      accountId: string | null;
+      occurredAt: Date;
+      paymentIntentId: string | null;
+      /** Everything refunded on the charge so far. */
+      refundedCents: number;
+      currency: string;
+    }
   | { kind: "ignored"; eventId: string; accountId: string | null; type: string };
 
 export class WebhookSignatureError extends Error {

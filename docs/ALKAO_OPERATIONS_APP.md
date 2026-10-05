@@ -10,10 +10,10 @@ TAKATAK V1 dashboard (menu "ALKAO — Billetterie"), with no second login. See
 | Screen | Content | Minimum role |
 |---|---|---|
 | Choisir un espace | The signed-in person's Clients and Brands (`GET /v1/admin/me`), with Ticketing status | any member |
-| Tableau de bord | Gross sales, taxes, refunds, TAKATAK commission, net to the Client; sessions (capacity, sold, held, available, admitted); revenue per ticket type; orders CSV | manager |
+| Tableau de bord | Gross sales, taxes, refunds, TAKATAK commission, net to the Client; sessions (capacity, sold, held, available, admitted); revenue per ticket type; orders CSV; open Stripe disputes with their response deadline (Run 19) | manager |
 | Événements | Create, publish or unpublish; sessions (create, put on sale or pause, capacity); ticket types, including Flex add-ons; attendees CSV per session | editor (read: everyone) |
 | Lieux | Venues | editor |
-| Commandes | List, detail (lines, TPS/TVQ, tickets), full or partial refund (with ticket voiding, automatic retry), Flex session change, QR reissue | manager |
+| Commandes | List, detail (lines, TPS/TVQ, tickets and when each entered), full or partial refund (with ticket voiding, automatic retry), Flex session change, QR reissue. A Stripe dispute or a refund made directly in Stripe shows as a notice on the order (Run 19) | manager |
 | Scanner | Event and session, gate window, keyboard-wedge scanner or typed code, camera (BarcodeDetector) when the browser supports it; big, colour-coded results; **offline mode** for gates with a weak network (signature checked on the device, scans synced later, double entries reported) | staff |
 | Paiements | Stripe account status, onboarding, sites allowed after payment | owner, admin |
 

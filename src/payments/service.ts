@@ -248,6 +248,7 @@ export class PaymentsService {
       return clientId ? { outcome: "processed", clientId, refund: null } : ignored();
     }
     if (event.kind === "ignored") return ignored();
+    if (event.kind === "dispute" || event.kind === "charge.refunded") return this.applyAfterSaleEvent(tx, event);
 
     const payment = await payments.lockPaymentBySession(tx, event.sessionId);
     if (!payment) return ignored();
@@ -320,6 +321,53 @@ export class PaymentsService {
     });
     await writeAudit(tx, scope, system, "order.paid_unfulfillable", { type: "order", id: payment.orderId }, { refundId: refund.id });
     return { outcome: "processed", clientId: scope.clientId, refund: { scope, refundId: refund.id } };
+  }
+
+  /**
+   * Run 19: what Stripe reports after the sale: a dispute (chargeback), or a refund made in
+   * the Client's Stripe dashboard. Recorded, audited and shown to staff; no money moves and
+   * no ticket changes here.
+   */
+  private async applyAfterSaleEvent(
+    tx: Tx,
+    event: Extract<PaymentWebhookEvent, { kind: "dispute" | "charge.refunded" }>,
+  ): Promise<{ outcome: "processed" | "ignored"; clientId: string | null; refund: null }> {
+    const ignored = (clientId: string | null = null) => ({ outcome: "ignored" as const, clientId, refund: null });
+    const payment = event.paymentIntentId ? await payments.lockPaymentByIntent(tx, event.paymentIntentId) : null;
+    if (!payment) return ignored();
+    const scope = { clientId: payment.clientId, brandId: payment.brandId };
+    const system: Actor = { type: "system", id: event.eventId };
+    if (event.accountId !== payment.stripeAccountId) {
+      await writeAudit(tx, scope, system, "payment.account_mismatch", { type: "payment", id: payment.id }, { account: event.accountId });
+      return ignored(scope.clientId);
+    }
+    const order = { type: "order", id: payment.orderId };
+
+    if (event.kind === "dispute") {
+      const applied = await payments.upsertDispute(tx, payment, {
+        stripeDisputeId: event.disputeId,
+        amountCents: event.amountCents,
+        currency: event.currency,
+        reason: event.reason,
+        status: event.status,
+        evidenceDueBy: event.evidenceDueBy,
+        occurredAt: event.occurredAt,
+      });
+      if (!applied) return ignored(scope.clientId); // an older event, delivered late
+      const action = applied.created
+        ? "payment.dispute_opened"
+        : payments.CLOSED_DISPUTE_STATUSES.includes(event.status) ? "payment.dispute_closed" : "payment.dispute_updated";
+      await writeAudit(tx, scope, system, action, order, {
+        disputeId: event.disputeId, status: event.status, amountCents: event.amountCents, reason: event.reason,
+      });
+      return { outcome: "processed", clientId: scope.clientId, refund: null };
+    }
+
+    const before = await payments.outsideRefund(tx, scope, payment.orderId);
+    await payments.recordChargeRefundTotal(tx, payment, event.refundedCents, event.occurredAt);
+    const after = await payments.outsideRefund(tx, scope, payment.orderId);
+    if (after.outsideCents > before.outsideCents) await writeAudit(tx, scope, system, "payment.outside_refund", order, after);
+    return { outcome: "processed", clientId: scope.clientId, refund: null };
   }
 
   // ── Refunds (owner/admin/manager) ───────────────────────────────────────

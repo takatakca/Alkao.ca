@@ -2,7 +2,7 @@ import Stripe from "stripe";
 import { describe, expect, it } from "vitest";
 import { PaymentProviderError, WebhookSignatureError } from "../../src/payments/gateway.js";
 import { StripeGateway } from "../../src/payments/stripe-gateway.js";
-import { completedSession, signedStripeEvent, WEBHOOK_SECRET } from "../helpers/fake-gateway.js";
+import { completedSession, dispute, refundedCharge, signedStripeEvent, WEBHOOK_SECRET } from "../helpers/fake-gateway.js";
 
 /** Records every Stripe SDK call made by StripeGateway, with its request options. */
 function stubStripe(overrides: Record<string, unknown> = {}) {
@@ -113,6 +113,17 @@ describe("StripeGateway webhook verification (real Stripe signatures)", () => {
     });
   });
 
+  it("maps disputes and refunded charges, with the event time (Run 19)", () => {
+    const at = new Date("2026-10-05T12:00:00Z");
+    const d = signedStripeEvent("charge.dispute.closed", dispute("dp_test_1", "pi_test_9", 6290, "won", { evidence_details: { due_by: null } }), "acct_123", WEBHOOK_SECRET, at);
+    expect(gateway.parseWebhook(d.body, d.signature)).toEqual({
+      kind: "dispute", eventId: expect.stringMatching(/^evt_/), accountId: "acct_123", occurredAt: at,
+      disputeId: "dp_test_1", paymentIntentId: "pi_test_9", amountCents: 6290, currency: "cad", reason: "fraudulent", status: "won", evidenceDueBy: null,
+    });
+    const r = signedStripeEvent("charge.refunded", refundedCharge("pi_test_9", 6290, 1000), "acct_123", WEBHOOK_SECRET, at);
+    expect(gateway.parseWebhook(r.body, r.signature)).toMatchObject({ kind: "charge.refunded", paymentIntentId: "pi_test_9", refundedCents: 1000, occurredAt: at });
+  });
+
   it("rejects missing, wrong-secret and tampered signatures", () => {
     const e = signedStripeEvent("checkout.session.completed", completedSession("cs_test_9", 6290), "acct_123");
     expect(() => gateway.parseWebhook(e.body, undefined)).toThrow(WebhookSignatureError);
@@ -133,6 +144,6 @@ describe("StripeGateway webhook verification (real Stripe signatures)", () => {
       kind: "account.updated",
       status: { accountId: "acct_123", chargesEnabled: true, payoutsEnabled: true, detailsSubmitted: true },
     });
-    expect(parse("charge.refunded", { id: "ch_1", object: "charge" })).toMatchObject({ kind: "ignored", type: "charge.refunded" });
+    expect(parse("payment_intent.created", { id: "pi_1", object: "payment_intent" })).toMatchObject({ kind: "ignored", type: "payment_intent.created" });
   });
 });

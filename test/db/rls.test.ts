@@ -44,6 +44,9 @@ const EXPECTED: Record<string, Visibility> = {
   // Run 10
   ticketing_session_cancellations: "none",
   ticketing_session_cancellation_orders: "none",
+  // Run 19
+  ticketing_payment_disputes: "none",
+  ticketing_charge_refund_totals: "none",
 };
 
 const clientColumn = (table: string) => (table === "ticketing_clients" ? "id" : "client_id");

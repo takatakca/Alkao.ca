@@ -208,6 +208,11 @@ export async function lockPaymentBySession(tx: Tx, sessionId: string): Promise<P
   return rows[0] ? paymentRow(rows[0]) : null;
 }
 
+export async function lockPaymentByIntent(tx: Tx, paymentIntentId: string): Promise<PaymentRow | null> {
+  const { rows } = await tx.query(`SELECT ${PAYMENT_COLUMNS} FROM public.ticketing_payments WHERE payment_intent_id = $1 FOR UPDATE`, [paymentIntentId]);
+  return rows[0] ? paymentRow(rows[0]) : null;
+}
+
 export async function getPaymentForOrder(q: Queryable, s: TenantScope, orderId: string): Promise<PaymentRow | null> {
   const { rows } = await q.query(
     `SELECT ${PAYMENT_COLUMNS} FROM public.ticketing_payments WHERE order_id = $1 AND client_id = $2 AND brand_id = $3`,
@@ -299,4 +304,99 @@ export async function recordPaymentEvent(
     [e.eventId, e.type, e.accountId, e.clientId, e.outcome],
   );
   return (r.rowCount ?? 0) === 1;
+}
+
+// ── After the sale: disputes and refunds made outside ALKAO (Run 19) ────────
+/** Stripe dispute statuses after which nothing is left to do. */
+export const CLOSED_DISPUTE_STATUSES = ["won", "lost", "warning_closed", "prevented"];
+
+export interface DisputeReport {
+  stripeDisputeId: string;
+  amountCents: number;
+  currency: string;
+  reason: string;
+  status: string;
+  evidenceDueBy: Date | null;
+}
+
+/**
+ * Record a dispute as Stripe reports it. An event older than the last one applied changes
+ * nothing. Returns whether the dispute is new, or null when the event was stale.
+ */
+export async function upsertDispute(
+  tx: Tx,
+  p: PaymentRow,
+  d: DisputeReport & { occurredAt: Date },
+): Promise<{ created: boolean } | null> {
+  const { rows } = await tx.query<{ created: boolean }>(
+    `INSERT INTO public.ticketing_payment_disputes
+       (client_id, brand_id, event_id, order_id, stripe_dispute_id, amount_cents, currency, reason, status, evidence_due_by, provider_updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, left($8, 100), left($9, 100), $10, $11)
+     ON CONFLICT (stripe_dispute_id) DO UPDATE SET
+       amount_cents = EXCLUDED.amount_cents, currency = EXCLUDED.currency, reason = EXCLUDED.reason, status = EXCLUDED.status,
+       evidence_due_by = EXCLUDED.evidence_due_by, provider_updated_at = EXCLUDED.provider_updated_at
+     WHERE ticketing_payment_disputes.provider_updated_at <= EXCLUDED.provider_updated_at
+       AND ticketing_payment_disputes.order_id = EXCLUDED.order_id
+     RETURNING (xmax = 0) AS created`,
+    [p.clientId, p.brandId, p.eventId, p.orderId, d.stripeDisputeId, d.amountCents, d.currency.toLowerCase(), d.reason, d.status, d.evidenceDueBy, d.occurredAt],
+  );
+  return rows[0] ?? null;
+}
+
+/** Keep Stripe's running refunded total for the order's charge; returns the total kept. */
+export async function recordChargeRefundTotal(tx: Tx, p: PaymentRow, refundedCents: number, occurredAt: Date): Promise<number> {
+  const { rows } = await tx.query<{ refunded_cents: number }>(
+    `INSERT INTO public.ticketing_charge_refund_totals (order_id, client_id, brand_id, event_id, refunded_cents, provider_updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6)
+     ON CONFLICT (order_id) DO UPDATE SET
+       refunded_cents = GREATEST(ticketing_charge_refund_totals.refunded_cents, EXCLUDED.refunded_cents),
+       provider_updated_at = GREATEST(ticketing_charge_refund_totals.provider_updated_at, EXCLUDED.provider_updated_at)
+     RETURNING refunded_cents`,
+    [p.orderId, p.clientId, p.brandId, p.eventId, refundedCents, occurredAt],
+  );
+  return rows[0]!.refunded_cents;
+}
+
+/**
+ * What ALKAO refunded or is refunding on an order, and the part of Stripe's refunded total
+ * that ALKAO did not issue. A refund ALKAO has started counts at once, so its own
+ * charge.refunded event never looks like a refund made elsewhere.
+ */
+export async function outsideRefund(q: Queryable, s: TenantScope, orderId: string): Promise<{ stripeRefundedCents: number; alkaoRefundedCents: number; outsideCents: number }> {
+  const { rows } = await q.query<{ stripe: number | null; alkao: number }>(
+    `SELECT (SELECT refunded_cents FROM public.ticketing_charge_refund_totals WHERE order_id = $1 AND client_id = $2 AND brand_id = $3) AS stripe,
+            (SELECT coalesce(sum(amount_cents), 0)::int FROM public.ticketing_refunds
+              WHERE order_id = $1 AND client_id = $2 AND brand_id = $3 AND status IN ('pending', 'succeeded')) AS alkao`,
+    [orderId, s.clientId, s.brandId],
+  );
+  const stripe = rows[0]?.stripe ?? 0;
+  const alkao = rows[0]?.alkao ?? 0;
+  return { stripeRefundedCents: stripe, alkaoRefundedCents: alkao, outsideCents: Math.max(0, stripe - alkao) };
+}
+
+const DISPUTE_COLUMNS = `d.id, d.order_id, d.stripe_dispute_id, d.amount_cents, d.currency, d.reason, d.status, d.evidence_due_by,
+  NOT (d.status = ANY($4::text[])) AS open, d.created_at, d.updated_at`;
+
+export async function orderDisputes(q: Queryable, s: TenantScope, orderId: string) {
+  const { rows } = await q.query(
+    `SELECT ${DISPUTE_COLUMNS} FROM public.ticketing_payment_disputes d
+     WHERE d.order_id = $1 AND d.client_id = $2 AND d.brand_id = $3 ORDER BY d.created_at`,
+    [orderId, s.clientId, s.brandId, CLOSED_DISPUTE_STATUSES],
+  );
+  return rows.map(toApi);
+}
+
+/** The Brand's disputes, open ones first (earliest deadline first), then the latest closed. */
+export async function listDisputes(q: Queryable, s: TenantScope, openOnly: boolean, limit = 100) {
+  const { rows } = await q.query(
+    `SELECT ${DISPUTE_COLUMNS}, o.reference, b.email AS buyer_email, b.full_name AS buyer_name
+     FROM public.ticketing_payment_disputes d
+     JOIN public.ticketing_orders o ON o.id = d.order_id AND o.client_id = d.client_id AND o.brand_id = d.brand_id
+     JOIN public.ticketing_buyers b ON b.id = o.buyer_id AND b.client_id = o.client_id AND b.brand_id = o.brand_id
+     WHERE d.client_id = $1 AND d.brand_id = $2 AND (NOT $3::boolean OR NOT (d.status = ANY($4::text[])))
+     ORDER BY (d.status = ANY($4::text[])), d.evidence_due_by NULLS LAST, d.created_at DESC
+     LIMIT $5`,
+    [s.clientId, s.brandId, openOnly, CLOSED_DISPUTE_STATUSES, limit],
+  );
+  return rows.map(toApi);
 }

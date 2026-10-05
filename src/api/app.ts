@@ -504,8 +504,22 @@ export function createApp(deps: AppDeps) {
     const orderId = param(c, "orderId");
     if (!orderId) return fail(c, 404, "order_not_found");
     const scope = c.get("scope");
-    const [order, emails] = await Promise.all([catalog.getOrder(deps.db, scope, orderId), delivery.listOrderEmails(deps.db, scope, orderId)]);
-    return c.json({ order: { ...order, emails } });
+    const [order, emails, disputes, outsideRefund, admissions] = await Promise.all([
+      catalog.getOrder(deps.db, scope, orderId),
+      delivery.listOrderEmails(deps.db, scope, orderId),
+      paymentsDb.orderDisputes(deps.db, scope, orderId),
+      paymentsDb.outsideRefund(deps.db, scope, orderId),
+      credentialsDb.admissionsForOrder(deps.db, scope, orderId),
+    ]);
+    // Run 19: when each ticket entered (evidence for a dispute), chargebacks, and refunds
+    // made directly in Stripe.
+    const tickets = (order.tickets as { id: string }[]).map((t) => ({ ...t, admittedAt: admissions.get(t.id) ?? null }));
+    return c.json({ order: { ...order, tickets, emails, disputes, outsideRefundCents: outsideRefund.outsideCents } });
+  });
+
+  app.get(`${ADMIN}/disputes`, ...admin, can("ticketing.orders.read"), async (c) => {
+    const q = api.DisputesQuery.parse(c.req.query());
+    return c.json({ disputes: await paymentsDb.listDisputes(deps.db, c.get("scope"), q.status === "open", q.limit) });
   });
 
   // ── Run 10: the organizer cancels a session and every buyer is refunded ──────────

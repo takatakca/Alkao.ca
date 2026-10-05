@@ -156,6 +156,18 @@ export async function sessionCredentials(q: Queryable, s: TenantScope, sessionId
 }
 
 // ── Scans ───────────────────────────────────────────────────────────────────
+/** When each ticket of an order entered at the gate (Run 19: evidence for a dispute). */
+export async function admissionsForOrder(q: Queryable, s: TenantScope, orderId: string): Promise<Map<string, Date>> {
+  const { rows } = await q.query<{ ticket_id: string; scanned_at: Date }>(
+    `SELECT sc.ticket_id, sc.scanned_at
+     FROM public.ticketing_tickets t
+     JOIN public.ticketing_scans sc ON sc.ticket_id = t.id AND sc.result = 'admitted'
+     WHERE t.order_id = $1 AND t.client_id = $2 AND t.brand_id = $3`,
+    [orderId, s.clientId, s.brandId],
+  );
+  return new Map(rows.map((r) => [r.ticket_id, r.scanned_at]));
+}
+
 export async function findAdmission(q: Queryable, ticketId: string): Promise<{ scannedAt: Date; deviceId: string | null } | null> {
   const { rows } = await q.query<{ scanned_at: Date; device_id: string | null }>(
     `SELECT scanned_at, device_id FROM public.ticketing_scans WHERE ticket_id = $1 AND result = 'admitted'`,

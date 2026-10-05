@@ -6,7 +6,7 @@ import { chromium, type Browser, type Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { call, pub, testApp, tokenFor, type TestApp } from "../helpers/app.js";
 import { createTestDatabase, type TestDatabase } from "../helpers/db.js";
-import { seedTwoTenants, TEST_CREDENTIAL_SECRET, type SeedResult } from "../helpers/seed.js";
+import { seedAfterSale, seedPaidOrder, seedTwoTenants, TEST_CREDENTIAL_SECRET, type SeedResult } from "../helpers/seed.js";
 
 /**
  * End-to-end: the real server, a real Chromium, the Operations app driven like a staff member.
@@ -285,6 +285,25 @@ describe("ALKAO Operations app", () => {
     expect(await page.getByRole("link", { name: `${origin}/acheter/${t.clientId}/${t.brandId}/${t.eventId}` }).isVisible()).toBe(true);
     const code = await page.getByLabel("Bouton pour votre site (copiez ce code dans la page)").inputValue();
     expect(code).toBe(`<script src="${origin}/widget.js" data-client="${t.clientId}" data-brand="${t.brandId}" data-event="${t.eventId}" data-label="Acheter des billets" async></script>`);
+  });
+
+  it("flags a Stripe dispute and a refund made in Stripe, on the dashboard and the order", async () => {
+    // FESTI-ICE, so Havana's pages in the other tests stay as they are.
+    const f = seed.festi;
+    const order = await seedPaidOrder(db.pool, f, "conteste@example.com");
+    await seedAfterSale(db.pool, f, order.orderId, 1000);
+    const page = await signedIn(seed.users.festiOwner);
+    await page.goto(`${origin}/ops#/c/${f.clientId}/b/${f.brandId}/dashboard`);
+    const notice = page.getByRole("alert").filter({ hasText: "litige Stripe ouvert" });
+    await notice.waitFor();
+    expect(await notice.textContent()).toContain("Réponse attendue");
+    await notice.getByRole("link").click();
+    await page.getByRole("heading", { name: /^Commande / }).waitFor();
+    const banner = page.getByRole("alert").filter({ hasText: "Litige Stripe (rétrofacturation)" });
+    expect(await banner.textContent()).toContain("motif : fraude");
+    expect(await banner.textContent()).toContain("ALKAO n'a annulé aucun billet");
+    expect(await page.getByText("Remboursé directement dans Stripe, hors ALKAO", { exact: false }).textContent()).toContain("10,00");
+    expect(await page.getByRole("columnheader", { name: "Entré" }).isVisible()).toBe(true);
   });
 
   it("hides money from gate staff", async () => {
