@@ -1,0 +1,173 @@
+import { existsSync } from "node:fs";
+import type { AddressInfo } from "node:net";
+import { serve, type ServerType } from "@hono/node-server";
+import { chromium, type Browser, type Page } from "playwright-core";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { call, pub, testApp, tokenFor, type TestApp } from "../helpers/app.js";
+import { createTestDatabase, type TestDatabase } from "../helpers/db.js";
+import { seedTwoTenants, TEST_CREDENTIAL_SECRET, type SeedResult } from "../helpers/seed.js";
+
+/**
+ * End-to-end: the real server, a real Chromium, the Operations app driven like a staff member.
+ * Chromium: ALKAO_CHROMIUM_PATH, else the preinstalled /opt/pw-browsers/chromium, else
+ * Playwright's own (CI runs `npx playwright-core install chromium`).
+ */
+const executablePath = process.env.ALKAO_CHROMIUM_PATH ?? (existsSync("/opt/pw-browsers/chromium") ? "/opt/pw-browsers/chromium" : undefined);
+
+let db: TestDatabase;
+let seed: SeedResult;
+let app: TestApp;
+let server: ServerType;
+let origin: string;
+let browser: Browser;
+const pageErrors: string[] = [];
+
+beforeAll(async () => {
+  db = await createTestDatabase();
+  seed = await seedTwoTenants(db.pool);
+  app = testApp(db.pool, { credentialMasterSecret: TEST_CREDENTIAL_SECRET });
+  server = await new Promise<ServerType>((resolve) => {
+    const s = serve({ fetch: app.fetch, port: 0, hostname: "127.0.0.1" }, () => resolve(s));
+  });
+  origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  browser = await chromium.launch({ ...(executablePath ? { executablePath } : {}), args: ["--no-sandbox"] });
+}, 60_000);
+
+afterAll(async () => {
+  await browser?.close();
+  await new Promise((r) => server?.close(r));
+  await db?.drop();
+});
+
+async function signedIn(userId: string): Promise<Page> {
+  const token = await tokenFor(userId, { expiresIn: "30m" });
+  const context = await browser.newContext({ locale: "fr-CA" });
+  await context.addInitScript((t) => {
+    sessionStorage.setItem("alkao.ops.session", JSON.stringify({ accessToken: t, refreshToken: null, expiresAt: Date.now() + 1_800_000, email: "ops@example.com" }));
+  }, token);
+  const page = await context.newPage();
+  page.on("pageerror", (e) => pageErrors.push(e.message));
+  return page;
+}
+
+const brandPath = () => `/c/${seed.havana.clientId}/b/${seed.havana.brandId}`;
+
+describe("ALKAO Operations app", () => {
+  it("is served with a strict content security policy", async () => {
+    const res = await fetch(`${origin}/ops`);
+    expect(res.status).toBe(200);
+    const csp = res.headers.get("content-security-policy")!;
+    expect(csp).toContain("script-src 'self'");
+    expect(csp).toContain("frame-ancestors 'none'");
+    expect(await (await fetch(`${origin}/ops/config.json`)).json()).toEqual({ supabaseUrl: null, supabaseAnonKey: null });
+  });
+
+  it("asks for credentials when signed out", async () => {
+    const page = await (await browser.newContext()).newPage();
+    await page.goto(`${origin}/ops`);
+    await expect(page.getByRole("button", { name: "Se connecter" }).isVisible()).resolves.toBe(true);
+  });
+
+  it("lets an owner pick a workspace and see the dashboard", async () => {
+    const page = await signedIn(seed.users.havanaOwner);
+    await page.goto(`${origin}/ops#/`);
+    await page.getByText("Havana Resort — Événements").click();
+    await page.getByRole("heading", { name: "Tableau de bord" }).waitFor();
+    expect(await page.getByText("Ventes brutes").isVisible()).toBe(true);
+    expect(await page.getByText("Net client (avant frais Stripe)").isVisible()).toBe(true);
+    // FESTI-ICE (another Client) is not offered to a Havana-only owner.
+    await page.goto(`${origin}/ops#/`);
+    await page.getByRole("heading", { name: "Choisir un espace" }).waitFor();
+    expect(await page.getByText("FESTI-ICE").count()).toBe(0);
+  });
+
+  it("builds the catalog: venue, event, session on sale, ticket type", async () => {
+    const page = await signedIn(seed.users.havanaOwner);
+    await page.goto(`${origin}/ops#${brandPath()}/venues`);
+    await page.getByLabel("Nom").fill("Sentier glacé");
+    await page.getByLabel("Ville").fill("Maricourt");
+    await page.getByRole("button", { name: "Ajouter le lieu" }).click();
+    await page.getByRole("cell", { name: "Sentier glacé" }).waitFor();
+
+    await page.goto(`${origin}/ops#${brandPath()}/events`);
+    await page.getByLabel("Titre").fill("Soirée Patin Rétro");
+    await page.getByRole("button", { name: "Créer l'événement" }).click();
+    await page.getByRole("link", { name: "Soirée Patin Rétro" }).click();
+    await page.getByRole("heading", { name: /Soirée Patin Rétro/ }).waitFor();
+
+    await page.getByLabel("Début").fill("2027-01-15T18:30");
+    await page.getByLabel("Capacité").fill("250");
+    await page.getByRole("button", { name: "Ajouter la séance" }).click();
+    await page.getByRole("button", { name: "Mettre en vente" }).click();
+    await page.getByRole("button", { name: "Pause" }).waitFor();
+
+    await page.getByLabel("Code").fill("ADULTE");
+    await page.getByLabel("Nom", { exact: true }).fill("Adulte");
+    await page.getByLabel("Prix ($)").fill("24,95");
+    await page.getByRole("button", { name: "Ajouter", exact: true }).click();
+    await page.getByRole("cell", { name: "ADULTE", exact: true }).waitFor();
+    await page.getByRole("button", { name: "Publier" }).click();
+    await page.getByRole("button", { name: "Retirer de la vente publique" }).waitFor();
+
+    const { rows } = await db.pool.query(
+      `SELECT e.status, s.status AS session_status, s.capacity, t.price_cents
+       FROM public.ticketing_events e JOIN public.ticketing_sessions s ON s.event_id = e.id JOIN public.ticketing_ticket_types t ON t.event_id = e.id
+       WHERE e.client_id = $1 AND e.title = 'Soirée Patin Rétro'`,
+      [seed.havana.clientId],
+    );
+    expect(rows).toEqual([{ status: "published", session_status: "on_sale", capacity: 250, price_cents: 2495 }]);
+  });
+
+  it("shows an order and explains in French why it cannot be refunded", async () => {
+    const page = await signedIn(seed.users.havanaOwner);
+    await page.goto(`${origin}/ops#${brandPath()}/order/${seed.havana.orderId}`);
+    await page.getByRole("heading", { name: /^Commande / }).waitFor();
+    expect(await page.getByText("Test Buyer").isVisible()).toBe(true);
+    page.on("dialog", (d) => void d.accept());
+    await page.getByRole("button", { name: "Rembourser", exact: true }).click();
+    await page.getByRole("alert").waitFor();
+    expect(await page.getByRole("alert").textContent()).toContain("Paiements non configurés");
+  });
+
+  it("scans tickets at the gate: accepted once, then already in", async () => {
+    const t = seed.havana;
+    const { rows } = await db.pool.query<{ id: string }>(
+      `INSERT INTO public.ticketing_sessions (client_id, brand_id, event_id, starts_at, capacity, status)
+       VALUES ($1, $2, $3, now() + interval '15 minutes', 20, 'on_sale') RETURNING id`,
+      [t.clientId, t.brandId, t.eventId],
+    );
+    const toddler = t.types.find((x) => x.code === "TODDLER")!.id;
+    const h = await call(app, "POST", `${pub(t.clientId, t.brandId)}/holds`, { body: { sessionId: rows[0]!.id, items: [{ ticketTypeId: toddler, quantity: 1 }] } });
+    const co = await call(app, "POST", `${pub(t.clientId, t.brandId)}/holds/${h.body.hold.id}/checkout`, {
+      headers: { "x-alkao-hold-token": h.body.hold.token },
+      body: { buyer: { email: "gate@example.com" }, successUrl: `${t.returnOrigin}/ok`, cancelUrl: `${t.returnOrigin}/ko` },
+    });
+    const order = await call(app, "GET", `${pub(t.clientId, t.brandId)}/orders/${co.body.order.id}`, { headers: { "x-alkao-order-token": co.body.order.token } });
+    const qr = order.body.order.tickets[0].credential as string;
+
+    const page = await signedIn(seed.users.havanaStaff);
+    await page.goto(`${origin}/ops#${brandPath()}/scanner`);
+    await page.getByLabel("Événement").selectOption({ label: "Havana Resort — Événements 2026-2027" });
+    const sessionId = rows[0]!.id;
+    await page.locator(`option[value="${sessionId}"]`).waitFor({ state: "attached" });
+    await page.getByLabel("Séance").selectOption(sessionId);
+    const input = page.getByLabel("Code du billet (lecteur ou saisie)");
+    await input.fill(qr);
+    await input.press("Enter");
+    await page.getByRole("status").getByText("ENTRÉE ACCEPTÉE").waitFor();
+    await input.fill(qr);
+    await input.press("Enter");
+    await page.getByRole("status").getByText("DÉJÀ ENTRÉ").waitFor();
+  });
+
+  it("hides money from gate staff", async () => {
+    const page = await signedIn(seed.users.havanaStaff);
+    await page.goto(`${origin}/ops#${brandPath()}/dashboard`);
+    await page.getByRole("alert").waitFor();
+    expect(await page.getByRole("alert").textContent()).toContain("Votre rôle ne permet pas cette action.");
+  });
+
+  it("ran without script errors", () => {
+    expect(pageErrors).toEqual([]);
+  });
+});

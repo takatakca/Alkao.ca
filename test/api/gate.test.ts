@@ -29,7 +29,12 @@ const UNGATED = new Set([
   "POST /v1/control/events",
   "POST /v1/webhooks/stripe",
   "GET /v1/admin/clients/:clientId/brands/:brandId/status",
+  // The caller's own memberships (no tenant id in the request).
+  "GET /v1/admin/me",
 ]);
+
+// Static files of the Operations app: no data, every call goes through the gated API.
+const isOpsAsset = (path: string) => path === "/ops" || path.startsWith("/ops/");
 
 function routesOf(app: TestApp) {
   const seen = new Set<string>();
@@ -58,7 +63,7 @@ async function holdCount() {
 
 async function expectAllGated(app: TestApp, clientId: string, brandId: string, reason: string) {
   const token = await tokenFor(seed.users.havanaOwner);
-  const routes = routesOf(app).filter((r) => !UNGATED.has(`${r.method} ${r.path}`));
+  const routes = routesOf(app).filter((r) => !UNGATED.has(`${r.method} ${r.path}`) && !isOpsAsset(r.path));
   expect(routes.length).toBeGreaterThan(15);
   for (const r of routes) {
     const path = concrete(r.path, clientId, brandId);
@@ -85,7 +90,7 @@ describe("Ticketing gate on every route", () => {
     const app = testApp(db.pool);
     for (const r of routesOf(app)) {
       const key = `${r.method} ${r.path}`;
-      expect(UNGATED.has(key) || r.path.startsWith("/v1/public/clients/:clientId/brands/:brandId/") || r.path.startsWith("/v1/admin/clients/:clientId/brands/:brandId/"), key).toBe(true);
+      expect(UNGATED.has(key) || isOpsAsset(r.path) || r.path.startsWith("/v1/public/clients/:clientId/brands/:brandId/") || r.path.startsWith("/v1/admin/clients/:clientId/brands/:brandId/"), key).toBe(true);
     }
   });
 

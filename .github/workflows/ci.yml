@@ -33,6 +33,8 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
+      # Chromium for the Operations app end-to-end tests (test/ui).
+      - run: npx playwright-core install --with-deps chromium
       - run: npm run typecheck
       - run: npm run check:migrations
       - run: npm test
