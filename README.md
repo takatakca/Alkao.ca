@@ -53,6 +53,7 @@ cp .env.example .env    # then fill DATABASE_URL, auth and control keys
 npm start
 npm run worker:sweeper  # expires lapsed holds every minute
 npm run worker:email    # sends buyers their tickets (needs RESEND_API_KEY, ALKAO_EMAIL_FROM, ALKAO_PUBLIC_URL)
+npm run worker:cancellations  # finishes session cancellations and retries refunds (needs Stripe)
 ```
 
 Operations app: open `http://localhost:8787/ops` and sign in with a Supabase account that has a
@@ -84,3 +85,4 @@ TAKATAK membership (set `SUPABASE_URL` and `SUPABASE_ANON_KEY`). See
 | Run 07 | `npm run control:apply`: set up Clients, Brands, staff and Ticketing from a plan through the signed control contract, before or without the TAKATAK publisher. [Go-live checklist](docs/ALKAO_GO_LIVE.md) |
 | Run 08 | Hosted ticket shop `/acheter`: sessions, quantities, server quote with TPS/TVQ, seat hold with countdown, Stripe Checkout, resume or free seats, then `/billets` |
 | Run 09 | Offline gate scanning in `/ops`: manifest stored on the device, Ed25519 checked with WebCrypto, queued scans synced in batches, double entries across gates reported |
+| Run 10 | Session cancellation by the organizer: sales stop, every buyer refunded in full (commission included) exactly once with retries, free tickets voided, "Séance annulée" email, late payments refunded |

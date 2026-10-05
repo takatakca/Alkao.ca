@@ -292,6 +292,7 @@ export class PaymentsService {
     }
 
     await payments.markPaymentPaid(tx, payment.id, event.paymentIntentId, now);
+    let unfulfillable = "capacity_unavailable";
     await tx.query("SAVEPOINT fulfil");
     try {
       const tickets = await recordOrderPaid(tx, scope, payment.orderId, now);
@@ -300,10 +301,12 @@ export class PaymentsService {
       return { outcome: "processed", clientId: scope.clientId, refund: null };
     } catch (error) {
       await tx.query("ROLLBACK TO SAVEPOINT fulfil");
-      if (!(error instanceof DomainError && error.code === "sold_out")) throw error;
+      if (!(error instanceof DomainError && (error.code === "sold_out" || error.code === "session_cancelled"))) throw error;
+      unfulfillable = error.code === "sold_out" ? "capacity_unavailable" : "session_cancelled";
     }
 
-    // The hold lapsed and the seats were sold meanwhile: take the money, then give it all back.
+    // The hold lapsed and the seats were sold meanwhile, or the organizer cancelled the
+    // session: take the money, then give it all back.
     await tx.query(`UPDATE public.ticketing_orders SET status = 'paid', paid_at = $2 WHERE id = $1`, [payment.orderId, now]);
     const refund = await payments.insertRefund(tx, {
       ...scope,
@@ -312,7 +315,7 @@ export class PaymentsService {
       amountCents: payment.amountCents,
       commissionRefundCents: payment.applicationFeeCents,
       voidTicketIds: [],
-      reason: "capacity_unavailable",
+      reason: unfulfillable,
       requestedBy: "system",
     });
     await writeAudit(tx, scope, system, "order.paid_unfulfillable", { type: "order", id: payment.orderId }, { refundId: refund.id });

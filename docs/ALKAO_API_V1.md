@@ -193,6 +193,38 @@ How it works:
 - **Event details:** `GET /v1/public/…/events/:eventId` now also returns `event.brand.name`
   and `event.venue` (name, city, timezone).
 
+### Session cancellation (Run 10)
+
+When an organizer cancels a session (weather, ice), every buyer is refunded and told.
+
+| Method | Path | Permission | Result |
+|---|---|---|---|
+| POST | `/sessions/:sessionId/cancel` `{ reason? }` | `payments.manage` (owner, admin) | `202 { cancellation }`. The session is `cancelled` at once, then a first batch runs. Asking twice is harmless |
+| POST | `/sessions/:sessionId/cancellation/continue` | `payments.manage` | The next batch (10 orders). The Operations app calls it until done |
+| GET | `/sessions/:sessionId/cancellation` | `orders.read` | Progress: orders refunded, voided, pending, failed; amount refunded; failures with their reference |
+
+**What happens:**
+
+- **Sales stop at once.** Open holds are released.
+- **Paying orders are refunded in full,** with the TAKATAK commission returned (V1 policy):
+  - partially refunded orders get the rest;
+  - for tickets moved into this session by Flex Météo, the original order, which holds the
+    money, is refunded.
+- **Free tickets are voided** (reason `cancelled`).
+- **Each buyer gets a "Séance annulée" email** with the amount refunded.
+
+**Safety:**
+
+- **Exactly once.** Each affected order has its own row (`ticketing_session_cancellation_orders`),
+  so it is refunded exactly once. A Stripe failure is retried with the same refund and the same
+  idempotency keys, at most once per batch and 10 times in all, then reported as `failed`.
+- **Late payments.** A checkout still open at Stripe that completes after the cancellation
+  issues no ticket and is refunded in full automatically (reason `session_cancelled`).
+- **No silent switch-off.** `PATCH /sessions/:id { status: "cancelled" }` on a session with
+  sold or held seats answers `409 use_session_cancellation`.
+- **Unattended.** `npm run worker:cancellations` finishes cancellations and retries without
+  anyone keeping the page open.
+
 ### Role → permission
 
 | Role | catalog.read · inventory.read · holds.read | catalog.write | orders.read · buyers.read | audit.read |

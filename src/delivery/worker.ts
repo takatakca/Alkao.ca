@@ -1,7 +1,7 @@
 import { withTransaction, type Db } from "../db/pool.js";
-import { EmailSendError, type EmailSender } from "./email.js";
+import { EmailSendError, type EmailMessage, type EmailSender } from "./email.js";
 import { emailLinkToken, ticketsUrl, tokenHash } from "./links.js";
-import { ticketsEmail } from "./templates.js";
+import { sessionCancelledEmail, ticketsEmail } from "./templates.js";
 
 export interface DeliveryConfig {
   sender: EmailSender;
@@ -27,7 +27,7 @@ interface DueRow {
   client_id: string;
   brand_id: string;
   order_id: string;
-  kind: "order_tickets" | "exchange_tickets";
+  kind: "order_tickets" | "exchange_tickets" | "session_cancelled";
   attempts: number;
   created_at: Date;
   reference: string;
@@ -41,6 +41,7 @@ interface DueRow {
   city: string | null;
   timezone: string;
   valid_tickets: number;
+  cancel_refund_cents: number;
 }
 
 /**
@@ -59,7 +60,10 @@ export async function deliverTicketEmails(db: Db, cfg: DeliveryConfig, now = new
                 o.reference, o.status AS order_status, b.email, b.full_name, br.name AS brand_name,
                 e.title AS event_title, s.starts_at, v.name AS venue_name, v.city, v.timezone,
                 (SELECT count(*)::int FROM public.ticketing_tickets t
-                  WHERE t.order_id = o.id AND t.client_id = o.client_id AND t.brand_id = o.brand_id AND t.status = 'valid') AS valid_tickets
+                  WHERE t.order_id = o.id AND t.client_id = o.client_id AND t.brand_id = o.brand_id AND t.status = 'valid') AS valid_tickets,
+                coalesce((SELECT i.amount_cents FROM public.ticketing_session_cancellation_orders i
+                  WHERE i.order_id = coalesce(o.exchange_of_order_id, o.id) AND i.client_id = o.client_id AND i.brand_id = o.brand_id
+                  ORDER BY i.created_at DESC LIMIT 1), 0)::int AS cancel_refund_cents
          FROM public.ticketing_email_outbox x
          JOIN public.ticketing_orders o ON o.id = x.order_id AND o.client_id = x.client_id AND o.brand_id = x.brand_id
          JOIN public.ticketing_buyers b ON b.id = o.buyer_id AND b.client_id = o.client_id AND b.brand_id = o.brand_id
@@ -80,6 +84,33 @@ export async function deliverTicketEmails(db: Db, cfg: DeliveryConfig, now = new
         return "skipped" as const;
       };
       if (now.getTime() - row.created_at.getTime() > maxAgeMs) return skip("too_old");
+      const send = async (content: Omit<EmailMessage, "to" | "idempotencyKey">) => {
+        try {
+          const messageId = await cfg.sender.send({ ...content, to: row.email, idempotencyKey: `alkao-email-${row.id}-${row.attempts}` });
+          await tx.query(
+            `UPDATE public.ticketing_email_outbox
+             SET status = 'sent', sent_at = $2, attempts = attempts + 1, provider_message_id = $3, last_error = NULL WHERE id = $1`,
+            [row.id, now, messageId],
+          );
+          return "sent" as const;
+        } catch (error) {
+          const retryable = error instanceof EmailSendError ? error.retryable : true;
+          const attempts = row.attempts + 1;
+          const giveUp = !retryable || attempts >= maxAttempts;
+          await tx.query(
+            `UPDATE public.ticketing_email_outbox
+             SET status = $2, attempts = $3, next_attempt_at = $4, last_error = left($5, 500) WHERE id = $1`,
+            [row.id, giveUp ? "failed" : "pending", attempts, new Date(now.getTime() + backoffMs(attempts)), String((error as Error).message ?? error)],
+          );
+          return giveUp ? ("failed" as const) : ("retried" as const);
+        }
+      };
+      if (row.kind === "session_cancelled") {
+        return send(sessionCancelledEmail({
+          brandName: row.brand_name, buyerName: row.full_name, reference: row.reference, eventTitle: row.event_title,
+          startsAt: row.starts_at, venueName: row.venue_name, city: row.city, timezone: row.timezone, refundedCents: row.cancel_refund_cents,
+        }));
+      }
       if (!["paid", "partially_refunded"].includes(row.order_status) || row.valid_tickets === 0) return skip("no_valid_ticket");
 
       const token = emailLinkToken(cfg.credentialMasterSecret, row.id);
@@ -102,25 +133,7 @@ export async function deliverTicketEmails(db: Db, cfg: DeliveryConfig, now = new
         validTickets: row.valid_tickets,
         link: ticketsUrl(cfg.publicUrl, { clientId: row.client_id, brandId: row.brand_id, orderId: row.order_id, token }),
       });
-      try {
-        const messageId = await cfg.sender.send({ ...content, to: row.email, idempotencyKey: `alkao-email-${row.id}-${row.attempts}` });
-        await tx.query(
-          `UPDATE public.ticketing_email_outbox
-           SET status = 'sent', sent_at = $2, attempts = attempts + 1, provider_message_id = $3, last_error = NULL WHERE id = $1`,
-          [row.id, now, messageId],
-        );
-        return "sent" as const;
-      } catch (error) {
-        const retryable = error instanceof EmailSendError ? error.retryable : true;
-        const attempts = row.attempts + 1;
-        const giveUp = !retryable || attempts >= maxAttempts;
-        await tx.query(
-          `UPDATE public.ticketing_email_outbox
-           SET status = $2, attempts = $3, next_attempt_at = $4, last_error = left($5, 500) WHERE id = $1`,
-          [row.id, giveUp ? "failed" : "pending", attempts, new Date(now.getTime() + backoffMs(attempts)), String((error as Error).message ?? error)],
-        );
-        return giveUp ? ("failed" as const) : ("retried" as const);
-      }
+      return send(content);
     });
     if (!outcome) break;
     result[outcome]++;

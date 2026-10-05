@@ -8,6 +8,7 @@ import { loadGateRecords, loadMembershipRole } from "../db/gate.js";
 import { withTransaction, type Db } from "../db/pool.js";
 import { applyControlEvent } from "../db/projections.js";
 import { evaluateTicketingGate, type GateDecision } from "../domain/entitlement.js";
+import { DomainError } from "../domain/errors.js";
 import { isUuid } from "../domain/ids.js";
 import { isSessionSellable } from "../domain/lifecycle.js";
 import { roleHasPermission, type TicketingPermission, type WorkspaceRole } from "../domain/permissions.js";
@@ -28,6 +29,7 @@ import { mountOpsUi, type OpsUiConfig } from "./ops-ui.js";
 import { mountBuyerUi } from "./buyer-ui.js";
 import { mountShopUi } from "./shop-ui.js";
 import * as delivery from "../delivery/db.js";
+import * as cancellation from "../ops/cancellation.js";
 
 export const API_VERSION = "alkao.api.v1";
 
@@ -389,6 +391,14 @@ export function createApp(deps: AppDeps) {
     if (!sessionId) return fail(c, 404, "session_not_found");
     const body = api.UpdateSession.parse(await readJson(c));
     const session = await withTransaction(deps.db, async (tx) => {
+      if (body.status === "cancelled") {
+        // Run 10: a session with buyers is cancelled through POST …/cancel, which refunds them.
+        const { rows } = await tx.query<{ n: number }>(
+          `SELECT (sold_count + reserved_count)::int AS n FROM public.ticketing_sessions WHERE id = $1 AND client_id = $2 AND brand_id = $3 FOR UPDATE`,
+          [sessionId, c.get("scope").clientId, c.get("scope").brandId],
+        );
+        if ((rows[0]?.n ?? 0) > 0) throw new DomainError("use_session_cancellation");
+      }
       const s = await catalog.updateSession(tx, c.get("scope"), sessionId, body);
       await catalog.writeAudit(tx, c.get("scope"), actor(c), "session.updated", { type: "session", id: sessionId }, body);
       return s;
@@ -437,6 +447,29 @@ export function createApp(deps: AppDeps) {
     const scope = c.get("scope");
     const [order, emails] = await Promise.all([catalog.getOrder(deps.db, scope, orderId), delivery.listOrderEmails(deps.db, scope, orderId)]);
     return c.json({ order: { ...order, emails } });
+  });
+
+  // ── Run 10: the organizer cancels a session and every buyer is refunded ──────────
+  app.post(`${ADMIN}/sessions/:sessionId/cancel`, ...admin, can("ticketing.payments.manage"), async (c) => {
+    const sessionId = param(c, "sessionId");
+    if (!sessionId) return fail(c, 404, "session_not_found");
+    const body = api.CancelSessionRequest.parse(await readJson(c));
+    const scope = c.get("scope");
+    await cancellation.cancelSession(deps.db, scope, sessionId, body.reason ?? null, actor(c));
+    return c.json({ cancellation: await cancellation.runCancellationBatch(deps.db, paymentsService, scope, sessionId) }, 202);
+  });
+
+  app.post(`${ADMIN}/sessions/:sessionId/cancellation/continue`, ...admin, can("ticketing.payments.manage"), async (c) => {
+    const sessionId = param(c, "sessionId");
+    if (!sessionId) return fail(c, 404, "session_not_found");
+    return c.json({ cancellation: await cancellation.runCancellationBatch(deps.db, paymentsService, c.get("scope"), sessionId) });
+  });
+
+  app.get(`${ADMIN}/sessions/:sessionId/cancellation`, ...admin, can("ticketing.orders.read"), async (c) => {
+    const sessionId = param(c, "sessionId");
+    const progress = sessionId ? await cancellation.getCancellation(deps.db, c.get("scope"), sessionId) : null;
+    if (!progress) return fail(c, 404, "cancellation_not_found");
+    return c.json({ cancellation: progress });
   });
 
   // ── Run 06: send the buyer's tickets email again (same personal link) ──────────

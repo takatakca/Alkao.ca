@@ -20,6 +20,7 @@
     "contracts:generate": "tsx scripts/generate-contracts.ts",
     "worker:sweeper": "tsx scripts/sweeper.ts",
     "worker:email": "tsx scripts/email-worker.ts",
+    "worker:cancellations": "tsx scripts/cancellation-worker.ts",
     "control:apply": "tsx scripts/control-apply.ts",
     "db:migrate": "tsx scripts/migrate.ts"
   },

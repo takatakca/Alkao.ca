@@ -181,6 +181,9 @@ export async function recordOrderPaid(tx: Tx, scope: TenantScope, orderId: strin
     const order = rows[0];
     if (!order) throw new DomainError("order_not_found");
     if (order.status !== "pending_payment") throw new DomainError("order_not_pending");
+    // Run 10: a cancelled session issues no ticket (a late payment is refunded in full).
+    const { rows: session } = await tx.query<{ status: string }>(`SELECT status FROM public.ticketing_sessions WHERE id = $1`, [order.session_id]);
+    if (session[0]?.status === "cancelled") throw new DomainError("session_cancelled");
 
     if (order.hold_id) {
       await tx.query(
