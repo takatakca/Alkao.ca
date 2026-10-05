@@ -69,3 +69,11 @@ ALKAO is **disabled by default**. A route serves a Client/Brand only when all of
    `validFrom`/`validUntil` window.
 
 An entitlement for one Brand never enables another Brand of the same Client.
+
+## Provisioning without the TAKATAK publisher
+
+`npm run control:apply -- plan.json` sends the same signed events from a provisioning plan
+(`src/control/provision.ts`, example in `provisioning.example.json`). Use it to set up
+Clients before the TAKATAK publisher exists. It uses the current time in milliseconds as
+`version`, the scale of an `updatedAt`, so a later TAKATAK update supersedes it. See
+[the go-live checklist](ALKAO_GO_LIVE.md).
