@@ -166,14 +166,98 @@ describe("Flex Météo exchange", () => {
     expect(ok.status).toBe(201);
   });
 
-  it("is enforced by the database: one exchange per order, never with money", async () => {
+  it("is enforced by the database: never with money, and always pointing to the original order", async () => {
     const f = seed.festi;
-    await expect(
-      db.pool.query(
+    const insert = (q: { query: typeof db.pool.query }, reference: string, cents: number, of: string) =>
+      q.query(
         `INSERT INTO public.ticketing_orders (client_id, brand_id, event_id, session_id, buyer_id, reference, subtotal_cents, tax_cents, total_cents, exchange_of_order_id)
-         VALUES ($1, $2, $3, $4, $5, 'ZZZZ-ZZZ1', 100, 0, 100, $6)`,
-        [f.clientId, f.brandId, f.eventId, f.sessionId, f.buyerId, f.orderId],
-      ),
-    ).rejects.toMatchObject({ code: "23514" });
+         VALUES ($1, $2, $3, $4, $5, $6, $7, 0, $7, $8) RETURNING id`,
+        [f.clientId, f.brandId, f.eventId, f.sessionId, f.buyerId, reference, cents, of],
+      );
+    await expect(insert(db.pool, "ZZZZ-ZZZ1", 100, f.orderId)).rejects.toMatchObject({ code: "23514" });
+    // Run 37: a move of a move is refused; it must point to the order holding the money.
+    const client = await db.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const { rows } = await insert(client, "ZZZZ-ZZZ2", 0, f.orderId);
+      await expect(insert(client, "ZZZZ-ZZZ3", 0, rows[0].id)).rejects.toMatchObject({ code: "23514", message: "exchange_must_point_to_original" });
+    } finally {
+      await client.query("ROLLBACK");
+      client.release();
+    }
+  });
+});
+
+describe("open-date tickets: billet ouvert (Run 37)", () => {
+  const openDate = (t: TenantFixture) =>
+    db.pool.query(`UPDATE public.ticketing_ticket_types SET open_date = true WHERE id = $1`, [typeId(t, "OPEN_DATE")]);
+  const publicOrder = async (t: TenantFixture, o: { orderId: string; token: string }) =>
+    (await call(app, "GET", `${pub(t.clientId, t.brandId)}/orders/${o.orderId}`, { headers: { "x-alkao-order-token": o.token } })).body.order;
+
+  it("change date as often as needed, the whole group together, each time from the latest order", async () => {
+    const f = seed.festi;
+    await openDate(f);
+    const [a, b, c] = [await session(f), await session(f), await session(f)];
+    const o = await buy(f, a, { OPEN_DATE: 1, CHILD: 1 });
+    expect(await publicOrder(f, o)).toMatchObject({ canChangeSession: true, openDate: true });
+
+    const first = await exchange(f, o, b);
+    expect(first.status).toBe(201);
+    const moved = { orderId: first.body.exchange.orderId, token: first.body.exchange.token };
+    expect(await publicOrder(f, moved)).toMatchObject({ canChangeSession: true, openDate: true, sessionId: b });
+    const second = await exchange(f, moved, c);
+    expect(second.status).toBe(201);
+    expect(second.body.exchange.tickets).toBe(2);
+    expect([await counts(a), await counts(b), await counts(c)].map((x) => x.sold_count)).toEqual([0, 0, 2]);
+
+    // An order already moved cannot move again: only its latest order can.
+    expect((await exchange(f, o, a)).body.error.code).toBe("already_exchanged");
+    expect((await exchange(f, moved, a)).body.error.code).toBe("already_exchanged");
+    expect(await publicOrder(f, moved)).toMatchObject({ canChangeSession: false, exchanged: true });
+    const { rows } = await db.pool.query(`SELECT data FROM public.ticketing_audit_log WHERE action = 'order.exchanged' AND entity_id = ANY($1::text[]) ORDER BY id`, [[o.orderId, moved.orderId]]);
+    expect(rows.map((r) => r.data.openDate)).toEqual([true, true]);
+  });
+
+  it("stop once a ticket has entered, and only to a session that is on sale with room", async () => {
+    const f = seed.festi;
+    await openDate(f);
+    const [a, full] = [await session(f), await session(f, 1)];
+    const o = await buy(f, a, { OPEN_DATE: 2 });
+    expect((await exchange(f, o, full)).body.error.code).toBe("sold_out");
+    const order = await publicOrder(f, o);
+    const { rows: cred } = await db.pool.query<{ id: string }>(`SELECT id FROM public.ticketing_credentials WHERE ticket_id = $1 AND status = 'active'`, [order.tickets[0].id]);
+    await db.pool.query(
+      `INSERT INTO public.ticketing_scans (client_id, brand_id, event_id, session_id, credential_id, ticket_id, result, device_id, scanned_by, scanned_at, received_at)
+       VALUES ($1, $2, $3, $4, $5, $6, 'admitted', 'gate-1', $7, now(), now())`,
+      [f.clientId, f.brandId, f.eventId, a, cred[0]!.id, order.tickets[0].id, seed.users.festiOwner],
+    );
+    expect((await exchange(f, o, await session(f))).body.error.code).toBe("ticket_already_used");
+  });
+
+  it("leave Flex Météo as it was: one change, and none without the option", async () => {
+    const f = seed.festi;
+    const [a, b, c] = [await session(f), await session(f), await session(f)];
+    const plain = await buy(f, a, { GENERAL: 1 });
+    expect((await exchange(f, plain, b)).body.error.code).toBe("flex_not_purchased");
+    const flex = await buy(f, a, { GENERAL: 1, FLEX_WEATHER: 1 });
+    const once = await exchange(f, flex, b);
+    expect(once.status).toBe(201);
+    const moved = { orderId: once.body.exchange.orderId, token: once.body.exchange.token };
+    expect(await publicOrder(f, moved)).toMatchObject({ canChangeSession: false, openDate: false });
+    expect((await exchange(f, moved, c)).body.error.code).toBe("already_exchanged");
+  });
+
+  it("is set on admission types only, by catalog editors", async () => {
+    const h = seed.havana;
+    const token = await tokenFor(seed.users.havanaOwner);
+    const base = `${adm(h.clientId, h.brandId)}/events/${h.eventId}/ticket-types`;
+    const made = await call(app, "POST", base, { token, body: { code: "OUVERT", name: "Billet ouvert", priceCents: 3995, maxQuantity: 10, openDate: true } });
+    expect(made.status).toBe(201);
+    expect(made.body.ticketType).toMatchObject({ kind: "admission", openDate: true });
+    expect((await call(app, "POST", base, { token, body: { code: "OPT", name: "Option", kind: "add_on", addOnScope: "per_admission", priceCents: 100, maxQuantity: 10, openDate: true } })).status).toBe(400);
+    const off = await call(app, "PATCH", `${adm(h.clientId, h.brandId)}/ticket-types/${made.body.ticketType.id}`, { token, body: { openDate: false } });
+    expect(off.body.ticketType.openDate).toBe(false);
+    const shop = await call(app, "GET", `${pub(h.clientId, h.brandId)}/events/${h.eventId}`);
+    expect(shop.body.ticketTypes.find((t: { code: string }) => t.code === "OUVERT")).toMatchObject({ openDate: false });
   });
 });

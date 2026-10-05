@@ -186,12 +186,14 @@ export async function runCancellationBatch(db: Db, payments: PaymentsService, s:
           await settle(rowCount ? "voided" : "skipped");
         }
 
-        // Tell the buyer, on the order that held this session's tickets.
+        // Tell the buyer, on the order that held this session's tickets: the latest of the
+        // group here, since an open-date ticket (Run 37) can come back to a session it left.
         await tx.query(
           `INSERT INTO public.ticketing_email_outbox (client_id, brand_id, event_id, order_id, kind)
            SELECT o.client_id, o.brand_id, o.event_id, o.id, 'session_cancelled'
            FROM public.ticketing_orders o
            WHERE (o.id = $1 OR o.exchange_of_order_id = $1) AND o.session_id = $2 AND o.client_id = $3 AND o.brand_id = $4
+           ORDER BY o.created_at DESC LIMIT 1
            ON CONFLICT (order_id, kind, refund_id) DO NOTHING`,
           [item.order_id, sessionId, s.clientId, s.brandId],
         );

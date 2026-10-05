@@ -44,6 +44,8 @@ const TRIGGER_CODES = new Set([
   "credential_key_invalid_transition",
   "credential_fields_immutable",
   "credential_revocation_is_final",
+  // Run 37
+  "exchange_must_point_to_original",
 ]);
 
 /** Translate a PostgreSQL error into a DomainError, or return null if it is not one of ours. */

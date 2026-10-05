@@ -18,6 +18,8 @@ export interface TicketTypeRule {
   countsAsAdult: boolean;
   addOnScope: AddOnScope | null;
   active: boolean;
+  /** Run 37: an open-date admission ("billet ouvert"): its order can change session freely. */
+  openDate?: boolean;
 }
 
 export interface CartItem {

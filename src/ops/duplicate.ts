@@ -53,9 +53,9 @@ export async function duplicateEvent(
     const types = await tx.query(
       `INSERT INTO public.ticketing_ticket_types
          (client_id, brand_id, event_id, code, name, description, kind, price_cents, min_quantity, max_quantity,
-          max_adults_in_order, counts_as_adult, add_on_scope, active, sort_order, grants_session_change)
+          max_adults_in_order, counts_as_adult, add_on_scope, active, sort_order, grants_session_change, open_date)
        SELECT client_id, brand_id, $4, code, name, description, kind, price_cents, min_quantity, max_quantity,
-              max_adults_in_order, counts_as_adult, add_on_scope, active, sort_order, grants_session_change
+              max_adults_in_order, counts_as_adult, add_on_scope, active, sort_order, grants_session_change, open_date
        FROM public.ticketing_ticket_types WHERE event_id = $1 AND client_id = $2 AND brand_id = $3`,
       [eventId, s.clientId, s.brandId, newId],
     );

@@ -65,7 +65,7 @@ How a payment works:
 | GET / PATCH | `/events/:eventId` | `catalog.read` / `catalog.write` |
 | GET / POST | `/events/:eventId/sessions` | `inventory.read` / `catalog.write` (always created as `draft`) |
 | PATCH | `/sessions/:sessionId` | `catalog.write`; `409 capacity_below_committed` if capacity drops below what is held + sold |
-| GET / POST | `/events/:eventId/ticket-types` | `catalog.read` / `catalog.write` |
+| GET / POST | `/events/:eventId/ticket-types` | `catalog.read` / `catalog.write`; `openDate: true` makes an admission type a "billet ouvert" (Run 37, admission types only, off by default) |
 | PATCH | `/ticket-types/:ticketTypeId` | `catalog.write` |
 | GET | `/orders?limit&before` | `orders.read` |
 | GET | `/orders/:orderId` | `orders.read` (buyer, lines, taxes, tickets) |
@@ -93,23 +93,38 @@ the database checks that the order's refunded totals equal the sum of its refund
 
 Every admin write is recorded in `ticketing_audit_log` in the same transaction.
 
-### Flex Météo session change (Run 04)
+### Session change: Flex Météo (Run 04) and open-date tickets (Run 37)
 
 | Method | Path | Who | Result |
 |---|---|---|---|
 | POST | `/v1/public/…/orders/:orderId/exchange` `{ sessionId }` | Buyer (header `X-Alkao-Order-Token`) | `201 { exchange: { orderId, reference, token, tickets } }` |
 | POST | `/v1/admin/…/orders/:orderId/exchange` `{ sessionId }` | `credentials.manage` (owner, admin, manager) | Same, done by staff |
 
-- **Who can change:** an order that bought an add-on with `grantsSessionChange` (FESTI-ICE
-  `FLEX_WEATHER`) can move all its valid tickets, **once**, to another session of the same event.
+- **Who can change:**
+  - **Flex Météo:** an order that bought an add-on with `grantsSessionChange` (FESTI-ICE
+    `FLEX_WEATHER`) can move all its valid tickets, **once**, to another session of the same
+    event.
+  - **Open-date ticket ("billet ouvert", Run 37):** an order holding an admission type with
+    `openDate: true` (FESTI-ICE `OPEN_DATE`) can move **as often as needed**, always with its
+    whole group (every ticket of the order, children included). A seat is held in the chosen
+    session each time, so a session never goes over capacity. Owner decision 4 in
+    [ALKAO_DECISIONS.md](ALKAO_DECISIONS.md).
+- **Which order moves:** only the latest one. Each move returns a new order and token, and
+  the earlier link then shows its tickets as replaced. Moving from an earlier order answers
+  `409 already_exchanged`. The public order says whether it can still move
+  (`canChangeSession`) and whether it is open-date (`openDate`).
 - **Where to:** the new session must be on sale, in the future and have room. Once any of the
   order's tickets has been scanned in, the order can no longer move.
 - **How:** the move creates a zero-amount exchange order. The money and the Stripe payment stay
-  on the original order. The new tickets and QR codes belong to the exchange order, and the old
-  tickets are voided, so their QR codes no longer open the gates. Prices depend on the ticket
-  type, not the session, so in V1 the difference is always zero.
-- **Refunds:** refunding the original order also voids the moved tickets. The exchange order
-  holds no money. Reports count the sale once.
+  on the original order, and **every move points to that original order**
+  (`exchange_of_order_id`), however many times the tickets moved; the database refuses a move
+  that points to another move. The original order's history lists every move
+  (`order.exchanged`, with `fromOrderId` and `openDate`). The new tickets and QR codes belong
+  to the exchange order, and the old tickets are voided, so their QR codes no longer open the
+  gates. Prices depend on the ticket type, not the session, so in V1 the difference is always
+  zero.
+- **Refunds:** refunding the original order also voids the moved tickets, wherever they are
+  now. The exchange orders hold no money. Reports count the sale once.
 - Errors: `409 flex_not_purchased`, `409 already_exchanged`, `409 ticket_already_used`,
   `409 session_not_available`, `409 sold_out`.
 
@@ -161,7 +176,8 @@ start without `RESEND_API_KEY`, `ALKAO_EMAIL_FROM`, `ALKAO_PUBLIC_URL` (HTTPS) a
 - the Brand, the event, the session and the venue;
 - one QR code per valid ticket, rendered in the browser and dark on white even in dark mode;
 - a clear notice for voided or replaced tickets;
-- the buyer's own **Flex Météo** change, when the order bought it.
+- the buyer's own **Flex Météo** change, when the order bought it, or **"Changer de date"**
+  for an open-date ticket, as often as needed (Run 37).
 - **Ajouter à mon calendrier** (Run 31): an `.ics` file built in the browser from what the
   page shows (event, session times in UTC, venue and address, order reference). It never
   contains the personal link or its token, because calendars are often synced and shared.
@@ -232,8 +248,8 @@ When an organizer cancels a session (weather, ice), every buyer is refunded and 
 - **Sales stop at once.** Open holds are released.
 - **Paying orders are refunded in full,** with the TAKATAK commission returned (V1 policy):
   - partially refunded orders get the rest;
-  - for tickets moved into this session by Flex Météo, the original order, which holds the
-    money, is refunded.
+  - for tickets moved into this session (Flex Météo or open-date), the original order, which
+    holds the money, is refunded. The email goes on the order that held the tickets here.
 - **Free tickets are voided** (reason `cancelled`).
 - **Each buyer gets a "Séance annulée" email** with the amount refunded.
 
@@ -322,7 +338,7 @@ times are the Client's evidence.
 
 **A dispute the buyer wins** (Run 34, owner decision, see [ALKAO_DECISIONS.md](ALKAO_DECISIONS.md)):
 
-- **For the whole remaining amount:** every ticket of the order (and of its Flex exchange)
+- **For the whole remaining amount:** every ticket of the order (and of its session changes)
   not yet used at the gate is cancelled (`void_reason = 'chargeback'`). Their QR codes stop
   working and their seats go back on sale. A ticket already used stays as it is.
   - The buyer is not emailed.
@@ -400,7 +416,7 @@ Each list keeps only what someone can still act on, so it empties as the work ge
 | `outsideRefunds` | Refunds made in Stripe on orders whose tickets are still valid for a session to come |
 | `cancellations` | Cancelled sessions where some buyers could not be refunded |
 
-**Voiding tickets.** Tickets of the order and of its Flex exchange can be voided. A ticket
+**Voiding tickets.** Tickets of the order and of its session changes can be voided. A ticket
 already used at the gate, already void or belonging to another order is refused
 (`ticket_already_used`, `invalid_ticket`). The order's money and status are untouched.
 

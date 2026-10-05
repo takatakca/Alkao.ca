@@ -23,7 +23,7 @@ const EVENT_COLUMNS =
   "id, venue_id, slug, title, description, status, sales_open_at, sales_close_at, admission_opens_before_minutes, admission_closes_after_minutes, created_at, updated_at";
 const SESSION_COLUMNS = "id, event_id, starts_at, ends_at, capacity, reserved_count, sold_count, status, created_at, updated_at";
 const TYPE_COLUMNS =
-  "id, event_id, code, name, description, kind, price_cents, min_quantity, max_quantity, max_adults_in_order, counts_as_adult, add_on_scope, grants_session_change, active, sort_order, created_at, updated_at";
+  "id, event_id, code, name, description, kind, price_cents, min_quantity, max_quantity, max_adults_in_order, counts_as_adult, add_on_scope, grants_session_change, open_date, active, sort_order, created_at, updated_at";
 
 /** camelCase body field → column, for whitelisted updates. */
 function updateSet(fields: Record<string, unknown>, allowed: Record<string, string>, startAt: number) {
@@ -157,16 +157,17 @@ export function createTicketType(q: Queryable, s: TenantScope, eventId: string, 
   code: string; name: string; description?: string | null; kind: string; priceCents: number; minQuantity: number; maxQuantity: number;
   maxAdultsInOrder?: number | null; countsAsAdult: boolean; addOnScope?: string | null; active: boolean; sortOrder: number;
   grantsSessionChange?: boolean | undefined;
+  openDate?: boolean | undefined;
 }) {
   return mapDbErrors(() =>
     one(
       q,
       `INSERT INTO public.ticketing_ticket_types
          (client_id, brand_id, event_id, code, name, description, kind, price_cents, min_quantity, max_quantity,
-          max_adults_in_order, counts_as_adult, add_on_scope, active, sort_order, grants_session_change)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) RETURNING ${TYPE_COLUMNS}`,
+          max_adults_in_order, counts_as_adult, add_on_scope, active, sort_order, grants_session_change, open_date)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17) RETURNING ${TYPE_COLUMNS}`,
       [s.clientId, s.brandId, eventId, t.code, t.name, t.description ?? null, t.kind, t.priceCents, t.minQuantity, t.maxQuantity,
-        t.maxAdultsInOrder ?? null, t.countsAsAdult, t.addOnScope ?? null, t.active, t.sortOrder, t.grantsSessionChange ?? false],
+        t.maxAdultsInOrder ?? null, t.countsAsAdult, t.addOnScope ?? null, t.active, t.sortOrder, t.grantsSessionChange ?? false, t.openDate ?? false],
       "ticket_type_not_found",
     ),
   );
@@ -176,6 +177,7 @@ export function updateTicketType(q: Queryable, s: TenantScope, ticketTypeId: str
   const set = updateSet(fields, {
     name: "name", description: "description", priceCents: "price_cents", minQuantity: "min_quantity",
     maxQuantity: "max_quantity", maxAdultsInOrder: "max_adults_in_order", active: "active", sortOrder: "sort_order",
+    openDate: "open_date",
   }, 4);
   return mapDbErrors(() =>
     one(q, `UPDATE public.ticketing_ticket_types SET ${set.sql} WHERE id = $1 AND client_id = $2 AND brand_id = $3 RETURNING ${TYPE_COLUMNS}`,
@@ -188,15 +190,16 @@ export async function loadTicketTypeRules(q: Queryable, s: TenantScope, eventId:
   const { rows } = await q.query<{
     id: string; code: string; name: string; kind: "admission" | "add_on"; price_cents: number; min_quantity: number;
     max_quantity: number; max_adults_in_order: number | null; counts_as_adult: boolean; add_on_scope: "per_admission" | null; active: boolean;
+    open_date: boolean;
   }>(
-    `SELECT id, code, name, kind, price_cents, min_quantity, max_quantity, max_adults_in_order, counts_as_adult, add_on_scope, active
+    `SELECT id, code, name, kind, price_cents, min_quantity, max_quantity, max_adults_in_order, counts_as_adult, add_on_scope, active, open_date
      FROM public.ticketing_ticket_types WHERE event_id = $1 AND client_id = $2 AND brand_id = $3 ORDER BY sort_order, code`,
     [eventId, s.clientId, s.brandId],
   );
   return rows.map((r) => ({
     id: r.id, code: r.code, name: r.name, kind: r.kind, priceCents: r.price_cents, minQuantity: r.min_quantity,
     maxQuantity: r.max_quantity, maxAdultsInOrder: r.max_adults_in_order, countsAsAdult: r.counts_as_adult,
-    addOnScope: r.add_on_scope, active: r.active,
+    addOnScope: r.add_on_scope, active: r.active, openDate: r.open_date,
   }));
 }
 
