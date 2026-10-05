@@ -141,6 +141,8 @@ const ERRORS_FR = {
   buyer_has_upcoming_tickets: "L'acheteur a encore un billet pour une séance à venir : remboursez-le ou attendez la fin de la séance.",
   dispute_open: "Un litige Stripe est ouvert sur une de ses commandes : attendez qu'il soit réglé.",
   buyer_anonymized: "Cet acheteur a été anonymisé : il n'a plus d'adresse courriel.",
+  too_many_sessions: "Plus de 1000 séances d'un coup : raccourcissez la période ou espacez les séances.",
+  venue_time_zone_invalid: "Le fuseau horaire du lieu est invalide : corrigez le lieu.",
 };
 const errText = (e) => (e instanceof ApiError ? ERRORS_FR[e.code] ?? `Erreur : ${e.code}` : String(e?.message ?? e));
 
@@ -370,6 +372,61 @@ function Events({ api, base, prefix }) {
         <tbody>${events.data.events.map((ev) => html`<tr><td><a href=${`#${prefix}/event/${ev.id}`}>${ev.title}</a></td><td><${Badge} status=${ev.status} /></td><td>${when(ev.createdAt)}</td></tr>`)}</tbody></table>`}`;
 }
 
+// Run 29: a season of sessions at once, in the venue's local time; preview first.
+const WEEKDAYS = [[1, "Lun"], [2, "Mar"], [3, "Mer"], [4, "Jeu"], [5, "Ven"], [6, "Sam"], [7, "Dim"]];
+function SessionBatch({ api, base, eventId, onDone }) {
+  const [open, setOpen] = useState(false);
+  const [f, setF] = useState({ fromDate: "", toDate: "", weekdays: [1, 2, 3, 4, 5, 6, 7], firstStart: "17:00", lastStart: "", everyMinutes: 15, durationMinutes: "", capacity: 100, onSale: false });
+  const [preview, setPreview] = useState(null);
+  const [done, setDone] = useState(null);
+  const [error, setError] = useState(null);
+  const change = (patch) => { setF({ ...f, ...patch }); setPreview(null); setDone(null); };
+  const toggleDay = (d) => change({ weekdays: f.weekdays.includes(d) ? f.weekdays.filter((x) => x !== d) : [...f.weekdays, d].sort() });
+  const several = f.lastStart !== "" && f.lastStart !== f.firstStart;
+  const body = (dryRun) => ({
+    fromDate: f.fromDate, toDate: f.toDate || f.fromDate, weekdays: f.weekdays.length === 7 ? undefined : f.weekdays,
+    firstStart: f.firstStart, lastStart: several ? f.lastStart : undefined, everyMinutes: several ? Number(f.everyMinutes) : undefined,
+    durationMinutes: f.durationMinutes === "" ? null : Number(f.durationMinutes), capacity: Number(f.capacity),
+    status: f.onSale ? "on_sale" : "draft", dryRun,
+  });
+  const run = (dryRun) => async (e) => {
+    e?.preventDefault?.(); setError(null); setDone(null);
+    try {
+      const r = await api(`${base}/events/${eventId}/sessions/batch`, { method: "POST", body: body(dryRun) });
+      if (dryRun) setPreview(r); else { setPreview(null); setDone(r); onDone(); }
+    } catch (err) { setError(err); }
+  };
+  if (!open) return html`<p><button class="secondary" onClick=${() => setOpen(true)}>Créer plusieurs séances…</button></p>`;
+  const list = preview?.sessions ?? [];
+  return html`<form class="card" aria-label="Créer plusieurs séances" onSubmit=${run(true)}>
+    <h3>Créer plusieurs séances</h3>
+    <div class="row">
+      <label>Du<input type="date" required value=${f.fromDate} onInput=${(e) => change({ fromDate: e.target.value })} /></label>
+      <label>Au<input type="date" value=${f.toDate} min=${f.fromDate} onInput=${(e) => change({ toDate: e.target.value })} /></label>
+      <fieldset class="days"><legend>Jours</legend>${WEEKDAYS.map(([d, label]) => html`<label class="check"><input type="checkbox" checked=${f.weekdays.includes(d)} onChange=${() => toggleDay(d)} /> ${label}</label>`)}</fieldset>
+    </div>
+    <div class="row">
+      <label>Première séance<input type="time" required value=${f.firstStart} onInput=${(e) => change({ firstStart: e.target.value })} /></label>
+      <label>Dernière séance (facultatif)<input type="time" value=${f.lastStart} onInput=${(e) => change({ lastStart: e.target.value })} /></label>
+      ${several && html`<label>Toutes les (minutes)<input type="number" min="5" max="720" required value=${f.everyMinutes} onInput=${(e) => change({ everyMinutes: e.target.value })} /></label>`}
+      <label>Durée (minutes, facultatif)<input type="number" min="1" max="1440" value=${f.durationMinutes} onInput=${(e) => change({ durationMinutes: e.target.value })} /></label>
+      <label>Capacité par séance<input type="number" min="0" required value=${f.capacity} onInput=${(e) => change({ capacity: e.target.value })} /></label>
+      <label class="check"><input type="checkbox" checked=${f.onSale} onChange=${(e) => change({ onSale: e.target.checked })} /> Mettre en vente tout de suite</label>
+    </div>
+    <p class="muted">Heures du lieu (changement d'heure compris). Les heures que l'événement a déjà sont sautées.</p>
+    ${error && html`<${Failure} error=${error} />`}
+    ${preview && html`<div class="alert ${list.length ? "ok" : "warn"}" role="status">
+      ${list.length ? `${list.length} séance(s) à créer, du ${when(list[0].startsAt)} au ${when(list[list.length - 1].startsAt)}` : "Aucune nouvelle séance à créer"}${preview.skipped ? ` · ${preview.skipped} déjà existante(s), sautée(s)` : ""}.
+    </div>`}
+    ${done && html`<div class="alert ok" role="status">${done.created} séance(s) créée(s)${done.skipped ? ` · ${done.skipped} déjà existante(s), sautée(s)` : ""}.</div>`}
+    <div class="row">
+      <button type="submit" class="secondary">Aperçu</button>
+      ${list.length > 0 && html`<button type="button" onClick=${run(false)}>Créer ${list.length} séance(s)</button>`}
+      <button type="button" class="link" onClick=${() => setOpen(false)}>Fermer</button>
+    </div>
+  </form>`;
+}
+
 function EventDetail({ api, base, eventId }) {
   const [ev, reloadEvent] = useLoad(() => api(`${base}/events/${eventId}`), [base, eventId]);
   const [sessions, reloadSessions] = useLoad(() => api(`${base}/events/${eventId}/sessions`), [base, eventId]);
@@ -402,6 +459,12 @@ function EventDetail({ api, base, eventId }) {
       setCancelling(r.cancellation);
     }
     reloadSessions();
+  });
+  // Run 29: the whole event's upcoming sessions on sale, or on pause, at once.
+  const setAllSessions = (from, to, question) => act(async () => {
+    if (!confirm(question)) return;
+    const r = await api(`${base}/events/${eventId}/sessions/status`, { method: "POST", body: { from, to } });
+    alert(`${r.updated} séance(s) modifiée(s).`); reloadSessions();
   });
   const setCapacity = (id, current) => act(async () => {
     const value = prompt("Nouvelle capacité", String(current)); if (value === null) return;
@@ -455,6 +518,12 @@ function EventDetail({ api, base, eventId }) {
       <label>Capacité<input type="number" min="0" required value=${sess.capacity} onInput=${(e) => setSess({ ...sess, capacity: e.target.value })} /></label>
       <button type="submit">Ajouter la séance</button>
     </form>
+    <${SessionBatch} api=${api} base=${base} eventId=${eventId} onDone=${reloadSessions} />
+    ${(sessions.data?.sessions ?? []).length > 0 && html`<div class="row">
+      <button class="secondary" onClick=${setAllSessions("draft", "on_sale", "Mettre en vente toutes les séances à venir encore en brouillon ?")}>Ouvrir les ventes des brouillons à venir</button>
+      <button class="secondary" onClick=${setAllSessions("on_sale", "paused", "Suspendre les ventes de toutes les séances à venir ? Plus personne ne pourra acheter.")}>Suspendre toutes les ventes à venir</button>
+      <button class="secondary" onClick=${setAllSessions("paused", "on_sale", "Reprendre les ventes de toutes les séances à venir suspendues ?")}>Reprendre les ventes suspendues</button>
+    </div>`}
     ${sessions.loading ? html`<${Loading} />` : html`<table><thead><tr><th>Début</th><th>Statut</th><th class="num">Capacité</th><th class="num">Vendus</th><th class="num">Réservés</th><th></th></tr></thead>
       <tbody>${(sessions.data?.sessions ?? []).map((s) => html`<tr>
         <td>${when(s.startsAt)}</td><td><${Badge} status=${s.status} /></td>
