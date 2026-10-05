@@ -136,6 +136,9 @@ const ERRORS_FR = {
   invalid_request: "Données invalides.", conflict: "Existe déjà.", invalid_reference: "Référence invalide.",
   order_has_no_valid_ticket: "Cette commande n'a plus de billet valide.", email_resend_limit: "Trop de renvois pour cette commande.",
   use_session_cancellation: "Des billets sont vendus : utilisez « Annuler la séance », qui rembourse les acheteurs.",
+  buyer_has_upcoming_tickets: "L'acheteur a encore un billet pour une séance à venir : remboursez-le ou attendez la fin de la séance.",
+  dispute_open: "Un litige Stripe est ouvert sur une de ses commandes : attendez qu'il soit réglé.",
+  buyer_anonymized: "Cet acheteur a été anonymisé : il n'a plus d'adresse courriel.",
 };
 const errText = (e) => (e instanceof ApiError ? ERRORS_FR[e.code] ?? `Erreur : ${e.code}` : String(e?.message ?? e));
 
@@ -452,6 +455,13 @@ function OrderDetail({ api, base, orderId }) {
   const reissue = (ticketId) => act(async () => { await api(`${base}/tickets/${ticketId}/credential/reissue`, { method: "POST" }); setMessage("Nouveau code QR émis ; l'ancien ne fonctionne plus."); });
   const resendEmail = act(async () => { await api(`${base}/orders/${orderId}/tickets-email`, { method: "POST" }); setMessage(`Billets renvoyés à ${o.buyerEmail}.`); reloadOrder(); });
   const toggle = (id) => setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
+  // Run 20: the buyer's personal data on request (Québec Law 25).
+  const exportBuyer = act(() => download(api, `${base}/orders/${orderId}/buyer/export`, `alkao-donnees-acheteur-${o.reference}.json`));
+  const anonymize = act(async () => {
+    if (!confirm(`Anonymiser ${o.buyerEmail} ? Son courriel, son nom et son téléphone seront effacés de toutes ses commandes de cette marque. Les montants, les billets et les entrées restent. C'est irréversible.`)) return;
+    await api(`${base}/orders/${orderId}/buyer/anonymize`, { method: "POST" });
+    setMessage("Acheteur anonymisé."); reloadOrder();
+  });
 
   return html`<h1>Commande ${o.reference} <${Badge} status=${o.status} /></h1>
     ${message && html`<div class="alert ok">${message}</div>`}
@@ -486,6 +496,13 @@ function OrderDetail({ api, base, orderId }) {
       <h2>Changement de séance (Flex Météo)</h2>
       ${sessions === null ? html`<button class="secondary" onClick=${loadSessions}>Choisir une autre séance</button>` : html`
         <table><tbody>${sessions.map((s) => html`<tr><td>${when(s.startsAt)}</td><td class="num">${s.capacity - s.soldCount - s.reservedCount} places</td><td><button onClick=${exchange(s.id)}>Déplacer ici</button></td></tr>`)}</tbody></table>`}`}
+    <h2>Données personnelles (Loi 25)</h2>
+    <div class="card">
+      ${o.buyerAnonymizedAt ? html`<p class="muted">Acheteur anonymisé le ${when(o.buyerAnonymizedAt)}.</p>` : html`<div class="row">
+        <button class="secondary" onClick=${exportBuyer}>Exporter les données de l'acheteur</button>
+        <button class="danger" onClick=${anonymize}>Anonymiser l'acheteur</button></div>
+        <p class="muted">À la demande de l'acheteur. L'anonymisation est possible une fois ses séances passées, sans remboursement en cours ni litige ouvert.</p>`}
+    </div>
     <h2>Remboursements</h2>
     ${refunds.loading ? html`<${Loading} />` : html`<table><thead><tr><th>Date</th><th>Statut</th><th class="num">Montant</th><th class="num">Commission rendue</th><th>Motif</th></tr></thead>
       <tbody>${(refunds.data?.refunds ?? []).map((r) => html`<tr><td>${when(r.createdAt)}</td><td><${Badge} status=${r.status} /></td><td class="num">${money(r.amountCents)}</td><td class="num">${money(r.commissionRefundCents)}</td><td>${r.reason ?? ""}</td></tr>`)}</tbody></table>`}`;

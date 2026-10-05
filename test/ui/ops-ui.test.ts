@@ -306,6 +306,28 @@ describe("ALKAO Operations app", () => {
     expect(await page.getByRole("columnheader", { name: "Entré" }).isVisible()).toBe(true);
   });
 
+  it("exports a buyer's data and anonymizes the buyer on request (Law 25)", async () => {
+    const f = seed.festi;
+    const { rows } = await db.pool.query<{ id: string }>(
+      `INSERT INTO public.ticketing_sessions (client_id, brand_id, event_id, starts_at, capacity, status)
+       VALUES ($1, $2, $3, now() - interval '2 days', 20, 'on_sale') RETURNING id`,
+      [f.clientId, f.brandId, f.eventId],
+    );
+    const order = await seedPaidOrder(db.pool, { ...f, sessionId: rows[0]!.id }, "loi25@example.com");
+    const page = await signedIn(seed.users.festiOwner);
+    await page.goto(`${origin}/ops#/c/${f.clientId}/b/${f.brandId}/order/${order.orderId}`);
+    await page.getByRole("heading", { name: "Données personnelles (Loi 25)" }).waitFor();
+    const [download] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: "Exporter les données de l'acheteur" }).click()]);
+    expect(download.suggestedFilename()).toMatch(/^alkao-donnees-acheteur-.+\.json$/);
+    const exported = JSON.parse(await new Response((await download.createReadStream()) as unknown as ReadableStream).text());
+    expect(exported.buyer.email).toBe("loi25@example.com");
+
+    page.on("dialog", (d) => void d.accept());
+    await page.getByRole("button", { name: "Anonymiser l'acheteur" }).click();
+    await page.getByText("Acheteur anonymisé le", { exact: false }).waitFor();
+    expect(await page.getByText("loi25@example.com").count()).toBe(0);
+  });
+
   it("hides money from gate staff", async () => {
     const page = await signedIn(seed.users.havanaStaff);
     await page.goto(`${origin}/ops#${brandPath()}/dashboard`);

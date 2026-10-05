@@ -57,6 +57,10 @@ const STATUS_BY_CODE: Record<string, ContentfulStatusCode> = {
   cancellation_not_found: 404,
   nothing_to_exchange: 409,
   ticket_already_used: 409,
+  // Run 20
+  buyer_has_upcoming_tickets: 409,
+  buyer_anonymized: 409,
+  dispute_open: 409,
 };
 
 /** Domain error details safe to return to callers (never constraint or column names). */

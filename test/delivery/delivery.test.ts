@@ -27,7 +27,9 @@ let db: TestDatabase;
 let seed: SeedResult;
 let app: TestApp;
 let sender: FakeSender;
-const deliver = (now = new Date()) =>
+// By default a moment from now: PostgreSQL stamps queued emails in microseconds, and a Date
+// taken in the same millisecond would still read them as not yet due.
+const deliver = (now = new Date(Date.now() + 1000)) =>
   deliverTicketEmails(db.pool, { sender, publicUrl: PUBLIC_URL, credentialMasterSecret: TEST_CREDENTIAL_SECRET }, now);
 
 beforeAll(async () => {
