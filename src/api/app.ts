@@ -19,6 +19,8 @@ import { FixedWindowLimiter } from "./rate-limit.js";
 import { WebhookSignatureError, type PaymentGateway } from "../payments/gateway.js";
 import { PaymentsService } from "../payments/service.js";
 import * as paymentsDb from "../db/payments.js";
+import * as credentialsDb from "../db/credentials.js";
+import { CredentialsService } from "../scanner/service.js";
 
 export const API_VERSION = "alkao.api.v1";
 
@@ -33,6 +35,8 @@ export interface AppDeps {
   paymentGateway?: PaymentGateway | null;
   /** Where Stripe sends a Client admin during and after account onboarding. */
   onboarding?: { refreshUrl: string; returnUrl: string } | null;
+  /** Secret from which Client credential (QR) signing keys are derived; null until configured. */
+  credentialMasterSecret?: string | null;
   now?: () => Date;
 }
 
@@ -58,6 +62,7 @@ export function createApp(deps: AppDeps) {
     now,
     onboarding: deps.onboarding ?? null,
   });
+  const credentials = new CredentialsService({ db: deps.db, masterSecret: deps.credentialMasterSecret ?? null, now });
   const app = new Hono<Env>();
 
   app.onError((error, c) => errorResponse(c, error));
@@ -451,7 +456,10 @@ export function createApp(deps: AppDeps) {
     if (!rowCount) return fail(c, 404, "order_not_found");
     const order = await catalog.getOrder(deps.db, scope, orderId);
     const { commissionCents: _c, commissionRefundedCents: _cr, buyerPhone: _p, ...publicOrder } = order;
-    return c.json({ order: publicOrder });
+    // QR payload per valid ticket (null for void tickets, or until credentials are configured).
+    const payloads = await credentials.payloadsForOrder(scope, orderId);
+    const tickets = (order.tickets as { id: string }[]).map((t) => ({ ...t, credential: payloads.get(t.id) ?? null }));
+    return c.json({ order: { ...publicOrder, tickets } });
   });
 
   // ── Run 02: Stripe webhooks ──────────────────────────────────────────────
@@ -512,6 +520,52 @@ export function createApp(deps: AppDeps) {
     const refundId = param(c, "refundId");
     if (!refundId) return fail(c, 404, "refund_not_found");
     return c.json({ refund: await paymentsService.retryRefund(c.get("scope"), refundId) });
+  });
+
+  // ── Run 03: credentials and gates ────────────────────────────────────────
+  app.get(`${ADMIN}/sessions/:sessionId/scanner-manifest`, ...admin, can("ticketing.scan"), async (c) => {
+    const sessionId = param(c, "sessionId");
+    if (!sessionId) return fail(c, 404, "session_not_found");
+    return c.json({ manifest: await credentials.manifest(c.get("scope"), sessionId) });
+  });
+
+  app.post(`${ADMIN}/scanner/scans`, ...admin, can("ticketing.scan"), async (c) => {
+    const body = api.ScanRequest.parse(await readJson(c));
+    const outcome = await credentials.scan(
+      c.get("scope"),
+      { sessionId: body.sessionId, payload: body.payload, deviceId: body.deviceId ?? null, offline: false },
+      c.get("userId"),
+    );
+    return c.json({ scan: outcome });
+  });
+
+  app.post(`${ADMIN}/scanner/scans/batch`, ...admin, can("ticketing.scan"), async (c) => {
+    const body = api.ScanBatchRequest.parse(await readJson(c));
+    const results = await credentials.scanBatch(
+      c.get("scope"),
+      { sessionId: body.sessionId, deviceId: body.deviceId, scans: body.scans.map((s) => ({ payload: s.payload, scannedAt: new Date(s.scannedAt) })) },
+      c.get("userId"),
+    );
+    return c.json({ scans: results });
+  });
+
+  app.get(`${ADMIN}/sessions/:sessionId/scans`, ...admin, can("ticketing.scan"), async (c) => {
+    const sessionId = param(c, "sessionId");
+    if (!sessionId) return fail(c, 404, "session_not_found");
+    const q = api.ListQuery.parse(c.req.query());
+    return c.json({ scans: await credentialsDb.listScans(deps.db, c.get("scope"), sessionId, q.limit) });
+  });
+
+  app.post(`${ADMIN}/tickets/:ticketId/credential/reissue`, ...admin, can("ticketing.credentials.manage"), async (c) => {
+    const ticketId = param(c, "ticketId");
+    if (!ticketId) return fail(c, 404, "ticket_not_found");
+    const reissued = await credentials.reissue(c.get("scope"), ticketId, actor(c));
+    return c.json({ credential: reissued }, 201);
+  });
+
+  app.post(`${ADMIN}/credential-keys/rotate`, ...admin, can("ticketing.keys.manage"), async (c) => {
+    const key = await credentials.rotateKey(c.get("scope"), actor(c));
+    return c.json({ key: { kid: key.kid, version: key.version, algorithm: "Ed25519", publicKey: key.publicKey } }, 201);
   });
 
   return app;

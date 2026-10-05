@@ -35,6 +35,10 @@ const EXPECTED: Record<string, Visibility> = {
   ticketing_payments: "managers",
   ticketing_refunds: "managers",
   ticketing_payment_events: "none",
+  // Run 03
+  ticketing_credential_keys: "all_members",
+  ticketing_credentials: "all_members",
+  ticketing_scans: "all_members",
 };
 
 const clientColumn = (table: string) => (table === "ticketing_clients" ? "id" : "client_id");

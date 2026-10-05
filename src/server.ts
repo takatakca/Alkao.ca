@@ -16,6 +16,7 @@ const app = createApp({
   publicHoldsPerMinute: config.publicHoldsPerMinute,
   paymentGateway: config.stripe ? StripeGateway.fromSecretKey(config.stripe.secretKey, config.stripe.webhookSecret) : null,
   onboarding: config.onboarding,
+  credentialMasterSecret: config.credentialMasterSecret,
 });
 
 serve({ fetch: app.fetch, port: config.port }, (info) => {

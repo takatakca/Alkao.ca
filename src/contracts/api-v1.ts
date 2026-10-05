@@ -39,6 +39,8 @@ export const CreateVenue = z.object({
 });
 export const UpdateVenue = CreateVenue.partial().refine((o) => Object.keys(o).length > 0, "empty update");
 
+const admissionMinutes = z.number().int().min(0).max(1440);
+
 export const CreateEvent = z
   .object({
     venueId: id,
@@ -47,6 +49,10 @@ export const CreateEvent = z
     description: text.nullish(),
     salesOpenAt: timestamp.nullish(),
     salesCloseAt: timestamp.nullish(),
+    /** Gates open this many minutes before each session starts (default 60). */
+    admissionOpensBeforeMinutes: admissionMinutes.optional(),
+    /** Gates close this many minutes after each session ends, or starts if it has no end (default 120). */
+    admissionClosesAfterMinutes: admissionMinutes.optional(),
   })
   .refine((e) => !e.salesOpenAt || !e.salesCloseAt || Date.parse(e.salesOpenAt) < Date.parse(e.salesCloseAt), {
     message: "salesOpenAt must be before salesCloseAt",
@@ -58,6 +64,8 @@ export const UpdateEvent = z
     status: z.enum(["draft", "published", "cancelled", "archived"]),
     salesOpenAt: timestamp.nullable(),
     salesCloseAt: timestamp.nullable(),
+    admissionOpensBeforeMinutes: admissionMinutes,
+    admissionClosesAfterMinutes: admissionMinutes,
   })
   .partial()
   .refine((o) => Object.keys(o).length > 0, "empty update");
@@ -141,4 +149,23 @@ export const RefundRequest = z.object({
   /** Tickets to void with a partial refund (their seats return to inventory). */
   ticketIds: z.array(z.uuid()).max(1000).optional(),
   reason: z.string().trim().max(500).nullish(),
+});
+
+// ── Run 03: credentials and scanning ────────────────────────────────────────
+const payload = z.string().trim().min(1).max(400);
+const deviceId = z.string().trim().min(1).max(100);
+
+export const ScanRequest = z.object({
+  sessionId: z.uuid(),
+  payload,
+  deviceId: deviceId.nullish(),
+});
+
+export const ScanBatchRequest = z.object({
+  sessionId: z.uuid(),
+  deviceId,
+  scans: z
+    .array(z.object({ payload, scannedAt: z.iso.datetime({ offset: true }) }))
+    .min(1)
+    .max(500),
 });

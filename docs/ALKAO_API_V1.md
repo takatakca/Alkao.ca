@@ -35,7 +35,7 @@ while Ticketing is off, and that a refused hold request writes nothing.
 | Method | Path | Body | Result |
 |---|---|---|---|
 | POST | `/holds/:holdId/checkout` | header `X-Alkao-Hold-Token`; `{ buyer: { email, fullName?, phone? }, successUrl, cancelUrl }` | `201 { order: { id, reference, token, status }, checkoutUrl }`. A free order is `paid` at once and `checkoutUrl` is `null`. Calling again for the same hold returns the same Checkout and rotates the order token. Errors: `422 return_url_not_allowed`, `409 payments_unavailable`, `409 hold_not_active`, `502 payment_provider_error` (safe to retry) |
-| GET | `/orders/:orderId` | header `X-Alkao-Order-Token` | Order status, lines, taxes and tickets, for the buyer's confirmation page |
+| GET | `/orders/:orderId` | header `X-Alkao-Order-Token` | Order status, lines, taxes and tickets, for the buyer's confirmation page. Each valid ticket has `credential`, its QR payload (Run 03, [format](ALKAO_SCANNER_V1.md)) |
 
 How a payment works:
 
@@ -101,6 +101,8 @@ Every admin write is recorded in `ticketing_audit_log` in the same transaction.
 | manager | ✓ | ✓ | ✓ | |
 
 Run 02 adds `payments.manage` (owner, admin) and `refunds.create` (owner, admin, manager).
+Run 03 adds `scan` (owner, admin, manager, staff), `credentials.manage` (owner, admin, manager)
+and `keys.manage` (owner, admin). Its routes are listed in [ALKAO_SCANNER_V1.md](ALKAO_SCANNER_V1.md).
 | editor | ✓ | ✓ | | |
 | staff, viewer | ✓ | | | |
 
@@ -119,6 +121,7 @@ manager only.
 | `ALKAO_HOLD_TTL_SECONDS` | `600` | Hold lifetime (60–1800) |
 | `ALKAO_PUBLIC_HOLDS_PER_MINUTE` | `20` | Per Client and IP, in-process. Also rate-limit at the edge in production |
 | `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` | — | Platform key and the **Connect** webhook endpoint secret. Without both, payments stay off (`payments_unavailable`/`503`) |
+| `ALKAO_CREDENTIAL_MASTER_SECRET` | — | Secret (≥ 32 chars) from which each Client's QR signing keys are derived. Without it, there are no QR codes and scanning answers `503`. Changing it invalidates every QR code |
 | `ALKAO_STRIPE_ONBOARDING_REFRESH_URL` / `_RETURN_URL` | — | HTTPS pages (TAKATAK dashboard) where Stripe sends a Client admin during and after onboarding |
 
 Stripe webhook events to send to `/v1/webhooks/stripe` (Connect endpoint, events on connected
