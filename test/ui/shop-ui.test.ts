@@ -262,6 +262,30 @@ describe("hosted ticket shop", () => {
     expect(rows).toEqual([{ status: "pending" }]);
   });
 
+  it("takes a promo code before taxes and explains a wrong one (Run 36)", async () => {
+    const f = seed.festi;
+    await db.pool.query(
+      `INSERT INTO public.ticketing_promo_codes (client_id, brand_id, event_id, code, kind, percent) VALUES ($1, $2, $3, 'HIVER25', 'percent', 25)`,
+      [f.clientId, f.brandId, f.eventId],
+    );
+    const s = await session(f, 21);
+    const page = await shop(f);
+    await page.getByRole("button", { name: new RegExp(s.label) }).click();
+    await plus(page, f.types.find((x) => x.code === "GENERAL")!.name).click();
+    await page.getByRole("cell", { name: "Total" }).waitFor();
+    await page.getByLabel("Code promo").fill("pasbon");
+    await page.getByRole("button", { name: "Appliquer" }).click();
+    await page.getByRole("alert").getByText("Ce code n'existe pas pour cet événement.").waitFor();
+    await page.getByLabel("Code promo").fill("hiver25");
+    await page.getByRole("button", { name: "Appliquer" }).click();
+    await page.getByRole("cell", { name: "Rabais (HIVER25)" }).waitFor();
+    await page.getByRole("button", { name: "Continuer" }).click();
+    await page.getByText("Places réservées pendant", { exact: false }).waitFor();
+    expect(await page.getByRole("cell", { name: "Rabais (HIVER25)" }).isVisible()).toBe(true);
+    const { rows } = await db.pool.query(`SELECT promo_code_id IS NOT NULL AS coded FROM public.ticketing_holds WHERE session_id = $1`, [s.id]);
+    expect(rows).toEqual([{ coded: true }]);
+  });
+
   // Run 35: at the door, today's sessions only; the tickets show right after payment.
   // (Skipped in the last minutes of a Montréal day, when "in 10 minutes" is already tomorrow.)
   const lateNight = Number(new Intl.DateTimeFormat("en-CA", { timeZone: "America/Toronto", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date()).replace(":", "")) >= 2345;

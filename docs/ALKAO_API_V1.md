@@ -579,6 +579,78 @@ history reads through them. A test checks this with 30 000 entries.
 - A **Journal** tab, for owners and admins only. It has a filter by family and **Plus ancien**.
 - An **Historique** section on each order.
 
+### Promo codes (Run 36)
+
+Owner decision, see [ALKAO_DECISIONS.md](ALKAO_DECISIONS.md).
+
+| Method | Path | Who | Result |
+|---|---|---|---|
+| GET | `/v1/admin/…/events/:eventId/promo-codes` | `catalog.read` | `{ promoCodes: [{ id, code, kind, percent, amountCents, maxUses, usedCount, startsAt, endsAt, active }] }` |
+| POST | `/v1/admin/…/events/:eventId/promo-codes` | `catalog.write` | `{ code, kind: "percent" \| "amount", percent? \| amountCents?, maxUses?, startsAt?, endsAt? }` → `201`. `409 promo_code_exists` |
+| PATCH | `/v1/admin/…/promo-codes/:id` | `catalog.write` | `{ active?, maxUses?, startsAt?, endsAt? }`. `409 promo_uses_below_used` |
+| POST | `/v1/public/…/events/:eventId/quote` | public | Now also takes `promoCode` |
+| POST | `/v1/public/…/holds` | public | Now also takes `promoCode`. The code travels with the hold to checkout |
+
+**The code**
+
+- It belongs to **one event**.
+- It is 3 to 32 characters (`A–Z`, `0–9`, `-`), stored in upper case. Buyers can type it in
+  any case, with spaces around it.
+- An order takes one code.
+
+**The discount**
+
+- A **percentage** (1–100 %, rounded to the cent) or a **fixed amount**, taken off the
+  pre-tax subtotal. It is never more than the subtotal.
+- **TPS and TVQ** are computed on the discounted subtotal.
+- **TAKATAK commission:** the rate applies to the discounted subtotal, and the fixed part per
+  paid ticket still applies.
+- **A 100 % code** makes a free order: no Stripe and no commission.
+- A quote and a hold return `subtotalCents` (at list price), `discountCents`, `promoCode`,
+  `taxes` and `totalCents`.
+
+**Refusals:** `422 promo_code_invalid`, with `details.reason`:
+
+| Reason | When |
+|---|---|
+| `unknown` | Not a code of this event |
+| `inactive` | Switched off |
+| `not_started`, `ended` | Outside its dates |
+| `used_up` | Its last use is taken |
+
+At checkout the code is checked again. A code switched off, or past its dates since the
+hold, refuses the order, and the buyer starts again without it.
+
+**Uses**
+
+- The database counts uses: one when an order is created with the code, one given back if
+  that order expires or is cancelled before payment. A refund does not give the use back.
+- A last use goes to one buyer only, even when two pay at the same moment.
+- Lowering `maxUses` below the uses already made is refused.
+
+**Stripe and money**
+
+- Stripe takes no negative line, so with a code the tickets are **one line at the discounted
+  subtotal**, named with the code. The tax lines follow.
+- The order keeps `discount_cents` and its code, both fixed like the rest of its money:
+  `total = subtotal − discount + taxes`.
+
+**Reports**
+
+- Sales and day-by-day reports have `discountCents`.
+- The day-by-day CSV adds `discount_cents` as its last column.
+- The orders CSV adds `discount_cents,promo_code` at the end, so earlier columns keep their
+  place.
+- The order detail shows `discountCents` and `promoCode`.
+
+**Operations app**
+
+- On the event page, **Codes promo**: create a code, see its uses, switch it off or on.
+- The dashboard shows "Rabais (codes promo)" once a code has been used in the period.
+
+**Shop:** a **Code promo** field at the quantity step shows the "Rabais" line, or explains in
+French or English why a code cannot be used.
+
 ### Role → permission
 
 | Role | catalog.read · inventory.read · holds.read | catalog.write | orders.read · buyers.read | audit.read |

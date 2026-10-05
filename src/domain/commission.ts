@@ -19,15 +19,18 @@ export function assertCommissionTerms(terms: CommissionTerms): void {
   assertCents(terms.fixedCentsPerPaidAdmission, "fixedCentsPerPaidAdmission");
 }
 
-/** Commission for an order. Never exceeds what the buyer pays. A free order costs nothing. */
+/**
+ * Commission for an order. Never exceeds what the buyer pays. A free order costs nothing.
+ * Run 36: the rate applies to the subtotal after a promo code's discount.
+ */
 export function computeCommission(
   terms: CommissionTerms,
-  order: { subtotalCents: Cents; totalCents: Cents; paidAdmissions: number },
+  order: { subtotalCents: Cents; discountCents?: Cents; totalCents: Cents; paidAdmissions: number },
 ): Cents {
   assertCommissionTerms(terms);
   assertCents(order.subtotalCents, "subtotalCents");
   assertCents(order.totalCents, "totalCents");
-  const variable = mulDivRound(order.subtotalCents, terms.rateBps, 10_000);
+  const variable = mulDivRound(order.subtotalCents - (order.discountCents ?? 0), terms.rateBps, 10_000);
   const fixed = terms.fixedCentsPerPaidAdmission * order.paidAdmissions;
   return Math.min(variable + fixed, order.totalCents);
 }

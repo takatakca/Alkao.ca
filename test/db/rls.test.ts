@@ -49,6 +49,8 @@ const EXPECTED: Record<string, Visibility> = {
   ticketing_charge_refund_totals: "none",
   // Run 20
   ticketing_buyer_erasures: "none",
+  // Run 36: read and written by the server only.
+  ticketing_promo_codes: "none",
 };
 
 const clientColumn = (table: string) => (table === "ticketing_clients" ? "id" : "client_id");
