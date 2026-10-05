@@ -735,7 +735,7 @@ function Journal({ api, base, prefix, me }) {
   useEffect(() => { setEntries([]); load(null); }, [base, family]);
   return html`<h1>Journal</h1>
     <p class="muted">Qui a fait quoi, et quand. Les noms restent dans TAKATAK : ALKAO garde le rôle de la personne.</p>
-    <div class="row card"><label>Afficher<select value=${family} onChange=${(e) => setFamily(e.target.value)}>${FAMILIES.map(([v, label]) => html`<option value=${v}>${label}</option>`)}</select></label></div>
+    <div class="row card"><label>Afficher<select value=${family} onChange=${(e) => { setEntries([]); setMore(false); setLoading(true); setFamily(e.target.value); }}>${FAMILIES.map(([v, label]) => html`<option value=${v}>${label}</option>`)}</select></label></div>
     ${error && html`<${Failure} error=${error} />`}
     ${entries.length > 0 ? html`<${AuditRows} entries=${entries} me=${me} prefix=${prefix} />` : !loading && !error && html`<p class="muted">Rien pour l'instant.</p>`}
     ${loading ? html`<${Loading} />` : more && html`<p><button class="secondary" onClick=${() => load(entries[entries.length - 1].id)}>Plus ancien</button></p>`}`;
