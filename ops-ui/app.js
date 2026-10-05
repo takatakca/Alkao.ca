@@ -218,15 +218,48 @@ function Workspaces({ api }) {
 }
 
 // ── Dashboard ───────────────────────────────────────────────────────────────
+// Run 26: the period the dashboard reports on, in the staff member's local time.
+const PERIODS = [["all", "Depuis le début"], ["today", "Aujourd'hui"], ["7d", "7 derniers jours"], ["month", "Ce mois-ci"], ["lastMonth", "Le mois dernier"]];
+function reportQuery(period, eventId) {
+  const now = new Date();
+  const day = (y, m, d) => new Date(y, m, d).toISOString();
+  const [y, m, d] = [now.getFullYear(), now.getMonth(), now.getDate()];
+  const range = {
+    today: [day(y, m, d), day(y, m, d + 1)],
+    "7d": [day(y, m, d - 6), day(y, m, d + 1)],
+    month: [day(y, m, 1), day(y, m + 1, 1)],
+    lastMonth: [day(y, m - 1, 1), day(y, m, 1)],
+  }[period];
+  const q = new URLSearchParams();
+  if (range) { q.set("from", range[0]); q.set("to", range[1]); }
+  if (eventId) q.set("eventId", eventId);
+  const text = q.toString();
+  return text ? `?${text}` : "";
+}
+
 function Dashboard({ api, base, prefix }) {
-  const [state] = useLoad(() => api(`${base}/reports/sales`), [base]);
+  const [period, setPeriod] = useState("all");
+  const [eventId, setEventId] = useState("");
+  const query = reportQuery(period, eventId);
+  const [events] = useLoad(() => api(`${base}/events`), [base]);
+  const [state] = useLoad(() => api(`${base}/reports/sales${query}`), [base, query]);
+  const [daily] = useLoad(() => api(`${base}/reports/daily${query}`), [base, query]);
   const [todo] = useLoad(() => api(`${base}/attention`), [base]);
-  if (state.loading) return html`<${Loading} />`;
-  if (state.error) return html`<${Failure} error=${state.error} />`;
-  const { totals, sessions, ticketTypes } = state.data.report;
-  return html`
-    <h1>Tableau de bord</h1>
+  const filters = html`<div class="inline card row" role="group" aria-label="Filtres du rapport">
+      <label>Période<select value=${period} onChange=${(e) => setPeriod(e.target.value)}>
+        ${PERIODS.map(([key, label]) => html`<option value=${key}>${label}</option>`)}</select></label>
+      <label>Événement<select value=${eventId} onChange=${(e) => setEventId(e.target.value)}>
+        <option value="">Tous</option>${(events.data?.events ?? []).map((ev) => html`<option value=${ev.id}>${ev.title}</option>`)}</select></label>
+    </div>`;
+  const head = html`<h1>Tableau de bord</h1>
     ${todo.data?.attention.total > 0 && html`<${Attention} a=${todo.data.attention} prefix=${prefix} />`}
+    ${filters}`;
+  if (state.error) return html`${head}<${Failure} error=${state.error} />`;
+  if (!state.data) return html`${head}<${Loading} />`;
+  const { totals, sessions, ticketTypes } = state.data.report;
+  const days = daily.data?.report;
+  return html`
+    ${head}
     <div class="grid">
       ${[["Commandes", totals.orders, false], ["Ventes brutes", totals.grossCents, true], ["Taxes (TPS + TVQ)", totals.taxCents, true],
          ["Remboursé", totals.refundedCents, true], ["Commission TAKATAK", totals.commissionCents - totals.commissionRefundedCents, true],
@@ -239,7 +272,16 @@ function Dashboard({ api, base, prefix }) {
     <h2>Par type de billet</h2>
     <table><thead><tr><th>Code</th><th class="num">Quantité</th><th class="num">Revenu</th></tr></thead>
       <tbody>${ticketTypes.map((t) => html`<tr><td>${t.code}</td><td class="num">${t.quantity}</td><td class="num">${money(t.revenueCents)}</td></tr>`)}</tbody></table>
-    <p><button class="secondary" onClick=${() => download(api, `${base}/reports/orders.csv`, "alkao-commandes.csv")}>Exporter les commandes (CSV)</button></p>
+    ${days && html`<h2>Par jour</h2>
+      <p class="muted">Ventes au jour du paiement, remboursements au jour où Stripe les a faits (heure de ${days.timeZone}).</p>
+      ${days.days.length === 0 ? html`<p class="muted">Aucune vente ni aucun remboursement sur cette période.</p>` : html`
+      <table><thead><tr><th>Jour</th><th class="num">Commandes</th><th class="num">Avant taxes</th><th class="num">TPS</th><th class="num">TVQ</th><th class="num">Brut</th><th class="num">Remboursé</th><th class="num">Commission nette</th><th class="num">Net client</th></tr></thead>
+        <tbody>${days.days.map((r) => html`<tr><td>${r.day}</td><td class="num">${r.orders}</td><td class="num">${money(r.subtotalCents)}</td><td class="num">${money(r.gstCents)}</td><td class="num">${money(r.qstCents)}</td><td class="num">${money(r.grossCents)}</td><td class="num">${money(r.refundedCents)}</td><td class="num">${money(r.commissionCents - r.commissionRefundedCents)}</td><td class="num">${money(r.netToClientCents)}</td></tr>`)}
+          <tr><th>Total</th><th class="num">${days.totals.orders}</th><th class="num">${money(days.totals.subtotalCents)}</th><th class="num">${money(days.totals.gstCents)}</th><th class="num">${money(days.totals.qstCents)}</th><th class="num">${money(days.totals.grossCents)}</th><th class="num">${money(days.totals.refundedCents)}</th><th class="num">${money(days.totals.commissionCents - days.totals.commissionRefundedCents)}</th><th class="num">${money(days.totals.netToClientCents)}</th></tr></tbody></table>`}`}
+    <p class="row">
+      <button class="secondary" onClick=${() => download(api, `${base}/reports/orders.csv${query}`, "alkao-commandes.csv")}>Exporter les commandes (CSV)</button>
+      <button class="secondary" onClick=${() => download(api, `${base}/reports/daily.csv${query}`, "alkao-ventes-par-jour.csv")}>Exporter par jour (CSV)</button>
+    </p>
     <${Reminders} api=${api} base=${base} />`;
 }
 

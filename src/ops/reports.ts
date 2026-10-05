@@ -82,6 +82,100 @@ export async function salesReport(db: Db, s: TenantScope, f: ReportFilter) {
   };
 }
 
+/**
+ * Run 26: sales day by day, for the accountant. Sales count on the day they were paid; refunds
+ * on the day Stripe completed them (so a refund in March of a February sale is in March).
+ * Days follow the Brand's venues' time zone (America/Toronto when there is none).
+ */
+export async function dailyReport(db: Db, s: TenantScope, f: ReportFilter) {
+  const { rows: zone } = await db.query<{ timezone: string }>(
+    `SELECT timezone FROM public.ticketing_venues WHERE client_id = $1 AND brand_id = $2
+     GROUP BY timezone ORDER BY count(*) DESC, timezone LIMIT 1`,
+    [s.clientId, s.brandId],
+  );
+  const timeZone = zone[0]?.timezone ?? "America/Toronto";
+  const range = (column: string, first: number) => {
+    const clauses: string[] = [];
+    const params: unknown[] = [];
+    if (f.eventId) { params.push(f.eventId); clauses.push(`o.event_id = $${first + params.length - 1}`); }
+    if (f.from) { params.push(f.from); clauses.push(`${column} >= $${first + params.length - 1}`); }
+    if (f.to) { params.push(f.to); clauses.push(`${column} < $${first + params.length - 1}`); }
+    return { sql: clauses.map((c) => ` AND ${c}`).join(""), params };
+  };
+  const paid = range("o.paid_at", 4);
+  const refunded = range("r.completed_at", 4);
+  const base = [s.clientId, s.brandId, timeZone];
+  const [sales, taxes, refunds] = await Promise.all([
+    db.query(
+      `SELECT to_char((o.paid_at AT TIME ZONE $3)::date, 'YYYY-MM-DD') AS day, count(*)::int AS orders,
+              sum(o.subtotal_cents)::bigint AS subtotal, sum(o.tax_cents)::bigint AS tax, sum(o.total_cents)::bigint AS gross,
+              sum(o.commission_cents)::bigint AS commission
+       FROM public.ticketing_orders o
+       WHERE o.client_id = $1 AND o.brand_id = $2 AND ${PAID}${paid.sql}
+       GROUP BY 1`,
+      [...base, ...paid.params],
+    ),
+    db.query(
+      `SELECT to_char((o.paid_at AT TIME ZONE $3)::date, 'YYYY-MM-DD') AS day, t.code, sum(t.amount_cents)::bigint AS amount
+       FROM public.ticketing_order_taxes t
+       JOIN public.ticketing_orders o ON o.id = t.order_id AND o.client_id = t.client_id AND o.brand_id = t.brand_id
+       WHERE o.client_id = $1 AND o.brand_id = $2 AND ${PAID}${paid.sql}
+       GROUP BY 1, 2`,
+      [...base, ...paid.params],
+    ),
+    db.query(
+      `SELECT to_char((r.completed_at AT TIME ZONE $3)::date, 'YYYY-MM-DD') AS day, count(*)::int AS refunds,
+              sum(r.amount_cents)::bigint AS refunded, sum(r.commission_refund_cents)::bigint AS commission_refunded
+       FROM public.ticketing_refunds r
+       JOIN public.ticketing_orders o ON o.id = r.order_id AND o.client_id = r.client_id AND o.brand_id = r.brand_id
+       WHERE r.client_id = $1 AND r.brand_id = $2 AND r.status = 'succeeded'${refunded.sql}
+       GROUP BY 1`,
+      [...base, ...refunded.params],
+    ),
+  ]);
+  const days = new Map<string, DailyRow>();
+  const row = (day: string) => {
+    let r = days.get(day);
+    if (!r) {
+      r = { day, orders: 0, subtotalCents: 0, taxCents: 0, gstCents: 0, qstCents: 0, grossCents: 0, refunds: 0, refundedCents: 0, commissionCents: 0, commissionRefundedCents: 0, netToClientCents: 0 };
+      days.set(day, r);
+    }
+    return r;
+  };
+  for (const x of sales.rows) Object.assign(row(x.day), { orders: x.orders, subtotalCents: Number(x.subtotal), taxCents: Number(x.tax), grossCents: Number(x.gross), commissionCents: Number(x.commission) });
+  for (const x of taxes.rows) {
+    if (x.code === "GST") row(x.day).gstCents += Number(x.amount);
+    else if (x.code === "QST") row(x.day).qstCents += Number(x.amount);
+  }
+  for (const x of refunds.rows) Object.assign(row(x.day), { refunds: x.refunds, refundedCents: Number(x.refunded), commissionRefundedCents: Number(x.commission_refunded) });
+  const rows = [...days.values()].sort((a, b) => a.day.localeCompare(b.day));
+  for (const r of rows) r.netToClientCents = r.grossCents - r.refundedCents - (r.commissionCents - r.commissionRefundedCents);
+  const totals = rows.reduce(
+    (t, r) => {
+      for (const k of Object.keys(t) as (keyof typeof t)[]) t[k] += r[k];
+      return t;
+    },
+    { orders: 0, subtotalCents: 0, taxCents: 0, gstCents: 0, qstCents: 0, grossCents: 0, refunds: 0, refundedCents: 0, commissionCents: 0, commissionRefundedCents: 0, netToClientCents: 0 },
+  );
+  return { currency: "CAD", timeZone, filter: { eventId: f.eventId ?? null, from: f.from ?? null, to: f.to ?? null }, days: rows, totals };
+}
+
+export interface DailyRow {
+  day: string;
+  orders: number;
+  subtotalCents: number;
+  /** All taxes; TPS (GST) and TVQ (QST) are also given apart. */
+  taxCents: number;
+  gstCents: number;
+  qstCents: number;
+  grossCents: number;
+  refunds: number;
+  refundedCents: number;
+  commissionCents: number;
+  commissionRefundedCents: number;
+  netToClientCents: number;
+}
+
 export async function attendeesRows(db: Db, s: TenantScope, sessionId: string) {
   const { rows } = await db.query(
     `SELECT o.reference, k.id AS ticket_id, tt.code, tt.name, b.full_name, b.email, k.status,
