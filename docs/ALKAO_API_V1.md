@@ -93,6 +93,26 @@ the database checks that the order's refunded totals equal the sum of its refund
 
 Every admin write is recorded in `ticketing_audit_log` in the same transaction.
 
+### Flex Météo session change (Run 04)
+
+| Method | Path | Who | Result |
+|---|---|---|---|
+| POST | `/v1/public/…/orders/:orderId/exchange` `{ sessionId }` | Buyer (header `X-Alkao-Order-Token`) | `201 { exchange: { orderId, reference, token, tickets } }` |
+| POST | `/v1/admin/…/orders/:orderId/exchange` `{ sessionId }` | `credentials.manage` (owner, admin, manager) | Same, done by staff |
+
+- **Who can change:** an order that bought an add-on with `grantsSessionChange` (FESTI-ICE
+  `FLEX_WEATHER`) can move all its valid tickets, **once**, to another session of the same event.
+- **Where to:** the new session must be on sale, in the future and have room. Once any of the
+  order's tickets has been scanned in, the order can no longer move.
+- **How:** the move creates a zero-amount exchange order. The money and the Stripe payment stay
+  on the original order. The new tickets and QR codes belong to the exchange order, and the old
+  tickets are voided, so their QR codes no longer open the gates. Prices depend on the ticket
+  type, not the session, so in V1 the difference is always zero.
+- **Refunds:** refunding the original order also voids the moved tickets. The exchange order
+  holds no money. Reports count the sale once.
+- Errors: `409 flex_not_purchased`, `409 already_exchanged`, `409 ticket_already_used`,
+  `409 session_not_available`, `409 sold_out`.
+
 ### Operations (Run 04)
 
 | Method | Path | Permission | Result |
