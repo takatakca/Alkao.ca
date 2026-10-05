@@ -26,6 +26,9 @@ const T = {
     qrSoon: "Code QR bientôt disponible.",
     confirmMove: (when) => `Déplacer vos billets au ${when} ? Ce changement ne peut être fait qu'une fois.`,
     changeTitle: "Changer de séance (Flex Météo)",
+    changeTitleOpen: "Changer de date (billet ouvert)",
+    changeAny: "Votre billet ouvert peut changer de date autant de fois que nécessaire, tant qu'il n'est pas entré.",
+    confirmMoveOpen: (when) => `Déplacer vos billets au ${when} ? Vous pourrez encore changer de date ensuite.`,
     changeOnce: "Votre commande permet un changement de séance, une seule fois.",
     seeSessions: "Voir les autres séances",
     noSessions: "Aucune autre séance n'a assez de places pour le moment.",
@@ -62,6 +65,9 @@ const T = {
     qrSoon: "QR code coming soon.",
     confirmMove: (when) => `Move your tickets to ${when}? This change can be made only once.`,
     changeTitle: "Change session (Flex Météo)",
+    changeTitleOpen: "Change date (open-date ticket)",
+    changeAny: "Your open-date ticket can change date as often as needed, until it has been used.",
+    confirmMoveOpen: (when) => `Move your tickets to ${when}? You can still change the date afterwards.`,
     changeOnce: "Your order allows one session change.",
     seeSessions: "See other sessions",
     noSessions: "No other session has enough seats right now.",
@@ -138,7 +144,7 @@ function ChangeSession({ order, token }) {
     } catch (e) { setError(message(e)); }
   };
   const move = async (s) => {
-    if (!confirm(T.confirmMove(whenFr(s.startsAt, order.event.venue.timezone)))) return;
+    if (!confirm((order.openDate ? T.confirmMoveOpen : T.confirmMove)(whenFr(s.startsAt, order.event.venue.timezone)))) return;
     setBusy(true); setError(null);
     try {
       const { exchange } = await call(`/orders/${order.id}/exchange`, { method: "POST", body: { sessionId: s.id }, token });
@@ -147,8 +153,8 @@ function ChangeSession({ order, token }) {
     } catch (e) { setError(message(e)); setBusy(false); }
   };
   return html`<div class="card noprint">
-    <h2>${T.changeTitle}</h2>
-    <p class="muted">${T.changeOnce}</p>
+    <h2>${order.openDate ? T.changeTitleOpen : T.changeTitle}</h2>
+    <p class="muted">${order.openDate ? T.changeAny : T.changeOnce}</p>
     ${error && html`<div class="alert bad" role="alert">${error}</div>`}
     ${sessions === null ? html`<button onClick=${load}>${T.seeSessions}</button>`
       : sessions.length === 0 ? html`<p>${T.noSessions}</p>`

@@ -57,3 +57,15 @@ has not entered.
 
 - **Why:** a seat is always reserved, so the gate can never be over capacity on a busy
   night, and the buyer keeps the "any date" freedom.
+- **How it works:**
+  - In `/ops`, an admission type gets the box "Billet ouvert (date modifiable)". It is off by
+    default, so nothing changes for a type until staff tick it.
+  - On the tickets page, the buyer sees "Changer de date (billet ouvert)" and picks another
+    session with room. The whole order moves together (every ticket, children included), and
+    the new QR codes replace the old ones.
+  - Each change makes a new tickets link, and only the latest one can change again. The
+    money stays on the first order, so refunds, cancellations and reports work as before.
+  - Once any ticket of the order has entered, the date is fixed.
+  - Flex Météo is unchanged: one change, only with the option.
+- **To undo:** untick the box on the type. Orders already sold keep their tickets and their
+  current date.

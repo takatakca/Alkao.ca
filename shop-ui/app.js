@@ -55,6 +55,7 @@ const T = {
     step2: "2. Vos billets",
     free: "Gratuit",
     perAdmission: " · option, une par entrée",
+    openDate: " · date modifiable",
     minimum: (n) => ` · minimum ${n}`,
     remove: (n) => `Retirer ${n}`,
     quantity: (n) => `Quantité ${n}`,
@@ -129,6 +130,7 @@ const T = {
     step2: "2. Your tickets",
     free: "Free",
     perAdmission: " · option, one per admission",
+    openDate: " · date can be changed",
     minimum: (n) => ` · minimum ${n}`,
     remove: (n) => `Remove ${n}`,
     quantity: (n) => `Quantity ${n}`,
@@ -349,7 +351,7 @@ function EventShop({ config }) {
         <h2>${T.step2}</h2>
         <div class="card">
           ${[...admissions, ...addOns].map((t) => html`<div class="type">
-            <div><div class="name">${t.name}</div><div class="muted">${t.priceCents === 0 ? T.free : money(t.priceCents)}${t.kind === "add_on" ? T.perAdmission : ""}${t.minQuantity > 1 ? T.minimum(t.minQuantity) : ""}</div></div>
+            <div><div class="name">${t.name}</div><div class="muted">${t.priceCents === 0 ? T.free : money(t.priceCents)}${t.kind === "add_on" ? T.perAdmission : ""}${t.openDate ? T.openDate : ""}${t.minQuantity > 1 ? T.minimum(t.minQuantity) : ""}</div></div>
             <div class="stepper">
               <button class="secondary" aria-label=${T.remove(t.name)} disabled=${!(qty[t.id] > 0)} onClick=${() => set(t.id, (qty[t.id] ?? 0) - 1)}>−</button>
               <output aria-label=${T.quantity(t.name)}>${qty[t.id] ?? 0}</output>

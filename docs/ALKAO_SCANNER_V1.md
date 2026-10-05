@@ -116,6 +116,6 @@ reference (on the confirmation email) and let a ticket in by hand.
   to the audit log (`scan.manual_admission`, with the staff member and the device).
 - **No buyer data for the gate.** Gate staff see no buyer data. Roles that read buyers
   (owner, admin, manager) also get `buyerName`, to check it against an ID.
-- **Flex changes.** The reference of the original order also finds the tickets it was moved
-  to by a session change.
+- **Session changes.** The reference of the original order also finds the tickets it was
+  moved to by a session change (Flex Météo, or each change of an open-date ticket).
 - **Online only.** It works online only. In offline mode the Scanner says so.

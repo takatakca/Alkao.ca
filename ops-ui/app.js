@@ -494,7 +494,7 @@ function EventDetail({ api, base, eventId }) {
   const [types, reloadTypes] = useLoad(() => api(`${base}/events/${eventId}/ticket-types`), [base, eventId]);
   const [error, setError] = useState(null);
   const [sess, setSess] = useState({ startsAt: "", capacity: 100 });
-  const [tt, setTt] = useState({ code: "", name: "", price: "", maxQuantity: 10, minQuantity: 0, kind: "admission", countsAsAdult: true, grantsSessionChange: false });
+  const [tt, setTt] = useState({ code: "", name: "", price: "", maxQuantity: 10, minQuantity: 0, kind: "admission", countsAsAdult: true, grantsSessionChange: false, openDate: false });
   const [cancelling, setCancelling] = useState(null);
   const [copied, setCopied] = useState(false);
   const act = (fn) => async (e) => { e?.preventDefault?.(); setError(null); try { await fn(); } catch (err) { setError(err); } };
@@ -540,7 +540,7 @@ function EventDetail({ api, base, eventId }) {
     await api(`${base}/events/${eventId}/ticket-types`, { method: "POST", body: {
       code: tt.code.toUpperCase(), name: tt.name, kind: tt.kind, priceCents: Math.round(Number(tt.price.replace(",", ".")) * 100),
       minQuantity: Number(tt.minQuantity), maxQuantity: Number(tt.maxQuantity), countsAsAdult: !addOn && tt.countsAsAdult,
-      addOnScope: addOn ? "per_admission" : null, grantsSessionChange: addOn && tt.grantsSessionChange,
+      addOnScope: addOn ? "per_admission" : null, grantsSessionChange: addOn && tt.grantsSessionChange, openDate: !addOn && tt.openDate,
     } });
     setTt({ ...tt, code: "", name: "", price: "" }); reloadTypes();
   });
@@ -613,13 +613,14 @@ function EventDetail({ api, base, eventId }) {
       <label>Max<input type="number" min="1" value=${tt.maxQuantity} onInput=${(e) => setTt({ ...tt, maxQuantity: e.target.value })} /></label>
       <label>Genre<select value=${tt.kind} onChange=${(e) => setTt({ ...tt, kind: e.target.value })}><option value="admission">Admission</option><option value="add_on">Option par billet</option></select></label>
       ${tt.kind === "admission"
-        ? html`<label class="check"><input type="checkbox" checked=${tt.countsAsAdult} onChange=${(e) => setTt({ ...tt, countsAsAdult: e.target.checked })} /> Adulte</label>`
+        ? html`<label class="check"><input type="checkbox" checked=${tt.countsAsAdult} onChange=${(e) => setTt({ ...tt, countsAsAdult: e.target.checked })} /> Adulte</label>
+            <label class="check"><input type="checkbox" checked=${tt.openDate} onChange=${(e) => setTt({ ...tt, openDate: e.target.checked })} /> Billet ouvert (date modifiable)</label>`
         : html`<label class="check"><input type="checkbox" checked=${tt.grantsSessionChange} onChange=${(e) => setTt({ ...tt, grantsSessionChange: e.target.checked })} /> Permet un changement de séance (Flex)</label>`}
       <button type="submit">Ajouter</button>
     </form>
     ${types.loading ? html`<${Loading} />` : html`<table><thead><tr><th>Code</th><th>Nom</th><th class="num">Prix</th><th class="num">Min–Max</th><th>Genre</th></tr></thead>
       <tbody>${(types.data?.ticketTypes ?? []).map((t) => html`<tr><td>${t.code}</td><td>${t.name}</td><td class="num">${money(t.priceCents)}</td><td class="num">${t.minQuantity}–${t.maxQuantity}</td>
-        <td>${t.kind === "add_on" ? (t.grantsSessionChange ? "Option (Flex)" : "Option") : t.countsAsAdult ? "Admission adulte" : "Admission"}</td></tr>`)}</tbody></table>`}`;
+        <td>${t.kind === "add_on" ? (t.grantsSessionChange ? "Option (Flex)" : "Option") : t.countsAsAdult ? "Admission adulte" : "Admission"}${t.openDate ? " · billet ouvert" : ""}</td></tr>`)}</tbody></table>`}`;
 }
 
 // ── Orders ──────────────────────────────────────────────────────────────────
@@ -726,7 +727,7 @@ function OrderDetail({ api, base, orderId, role, me }) {
         <span class="muted">${selected.length} billet(s) coché(s) seront annulés</span>
         <button type="submit" class="danger">Rembourser</button>
       </form>
-      <h2>Changement de séance (Flex Météo)</h2>
+      <h2>Changement de séance (Flex Météo ou billet ouvert)</h2>
       ${sessions === null ? html`<button class="secondary" onClick=${loadSessions}>Choisir une autre séance</button>` : html`
         <table><tbody>${sessions.map((s) => html`<tr><td>${when(s.startsAt)}</td><td class="num">${s.capacity - s.soldCount - s.reservedCount} places</td><td><button onClick=${exchange(s.id)}>Déplacer ici</button></td></tr>`)}</tbody></table>`}`}
     <h2>Données personnelles (Loi 25)</h2>

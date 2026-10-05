@@ -16,6 +16,10 @@ export interface ExchangeResult {
 
 /**
  * Flex Météo: move an order's valid tickets, once, to another session of the same event.
+ * Run 37 (owner decision): an order holding an open-date admission ("billet ouvert") can
+ * move as often as needed, each time from its latest move; its whole group moves together.
+ * Every move points to the original order (the one holding the money), so code that looks
+ * one level down from it (refunds, cancellations, emails) sees every ticket.
  *
  * The move is a zero-amount exchange order linked to the original. Money stays on the
  * original order and its payment; the new tickets (and credentials) live on the exchange
@@ -39,19 +43,37 @@ export async function exchangeOrder(
       );
       const original = rows[0];
       if (!original) throw new DomainError("order_not_found");
-      if (original.exchange_of_order_id) throw new DomainError("already_exchanged");
       if (!["paid", "partially_refunded"].includes(original.status)) throw new DomainError("order_not_exchangeable");
 
-      const { rowCount: exchanged } = await tx.query(`SELECT 1 FROM public.ticketing_orders WHERE exchange_of_order_id = $1`, [orderId]);
+      // The order holding the money; its row lock makes moves of the same tickets one at a time.
+      const rootId = original.exchange_of_order_id ?? orderId;
+      if (rootId !== orderId) {
+        await tx.query(`SELECT 1 FROM public.ticketing_orders WHERE id = $1 AND client_id = $2 AND brand_id = $3 FOR UPDATE`, [rootId, scope.clientId, scope.brandId]);
+      }
+      // Only the latest move can move again.
+      const { rowCount: exchanged } = await tx.query(
+        `SELECT 1 FROM public.ticketing_orders x
+         WHERE x.exchange_of_order_id = $1 AND x.id <> $2
+           AND x.created_at >= (SELECT created_at FROM public.ticketing_orders WHERE id = $2)`,
+        [rootId, orderId],
+      );
       if (exchanged) throw new DomainError("already_exchanged");
-
-      const { rowCount: flex } = await tx.query(
+      const { rowCount: openDate } = await tx.query(
         `SELECT 1 FROM public.ticketing_order_lines l
          JOIN public.ticketing_ticket_types t ON t.id = l.ticket_type_id AND t.client_id = l.client_id AND t.brand_id = l.brand_id
-         WHERE l.order_id = $1 AND l.kind = 'add_on' AND t.grants_session_change`,
+         WHERE l.order_id = $1 AND l.kind = 'admission' AND t.open_date`,
         [orderId],
       );
-      if (!flex) throw new DomainError("flex_not_purchased");
+      if (!openDate) {
+        if (original.exchange_of_order_id) throw new DomainError("already_exchanged");
+        const { rowCount: flex } = await tx.query(
+          `SELECT 1 FROM public.ticketing_order_lines l
+           JOIN public.ticketing_ticket_types t ON t.id = l.ticket_type_id AND t.client_id = l.client_id AND t.brand_id = l.brand_id
+           WHERE l.order_id = $1 AND l.kind = 'add_on' AND t.grants_session_change`,
+          [orderId],
+        );
+        if (!flex) throw new DomainError("flex_not_purchased");
+      }
 
       const { rows: tickets } = await tx.query<{ id: string; ticket_type_id: string; code: string; name: string }>(
         `SELECT k.id, k.ticket_type_id, l.code_snapshot AS code, l.name_snapshot AS name
@@ -81,7 +103,7 @@ export async function exchangeOrder(
             `INSERT INTO public.ticketing_orders
                (client_id, brand_id, event_id, session_id, buyer_id, reference, subtotal_cents, tax_cents, total_cents, commission_cents, exchange_of_order_id)
              VALUES ($1, $2, $3, $4, $5, $6, 0, 0, 0, 0, $7) RETURNING id, reference`,
-            [scope.clientId, scope.brandId, original.event_id, session.id, original.buyer_id, newOrderReference(), orderId],
+            [scope.clientId, scope.brandId, original.event_id, session.id, original.buyer_id, newOrderReference(), rootId],
           );
           order = created[0];
           await tx.query("RELEASE SAVEPOINT exchange_reference");
@@ -119,11 +141,14 @@ export async function exchangeOrder(
         `INSERT INTO public.ticketing_access_tokens (token_hash, client_id, brand_id, subject_type, subject_id) VALUES ($1, $2, $3, 'order', $4)`,
         [createHash("sha256").update(orderToken).digest(), scope.clientId, scope.brandId, order.id],
       );
-      await writeAudit(tx, scope, actor, "order.exchanged", { type: "order", id: orderId }, {
+      // Logged on the original order, so its history shows every move.
+      await writeAudit(tx, scope, actor, "order.exchanged", { type: "order", id: rootId }, {
+        fromOrderId: orderId,
         exchangeOrderId: order.id,
         fromSessionId: original.session_id,
         toSessionId: session.id,
         tickets: ticketIds.length,
+        openDate: Boolean(openDate),
       });
       return { exchangeOrderId: order.id, reference: order.reference, orderToken, ticketIds };
     }),

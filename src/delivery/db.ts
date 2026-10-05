@@ -53,13 +53,23 @@ export async function publicOrderContext(q: Queryable, s: TenantScope, orderId: 
   const { rows } = await q.query(
     `SELECT br.name AS brand_name, e.id AS event_id, e.title AS event_title, se.starts_at, se.ends_at,
             v.name AS venue_name, v.address_line1, v.city, v.timezone, o.exchange_of_order_id,
-            (o.exchange_of_order_id IS NULL
-              AND o.status IN ('paid', 'partially_refunded')
-              AND NOT EXISTS (SELECT 1 FROM public.ticketing_orders x WHERE x.exchange_of_order_id = o.id)
-              AND EXISTS (SELECT 1 FROM public.ticketing_order_lines l
-                          JOIN public.ticketing_ticket_types t ON t.id = l.ticket_type_id AND t.client_id = l.client_id AND t.brand_id = l.brand_id
-                          WHERE l.order_id = o.id AND l.kind = 'add_on' AND t.grants_session_change)) AS can_change_session,
-            (SELECT x.id FROM public.ticketing_orders x WHERE x.exchange_of_order_id = o.id) AS exchanged_to_order_id
+            EXISTS (SELECT 1 FROM public.ticketing_order_lines l
+                    JOIN public.ticketing_ticket_types t ON t.id = l.ticket_type_id AND t.client_id = l.client_id AND t.brand_id = l.brand_id
+                    WHERE l.order_id = o.id AND l.kind = 'admission' AND t.open_date) AS open_date,
+            (o.status IN ('paid', 'partially_refunded')
+              -- Not replaced by a later move of the same original order (Run 37).
+              AND NOT EXISTS (SELECT 1 FROM public.ticketing_orders x
+                              WHERE x.exchange_of_order_id = coalesce(o.exchange_of_order_id, o.id) AND x.id <> o.id AND x.created_at >= o.created_at)
+              AND (EXISTS (SELECT 1 FROM public.ticketing_order_lines l
+                           JOIN public.ticketing_ticket_types t ON t.id = l.ticket_type_id AND t.client_id = l.client_id AND t.brand_id = l.brand_id
+                           WHERE l.order_id = o.id AND l.kind = 'admission' AND t.open_date)
+                OR (o.exchange_of_order_id IS NULL
+                    AND EXISTS (SELECT 1 FROM public.ticketing_order_lines l
+                                JOIN public.ticketing_ticket_types t ON t.id = l.ticket_type_id AND t.client_id = l.client_id AND t.brand_id = l.brand_id
+                                WHERE l.order_id = o.id AND l.kind = 'add_on' AND t.grants_session_change)))) AS can_change_session,
+            (SELECT x.id FROM public.ticketing_orders x
+             WHERE x.exchange_of_order_id = coalesce(o.exchange_of_order_id, o.id) AND x.id <> o.id AND x.created_at >= o.created_at
+             ORDER BY x.created_at DESC LIMIT 1) AS exchanged_to_order_id
      FROM public.ticketing_orders o
      JOIN public.ticketing_brands br ON br.id = o.brand_id AND br.client_id = o.client_id
      JOIN public.ticketing_events e ON e.id = o.event_id AND e.client_id = o.client_id AND e.brand_id = o.brand_id
@@ -82,5 +92,7 @@ export async function publicOrderContext(q: Queryable, s: TenantScope, orderId: 
     exchangeOfOrderId: r.exchange_of_order_id,
     exchanged: Boolean(r.exchanged_to_order_id),
     canChangeSession: Boolean(r.can_change_session),
+    /** Run 37: the change is the open-date kind (as often as needed), not Flex Météo (once). */
+    openDate: Boolean(r.open_date),
   };
 }

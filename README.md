@@ -112,3 +112,4 @@ TAKATAK membership (set `SUPABASE_URL` and `SUPABASE_ANON_KEY`). See
 | Run 34 | Owner decisions recorded in [ALKAO_DECISIONS.md](docs/ALKAO_DECISIONS.md). A dispute the buyer wins cancels the tickets nobody has used; a partial one waits in "À traiter" |
 | Run 35 | Door sales: "Vente à la porte" opens the shop on the staff device, today's sessions only, card through Stripe (same commission), tickets on screen, next sale |
 | Run 36 | Promo codes per event: percentage or amount off before taxes (commission on the discounted subtotal), uses counted by the database, dates, on or off; shop field, staff screen, reports |
+| Run 37 | "Billet ouvert": an admission type whose date the buyer can change as often as needed, with the whole group, until a ticket has entered; a seat is always held; off by default per type |

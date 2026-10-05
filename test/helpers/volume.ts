@@ -155,10 +155,16 @@ export async function seedVolume(db: Db, t: TenantFixture, o: VolumeOptions): Pr
     [pastSessionIds, t.clientId, t.brandId, scannerUser, Math.round(share * 1000)],
   );
 
+  // A buyer from the middle whose number has the most digits: "festi 96" would also match
+  // "festi 960…969" (and more at volume), so part of its name would not name one order.
   const { rows: sample } = await db.query<{ reference: string; email: string; full_name: string }>(
-    `SELECT o.reference, b.email, b.full_name FROM public.ticketing_orders o JOIN public.ticketing_buyers b ON b.id = o.buyer_id
-     WHERE o.client_id = $1 AND o.brand_id = $2 AND o.session_id = ANY($3::uuid[]) ORDER BY o.created_at LIMIT 1 OFFSET $4`,
-    [...scope, Math.floor((sessions * o.ordersPerSession) / 2)],
+    `WITH longest AS (
+       SELECT o.reference, b.email, b.full_name, o.created_at FROM public.ticketing_orders o JOIN public.ticketing_buyers b ON b.id = o.buyer_id
+       WHERE o.client_id = $1 AND o.brand_id = $2 AND o.session_id = ANY($3::uuid[])
+         AND length(b.full_name) = (SELECT max(length(x.full_name)) FROM public.ticketing_buyers x WHERE x.client_id = $1 AND x.brand_id = $2)
+     )
+     SELECT reference, email, full_name FROM longest ORDER BY created_at LIMIT 1 OFFSET (SELECT count(*) / 2 FROM longest)`,
+    scope,
   );
   await db.query("ANALYZE");
   return {

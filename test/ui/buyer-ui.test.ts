@@ -163,6 +163,15 @@ describe("buyer tickets page", () => {
     expect(await before.getByRole("img", { name: /^Code QR du billet / }).count()).toBe(0);
   });
 
+  it("offers an open-date ticket a change of date as often as needed (Run 37)", async () => {
+    const f = seed.festi;
+    await db.pool.query(`UPDATE public.ticketing_ticket_types SET open_date = true WHERE event_id = $1 AND code = 'OPEN_DATE'`, [f.eventId]);
+    const o = await buy(f, { OPEN_DATE: 1 });
+    const page = await open(linkFor(f, o));
+    await page.getByRole("heading", { name: "Changer de date (billet ouvert)" }).waitFor();
+    expect(await page.getByText("Votre billet ouvert peut changer de date autant de fois que nécessaire", { exact: false }).isVisible()).toBe(true);
+  });
+
   it("ran without script errors", () => {
     expect(pageErrors).toEqual([]);
   });

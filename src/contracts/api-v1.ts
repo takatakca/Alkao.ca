@@ -105,12 +105,15 @@ const ticketTypeFields = {
   sortOrder: z.number().int().min(0).max(10_000).default(0),
   /** Add-ons only: buying it allows one session change (FESTI-ICE Flex Météo). */
   grantsSessionChange: z.boolean().default(false),
+  /** Run 37, admissions only: "billet ouvert", its order can change session as often as needed. */
+  openDate: z.boolean().default(false),
 };
 export const CreateTicketType = z
   .object(ticketTypeFields)
   .refine((t) => t.minQuantity <= t.maxQuantity, { message: "minQuantity must not exceed maxQuantity" })
   .refine((t) => (t.kind === "add_on") === Boolean(t.addOnScope), { message: "add-ons need addOnScope; admissions must not have one" })
-  .refine((t) => !t.grantsSessionChange || t.kind === "add_on", { message: "only add-ons can grant a session change" });
+  .refine((t) => !t.grantsSessionChange || t.kind === "add_on", { message: "only add-ons can grant a session change" })
+  .refine((t) => !t.openDate || t.kind === "admission", { message: "only admissions can be open-date" });
 export const UpdateTicketType = z
   .object({
     name,
@@ -121,6 +124,7 @@ export const UpdateTicketType = z
     maxAdultsInOrder: z.number().int().min(0).max(1000).nullable(),
     active: z.boolean(),
     sortOrder: z.number().int().min(0).max(10_000),
+    openDate: z.boolean(),
   })
   .partial()
   .refine((o) => Object.keys(o).length > 0, "empty update");

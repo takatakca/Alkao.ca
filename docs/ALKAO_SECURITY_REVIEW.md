@@ -32,6 +32,7 @@ run. Every point below is covered by an automated test unless it says otherwise.
 | The same Stripe webhook delivered 10 times at once | The order is fulfilled once, with exactly the bought number of tickets |
 | Full refund double-clicked 6 times | One refund, one Stripe payout, order `refunded` |
 | Flex Météo change clicked 5 times | Moved once; the others get `already_exchanged` |
+| Open-date ticket moved again from an older link (Run 37) | Refused with `already_exchanged`: only the latest order can move, under a lock on the original order |
 | 3 staff pushing a session cancellation at the same time | Each of the 6 buyers is refunded exactly once |
 
 ## Fixed in this run

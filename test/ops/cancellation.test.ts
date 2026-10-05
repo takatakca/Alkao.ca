@@ -149,6 +149,27 @@ describe("session cancellation", () => {
     expect(audit.rows.map((r: { action: string }) => r.action)).toEqual(["session.cancelled", "session.cancellation_completed"]);
   });
 
+  it("tells an open-date buyer once, on their latest order, when their ticket came back to the session (Run 37)", async () => {
+    const f = seed.festi;
+    const owner = await tokenFor(seed.users.festiOwner);
+    await db.pool.query(`UPDATE public.ticketing_ticket_types SET open_date = true WHERE id = $1`, [typeId(f, "OPEN_DATE")]);
+    const [s, other] = [await session(f, 35), await session(f, 36)];
+    const o = await buy(f, s, { OPEN_DATE: 1 });
+    const move = (from: { orderId: string; token: string }, sessionId: string) =>
+      call(app, "POST", `${pub(f.clientId, f.brandId)}/orders/${from.orderId}/exchange`, { headers: { "x-alkao-order-token": from.token }, body: { sessionId } });
+    const away = await move(o, other);
+    const back = await move({ orderId: away.body.exchange.orderId, token: away.body.exchange.token }, s);
+    expect(back.status).toBe(201);
+
+    const progress = await runToEnd(f, s, owner);
+    expect(progress.orders).toMatchObject({ total: 1, refunded: 1 });
+    expect(await order(o.orderId)).toMatchObject({ status: "refunded" });
+    expect(await tickets(back.body.exchange.orderId)).toEqual([{ status: "void", void_reason: "refunded" }]);
+    const { rows } = await db.pool.query(`SELECT order_id FROM public.ticketing_email_outbox WHERE kind = 'session_cancelled' AND order_id = ANY($1::uuid[])`,
+      [[o.orderId, away.body.exchange.orderId, back.body.exchange.orderId]]);
+    expect(rows).toEqual([{ order_id: back.body.exchange.orderId }]);
+  });
+
   it("retries a refund that Stripe failed, without paying out twice", async () => {
     const f = seed.festi;
     const owner = await tokenFor(seed.users.festiOwner);
