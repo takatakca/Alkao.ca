@@ -7,7 +7,7 @@ import type { CreateCheckoutInput } from "../../src/payments/gateway.js";
 import { call, testApp, type TestApp } from "../helpers/app.js";
 import { createTestDatabase, type TestDatabase } from "../helpers/db.js";
 import { completedSession, FakeGateway, signedStripeEvent } from "../helpers/fake-gateway.js";
-import { seedTwoTenants, TEST_CREDENTIAL_SECRET, type SeedResult, type TenantFixture } from "../helpers/seed.js";
+import { seedPaidOrder, seedTwoTenants, TEST_CREDENTIAL_SECRET, type SeedResult, type TenantFixture } from "../helpers/seed.js";
 
 /** End-to-end: a buyer uses the hosted shop in a real Chromium; Stripe is the fake gateway. */
 const executablePath = process.env.ALKAO_CHROMIUM_PATH ?? (existsSync("/opt/pw-browsers/chromium") ? "/opt/pw-browsers/chromium" : undefined);
@@ -244,6 +244,22 @@ describe("hosted ticket shop", () => {
     const button = page.getByRole("link", { name: "Buy tickets" });
     await button.waitFor();
     expect(await button.getAttribute("href")).toBe(`${origin}/acheter/${f.clientId}/${f.brandId}?lang=en`);
+  });
+
+  it("sends a buyer's tickets again from the shop, without saying whether the address bought (Run 27)", async () => {
+    const t = seed.havana;
+    await seedPaidOrder(db.pool, t, "retrouve@example.com");
+    await db.pool.query(`UPDATE public.ticketing_email_outbox SET status = 'sent', sent_at = now() WHERE status = 'pending'`);
+    const page = await shop(t);
+    await page.getByRole("heading", { name: "Vous avez déjà acheté ? Retrouvez vos billets" }).waitFor();
+    await page.getByLabel("Le courriel utilisé pour l'achat").fill("retrouve@example.com");
+    await page.getByRole("button", { name: "Renvoyer mes billets" }).click();
+    await page.getByRole("status").getByText("Si une commande à venir correspond à cette adresse", { exact: false }).waitFor();
+    const { rows } = await db.pool.query(
+      `SELECT x.status FROM public.ticketing_email_outbox x JOIN public.ticketing_orders o ON o.id = x.order_id
+       JOIN public.ticketing_buyers b ON b.id = o.buyer_id WHERE b.email = 'retrouve@example.com'`,
+    );
+    expect(rows).toEqual([{ status: "pending" }]);
   });
 
   it("ran without script errors", () => {

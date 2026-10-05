@@ -36,7 +36,8 @@ platform-wide counts only, never a Client, Brand, buyer or amount.
 3. Restart the worker (`npm run worker:email`). Emails queued meanwhile go out. Emails older
    than `ALKAO_EMAIL_MAX_AGE_HOURS` (72 h) are skipped and listed in "À traiter".
 4. For one buyer, open the order and use **Renvoyer les billets par courriel**. The buyer can
-   also open the personal link from any earlier email.
+   also open the personal link from any earlier email, or use **Retrouvez vos billets** on the
+   shop page (Run 27).
 
 ### Paid orders stay "en attente de paiement"
 

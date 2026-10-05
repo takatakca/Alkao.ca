@@ -24,6 +24,7 @@ import * as paymentsDb from "../db/payments.js";
 import * as credentialsDb from "../db/credentials.js";
 import { CredentialsService } from "../scanner/service.js";
 import { toCsv } from "../ops/csv.js";
+import * as findTickets from "../delivery/find-tickets.js";
 import * as attention from "../ops/attention.js";
 import * as metrics from "../ops/metrics.js";
 import * as reminders from "../delivery/reminders.js";
@@ -82,6 +83,9 @@ const sha256 = (value: string) => createHash("sha256").update(value).digest();
 export function createApp(deps: AppDeps) {
   const now = deps.now ?? (() => new Date());
   const holdLimiter = new FixedWindowLimiter(deps.publicHoldsPerMinute, 60_000);
+  // Run 27: "Retrouver mes billets", per caller and per address, so it cannot flood an inbox.
+  const findTicketsByIp = new FixedWindowLimiter(5, 10 * 60_000);
+  const findTicketsByEmail = new FixedWindowLimiter(3, 60 * 60_000);
   const paymentsService = new PaymentsService({
     db: deps.db,
     gateway: deps.paymentGateway ?? null,
@@ -294,6 +298,19 @@ export function createApp(deps: AppDeps) {
     const result = buildQuote(rules, body.items, event.taxRegion);
     if (!result.ok) return fail(c, 422, "cart_invalid", result.violations);
     return c.json({ quote: result.quote });
+  });
+
+  // Run 27: a buyer who lost the email asks for their tickets again. The answer is the same
+  // whether or not the address has orders, so it reveals nothing about who bought.
+  app.post(`${PUBLIC}/tickets/resend`, publicGate, async (c) => {
+    const scope = c.get("scope");
+    const at = now().getTime();
+    if (!findTicketsByIp.take(`${scope.clientId}:${clientIp(c, deps.trustedProxyHops ?? 1)}`, at)) return fail(c, 429, "rate_limited");
+    const { email } = api.FindTicketsRequest.parse(await readJson(c));
+    if (findTicketsByEmail.take(`${scope.clientId}:${scope.brandId}:${email.trim().toLowerCase()}`, at)) {
+      await findTickets.resendTicketsToBuyer(deps.db, scope, email, now());
+    }
+    return c.json({ ok: true }, 202);
   });
 
   app.post(`${PUBLIC}/holds`, publicGate, async (c) => {

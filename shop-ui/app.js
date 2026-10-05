@@ -69,6 +69,10 @@ const T = {
     thanks: "Merci !",
     confirming: "Votre paiement est en cours de confirmation. Vos billets vous seront envoyés par courriel dans quelques minutes.",
     badAddress: "Adresse de billetterie incomplète.",
+    findTitle: "Vous avez déjà acheté ? Retrouvez vos billets",
+    findEmail: "Le courriel utilisé pour l'achat",
+    findSend: "Renvoyer mes billets",
+    findSent: "Si une commande à venir correspond à cette adresse, vos billets viennent de vous être renvoyés. Vérifiez aussi vos courriels indésirables.",
     other: "English",
   },
   en: {
@@ -130,6 +134,10 @@ const T = {
     thanks: "Thank you!",
     confirming: "Your payment is being confirmed. Your tickets will be emailed to you within a few minutes.",
     badAddress: "Incomplete ticketing address.",
+    findTitle: "Already bought? Find your tickets",
+    findEmail: "The email used for the purchase",
+    findSend: "Send my tickets again",
+    findSent: "If an upcoming order matches this address, your tickets have just been sent again. Also check your spam folder.",
     other: "Français",
   },
 }[LANG];
@@ -335,8 +343,30 @@ function EventShop({ config }) {
         </div>
         ${hold.quote.totalCents > 0 && html`<p class="muted">${T.stripe}</p>`}
       </form>`}
+    ${!hold && html`<${FindTickets} />`}
     <footer>${T.footer}</footer>
   </main>`;
+}
+
+// ── Run 27: lost the email? The tickets are sent again to the same address ──
+function FindTickets() {
+  const [email, setEmail] = useState("");
+  const [state, setState] = useState(null);
+  const submit = async (e) => {
+    e.preventDefault();
+    setState("busy");
+    try { await call(`/tickets/resend`, { method: "POST", body: { email: email.trim() } }); setState("sent"); }
+    catch (err) { setState({ error: err }); }
+  };
+  return html`<section class="card find" aria-labelledby="find-title">
+    <h2 id="find-title">${T.findTitle}</h2>
+    ${state === "sent" ? html`<div class="alert ok" role="status">${T.findSent}</div>` : html`
+      <form onSubmit=${submit}>
+        <label>${T.findEmail}<input type="email" required autocomplete="email" value=${email} onInput=${(e) => setEmail(e.target.value)} /></label>
+        <div class="actions"><button type="submit" class="secondary" disabled=${state === "busy"}>${T.findSend}</button></div>
+      </form>`}
+    ${state?.error && html`<div class="alert bad" role="alert">${errText(state.error)}</div>`}
+  </section>`;
 }
 
 // ── Brand: published events ─────────────────────────────────────────────────
@@ -348,6 +378,7 @@ function EventList() {
   return html`<main>${switcher}<h1>${T.shop}</h1>
     ${state.events.length === 0 ? html`<p class="muted">${T.noEvents}</p>`
       : html`<ul class="events card">${state.events.map((e) => html`<li><a href=${`/acheter/${route.c}/${route.b}/${e.id}`}>${e.title}</a></li>`)}</ul>`}
+    <${FindTickets} />
     <footer>${T.footer}</footer></main>`;
 }
 
