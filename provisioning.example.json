@@ -1,0 +1,35 @@
+{
+  "clients": [
+    {
+      "clientId": "00000000-0000-4000-8000-000000000001",
+      "name": "Havana Resort",
+      "commission": { "rateBps": 0, "fixedCentsPerPaidAdmission": 0 },
+      "brands": [
+        {
+          "brandId": "00000000-0000-4000-8000-000000000011",
+          "name": "Havana Resort",
+          "ticketing": { "status": "active" }
+        }
+      ],
+      "members": [
+        { "userId": "00000000-0000-4000-8000-000000000101", "role": "owner" }
+      ]
+    },
+    {
+      "clientId": "00000000-0000-4000-8000-000000000002",
+      "name": "FESTI-ICE",
+      "commission": { "rateBps": 0, "fixedCentsPerPaidAdmission": 0 },
+      "brands": [
+        {
+          "brandId": "00000000-0000-4000-8000-000000000022",
+          "name": "FESTI-ICE",
+          "ticketing": { "status": "active" }
+        }
+      ],
+      "members": [
+        { "userId": "00000000-0000-4000-8000-000000000101", "role": "owner" },
+        { "userId": "00000000-0000-4000-8000-000000000202", "role": "staff" }
+      ]
+    }
+  ]
+}
