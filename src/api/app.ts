@@ -31,6 +31,7 @@ import * as metrics from "../ops/metrics.js";
 import * as reminders from "../delivery/reminders.js";
 import * as privacy from "../ops/privacy.js";
 import * as reports from "../ops/reports.js";
+import * as sessionBatch from "../ops/session-batch.js";
 import { exchangeOrder } from "../ops/exchange.js";
 import { mountOpsUi, type OpsUiConfig } from "./ops-ui.js";
 import { mountBuyerUi } from "./buyer-ui.js";
@@ -487,6 +488,22 @@ export function createApp(deps: AppDeps) {
       return s;
     });
     return c.json({ session }, 201);
+  });
+
+  // Run 29: a season of sessions at once (every N minutes, on chosen weekdays, venue time).
+  app.post(`${ADMIN}/events/:eventId/sessions/batch`, ...admin, can("ticketing.catalog.write"), async (c) => {
+    const eventId = param(c, "eventId");
+    if (!eventId) return fail(c, 404, "event_not_found");
+    const body = api.SessionBatchRequest.parse(await readJson(c));
+    const result = await sessionBatch.createSessionBatch(deps.db, c.get("scope"), eventId, body, actor(c));
+    return c.json(result, body.dryRun ? 200 : 201);
+  });
+
+  app.post(`${ADMIN}/events/:eventId/sessions/status`, ...admin, can("ticketing.catalog.write"), async (c) => {
+    const eventId = param(c, "eventId");
+    if (!eventId) return fail(c, 404, "event_not_found");
+    const body = api.SessionStatusBatchRequest.parse(await readJson(c));
+    return c.json(await sessionBatch.setUpcomingSessionsStatus(deps.db, c.get("scope"), eventId, body, actor(c), now()));
   });
 
   app.patch(`${ADMIN}/sessions/:sessionId`, ...admin, can("ticketing.catalog.write"), async (c) => {

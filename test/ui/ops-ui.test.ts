@@ -424,6 +424,34 @@ describe("ALKAO Operations app", () => {
     expect(rows[0].sessions).toBeGreaterThan(0);
   });
 
+  it("creates a season of sessions after a preview, then puts them on sale at once (Run 29)", async () => {
+    const f = seed.festi;
+    const page = await signedIn(seed.users.festiOwner);
+    await page.goto(`${origin}/ops#/c/${f.clientId}/b/${f.brandId}/event/${f.eventId}`);
+    await page.getByRole("button", { name: "Créer plusieurs séances…" }).click();
+    const form = page.getByRole("form", { name: "Créer plusieurs séances" });
+    // Fridays and Saturdays from 2027-02-05 to 2027-02-14, 17:00 to 17:45 every 15 minutes.
+    await form.getByLabel("Du", { exact: true }).fill("2027-02-05");
+    await form.getByLabel("Au", { exact: true }).fill("2027-02-14");
+    for (const day of ["Lun", "Mar", "Mer", "Jeu", "Dim"]) await form.getByRole("checkbox", { name: day }).uncheck();
+    await form.getByLabel("Première séance").fill("17:00");
+    await form.getByLabel("Dernière séance (facultatif)").fill("17:45");
+    await form.getByLabel("Toutes les (minutes)").fill("15");
+    await form.getByLabel("Capacité par séance").fill("60");
+    await form.getByRole("button", { name: "Aperçu" }).click();
+    await form.getByRole("status").getByText(/^16 séance\(s\) à créer/).waitFor();
+    const countIn = async (status: string) =>
+      (await db.pool.query(`SELECT count(*)::int AS n FROM public.ticketing_sessions WHERE event_id = $1 AND starts_at >= '2027-02-05' AND starts_at < '2027-02-15' AND status = $2`, [f.eventId, status])).rows[0].n;
+    expect(await countIn("draft")).toBe(0);
+    await form.getByRole("button", { name: "Créer 16 séance(s)" }).click();
+    await form.getByRole("status").getByText("16 séance(s) créée(s).").waitFor();
+    expect(await countIn("draft")).toBe(16);
+
+    page.on("dialog", (d) => void d.accept());
+    await page.getByRole("button", { name: "Ouvrir les ventes des brouillons à venir" }).click();
+    await expect.poll(() => countIn("on_sale")).toBe(16);
+  });
+
   it("hides money from gate staff", async () => {
     const page = await signedIn(seed.users.havanaStaff);
     await page.goto(`${origin}/ops#${brandPath()}/dashboard`);

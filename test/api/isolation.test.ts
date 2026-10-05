@@ -73,6 +73,9 @@ describe("tenant isolation sweep", () => {
       "POST /sessions/:sessionId/cancel": { reason: "pirate" },
       // Runs 20–22: valid bodies and queries, so each reaches the database.
       "POST /orders/:orderId/tickets/void": { ticketIds: [f.ticketIds[0]], reason: "pirate" },
+      // Run 29
+      "POST /events/:eventId/sessions/batch": { fromDate: "2027-03-01", toDate: "2027-03-02", firstStart: "18:00", capacity: 10 },
+      "POST /events/:eventId/sessions/status": { from: "draft", to: "on_sale" },
     };
     const { rows: festiOrder } = await db.pool.query<{ reference: string }>(`SELECT reference FROM public.ticketing_orders WHERE id = $1`, [f.orderId]);
     const queries: Record<string, string> = {
@@ -96,7 +99,8 @@ describe("tenant isolation sweep", () => {
       expect([400, 403, 404, 409, 422]).toContain(res.status);
     }
     expect(results.length).toBeGreaterThanOrEqual(25);
-    for (const key of ["GET /orders/:orderId/buyer/export", "POST /orders/:orderId/buyer/anonymize", "POST /orders/:orderId/tickets/void", "GET /sessions/:sessionId/lookup"]) {
+    for (const key of ["GET /orders/:orderId/buyer/export", "POST /orders/:orderId/buyer/anonymize", "POST /orders/:orderId/tickets/void", "GET /sessions/:sessionId/lookup",
+      "POST /events/:eventId/duplicate", "POST /events/:eventId/sessions/batch", "POST /events/:eventId/sessions/status"]) {
       expect(results.some((r) => r.startsWith(`${key} → 404`)), `${key}: ${results.find((r) => r.startsWith(key))}`).toBe(true);
     }
 

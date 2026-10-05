@@ -218,6 +218,42 @@ export const DuplicateEventRequest = z.object({
   shiftDays: z.number().int().min(-3660).max(3660).nullish(),
 });
 
+// ── Run 29: sessions in bulk ────────────────────────────────────────────────
+const localDate = z.iso.date();
+const localTime = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
+const minutesOf = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
+/**
+ * Every day from `fromDate` to `toDate` (on `weekdays` only, ISO 1 = Monday … 7 = Sunday),
+ * one session at `firstStart`, then every `everyMinutes` up to `lastStart`, in the venue's
+ * time zone. Start times already taken for the event are skipped.
+ */
+export const SessionBatchRequest = z
+  .object({
+    fromDate: localDate,
+    toDate: localDate,
+    weekdays: z.array(z.number().int().min(1).max(7)).min(1).max(7).optional(),
+    firstStart: localTime,
+    lastStart: localTime.optional(),
+    everyMinutes: z.number().int().min(5).max(720).optional(),
+    durationMinutes: z.number().int().min(1).max(1440).nullish(),
+    capacity: z.number().int().min(0).max(1_000_000),
+    status: z.enum(["draft", "on_sale"]).default("draft"),
+    /** Only list what would be created. */
+    dryRun: z.boolean().default(false),
+  })
+  .refine((b) => b.fromDate <= b.toDate, { message: "toDate must not be before fromDate", path: ["toDate"] })
+  .refine((b) => Date.parse(b.toDate) - Date.parse(b.fromDate) <= 366 * 86_400_000, { message: "at most 367 days", path: ["toDate"] })
+  .refine((b) => !b.lastStart || minutesOf(b.lastStart) >= minutesOf(b.firstStart), { message: "lastStart must not be before firstStart", path: ["lastStart"] })
+  .refine((b) => !b.lastStart || b.lastStart === b.firstStart || b.everyMinutes !== undefined, { message: "everyMinutes is required with lastStart", path: ["everyMinutes"] });
+
+/** Put a whole event's upcoming sessions on sale, or pause them, at once. */
+export const SessionStatusBatchRequest = z
+  .object({
+    from: z.enum(["draft", "on_sale", "paused"]),
+    to: z.enum(["on_sale", "paused"]),
+  })
+  .refine((b) => b.from !== b.to, { message: "from and to must differ", path: ["to"] });
+
 // ── Run 27: "Retrouver mes billets" ─────────────────────────────────────────
 export const FindTicketsRequest = z.object({ email: z.string().trim().max(320).pipe(z.email()) });
 

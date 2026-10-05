@@ -456,6 +456,49 @@ hours and ticket types (prices, limits, Flex Météo option).
 - Logged as `event.duplicated`. In the Operations app, use **Dupliquer l'événement** on the
   event page.
 
+### Sessions in bulk (Run 29)
+
+| Method | Path | Permission | Result |
+|---|---|---|---|
+| POST | `/v1/admin/…/events/:eventId/sessions/batch` | `catalog.write` | see below → `201 { timeZone, requested, created, skipped, sessions: [{ id, startsAt, endsAt }] }`; with `dryRun: true`, `200` and nothing is created |
+| POST | `/v1/admin/…/events/:eventId/sessions/status` | `catalog.write` | `{ from: "draft" \| "on_sale" \| "paused", to: "on_sale" \| "paused" }` → `200 { updated }` |
+
+This is for a whole season at once. FESTI-ICE, for example, has arrivals every 15 minutes
+from 17:00 to 20:30, every evening.
+
+**Batch body:**
+
+| Field | Meaning |
+|---|---|
+| `fromDate`, `toDate` | `YYYY-MM-DD`, both included, at most 367 days apart |
+| `weekdays` | Optional, ISO numbers (1 = Monday … 7 = Sunday). Absent: every day |
+| `firstStart`, `lastStart` | `HH:MM`. Without `lastStart`, one session a day at `firstStart` |
+| `everyMinutes` | 5 to 720. Required when `lastStart` is after `firstStart` |
+| `durationMinutes` | Optional. Sets each session's end |
+| `capacity` | Seats per session |
+| `status` | `draft` (default) or `on_sale` |
+| `dryRun` | `true`: only list what would be created |
+
+- **Times are the venue's local times.** PostgreSQL turns them into instants, so a clock
+  change is handled. A local time skipped when clocks go forward becomes the hour after;
+  if that is also asked for, only one session is made.
+- **Start times the event already has are skipped** and counted in `skipped`. Those sessions
+  are left exactly as they are, so the same batch can be sent again safely.
+- At most **1000 sessions** per request (`422 too_many_sessions`, `details.max`).
+- Logged once as `sessions.batch_created`, with the request and the counts.
+
+**Status in bulk:**
+
+- Only **upcoming** sessions in `from` are moved. Past, cancelled and closed sessions never
+  move. Cancelling a session with buyers stays on its own route, which refunds them.
+- Logged as `sessions.status_batch_changed`, with the count.
+
+**In the Operations app**, on the event page:
+
+- **Créer plusieurs séances…**: preview first, then **Créer N séance(s)**.
+- **Ouvrir les ventes des brouillons à venir**, **Suspendre toutes les ventes à venir** and
+  **Reprendre les ventes suspendues**.
+
 ### Role → permission
 
 | Role | catalog.read · inventory.read · holds.read | catalog.write | orders.read · buyers.read | audit.read |

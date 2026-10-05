@@ -68,3 +68,7 @@ input.scan { font-size: 1.1rem; width: 100%; }
 .attention h2 { margin-top: 0; }
 .attention h3 { font-size: 1rem; margin: 1rem 0 .3rem; }
 .attention ul { margin: 0; padding-left: 1.2rem; }
+/* Run 29: weekday choice in "Créer plusieurs séances". */
+fieldset.days { display: flex; flex-wrap: wrap; gap: .5rem; border: 1px solid var(--line); border-radius: 8px; padding: .35rem .6rem; margin: 0; }
+fieldset.days legend { font-size: .8rem; color: var(--muted); padding: 0 .25rem; }
+form.card > h3 { font-size: .98rem; margin: 0 0 .6rem; }
