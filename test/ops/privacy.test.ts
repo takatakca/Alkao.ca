@@ -142,7 +142,10 @@ describe("buyer anonymization", () => {
     );
     const sent: EmailMessage[] = [];
     const sender: EmailSender = { send: async (m) => (sent.push(m), "msg_1") };
-    const result = await deliverTicketEmails(db.pool, { sender, publicUrl: "https://billets.alkao.test", credentialMasterSecret: TEST_CREDENTIAL_SECRET });
+    // A moment later: the row was stamped by PostgreSQL in microseconds, and a JavaScript
+    // Date taken in the same millisecond would still read it as not yet due.
+    const later = new Date(Date.now() + 1000);
+    const result = await deliverTicketEmails(db.pool, { sender, publicUrl: "https://billets.alkao.test", credentialMasterSecret: TEST_CREDENTIAL_SECRET }, later);
     expect(sent).toEqual([]);
     expect(result.skipped).toBeGreaterThanOrEqual(1);
     const { rows } = await db.pool.query(`SELECT last_error FROM public.ticketing_email_outbox WHERE order_id = $1 AND kind = 'session_cancelled'`, [order.orderId]);
