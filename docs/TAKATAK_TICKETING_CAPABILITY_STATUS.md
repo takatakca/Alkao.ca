@@ -35,6 +35,20 @@ pas de force-push, pas de suppression).
 
 | Vérification | Constat 2026-10-05 | Statut |
 |---|---|---|
+| `main` existe | oui — commit racine vide `1cec0b6`, rien d'autre | OK |
+| Travail sur une branche dédiée | oui, `claude/amazing-pascal-tppqd4`, livré par PR vers `main` | OK |
+| Branche par défaut = `main` | non : GitHub a pris la branche de travail au premier push dans le dépôt vide | **action propriétaire** |
+| `main` protégée | `protected = false` | **action propriétaire** |
+
+Règle : ne jamais travailler directement sur la branche par défaut ; tout passe par une PR.
+Le proxy GitHub de la session refuse les écritures de paramètres du dépôt (branche par défaut,
+protection) ; ces deux réglages se font dans GitHub :
+
+1. Settings → General → Default branch → `main`.
+2. Settings → Branches (ou Rules → Rulesets) → règle sur `main` : PR obligatoire, pas de
+   force-push, pas de suppression.
+
+---|---|---|
 | `main` existe | non — le dépôt était vide | **à corriger** |
 | Branche par défaut | `claude/amazing-pascal-tppqd4` (GitHub l'a choisie au premier push dans un dépôt vide) | **à corriger** |
 | Travail sur une branche dédiée | oui, `claude/amazing-pascal-tppqd4` | OK |
