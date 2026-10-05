@@ -2,7 +2,7 @@
   "name": "alkao",
   "version": "0.1.0",
   "private": true,
-  "description": "ALKAO \u2014 TAKATAK Ticket Hub: standalone multi-tenant ticketing engine.",
+  "description": "ALKAO — TAKATAK Ticket Hub: standalone multi-tenant ticketing engine.",
   "type": "module",
   "engines": {
     "node": "22.x"
@@ -23,6 +23,7 @@
   "dependencies": {
     "@hono/node-server": "^2.1.3",
     "hono": "^4.13.13",
+    "htm": "^3.1.1",
     "jose": "^6.2.12",
     "pg": "^8.23.1",
     "stripe": "^23.0.0",
@@ -31,6 +32,7 @@
   "devDependencies": {
     "@types/node": "^22.20.5",
     "@types/pg": "^8.23.1",
+    "playwright-core": "^1.63.0",
     "tsx": "^4.23.15",
     "typescript": "^5.9.3",
     "vitest": "^5.0.3"

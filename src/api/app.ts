@@ -24,6 +24,7 @@ import { CredentialsService } from "../scanner/service.js";
 import { toCsv } from "../ops/csv.js";
 import * as reports from "../ops/reports.js";
 import { exchangeOrder } from "../ops/exchange.js";
+import { mountOpsUi, type OpsUiConfig } from "./ops-ui.js";
 
 export const API_VERSION = "alkao.api.v1";
 
@@ -40,6 +41,8 @@ export interface AppDeps {
   onboarding?: { refreshUrl: string; returnUrl: string } | null;
   /** Secret from which Client credential (QR) signing keys are derived; null until configured. */
   credentialMasterSecret?: string | null;
+  /** Standalone Operations web app served under /ops. */
+  opsUi?: OpsUiConfig;
   now?: () => Date;
 }
 
@@ -633,6 +636,37 @@ export function createApp(deps: AppDeps) {
     const result = await exchangeOrder(deps.db, c.get("scope"), orderId, body.sessionId, actor(c), now());
     return c.json({ exchange: { orderId: result.exchangeOrderId, reference: result.reference, token: result.orderToken, tickets: result.ticketIds.length } }, 201);
   });
+
+  // ── Run 04: the caller's own workspaces (for the Operations app) ─────────
+  // Lists only the caller's memberships: no tenant id comes from the request.
+  app.get("/v1/admin/me", requireUser, async (c) => {
+    const userId = c.get("userId");
+    const { rows } = await deps.db.query<{ client_id: string; client_name: string; client_status: string; role: WorkspaceRole }>(
+      `SELECT m.client_id, cl.name AS client_name, cl.status AS client_status, m.role
+       FROM public.ticketing_memberships m JOIN public.ticketing_clients cl ON cl.id = m.client_id
+       WHERE m.user_id = $1 AND m.status = 'active' ORDER BY cl.name`,
+      [userId],
+    );
+    const memberships = [];
+    for (const r of rows) {
+      const { rows: brands } = await deps.db.query<{ id: string; name: string; status: string }>(
+        `SELECT id, name, status FROM public.ticketing_brands WHERE client_id = $1 ORDER BY name`,
+        [r.client_id],
+      );
+      memberships.push({
+        clientId: r.client_id,
+        clientName: r.client_name,
+        clientStatus: r.client_status,
+        role: r.role,
+        brands: await Promise.all(
+          brands.map(async (b) => ({ brandId: b.id, name: b.name, status: b.status, ticketing: await decide(r.client_id, b.id) })),
+        ),
+      });
+    }
+    return c.json({ userId, memberships });
+  });
+
+  mountOpsUi(app, deps.opsUi ?? { supabaseUrl: null, supabaseAnonKey: null, frameAncestors: [] });
 
   return app;
 }

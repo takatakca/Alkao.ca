@@ -22,6 +22,11 @@ const EnvSchema = z.object({
   ALKAO_STRIPE_ONBOARDING_RETURN_URL: z.url({ protocol: /^https$/ }).optional(),
   /** Secret from which each Client's Ed25519 credential keys are derived (Run 03). Never stored. */
   ALKAO_CREDENTIAL_MASTER_SECRET: z.string().min(32).optional(),
+  /** Supabase project URL and public anon key, for the Operations app's sign-in (public values). */
+  SUPABASE_URL: z.url().optional(),
+  SUPABASE_ANON_KEY: z.string().min(20).optional(),
+  /** Origins allowed to embed /ops in an iframe (e.g. the TAKATAK dashboard), comma-separated. */
+  ALKAO_OPS_FRAME_ANCESTORS: z.string().optional(),
   ALKAO_HOLD_TTL_SECONDS: z.coerce.number().int().min(60).max(1800).default(600),
   ALKAO_PUBLIC_HOLDS_PER_MINUTE: z.coerce.number().int().min(1).max(1000).default(20),
   PORT: z.coerce.number().int().min(1).max(65535).default(8787),
@@ -37,6 +42,7 @@ export interface Config {
   stripe: { secretKey: string; webhookSecret: string } | null;
   onboarding: { refreshUrl: string; returnUrl: string } | null;
   credentialMasterSecret: string | null;
+  opsUi: { supabaseUrl: string | null; supabaseAnonKey: string | null; frameAncestors: string[] };
   port: number;
 }
 
@@ -73,6 +79,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
         ? { refreshUrl: e.ALKAO_STRIPE_ONBOARDING_REFRESH_URL, returnUrl: e.ALKAO_STRIPE_ONBOARDING_RETURN_URL }
         : null,
     credentialMasterSecret: e.ALKAO_CREDENTIAL_MASTER_SECRET ?? null,
+    opsUi: {
+      supabaseUrl: e.SUPABASE_URL ?? null,
+      supabaseAnonKey: e.SUPABASE_ANON_KEY ?? null,
+      frameAncestors: (e.ALKAO_OPS_FRAME_ANCESTORS ?? "").split(",").map((s) => s.trim()).filter((s) => /^https:\/\/[a-z0-9.-]+(:\d+)?$/.test(s)),
+    },
     port: e.PORT,
   };
 }
