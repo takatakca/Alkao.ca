@@ -612,7 +612,6 @@ function Scanner({ api, base }) {
       refreshAttendance(); setFound(await lookup(found.reference));
     } catch (err) { setError(err); }
   };
-  useEffect(() => { setFound(null); setReference(""); }, [sessionId]);
 
   useEffect(() => {
     if (!camera || !("BarcodeDetector" in window)) return;
@@ -634,9 +633,9 @@ function Scanner({ api, base }) {
   return html`<h1>Scanner</h1>
     ${error && html`<${Failure} error=${error} />`}
     <div class="inline card row">
-      <label>Événement<select value=${eventId} onChange=${(e) => { setEventId(e.target.value); setSessionId(""); setManifest(null); }}>
+      <label>Événement<select value=${eventId} onChange=${(e) => { setEventId(e.target.value); setSessionId(""); setManifest(null); setFound(null); setReference(""); }}>
         <option value="">—</option>${(events.data?.events ?? []).map((ev) => html`<option value=${ev.id}>${ev.title}</option>`)}</select></label>
-      <label>Séance<select value=${sessionId} onChange=${(e) => setSessionId(e.target.value)}>
+      <label>Séance<select value=${sessionId} onChange=${(e) => { setSessionId(e.target.value); setFound(null); setReference(""); }}>
         <option value="">—</option>${sessions.map((s) => html`<option value=${s.id}>${when(s.startsAt)}</option>`)}</select></label>
       ${manifest && html`<span class="muted">Portes : ${when(manifest.session.admission.opensAt)} → ${when(manifest.session.admission.closesAt)} · ${manifest.credentials.length} à entrer · ${manifest.admitted.length} entrés</span>`}
     </div>
