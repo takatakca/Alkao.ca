@@ -38,7 +38,7 @@ const HEADERS = (type: string) => ({
  * The hosted ticket shop (Run 08): a Brand sells with a plain link, no website change.
  * Static files only; every price, rule and seat comes from the public, gated API.
  */
-export function mountShopUi(app: Hono<any>, cfg: { publicUrl: string | null }): void {
+export function mountShopUi(app: Hono<any>, cfg: { publicUrl: string | null; paymentsMode?: "test" | "live" | null }): void {
   const cache = new Map<string, string>();
   const read = (path: string) => {
     if (!cache.has(path)) cache.set(path, readFileSync(path, "utf8"));
@@ -66,7 +66,11 @@ export function mountShopUi(app: Hono<any>, cfg: { publicUrl: string | null }): 
       "cache-control": "public, max-age=300",
     }),
   );
-  app.get("/shop/config.json", (c) => c.body(JSON.stringify({ publicUrl: cfg.publicUrl ? new URL(cfg.publicUrl).origin : null }), 200, HEADERS("application/json")));
+  // Run 32: paymentsMode only when payments are configured; "test" shows a banner to buyers.
+  app.get("/shop/config.json", (c) => c.body(JSON.stringify({
+    publicUrl: cfg.publicUrl ? new URL(cfg.publicUrl).origin : null,
+    ...(cfg.paymentsMode ? { paymentsMode: cfg.paymentsMode } : {}),
+  }), 200, HEADERS("application/json")));
   for (const [name, file] of Object.entries(FILES)) {
     app.get(`/shop/${name}`, (c) => c.body(read(file.path), 200, HEADERS(file.type)));
   }

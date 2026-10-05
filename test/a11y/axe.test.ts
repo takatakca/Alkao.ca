@@ -29,7 +29,8 @@ beforeAll(async () => {
   seed = await seedTwoTenants(db.pool);
   // Run 19: the dispute and outside-refund notices are part of the audited pages.
   await seedAfterSale(db.pool, seed.havana, seed.havana.orderId);
-  app = testApp(db.pool, { paymentGateway: new FakeGateway(), credentialMasterSecret: TEST_CREDENTIAL_SECRET, publicUrl: "https://billets.alkao.test" });
+  // Run 32: in Stripe test mode, so the test-mode banner and badge are audited on every page.
+  app = testApp(db.pool, { paymentGateway: new FakeGateway(), credentialMasterSecret: TEST_CREDENTIAL_SECRET, publicUrl: "https://billets.alkao.test", paymentsMode: "test" });
   server = await new Promise<ServerType>((resolve) => {
     const s = serve({ fetch: app.fetch, port: 0, hostname: "127.0.0.1" }, () => resolve(s));
   });

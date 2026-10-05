@@ -46,7 +46,8 @@ export interface Config {
   jwt: { jwksUrl?: string; secret?: string; issuer?: string };
   holdTtlSeconds: number;
   publicHoldsPerMinute: number;
-  stripe: { secretKey: string; webhookSecret: string } | null;
+  /** `mode` (Run 32): from the key itself, so staff and buyers can be told when nothing is real. */
+  stripe: { secretKey: string; webhookSecret: string; mode: "test" | "live" } | null;
   onboarding: { refreshUrl: string; returnUrl: string } | null;
   credentialMasterSecret: string | null;
   opsUi: { supabaseUrl: string | null; supabaseAnonKey: string | null; frameAncestors: string[] };
@@ -55,6 +56,9 @@ export interface Config {
   metricsToken: string | null;
   port: number;
 }
+
+/** Run 32: `sk_test_…` and `rk_test_…` keys are Stripe test mode; the schema allows only test or live keys. */
+export const stripeKeyMode = (key: string): "test" | "live" => (/^(sk|rk)_test_/.test(key) ? "test" : "live");
 
 export function parseControlKeys(raw: string | undefined): Map<string, string> {
   const keys = new Map<string, string>();
@@ -83,7 +87,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     },
     holdTtlSeconds: e.ALKAO_HOLD_TTL_SECONDS,
     publicHoldsPerMinute: e.ALKAO_PUBLIC_HOLDS_PER_MINUTE,
-    stripe: e.STRIPE_SECRET_KEY && e.STRIPE_WEBHOOK_SECRET ? { secretKey: e.STRIPE_SECRET_KEY, webhookSecret: e.STRIPE_WEBHOOK_SECRET } : null,
+    stripe: e.STRIPE_SECRET_KEY && e.STRIPE_WEBHOOK_SECRET
+      ? { secretKey: e.STRIPE_SECRET_KEY, webhookSecret: e.STRIPE_WEBHOOK_SECRET, mode: stripeKeyMode(e.STRIPE_SECRET_KEY) }
+      : null,
     onboarding:
       e.ALKAO_STRIPE_ONBOARDING_REFRESH_URL && e.ALKAO_STRIPE_ONBOARDING_RETURN_URL
         ? { refreshUrl: e.ALKAO_STRIPE_ONBOARDING_REFRESH_URL, returnUrl: e.ALKAO_STRIPE_ONBOARDING_RETURN_URL }

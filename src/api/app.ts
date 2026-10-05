@@ -53,6 +53,8 @@ export interface AppDeps {
   publicHoldsPerMinute: number;
   /** Stripe Connect gateway; null until payments are configured. */
   paymentGateway?: PaymentGateway | null;
+  /** Run 32: Stripe test or live mode, shown to staff and buyers when it is test. */
+  paymentsMode?: "test" | "live" | null;
   /** Where Stripe sends a Client admin during and after account onboarding. */
   onboarding?: { refreshUrl: string; returnUrl: string } | null;
   /** Secret from which Client credential (QR) signing keys are derived; null until configured. */
@@ -979,9 +981,9 @@ export function createApp(deps: AppDeps) {
     return c.json({ userId, memberships });
   });
 
-  mountOpsUi(app, deps.opsUi ?? { supabaseUrl: null, supabaseAnonKey: null, frameAncestors: [] });
+  mountOpsUi(app, { ...(deps.opsUi ?? { supabaseUrl: null, supabaseAnonKey: null, frameAncestors: [] }), paymentsMode: deps.paymentsMode ?? null });
   mountBuyerUi(app);
-  mountShopUi(app, { publicUrl: deps.publicUrl ?? null });
+  mountShopUi(app, { publicUrl: deps.publicUrl ?? null, paymentsMode: deps.paymentsMode ?? null });
 
   return app;
 }
