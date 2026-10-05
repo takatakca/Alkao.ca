@@ -50,6 +50,7 @@ a.link, button.link { background: none; border: 0; color: var(--brand); padding:
 .alert.bad { background: var(--bad-bg); color: var(--bad); }
 .alert.ok { background: var(--ok-bg); color: var(--ok); }
 .alert.warn { background: var(--warn-bg); color: var(--warn); }
+.alert a { color: inherit; text-decoration: underline; }
 .muted { color: var(--muted); }
 .row { display: flex; gap: .75rem; flex-wrap: wrap; align-items: center; }
 .login { max-width: 380px; margin: 10vh auto; }

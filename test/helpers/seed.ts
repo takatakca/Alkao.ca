@@ -227,3 +227,18 @@ export async function seedGateActivity(db: Db, t: TenantFixture, scannedBy: stri
     deviceId: "seed-gate", scannedBy, scannedAt: new Date(), offline: false,
   });
 }
+
+/** Run 19: a Stripe dispute and a refund made directly in Stripe, as the webhooks record them. */
+export async function seedAfterSale(db: Db, t: Pick<TenantFixture, "clientId" | "brandId" | "eventId">, orderId: string, outsideCents = 500): Promise<void> {
+  await db.query(
+    `INSERT INTO public.ticketing_payment_disputes
+       (client_id, brand_id, event_id, order_id, stripe_dispute_id, amount_cents, currency, reason, status, evidence_due_by, provider_updated_at)
+     VALUES ($1, $2, $3, $4, $5, 2995, 'cad', 'fraudulent', 'needs_response', now() + interval '7 days', now())`,
+    [t.clientId, t.brandId, t.eventId, orderId, `dp_seed${randomUUID().replaceAll("-", "").slice(0, 16)}`],
+  );
+  await db.query(
+    `INSERT INTO public.ticketing_charge_refund_totals (order_id, client_id, brand_id, event_id, refunded_cents, provider_updated_at)
+     VALUES ($1, $2, $3, $4, $5, now())`,
+    [orderId, t.clientId, t.brandId, t.eventId, outsideCents],
+  );
+}

@@ -8,7 +8,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { call, pub, testApp, tokenFor, type TestApp } from "../helpers/app.js";
 import { createTestDatabase, type TestDatabase } from "../helpers/db.js";
 import { FakeGateway } from "../helpers/fake-gateway.js";
-import { seedTwoTenants, TEST_CREDENTIAL_SECRET, type SeedResult } from "../helpers/seed.js";
+import { seedAfterSale, seedTwoTenants, TEST_CREDENTIAL_SECRET, type SeedResult } from "../helpers/seed.js";
 
 /**
  * Accessibility (Run 17): axe-core (WCAG 2.1 A and AA rules) on every buyer and staff page,
@@ -27,6 +27,8 @@ let browser: Browser;
 beforeAll(async () => {
   db = await createTestDatabase();
   seed = await seedTwoTenants(db.pool);
+  // Run 19: the dispute and outside-refund notices are part of the audited pages.
+  await seedAfterSale(db.pool, seed.havana, seed.havana.orderId);
   app = testApp(db.pool, { paymentGateway: new FakeGateway(), credentialMasterSecret: TEST_CREDENTIAL_SECRET, publicUrl: "https://billets.alkao.test" });
   server = await new Promise<ServerType>((resolve) => {
     const s = serve({ fetch: app.fetch, port: 0, hostname: "127.0.0.1" }, () => resolve(s));

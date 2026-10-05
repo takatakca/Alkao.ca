@@ -93,12 +93,18 @@ export class FakeGateway implements PaymentGateway {
 }
 
 /** A Stripe event payload and its valid signature header. */
-export function signedStripeEvent(type: string, object: Record<string, unknown>, account: string | null, secret = WEBHOOK_SECRET) {
+export function signedStripeEvent(
+  type: string,
+  object: Record<string, unknown>,
+  account: string | null,
+  secret = WEBHOOK_SECRET,
+  created = new Date(),
+) {
   const body = JSON.stringify({
     id: id("evt"),
     object: "event",
     api_version: "2026-09-30",
-    created: Math.floor(Date.now() / 1000),
+    created: Math.floor(created.getTime() / 1000),
     type,
     account,
     livemode: false,
@@ -120,4 +126,25 @@ export function completedSession(sessionId: string, amountTotal: number, payment
     payment_intent: paymentIntentId,
     ...extra,
   };
+}
+
+/** A Stripe dispute (chargeback) on a payment. */
+export function dispute(disputeId: string, paymentIntentId: string, amount: number, status = "needs_response", extra: Record<string, unknown> = {}) {
+  return {
+    id: disputeId,
+    object: "dispute",
+    amount,
+    currency: "cad",
+    reason: "fraudulent",
+    status,
+    payment_intent: paymentIntentId,
+    charge: id("ch"),
+    evidence_details: { due_by: Math.floor(Date.now() / 1000) + 7 * 86400, has_evidence: false, past_due: false, submission_count: 0 },
+    ...extra,
+  };
+}
+
+/** A charge as Stripe sends it in charge.refunded: amount_refunded is the running total. */
+export function refundedCharge(paymentIntentId: string, amount: number, amountRefunded: number) {
+  return { id: id("ch"), object: "charge", amount, amount_refunded: amountRefunded, currency: "cad", payment_intent: paymentIntentId, refunded: amountRefunded >= amount };
 }

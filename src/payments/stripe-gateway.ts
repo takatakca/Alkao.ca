@@ -154,6 +154,39 @@ export class StripeGateway implements PaymentGateway {
         return { kind: "checkout.expired", eventId: event.id, accountId, sessionId: event.data.object.id };
       case "account.updated":
         return { kind: "account.updated", eventId: event.id, accountId: event.data.object.id, status: accountStatus(event.data.object) };
+      case "charge.dispute.created":
+      case "charge.dispute.updated":
+      case "charge.dispute.closed":
+      case "charge.dispute.funds_withdrawn":
+      case "charge.dispute.funds_reinstated": {
+        const d = event.data.object;
+        const due = d.evidence_details?.due_by;
+        return {
+          kind: "dispute",
+          eventId: event.id,
+          accountId,
+          occurredAt: new Date(event.created * 1000),
+          disputeId: d.id,
+          paymentIntentId: idOf(d.payment_intent),
+          amountCents: d.amount,
+          currency: d.currency,
+          reason: String(d.reason),
+          status: String(d.status),
+          evidenceDueBy: due ? new Date(due * 1000) : null,
+        };
+      }
+      case "charge.refunded": {
+        const ch = event.data.object;
+        return {
+          kind: "charge.refunded",
+          eventId: event.id,
+          accountId,
+          occurredAt: new Date(event.created * 1000),
+          paymentIntentId: idOf(ch.payment_intent),
+          refundedCents: ch.amount_refunded,
+          currency: ch.currency,
+        };
+      }
       default:
         return { kind: "ignored", eventId: event.id, accountId, type: event.type };
     }

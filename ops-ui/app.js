@@ -19,6 +19,24 @@ const REASON_FR = {
   entitlement_inactive: "Ticketing suspendu par TAKATAK", entitlement_expired: "Activation Ticketing expirée",
   entitlement_not_yet_valid: "Activation Ticketing pas encore en vigueur", client_inactive: "Client suspendu", brand_inactive: "Marque suspendue",
 };
+// Run 19: Stripe's dispute statuses and reasons.
+const DISPUTE_FR = {
+  warning_needs_response: "Demande de renseignements : réponse attendue", warning_under_review: "Demande de renseignements : à l'étude",
+  warning_closed: "Demande de renseignements close", needs_response: "Réponse attendue", under_review: "À l'étude par la banque",
+  won: "Gagné", lost: "Perdu", prevented: "Évité",
+};
+const DISPUTE_REASON_FR = {
+  fraudulent: "fraude", duplicate: "paiement en double", product_not_received: "service non reçu", product_unacceptable: "service non conforme",
+  subscription_canceled: "abonnement annulé", credit_not_processed: "remboursement non reçu", unrecognized: "paiement non reconnu", general: "autre",
+};
+function DisputeNotice({ d }) {
+  const reason = DISPUTE_REASON_FR[d.reason] ?? d.reason;
+  if (!d.open) return html`<p class="muted">Litige Stripe ${money(d.amountCents)} (${reason}) : ${DISPUTE_FR[d.status] ?? d.status}.</p>`;
+  return html`<div class="alert bad" role="alert">
+    <strong>Litige Stripe (rétrofacturation) : ${DISPUTE_FR[d.status] ?? d.status}</strong> — ${money(d.amountCents)}, motif : ${reason}${d.evidenceDueBy ? html`, réponse avant le <strong>${when(d.evidenceDueBy)}</strong>` : ""}.
+    Répondez depuis votre tableau de bord Stripe. Les heures d'entrée des billets ci-dessous peuvent servir de preuve. ALKAO n'a annulé aucun billet.</div>`;
+}
+
 const SCAN_FR = {
   admitted: ["ok", "ENTRÉE ACCEPTÉE"], already_admitted: ["bad", "DÉJÀ ENTRÉ"], revoked: ["bad", "BILLET ANNULÉ"],
   wrong_session: ["warn", "MAUVAISE SÉANCE"], too_early: ["warn", "TROP TÔT"], too_late: ["warn", "TROP TARD"],
@@ -195,13 +213,17 @@ function Workspaces({ api }) {
 }
 
 // ── Dashboard ───────────────────────────────────────────────────────────────
-function Dashboard({ api, base }) {
+function Dashboard({ api, base, prefix }) {
   const [state] = useLoad(() => api(`${base}/reports/sales`), [base]);
+  const [disputes] = useLoad(() => api(`${base}/disputes`), [base]);
   if (state.loading) return html`<${Loading} />`;
   if (state.error) return html`<${Failure} error=${state.error} />`;
   const { totals, sessions, ticketTypes } = state.data.report;
+  const open = disputes.data?.disputes ?? [];
   return html`
     <h1>Tableau de bord</h1>
+    ${open.length > 0 && html`<div class="alert bad" role="alert"><strong>${open.length} litige${open.length > 1 ? "s" : ""} Stripe ouvert${open.length > 1 ? "s" : ""}</strong>
+      <ul>${open.map((d) => html`<li><a href=${`#${prefix}/order/${d.orderId}`}>${d.reference}</a> · ${d.buyerName ?? d.buyerEmail} · ${money(d.amountCents)} · ${DISPUTE_FR[d.status] ?? d.status}${d.evidenceDueBy ? ` · réponse avant le ${when(d.evidenceDueBy)}` : ""}</li>`)}</ul></div>`}
     <div class="grid">
       ${[["Commandes", totals.orders, false], ["Ventes brutes", totals.grossCents, true], ["Taxes (TPS + TVQ)", totals.taxCents, true],
          ["Remboursé", totals.refundedCents, true], ["Commission TAKATAK", totals.commissionCents - totals.commissionRefundedCents, true],
@@ -434,6 +456,9 @@ function OrderDetail({ api, base, orderId }) {
   return html`<h1>Commande ${o.reference} <${Badge} status=${o.status} /></h1>
     ${message && html`<div class="alert ok">${message}</div>`}
     ${error && html`<${Failure} error=${error} />`}
+    ${(o.disputes ?? []).map((d) => html`<${DisputeNotice} d=${d} />`)}
+    ${o.outsideRefundCents > 0 && html`<div class="alert warn">Remboursé directement dans Stripe, hors ALKAO : <strong>${money(o.outsideRefundCents)}</strong>.
+      ALKAO n'a annulé aucun billet et ses rapports ne comptent pas ce montant.</div>`}
     <div class="card"><div class="row"><strong>${o.buyerName ?? ""}</strong><span class="muted">${o.buyerEmail}</span><span class="muted">${o.buyerPhone ?? ""}</span></div>
       <p class="muted">Payée le ${when(o.paidAt)} · Total ${money(o.totalCents)} · Remboursé ${money(o.refundedCents)} · Commission ${money(o.commissionCents - o.commissionRefundedCents)}</p></div>
     <table><thead><tr><th>Ligne</th><th class="num">Qté</th><th class="num">Prix</th><th class="num">Total</th></tr></thead>
@@ -446,10 +471,10 @@ function OrderDetail({ api, base, orderId }) {
       ${["paid", "partially_refunded"].includes(o.status) && html`<button class="secondary" onClick=${resendEmail}>Renvoyer les billets par courriel</button>`}
     </div></div>
     <h2>Billets</h2>
-    <table><thead><tr><th></th><th>Billet</th><th>Statut</th><th></th></tr></thead>
+    <table><thead><tr><th></th><th>Billet</th><th>Statut</th><th>Entré</th><th></th></tr></thead>
       <tbody>${o.tickets.map((t) => html`<tr>
         <td>${t.status === "valid" && html`<input type="checkbox" aria-label="Annuler ce billet" checked=${selected.includes(t.id)} onChange=${() => toggle(t.id)} />`}</td>
-        <td><code>${t.id.slice(0, 8)}</code></td><td><${Badge} status=${t.status} /></td>
+        <td><code>${t.id.slice(0, 8)}</code></td><td><${Badge} status=${t.status} /></td><td>${t.admittedAt ? when(t.admittedAt) : "—"}</td>
         <td>${t.status === "valid" && html`<button class="link" onClick=${reissue(t.id)}>Réémettre le QR</button>`}</td></tr>`)}</tbody></table>
     ${["paid", "partially_refunded"].includes(o.status) && html`
       <h2>Rembourser</h2>
@@ -648,7 +673,7 @@ function Shell({ api, route, email, onLogout }) {
   const tab = page === "event" ? "events" : page === "order" ? "orders" : page;
   const disabled = status.data && !status.data.ticketing.active;
   const body = disabled ? html`<div class="alert warn">${REASON_FR[status.data.ticketing.reason] ?? status.data.ticketing.reason}</div>`
-    : page === "dashboard" ? html`<${Dashboard} api=${api} base=${base} />`
+    : page === "dashboard" ? html`<${Dashboard} api=${api} base=${base} prefix=${prefix} />`
     : page === "events" ? html`<${Events} api=${api} base=${base} prefix=${prefix} />`
     : page === "event" ? html`<${EventDetail} api=${api} base=${base} eventId=${route.id} />`
     : page === "venues" ? html`<${Venues} api=${api} base=${base} />`

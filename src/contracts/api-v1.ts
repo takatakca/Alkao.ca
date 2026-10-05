@@ -198,3 +198,10 @@ export const OrdersQuery = z.object({
   /** Reference prefix, email prefix or part of the buyer's name. */
   q: z.string().trim().min(2).max(120).optional(),
 });
+
+// ── Run 19: disputes ────────────────────────────────────────────────────────
+export const DisputesQuery = z.object({
+  /** "open" (default): disputes still waiting on the Client or the bank; "all": closed ones too. */
+  status: z.enum(["open", "all"]).default("open"),
+  limit: z.coerce.number().int().min(1).max(200).default(100),
+});

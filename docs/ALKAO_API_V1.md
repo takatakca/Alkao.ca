@@ -284,6 +284,37 @@ keeps it on the buyer. The tickets, refund and "session cancelled" emails follow
 choice, including dates and amounts in the right format. The website button accepts
 `data-lang="en"`, which links to the English shop and shows "Buy tickets".
 
+### Disputes and refunds made in Stripe (Run 19)
+
+After the sale, two things can happen on the Client's Stripe account without ALKAO:
+
+- **A dispute (chargeback).** The buyer's bank takes the money back. Stripe tells the
+  Client, who answers from the Stripe dashboard.
+- **A refund made directly in the Stripe dashboard.**
+
+ALKAO records both from the webhooks and shows them to staff. **Neither moves money or
+cancels a ticket by itself.** The order keeps its status and its tickets stay valid until
+staff decide.
+
+| Method | Path | Permission | Result |
+|---|---|---|---|
+| GET | `/v1/admin/…/orders/:orderId` | `orders.read` | Also returns `disputes` (`stripeDisputeId`, `amountCents`, `reason`, `status`, `evidenceDueBy`, `open`), `outsideRefundCents` (the part of Stripe's refunded total that ALKAO did not issue) and, per ticket, `admittedAt` (when it entered at the gate: evidence for a dispute) |
+| GET | `/v1/admin/…/disputes?status=open\|all` | `orders.read` | The Brand's disputes with the order reference and buyer. Open first, earliest deadline first. Default `open` |
+
+How ALKAO reads the events:
+
+- `status` and `reason` are Stripe's own values.
+- A dispute is `open` until Stripe reports `won`, `lost`, `warning_closed` or `prevented`.
+- An event older than the last one applied changes nothing, so a late delivery cannot reopen
+  a closed dispute.
+- For refunds, ALKAO keeps Stripe's running `amount_refunded` for the charge, which only
+  grows. A refund that ALKAO has started counts against it immediately, so ALKAO's own
+  refunds never look like outside ones.
+- Each new dispute, dispute change and outside refund is written to the audit log
+  (`payment.dispute_opened`, `payment.dispute_updated`, `payment.dispute_closed`,
+  `payment.outside_refund`).
+- Sales reports count only ALKAO's own refunds.
+
 ### Role → permission
 
 | Role | catalog.read · inventory.read · holds.read | catalog.write | orders.read · buyers.read | audit.read |
@@ -321,4 +352,6 @@ manager only.
 Stripe webhook events to send to `/v1/webhooks/stripe` (Connect endpoint, events on connected
 accounts): `checkout.session.completed`, `checkout.session.expired`,
 `checkout.session.async_payment_succeeded`, `checkout.session.async_payment_failed`,
-`account.updated`.
+`account.updated`, and since Run 19 `charge.dispute.created`, `charge.dispute.updated`,
+`charge.dispute.closed`, `charge.dispute.funds_withdrawn`, `charge.dispute.funds_reinstated`
+and `charge.refunded`.
