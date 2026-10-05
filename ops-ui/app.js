@@ -531,6 +531,7 @@ function EventDetail({ api, base, eventId }) {
     <h2>Vendre en ligne</h2>
     <div class="card">
       <p>Lien de la billetterie : <a href=${shopUrl} target="_blank" rel="noopener">${shopUrl}</a></p>
+      <p><a class="button" href=${`${shopUrl}?porte=1`} target="_blank" rel="noopener">Vente à la porte</a> <span class="muted">Séances du jour seulement, paiement par carte (Stripe) sur cet appareil ; les billets s'affichent tout de suite.</span></p>
       <label>Bouton pour votre site (copiez ce code dans la page)<textarea rows="3" readonly onFocus=${(e) => e.target.select()}>${widgetCode}</textarea></label>
       <div class="row"><button class="secondary" onClick=${copyWidget}>Copier le code</button>${copied && html`<span class="badge ok">Copié</span>`}</div>
     </div>

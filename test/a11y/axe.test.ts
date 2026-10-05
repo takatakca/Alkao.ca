@@ -118,6 +118,15 @@ describe.each(["light", "dark"] as const)("accessibility (%s)", (scheme) => {
     await tickets.goto(url);
     await tickets.getByRole("img", { name: /^Code QR du billet / }).waitFor();
     problems.push(...report("tickets", await audit(tickets)));
+
+    // Run 35: the door-sale shop and the tickets page with its "next sale" button.
+    await shop.goto(`${origin}/acheter/${h.clientId}/${h.brandId}/${h.eventId}?porte=1`);
+    await shop.getByText("Vente à la porte", { exact: true }).waitFor();
+    problems.push(...report("door sale", await audit(shop)));
+    await tickets.goto(`${url}&porte=1`);
+    await tickets.reload(); // only the fragment changed
+    await tickets.getByRole("link", { name: "Nouvelle vente à la porte" }).waitFor();
+    problems.push(...report("tickets after a door sale", await audit(tickets)));
     expect(problems).toEqual([]);
   }, 60_000);
 

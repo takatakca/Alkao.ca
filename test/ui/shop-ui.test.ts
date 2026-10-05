@@ -262,6 +262,54 @@ describe("hosted ticket shop", () => {
     expect(rows).toEqual([{ status: "pending" }]);
   });
 
+  // Run 35: at the door, today's sessions only; the tickets show right after payment.
+  // (Skipped in the last minutes of a Montréal day, when "in 10 minutes" is already tomorrow.)
+  const lateNight = Number(new Intl.DateTimeFormat("en-CA", { timeZone: "America/Toronto", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date()).replace(":", "")) >= 2345;
+  it.skipIf(lateNight)("sells at the door: today's sessions only, card through Stripe, tickets on screen, then the next sale (Run 35)", async () => {
+    const f = seed.festi;
+    const { rows } = await db.pool.query<{ id: string; starts_at: Date }>(
+      `INSERT INTO public.ticketing_sessions (client_id, brand_id, event_id, starts_at, capacity, status)
+       VALUES ($1, $2, $3, date_trunc('minute', now()) + interval '10 minutes', 30, 'on_sale') RETURNING id, starts_at`,
+      [f.clientId, f.brandId, f.eventId],
+    );
+    const tonight = new Intl.DateTimeFormat("fr-CA", { dateStyle: "full", timeStyle: "short", timeZone: "America/Toronto" }).format(rows[0]!.starts_at);
+    const later = await session(f, 3);
+
+    const context = await browser.newContext({ locale: "fr-CA" });
+    await context.route("https://checkout.stripe.com/**", (r) => r.fulfill({ contentType: "text/html", body: "<h1>Stripe (test)</h1>" }));
+    const page = await context.newPage();
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    await page.goto(`${origin}/acheter/${f.clientId}/${f.brandId}/${f.eventId}?porte=1`);
+    await page.getByRole("heading", { level: 1 }).waitFor();
+    expect(await page.getByText("Vente à la porte", { exact: true }).isVisible()).toBe(true);
+    expect(await page.getByRole("button", { name: new RegExp(tonight) }).count()).toBe(1);
+    expect(await page.getByRole("button", { name: new RegExp(later.label) }).count()).toBe(0);
+    expect(await page.getByRole("heading", { name: /Retrouvez vos billets/ }).count()).toBe(0);
+
+    await page.getByRole("button", { name: new RegExp(tonight) }).click();
+    await plus(page, f.types.find((x) => x.code === "GENERAL")!.name).click();
+    await page.getByRole("cell", { name: "Total" }).waitFor();
+    await page.getByRole("button", { name: "Continuer" }).click();
+    await page.getByLabel("Courriel (vos billets y seront envoyés)").fill("porte@example.com");
+    await page.getByLabel("Nom complet").fill("Client Porte");
+    await page.getByRole("button", { name: /^Payer / }).click();
+    await page.waitForURL(/checkout\.stripe\.com/);
+
+    // The same Stripe payment as online, so the same TAKATAK commission.
+    const input = gateway.callsOf("createCheckoutSession").at(-1) as CreateCheckoutInput;
+    expect(input.cancelUrl).toMatch(/\?porte=1#annule=/);
+    expect(input.applicationFeeCents).toBeGreaterThan(0);
+    const e = signedStripeEvent("checkout.session.completed", completedSession(page.url().split("/").pop()!, input.amountTotalCents, "pi_door_e2e"), f.stripeAccountId);
+    expect((await call(app, "POST", "/v1/webhooks/stripe", { body: e.body, headers: { "stripe-signature": e.signature } })).body.outcome).toBe("processed");
+
+    await page.goto(local(input.successUrl));
+    await page.waitForURL(/\/billets#.*porte=1/);
+    await page.getByRole("img", { name: /^Code QR du billet / }).first().waitFor();
+    await page.getByRole("link", { name: "Nouvelle vente à la porte" }).click();
+    await page.waitForURL(new RegExp(`/acheter/${f.clientId}/${f.brandId}/${f.eventId}\\?porte=1$`));
+    await page.getByText("Vente à la porte", { exact: true }).waitFor();
+  });
+
   it("ran without script errors", () => {
     expect(pageErrors).toEqual([]);
   });

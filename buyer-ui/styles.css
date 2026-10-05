@@ -35,3 +35,5 @@ footer { color: var(--muted); font-size: .8rem; text-align: center; margin-top: 
 @media print { button, .noprint { display: none; } .card { break-inside: avoid; } }
 .lang { text-align: right; margin: 0; }
 button.link { background: none; color: var(--muted); padding: .25rem 0; text-decoration: underline; font-weight: 400; border: 0; }
+/* Run 35: "Nouvelle vente à la porte", a link that looks like the page's buttons. */
+a.button { display: inline-block; padding: .65rem 1rem; border-radius: 10px; background: var(--ink); color: var(--bg); font-weight: 600; text-decoration: none; }
