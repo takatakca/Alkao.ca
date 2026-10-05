@@ -85,3 +85,13 @@ export const ControlEvent = z
   );
 
 export type ControlEvent = z.infer<typeof ControlEvent>;
+
+/**
+ * Reconciliation (Run 11): TAKATAK asks what ALKAO holds, then sends only the differences.
+ * Signed like an event. `clientIds` omitted: every Client ALKAO knows.
+ */
+export const ControlStateRequest = z.object({
+  contract: z.literal(CONTROL_CONTRACT_VERSION),
+  clientIds: z.array(masterId).max(500).optional(),
+});
+export type ControlStateRequest = z.infer<typeof ControlStateRequest>;

@@ -70,6 +70,31 @@ ALKAO is **disabled by default**. A route serves a Client/Brand only when all of
 
 An entitlement for one Brand never enables another Brand of the same Client.
 
+## Reconciliation: `POST /v1/control/state` (Run 11)
+
+The request is signed exactly like an event, with the same three headers over the raw body:
+
+```json
+{ "contract": "alkao.control.v1", "clientIds": ["uuid", "…"] }
+```
+
+`clientIds` is optional. Without it, the response covers every Client ALKAO holds:
+
+```json
+{ "contract": "alkao.control.v1", "clients": [{
+  "clientId": "…", "name": "…", "status": "active", "timezone": "America/Toronto",
+  "commission": { "rateBps": 500, "fixedCentsPerPaidAdmission": 50 }, "version": 1791187803969,
+  "brands": [{ "brandId": "…", "name": "…", "status": "active", "version": 1791187803969,
+               "entitlement": { "status": "active", "validFrom": null, "validUntil": null, "version": 1791187803969 } }],
+  "members": [{ "userId": "…", "role": "owner", "status": "active", "version": 1791187803969 }]
+}] }
+```
+
+The TAKATAK sync reads this state, compares it with the master records and sends events only
+for the differences, with `version` = the current time in ms. That covers removals too: a
+member ALKAO holds but TAKATAK no longer has gets `membership.removed`. With nothing to
+change, the sync sends nothing and ALKAO writes nothing.
+
 ## Provisioning without the TAKATAK publisher
 
 `npm run control:apply -- plan.json` sends the same signed events from a provisioning plan

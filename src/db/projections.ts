@@ -1,7 +1,7 @@
 import type { ControlEvent } from "../contracts/control-v1.js";
 import { DomainError } from "../domain/errors.js";
 import { mapDbErrors } from "./errors.js";
-import type { Tx } from "./pool.js";
+import type { Db, Tx } from "./pool.js";
 
 export type ControlOutcome = "applied" | "stale" | "duplicate";
 
@@ -122,4 +122,53 @@ async function applyProjection(tx: Tx, event: ControlEvent): Promise<boolean> {
       return (r.rowCount ?? 0) === 1;
     }
   }
+}
+
+/** What ALKAO holds from the master, with the versions it holds (reconciliation, Run 11). */
+export async function readControlState(q: Tx | Db, clientIds?: string[]) {
+  const filter = clientIds ? `WHERE id = ANY($1::uuid[])` : "";
+  const { rows: clients } = await q.query(
+    `SELECT id, name, status, timezone, commission_rate_bps, commission_fixed_cents, master_version
+     FROM public.ticketing_clients ${filter} ORDER BY id`,
+    clientIds ? [clientIds] : [],
+  );
+  const ids = clients.map((c) => c.id as string);
+  const [{ rows: brands }, { rows: members }, { rows: entitlements }] = await Promise.all([
+    q.query(`SELECT id, client_id, name, status, master_version FROM public.ticketing_brands WHERE client_id = ANY($1::uuid[]) ORDER BY id`, [ids]),
+    q.query(`SELECT client_id, user_id, role, status, master_version FROM public.ticketing_memberships WHERE client_id = ANY($1::uuid[]) ORDER BY user_id`, [ids]),
+    q.query(
+      `SELECT client_id, brand_id, status, valid_from, valid_until, master_version FROM public.ticketing_entitlements WHERE client_id = ANY($1::uuid[])`,
+      [ids],
+    ),
+  ]);
+  return clients.map((c) => ({
+    clientId: c.id,
+    name: c.name,
+    status: c.status,
+    timezone: c.timezone,
+    commission: { rateBps: c.commission_rate_bps, fixedCentsPerPaidAdmission: c.commission_fixed_cents },
+    version: Number(c.master_version),
+    brands: brands
+      .filter((b) => b.client_id === c.id)
+      .map((b) => {
+        const e = entitlements.find((x) => x.brand_id === b.id);
+        return {
+          brandId: b.id,
+          name: b.name,
+          status: b.status,
+          version: Number(b.master_version),
+          entitlement: e
+            ? {
+                status: e.status,
+                validFrom: e.valid_from ? new Date(e.valid_from).toISOString() : null,
+                validUntil: e.valid_until ? new Date(e.valid_until).toISOString() : null,
+                version: Number(e.master_version),
+              }
+            : null,
+        };
+      }),
+    members: members
+      .filter((m) => m.client_id === c.id)
+      .map((m) => ({ userId: m.user_id, role: m.role, status: m.status, version: Number(m.master_version) })),
+  }));
 }

@@ -1,12 +1,12 @@
 import { createHash, randomBytes } from "node:crypto";
 import { Hono, type Context, type MiddlewareHandler } from "hono";
 import * as api from "../contracts/api-v1.js";
-import { CONTROL_CONTRACT_VERSION, ControlEvent } from "../contracts/control-v1.js";
+import { CONTROL_CONTRACT_VERSION, ControlEvent, ControlStateRequest } from "../contracts/control-v1.js";
 import * as catalog from "../db/catalog.js";
 import { createHold, releaseHold, type TenantScope } from "../db/commerce.js";
 import { loadGateRecords, loadMembershipRole } from "../db/gate.js";
 import { withTransaction, type Db } from "../db/pool.js";
-import { applyControlEvent } from "../db/projections.js";
+import { applyControlEvent, readControlState } from "../db/projections.js";
 import { evaluateTicketingGate, type GateDecision } from "../domain/entitlement.js";
 import { DomainError } from "../domain/errors.js";
 import { isUuid } from "../domain/ids.js";
@@ -156,7 +156,8 @@ export function createApp(deps: AppDeps) {
   app.get("/health", (c) => c.json({ ok: true, service: "alkao", api: API_VERSION, control: CONTROL_CONTRACT_VERSION }));
 
   // ── Control contract (TAKATAK → ALKAO) ───────────────────────────────────
-  app.post("/v1/control/events", async (c) => {
+  /** HMAC-signed control request: the parsed JSON body and the key id, or an error response. */
+  async function signedControlBody(c: Context<Env>): Promise<{ json: unknown; keyId: string } | Response> {
     if (deps.controlKeys.size === 0) return fail(c, 503, "control_not_configured");
     const rawBody = await c.req.text();
     const keyId = c.req.header("x-alkao-key-id");
@@ -169,15 +170,27 @@ export function createApp(deps: AppDeps) {
       now: now(),
     });
     if (!check.ok) return fail(c, 401, "invalid_signature", { reason: check.reason });
-    let json: unknown;
     try {
-      json = JSON.parse(rawBody);
+      return { json: JSON.parse(rawBody), keyId: keyId! };
     } catch {
       return fail(c, 400, "invalid_json");
     }
-    const event = ControlEvent.parse(json);
-    const outcome = await withTransaction(deps.db, (tx) => applyControlEvent(tx, event, keyId!));
+  }
+
+  app.post("/v1/control/events", async (c) => {
+    const signed = await signedControlBody(c);
+    if (signed instanceof Response) return signed;
+    const event = ControlEvent.parse(signed.json);
+    const outcome = await withTransaction(deps.db, (tx) => applyControlEvent(tx, event, signed.keyId));
     return c.json({ eventId: event.eventId, outcome });
+  });
+
+  // Run 11: reconciliation. TAKATAK reads what ALKAO holds and sends only the differences.
+  app.post("/v1/control/state", async (c) => {
+    const signed = await signedControlBody(c);
+    if (signed instanceof Response) return signed;
+    const request = ControlStateRequest.parse(signed.json);
+    return c.json({ contract: CONTROL_CONTRACT_VERSION, clients: await readControlState(deps.db, request.clientIds) });
   });
 
   // ── Public (buyer-facing) ────────────────────────────────────────────────
