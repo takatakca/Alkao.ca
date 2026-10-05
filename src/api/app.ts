@@ -16,6 +16,9 @@ import { AuthError, type AuthVerifier } from "./auth.js";
 import { verifyControlSignature } from "./control-signature.js";
 import { errorResponse, fail, readJson } from "./http.js";
 import { FixedWindowLimiter } from "./rate-limit.js";
+import { WebhookSignatureError, type PaymentGateway } from "../payments/gateway.js";
+import { PaymentsService } from "../payments/service.js";
+import * as paymentsDb from "../db/payments.js";
 
 export const API_VERSION = "alkao.api.v1";
 
@@ -26,6 +29,10 @@ export interface AppDeps {
   controlKeys: ReadonlyMap<string, string>;
   holdTtlSeconds: number;
   publicHoldsPerMinute: number;
+  /** Stripe Connect gateway; null until payments are configured. */
+  paymentGateway?: PaymentGateway | null;
+  /** Where Stripe sends a Client admin during and after account onboarding. */
+  onboarding?: { refreshUrl: string; returnUrl: string } | null;
   now?: () => Date;
 }
 
@@ -45,6 +52,12 @@ const sha256 = (value: string) => createHash("sha256").update(value).digest();
 export function createApp(deps: AppDeps) {
   const now = deps.now ?? (() => new Date());
   const holdLimiter = new FixedWindowLimiter(deps.publicHoldsPerMinute, 60_000);
+  const paymentsService = new PaymentsService({
+    db: deps.db,
+    gateway: deps.paymentGateway ?? null,
+    now,
+    onboarding: deps.onboarding ?? null,
+  });
   const app = new Hono<Env>();
 
   app.onError((error, c) => errorResponse(c, error));
@@ -408,6 +421,97 @@ export function createApp(deps: AppDeps) {
   app.get(`${ADMIN}/audit`, ...admin, can("ticketing.audit.read"), async (c) => {
     const q = api.ListQuery.parse(c.req.query());
     return c.json({ entries: await catalog.listAudit(deps.db, c.get("scope"), q.limit, q.before) });
+  });
+
+  // ── Run 02: checkout and order status (public) ───────────────────────────
+  app.post(`${PUBLIC}/holds/:holdId/checkout`, publicGate, async (c) => {
+    const holdId = await holdForToken(c);
+    if (!holdId) return fail(c, 404, "hold_not_found");
+    const body = api.CheckoutRequest.parse(await readJson(c));
+    const result = await paymentsService.startCheckout(c.get("scope"), holdId, body);
+    return c.json(
+      {
+        order: { id: result.orderId, reference: result.reference, token: result.orderToken, status: result.kind === "free" ? "paid" : "pending_payment" },
+        checkoutUrl: result.kind === "redirect" ? result.checkoutUrl : null,
+      },
+      201,
+    );
+  });
+
+  app.get(`${PUBLIC}/orders/:orderId`, publicGate, async (c) => {
+    const orderId = param(c, "orderId");
+    const token = c.req.header("x-alkao-order-token");
+    const scope = c.get("scope");
+    if (!orderId || !token || token.length > 100) return fail(c, 404, "order_not_found");
+    const { rowCount } = await deps.db.query(
+      `SELECT 1 FROM public.ticketing_access_tokens
+       WHERE token_hash = $1 AND subject_type = 'order' AND subject_id = $2 AND client_id = $3 AND brand_id = $4`,
+      [sha256(token), orderId, scope.clientId, scope.brandId],
+    );
+    if (!rowCount) return fail(c, 404, "order_not_found");
+    const order = await catalog.getOrder(deps.db, scope, orderId);
+    const { commissionCents: _c, commissionRefundedCents: _cr, buyerPhone: _p, ...publicOrder } = order;
+    return c.json({ order: publicOrder });
+  });
+
+  // ── Run 02: Stripe webhooks ──────────────────────────────────────────────
+  // Authenticated by the Stripe signature, not by the Ticketing gate: a checkout opened
+  // while Ticketing was active must still be fulfilled (or refunded) if it is revoked
+  // before the buyer pays.
+  app.post("/v1/webhooks/stripe", async (c) => {
+    if (!deps.paymentGateway) return fail(c, 503, "payments_not_configured");
+    const rawBody = await c.req.text();
+    try {
+      const result = await paymentsService.handleWebhook(rawBody, c.req.header("stripe-signature"));
+      return c.json(result);
+    } catch (error) {
+      if (error instanceof WebhookSignatureError) return fail(c, 400, "invalid_signature");
+      throw error;
+    }
+  });
+
+  // ── Run 02: payments administration ──────────────────────────────────────
+  app.post(`${ADMIN}/payments/onboarding`, ...admin, can("ticketing.payments.manage"), async (c) => {
+    const link = await paymentsService.startOnboarding(c.get("scope"), actor(c));
+    return c.json({ onboarding: link }, 201);
+  });
+
+  app.get(`${ADMIN}/payments/account`, ...admin, can("ticketing.payments.manage"), async (c) =>
+    c.json({ account: await paymentsService.accountStatus(c.get("scope")) }),
+  );
+
+  app.get(`${ADMIN}/payments/settings`, ...admin, can("ticketing.payments.manage"), async (c) =>
+    c.json({ settings: { checkoutReturnOrigins: await paymentsDb.getCheckoutReturnOrigins(deps.db, c.get("scope")) } }),
+  );
+
+  app.put(`${ADMIN}/payments/settings`, ...admin, can("ticketing.payments.manage"), async (c) => {
+    const body = api.CheckoutSettings.parse(await readJson(c));
+    const origins = await withTransaction(deps.db, async (tx) => {
+      const saved = await paymentsDb.setCheckoutReturnOrigins(tx, c.get("scope"), [...new Set(body.checkoutReturnOrigins)]);
+      await catalog.writeAudit(tx, c.get("scope"), actor(c), "payments.settings_updated", { type: "brand_settings", id: null }, { origins: saved });
+      return saved;
+    });
+    return c.json({ settings: { checkoutReturnOrigins: origins } });
+  });
+
+  app.get(`${ADMIN}/orders/:orderId/refunds`, ...admin, can("ticketing.orders.read"), async (c) => {
+    const orderId = param(c, "orderId");
+    if (!orderId) return fail(c, 404, "order_not_found");
+    return c.json({ refunds: await paymentsDb.listRefunds(deps.db, c.get("scope"), orderId) });
+  });
+
+  app.post(`${ADMIN}/orders/:orderId/refunds`, ...admin, can("ticketing.refunds.create"), async (c) => {
+    const orderId = param(c, "orderId");
+    if (!orderId) return fail(c, 404, "order_not_found");
+    const body = api.RefundRequest.parse(await readJson(c));
+    const refund = await paymentsService.requestRefund(c.get("scope"), orderId, body, actor(c));
+    return c.json({ refund }, 201);
+  });
+
+  app.post(`${ADMIN}/refunds/:refundId/retry`, ...admin, can("ticketing.refunds.create"), async (c) => {
+    const refundId = param(c, "refundId");
+    if (!refundId) return fail(c, 404, "refund_not_found");
+    return c.json({ refund: await paymentsService.retryRefund(c.get("scope"), refundId) });
   });
 
   return app;

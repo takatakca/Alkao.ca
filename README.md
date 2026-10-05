@@ -14,6 +14,7 @@ versioned control contract.
 - Node 22 and TypeScript (strict)
 - PostgreSQL with Supabase-compatible RLS; SQL migrations in `supabase/migrations`
 - Hono HTTP API (`alkao.api.v1`), `pg`, Zod, `jose` (Supabase Auth tokens)
+- Stripe Connect direct charges with the TAKATAK commission as the application fee (`stripe`)
 - Vitest, tested against local ephemeral PostgreSQL only
 
 ## Layout
@@ -24,6 +25,7 @@ versioned control contract.
 | `src/db` | Pool, transactions, migration runner, inventory/order primitives, catalog, control-contract projections |
 | `src/contracts` | API v1 request schemas and the `alkao.control.v1` contract |
 | `src/api` | Hono app: public, admin and control routes, gates, auth, signatures |
+| `src/payments` | Payment gateway interface, Stripe implementation, checkout, webhook and refund service |
 | `contracts/` | Published JSON Schema of `alkao.control.v1` (generated; drift-tested) |
 | `supabase/migrations` | Schema. Every `ticketing_*` table enables RLS in the migration that creates it |
 | `supabase/tests/supabase_shim.sql` | Local test stand-in for Supabase roles, `auth.uid()` and default grants |
@@ -63,6 +65,6 @@ npm start
 | Run | Scope |
 |---|---|
 | Run 01 | PR 1 capability status · PR 2 domain, schema, RLS, invariants · PR 3 API contracts and entitlement gates |
-| Run 02 | Stripe Connect direct charges, application fee, refunds |
+| Run 02 | Stripe Connect onboarding, checkout (direct charges, application fee), webhooks, refunds with the V1 commission policy |
 | Run 03 | Signed QR credentials (stable ids and key version only), scanner manifest, scans |
 | Run 04 | Operations UI in the TAKATAK dashboard |

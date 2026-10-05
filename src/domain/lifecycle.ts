@@ -39,6 +39,11 @@ export function canTransitionHold(from: HoldStatus, to: HoldStatus): boolean {
 export const DEFAULT_HOLD_TTL_SECONDS = 10 * 60;
 export const MAX_HOLD_TTL_SECONDS = 30 * 60;
 
+/** Stripe Checkout sessions live at least 30 minutes; a hold entering checkout is extended to match. */
+export const CHECKOUT_SESSION_SECONDS = 31 * 60;
+/** Extra hold time after the Checkout session expires, for late webhook delivery. */
+export const CHECKOUT_HOLD_GRACE_SECONDS = 5 * 60;
+
 export function isHoldExpired(hold: { status: HoldStatus; expiresAt: Date }, now: Date): boolean {
   return hold.status === "active" && hold.expiresAt.getTime() <= now.getTime();
 }

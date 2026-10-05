@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { createHold, createOrderFromHold, recordOrderPaid } from "../../src/db/commerce.js";
 import { withTransaction, type Db } from "../../src/db/pool.js";
-import { buildQuote, computeCommission } from "../../src/domain/index.js";
+import { applyRefund, buildQuote, computeCommission } from "../../src/domain/index.js";
+import { insertPayment, insertPaymentAccount, insertRefund, markPaymentPaid, setCheckoutReturnOrigins } from "../../src/db/payments.js";
 import type { TicketTypeRule } from "../../src/domain/catalog.js";
 import { FESTI_ICE_TYPES } from "../fixtures/festi-ice.js";
 
@@ -16,6 +17,9 @@ export interface TenantFixture {
   orderId: string;
   buyerId: string;
   ticketIds: string[];
+  /** Run 02 fixtures: the Client's connected account and its checkout origin. */
+  stripeAccountId: string;
+  returnOrigin: string;
 }
 
 export interface SeedResult {
@@ -44,6 +48,8 @@ export async function seedTwoTenants(db: Db): Promise<SeedResult> {
   };
   const havana = await seedTenant(db, "Havana Resort", "Havana Resort — Événements", 1500);
   const festi = await seedTenant(db, "FESTI-ICE", "FESTI-ICE", 300);
+  await seedPaymentLedger(db, havana);
+  await seedPaymentLedger(db, festi);
 
   await db.query(
     `INSERT INTO public.ticketing_memberships (client_id, user_id, role, status) VALUES
@@ -103,7 +109,12 @@ export async function seedTenant(db: Db, clientName: string, brandName: string, 
       );
       types.push({ ...t, id: rows[0]!.id });
     }
-    return { clientId, brandId, venueId, eventId, sessionId, types, holdId: "", orderId: "", buyerId: "", ticketIds: [] };
+    const stripeAccountId = `acct_seed${randomUUID().replaceAll("-", "").slice(0, 16)}`;
+    const returnOrigin = `https://${brandName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}.example`;
+    return {
+      clientId, brandId, venueId, eventId, sessionId, types, holdId: "", orderId: "", buyerId: "", ticketIds: [],
+      stripeAccountId, returnOrigin,
+    };
   }).then(async (base) => ({ ...base, ...(await seedPaidOrder(db, base)) }));
 }
 
@@ -154,5 +165,45 @@ export async function seedPaidOrder(
       [t.clientId],
     );
     return { holdId: hold.id, orderId: order.id, buyerId: order.buyerId, ticketIds };
+  });
+}
+
+/**
+ * A connected account, checkout settings, and one more order paid through a payment
+ * with a succeeded partial refund — so every Run 02 table holds rows for each tenant.
+ */
+export async function seedPaymentLedger(db: Db, t: TenantFixture): Promise<void> {
+  const scope = { clientId: t.clientId, brandId: t.brandId };
+  const general = t.types.find((x) => x.code === "GENERAL")!.id;
+  const result = buildQuote(t.types, [{ ticketTypeId: general, quantity: 1 }], "CA-QC");
+  if (!result.ok) throw new Error("seed quote invalid");
+  const quote = result.quote;
+  await withTransaction(db, async (tx) => {
+    await insertPaymentAccount(tx, t.clientId, t.stripeAccountId);
+    await tx.query(`UPDATE public.ticketing_payment_accounts SET charges_enabled = true, payouts_enabled = true, details_submitted = true WHERE client_id = $1`, [t.clientId]);
+    await setCheckoutReturnOrigins(tx, scope, [t.returnOrigin]);
+    const hold = await createHold(tx, {
+      ...scope, eventId: t.eventId, sessionId: t.sessionId, admissions: 1,
+      items: [{ ticketTypeId: general, quantity: 1, unitPriceCents: 2995 }],
+      expiresAt: new Date(Date.now() + 600_000),
+    });
+    const commission = computeCommission({ rateBps: 500, fixedCentsPerPaidAdmission: 50 }, quote);
+    const order = await createOrderFromHold(tx, { ...scope, holdId: hold.id, buyer: { email: `ledger-${randomUUID().slice(0, 8)}@example.com` }, quote, commissionCents: commission });
+    const paymentId = await insertPayment(tx, {
+      ...scope, eventId: t.eventId, orderId: order.id, stripeAccountId: t.stripeAccountId,
+      amountCents: quote.totalCents, applicationFeeCents: commission, expiresAt: new Date(Date.now() + 1_800_000),
+    });
+    await markPaymentPaid(tx, paymentId, `pi_seed${randomUUID().replaceAll("-", "").slice(0, 16)}`, new Date());
+    await recordOrderPaid(tx, scope, order.id, new Date());
+    const outcome = applyRefund({ totalPaidCents: quote.totalCents, commissionCents: commission, refundedCents: 0, commissionRefundedCents: 0 }, 500);
+    const refund = await insertRefund(tx, {
+      ...scope, eventId: t.eventId, orderId: order.id, amountCents: 500, commissionRefundCents: outcome.commissionRefundCents,
+      voidTicketIds: [], reason: "seed", requestedBy: "system",
+    });
+    await tx.query(
+      `UPDATE public.ticketing_orders SET status = 'partially_refunded', refunded_cents = $2, commission_refunded_cents = $3 WHERE id = $1`,
+      [order.id, outcome.refundedAfterCents, outcome.commissionRefundedAfterCents],
+    );
+    await tx.query(`UPDATE public.ticketing_refunds SET status = 'succeeded', stripe_refund_id = $2 WHERE id = $1`, [refund.id, `re_seed${randomUUID().replaceAll("-", "").slice(0, 16)}`]);
   });
 }

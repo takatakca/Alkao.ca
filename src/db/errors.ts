@@ -31,6 +31,15 @@ const TRIGGER_CODES = new Set([
   "ticket_fields_immutable",
   "ticket_void_is_final",
   "brand_client_immutable",
+  "payment_account_immutable",
+  "payment_must_start_open",
+  "payment_amount_mismatch",
+  "payment_fields_immutable",
+  "payment_invalid_transition",
+  "refund_must_start_pending",
+  "refund_fields_immutable",
+  "refund_invalid_transition",
+  "order_refund_ledger_mismatch",
 ]);
 
 /** Translate a PostgreSQL error into a DomainError, or return null if it is not one of ours. */

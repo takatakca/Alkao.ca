@@ -15,6 +15,11 @@ const EnvSchema = z.object({
   SUPABASE_JWKS_URL: z.url().optional(),
   SUPABASE_JWT_SECRET: z.string().min(32).optional(),
   SUPABASE_JWT_ISSUER: z.string().optional(),
+  /** Stripe Connect platform key and the Connect webhook endpoint secret (Run 02). */
+  STRIPE_SECRET_KEY: z.string().regex(/^(sk|rk)_(test|live)_/).optional(),
+  STRIPE_WEBHOOK_SECRET: z.string().regex(/^whsec_/).optional(),
+  ALKAO_STRIPE_ONBOARDING_REFRESH_URL: z.url({ protocol: /^https$/ }).optional(),
+  ALKAO_STRIPE_ONBOARDING_RETURN_URL: z.url({ protocol: /^https$/ }).optional(),
   ALKAO_HOLD_TTL_SECONDS: z.coerce.number().int().min(60).max(1800).default(600),
   ALKAO_PUBLIC_HOLDS_PER_MINUTE: z.coerce.number().int().min(1).max(1000).default(20),
   PORT: z.coerce.number().int().min(1).max(65535).default(8787),
@@ -27,6 +32,8 @@ export interface Config {
   jwt: { jwksUrl?: string; secret?: string; issuer?: string };
   holdTtlSeconds: number;
   publicHoldsPerMinute: number;
+  stripe: { secretKey: string; webhookSecret: string } | null;
+  onboarding: { refreshUrl: string; returnUrl: string } | null;
   port: number;
 }
 
@@ -57,6 +64,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     },
     holdTtlSeconds: e.ALKAO_HOLD_TTL_SECONDS,
     publicHoldsPerMinute: e.ALKAO_PUBLIC_HOLDS_PER_MINUTE,
+    stripe: e.STRIPE_SECRET_KEY && e.STRIPE_WEBHOOK_SECRET ? { secretKey: e.STRIPE_SECRET_KEY, webhookSecret: e.STRIPE_WEBHOOK_SECRET } : null,
+    onboarding:
+      e.ALKAO_STRIPE_ONBOARDING_REFRESH_URL && e.ALKAO_STRIPE_ONBOARDING_RETURN_URL
+        ? { refreshUrl: e.ALKAO_STRIPE_ONBOARDING_REFRESH_URL, returnUrl: e.ALKAO_STRIPE_ONBOARDING_RETURN_URL }
+        : null,
     port: e.PORT,
   };
 }
