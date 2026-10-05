@@ -173,6 +173,71 @@ describe("ALKAO Operations app", () => {
     await page.getByRole("status").getByText("DÉJÀ ENTRÉ").waitFor();
   });
 
+  it("beeps and vibrates once for a ticket let in, twice for a refusal, unless turned off (Run 33)", async () => {
+    const t = seed.havana;
+    const { rows } = await db.pool.query<{ id: string }>(
+      `INSERT INTO public.ticketing_sessions (client_id, brand_id, event_id, starts_at, capacity, status)
+       VALUES ($1, $2, $3, now() + interval '20 minutes', 20, 'on_sale') RETURNING id`,
+      [t.clientId, t.brandId, t.eventId],
+    );
+    const sessionId = rows[0]!.id;
+    const toddler = t.types.find((x) => x.code === "TODDLER")!.id;
+    const h = await call(app, "POST", `${pub(t.clientId, t.brandId)}/holds`, { body: { sessionId, items: [{ ticketTypeId: toddler, quantity: 1 }] } });
+    const co = await call(app, "POST", `${pub(t.clientId, t.brandId)}/holds/${h.body.hold.id}/checkout`, {
+      headers: { "x-alkao-hold-token": h.body.hold.token },
+      body: { buyer: { email: "bip@example.com" }, successUrl: `${t.returnOrigin}/ok`, cancelUrl: `${t.returnOrigin}/ko` },
+    });
+    const order = await call(app, "GET", `${pub(t.clientId, t.brandId)}/orders/${co.body.order.id}`, { headers: { "x-alkao-order-token": co.body.order.token } });
+    const qr = order.body.order.tickets[0].credential as string;
+
+    const page = await signedIn(seed.users.havanaStaff);
+    // A recording speaker and vibrator: what the gate would hear and feel.
+    await page.context().addInitScript(() => {
+      const w = globalThis as unknown as { __signals: unknown[][]; AudioContext: unknown };
+      w.__signals = [];
+      Object.defineProperty(navigator, "vibrate", { configurable: true, value: (p: unknown) => (w.__signals.push(["vibrate", p]), true) });
+      w.AudioContext = class {
+        currentTime = 0;
+        destination = {};
+        resume() { return Promise.resolve(); }
+        createGain() { return { gain: { value: 0 }, connect: (d: unknown) => d }; }
+        createOscillator() {
+          const o = { type: "", frequency: { value: 0 }, connect: (g: unknown) => g, start: () => w.__signals.push(["beep", o.frequency.value]), stop: () => undefined };
+          return o;
+        }
+      };
+    });
+    const signals = () => page.evaluate(() => (globalThis as unknown as { __signals: unknown[][] }).__signals.splice(0));
+    const scanner = async () => {
+      await page.goto(`${origin}/ops#${brandPath()}/scanner`);
+      await page.getByLabel("Événement").selectOption({ label: "Havana Resort — Événements 2026-2027" });
+      await page.locator(`option[value="${sessionId}"]`).waitFor({ state: "attached" });
+      await page.getByLabel("Séance").selectOption(sessionId);
+      return page.getByLabel("Code du billet (lecteur ou saisie)");
+    };
+    const input = await scanner();
+    await input.fill(qr);
+    await input.press("Enter");
+    await page.getByRole("status").getByText("ENTRÉE ACCEPTÉE").waitFor();
+    await expect.poll(signals).toEqual([["vibrate", 80], ["beep", 880]]);
+    await input.fill(qr);
+    await input.press("Enter");
+    await page.getByRole("status").getByText("DÉJÀ ENTRÉ").waitFor();
+    await expect.poll(signals).toEqual([["vibrate", [120, 80, 120]], ["beep", 220], ["beep", 220]]);
+
+    // Turned off, it stays off on this device.
+    await page.getByLabel("Son et vibration").uncheck();
+    await input.fill(qr);
+    await input.press("Enter");
+    await page.getByRole("status").getByText("DÉJÀ ENTRÉ").waitFor();
+    const again = await scanner();
+    expect(await page.getByLabel("Son et vibration").isChecked()).toBe(false);
+    await again.fill(qr);
+    await again.press("Enter");
+    await page.getByRole("status").getByText("DÉJÀ ENTRÉ").waitFor();
+    expect(await signals()).toEqual([]);
+  });
+
   it("lets a ticket in without its QR code, found by the order reference (Run 22)", async () => {
     const t = seed.havana;
     const { rows } = await db.pool.query<{ id: string }>(
