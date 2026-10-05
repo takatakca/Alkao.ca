@@ -48,17 +48,6 @@ protection) ; ces deux réglages se font dans GitHub :
 2. Settings → Branches (ou Rules → Rulesets) → règle sur `main` : PR obligatoire, pas de
    force-push, pas de suppression.
 
----|---|---|
-| `main` existe | non — le dépôt était vide | **à corriger** |
-| Branche par défaut | `claude/amazing-pascal-tppqd4` (GitHub l'a choisie au premier push dans un dépôt vide) | **à corriger** |
-| Travail sur une branche dédiée | oui, `claude/amazing-pascal-tppqd4` | OK |
-| `main` protégée | n/a | à faire après création |
-
-Règle : ne jamais travailler directement sur la branche par défaut ; tout passe par une PR.
-Tant que la branche de travail est aussi la branche par défaut, aucun nouveau commit n'y est
-poussé. Correctif : créer `main`, la définir comme branche par défaut, la protéger, puis
-ouvrir la PR `claude/amazing-pascal-tppqd4` → `main`.
-
 ---
 
 ## 1. Faits — `takatak-v1`
