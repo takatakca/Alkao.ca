@@ -21,6 +21,8 @@ import { PaymentsService } from "../payments/service.js";
 import * as paymentsDb from "../db/payments.js";
 import * as credentialsDb from "../db/credentials.js";
 import { CredentialsService } from "../scanner/service.js";
+import { toCsv } from "../ops/csv.js";
+import * as reports from "../ops/reports.js";
 
 export const API_VERSION = "alkao.api.v1";
 
@@ -566,6 +568,44 @@ export function createApp(deps: AppDeps) {
   app.post(`${ADMIN}/credential-keys/rotate`, ...admin, can("ticketing.keys.manage"), async (c) => {
     const key = await credentials.rotateKey(c.get("scope"), actor(c));
     return c.json({ key: { kid: key.kid, version: key.version, algorithm: "Ed25519", publicKey: key.publicKey } }, 201);
+  });
+
+  // ── Run 04: operations reports and exports ───────────────────────────────
+  app.get(`${ADMIN}/reports/sales`, ...admin, can("ticketing.orders.read"), async (c) => {
+    const q = api.ReportQuery.parse(c.req.query());
+    return c.json({ report: await reports.salesReport(deps.db, c.get("scope"), q) });
+  });
+
+  const csv = (c: Context<Env>, filename: string, body: string) =>
+    c.body(body, 200, {
+      "content-type": "text/csv; charset=utf-8",
+      "content-disposition": `attachment; filename="${filename}"`,
+      "cache-control": "no-store",
+    });
+
+  app.get(`${ADMIN}/reports/attendees.csv`, ...admin, can("ticketing.buyers.read"), async (c) => {
+    const { sessionId } = api.AttendeesQuery.parse(c.req.query());
+    const rows = await reports.attendeesRows(deps.db, c.get("scope"), sessionId);
+    await catalog.writeAudit(deps.db, c.get("scope"), actor(c), "reports.attendees_exported", { type: "session", id: sessionId }, { rows: rows.length });
+    return csv(
+      c,
+      `alkao-attendees-${sessionId}.csv`,
+      toCsv(["order_reference", "ticket_id", "ticket_type", "ticket_type_name", "buyer_name", "buyer_email", "ticket_status", "admitted_at"], rows),
+    );
+  });
+
+  app.get(`${ADMIN}/reports/orders.csv`, ...admin, can("ticketing.buyers.read"), async (c) => {
+    const q = api.ReportQuery.parse(c.req.query());
+    const rows = await reports.ordersRows(deps.db, c.get("scope"), q);
+    await catalog.writeAudit(deps.db, c.get("scope"), actor(c), "reports.orders_exported", { type: "brand", id: c.get("scope").brandId }, { rows: rows.length, ...q });
+    return csv(
+      c,
+      "alkao-orders.csv",
+      toCsv(
+        ["order_reference", "status", "paid_at", "buyer_email", "subtotal_cents", "tax_cents", "total_cents", "refunded_cents", "commission_cents", "commission_refunded_cents"],
+        rows,
+      ),
+    );
   });
 
   return app;
