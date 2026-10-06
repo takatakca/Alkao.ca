@@ -38,6 +38,7 @@ import { mountUnsubscribe } from "./unsubscribe.js";
 import * as newsletterDb from "../db/newsletter.js";
 import { mountNewsletterPage } from "./newsletter-page.js";
 import { replyIntent, twilioSignatureValid } from "../delivery/sms.js";
+import { emailEventOf, resendSignatureValid } from "../delivery/bounces.js";
 import { normalizePhone } from "../domain/customers.js";
 import { localDate } from "../domain/customers.js";
 import * as journal from "../ops/journal.js";
@@ -80,6 +81,8 @@ export interface AppDeps {
   metricsToken?: string | null;
   /** Run 46: Twilio's auth token, to check its webhook's signature; null until texts are configured. */
   twilioAuthToken?: string | null;
+  /** Run 48: Resend's webhook signing secret (bounces, spam complaints); null until it is set up. */
+  resendWebhookSecret?: string | null;
   now?: () => Date;
 }
 
@@ -808,6 +811,24 @@ export function createApp(deps: AppDeps) {
     return c.body('<?xml version="1.0" encoding="UTF-8"?><Response></Response>', 200, { "content-type": "text/xml; charset=utf-8" });
   });
 
+  // ── Run 48: Resend's webhook: e-mails that bounced or were marked as spam ───
+  // Authenticated by Resend's (Svix) signature; 404 until the secret is configured.
+  app.post("/v1/webhooks/resend", async (c) => {
+    if (!deps.resendWebhookSecret) return fail(c, 404, "not_found");
+    const raw = await c.req.text();
+    const headers = { id: c.req.header("svix-id"), timestamp: c.req.header("svix-timestamp"), signature: c.req.header("svix-signature") };
+    if (!resendSignatureValid(deps.resendWebhookSecret, headers, raw, now())) return fail(c, 403, "invalid_signature");
+    let payload: unknown;
+    try {
+      payload = JSON.parse(raw);
+    } catch {
+      return fail(c, 400, "invalid_json");
+    }
+    const event = emailEventOf(payload);
+    if (event) await withTransaction(deps.db, (tx) => campaignsDb.recordEmailEvent(tx, event, now()));
+    return c.json({ received: true });
+  });
+
   app.post("/v1/webhooks/stripe", async (c) => {
     if (!deps.paymentGateway) return fail(c, 503, "payments_not_configured");
     const rawBody = await c.req.text();
@@ -1131,6 +1152,14 @@ export function createApp(deps: AppDeps) {
     if (!id) return fail(c, 404, "campaign_not_found");
     const body = api.CampaignAutomation.parse(await readJson(c));
     await withTransaction(deps.db, (tx) => campaignsDb.setAutomation(tx, c.get("scope"), id, body.active, actor(c), now()));
+    return c.json({ campaign: await campaignsDb.getCampaign(deps.db, c.get("scope"), id, today()) });
+  });
+
+  // Run 48: a campaign held for its bounces or complaints sends the rest.
+  app.post(`${ADMIN}/campaigns/:campaignId/resume`, ...admin, manageCampaigns, async (c) => {
+    const id = param(c, "campaignId");
+    if (!id) return fail(c, 404, "campaign_not_found");
+    await withTransaction(deps.db, (tx) => campaignsDb.resumeCampaign(tx, c.get("scope"), id, actor(c), now()));
     return c.json({ campaign: await campaignsDb.getCampaign(deps.db, c.get("scope"), id, today()) });
   });
 

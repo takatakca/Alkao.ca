@@ -26,16 +26,16 @@ export async function attentionList(db: Db, s: TenantScope, now = new Date()) {
       params,
     ),
     // Emails that never reached the buyer: tickets for a session still to come, or a refund
-    // or cancellation notice from the last 30 days.
+    // or cancellation notice from the last 30 days. Run 48: also those the address refused.
     db.query(
-      `SELECT x.order_id, o.reference, x.kind, x.status, x.last_error, x.updated_at, b.email AS buyer_email
+      `SELECT x.order_id, o.reference, x.kind, x.status, x.last_error, x.updated_at, x.bounced_at, b.email AS buyer_email
        FROM public.ticketing_email_outbox x
        JOIN public.ticketing_orders o ON o.id = x.order_id AND o.client_id = x.client_id AND o.brand_id = x.brand_id
        JOIN public.ticketing_buyers b ON b.id = o.buyer_id AND b.client_id = o.client_id AND b.brand_id = o.brand_id
        JOIN public.ticketing_sessions se ON se.id = o.session_id AND se.client_id = o.client_id AND se.brand_id = o.brand_id
        WHERE x.client_id = $1 AND x.brand_id = $2
          AND x.kind <> 'reminder' -- a missed reminder needs no one's action
-         AND (x.status = 'failed' OR (x.status = 'skipped' AND x.last_error = 'too_old'))
+         AND (x.status = 'failed' OR (x.status = 'skipped' AND x.last_error = 'too_old') OR x.bounced_at IS NOT NULL)
          AND NOT EXISTS (SELECT 1 FROM public.ticketing_buyer_erasures e WHERE e.buyer_id = b.id)
          AND CASE WHEN x.kind IN ('order_tickets', 'exchange_tickets')
                   THEN coalesce(se.ends_at, se.starts_at) > $3 AND o.status IN ('paid', 'partially_refunded')

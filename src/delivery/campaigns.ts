@@ -28,7 +28,15 @@ export interface CampaignDeliveryConfig {
   publicUrl: string;
   credentialMasterSecret: string;
   maxAttempts?: number;
+  /**
+   * Run 48: campaign e-mails per hour, all Brands together (they share the sending address).
+   * A new sending domain is trusted gradually; tests and the buyers' own e-mails never wait.
+   */
+  campaignEmailsPerHour?: number;
 }
+
+/** Run 48: the default pace, about 7,000 a day. Raise it once the domain has a good record. */
+export const DEFAULT_CAMPAIGN_EMAILS_PER_HOUR = 300;
 
 export interface CampaignDeliveryResult {
   sent: number;
@@ -38,6 +46,8 @@ export interface CampaignDeliveryResult {
   finished: number;
   /** Run 45: automatic messages queued this pass. */
   queued: number;
+  /** Run 48: true when the hourly pace was reached and the rest waits for the next pass. */
+  paced: boolean;
 }
 
 /** A campaign is news: a message still waiting after this long is dropped, never sent late. */
@@ -64,6 +74,7 @@ interface DueRow {
   contact: string | null;
   first_name: string | null;
   opted_out: boolean;
+  bounced: boolean;
   anonymized: boolean;
   visit_item: string | null;
   visit_category: string | null;
@@ -73,13 +84,20 @@ interface DueRow {
  * Send due campaign messages, one per transaction (FOR UPDATE SKIP LOCKED). A message is
  * skipped if its campaign was cancelled, if the customer unsubscribed or was anonymized
  * since, or if the sender's address was removed (the law's footer cannot be left out).
- * A campaign with nothing left to send is marked sent.
+ * A campaign with nothing left to send is marked sent. Run 48: an address that bounced is
+ * skipped, a held campaign waits, and at most `campaignEmailsPerHour` go out per hour.
  */
 export async function deliverCampaignEmails(db: Db, cfg: CampaignDeliveryConfig, now = new Date(), limit = 100): Promise<CampaignDeliveryResult> {
-  const result: CampaignDeliveryResult = { sent: 0, skipped: 0, retried: 0, failed: 0, finished: 0, queued: 0 };
+  const result: CampaignDeliveryResult = { sent: 0, skipped: 0, retried: 0, failed: 0, finished: 0, queued: 0, paced: false };
   // Run 45: today's "after the visit" messages join the queue first.
   result.queued = await queueAfterVisitMessages(db, now, localDate(now));
   const maxAttempts = cfg.maxAttempts ?? 6;
+  const { rows: pace } = await db.query<{ n: number }>(
+    `SELECT count(*)::int AS n FROM public.ticketing_campaign_messages
+     WHERE status = 'sent' AND customer_id IS NOT NULL AND email IS NOT NULL AND sent_at > $1::timestamptz - interval '1 hour'`,
+    [now],
+  );
+  let budget = (cfg.campaignEmailsPerHour ?? DEFAULT_CAMPAIGN_EMAILS_PER_HOUR) - (pace[0]?.n ?? 0);
   for (let i = 0; i < limit; i++) {
     const outcome = await withTransaction(db, async (tx) => {
       const { rows } = await tx.query<DueRow>(
@@ -87,7 +105,7 @@ export async function deliverCampaignEmails(db: Db, cfg: CampaignDeliveryConfig,
                 c.heading, c.body, c.image_url, c.cta_label, c.cta_url, br.name AS brand_name,
                 bs.marketing_sender_address AS sender_address, bs.marketing_contact AS contact, cu.first_name,
                 (cu.email_opt_out_at IS NOT NULL AND (cu.email_consent_at IS NULL OR cu.email_opt_out_at >= cu.email_consent_at)) AS opted_out,
-                (cu.anonymized_at IS NOT NULL) AS anonymized, bk.item AS visit_item, bk.category AS visit_category
+                (cu.email_bounced_at IS NOT NULL AND cu.email = m.email) AS bounced, (cu.anonymized_at IS NOT NULL) AS anonymized, bk.item AS visit_item, bk.category AS visit_category
          FROM public.ticketing_campaign_messages m
          JOIN public.ticketing_campaigns c ON c.id = m.campaign_id AND c.client_id = m.client_id AND c.brand_id = m.brand_id
          JOIN public.ticketing_brands br ON br.id = m.brand_id AND br.client_id = m.client_id
@@ -95,10 +113,11 @@ export async function deliverCampaignEmails(db: Db, cfg: CampaignDeliveryConfig,
          LEFT JOIN public.ticketing_customers cu ON cu.id = m.customer_id AND cu.client_id = m.client_id AND cu.brand_id = m.brand_id
          LEFT JOIN public.ticketing_customer_bookings bk ON bk.id = m.booking_id AND bk.client_id = m.client_id AND bk.brand_id = m.brand_id
          WHERE m.status = 'pending' AND m.email IS NOT NULL AND m.next_attempt_at <= $1
+           AND c.held_at IS NULL AND (m.customer_id IS NULL OR $2)
          ORDER BY m.next_attempt_at, m.id
          LIMIT 1
          FOR UPDATE OF m SKIP LOCKED`,
-        [now],
+        [now, budget > 0],
       );
       const row = rows[0];
       if (!row) return null;
@@ -109,6 +128,7 @@ export async function deliverCampaignEmails(db: Db, cfg: CampaignDeliveryConfig,
       if (row.campaign_status === "cancelled") return skip("cancelled");
       if (row.anonymized) return skip("anonymized");
       if (row.opted_out) return skip("unsubscribed");
+      if (row.bounced) return skip("bounced");
       if (now.getTime() - row.created_at.getTime() > MAX_AGE_MS) return skip("too_old");
       if (!row.sender_address || !row.contact) return skip("sender_settings_missing");
       const link = unsubscribeUrl(cfg.publicUrl, row.id, unsubscribeToken(cfg.credentialMasterSecret, row.id));
@@ -127,6 +147,7 @@ export async function deliverCampaignEmails(db: Db, cfg: CampaignDeliveryConfig,
           `UPDATE public.ticketing_campaign_messages SET status = 'sent', sent_at = $2, attempts = attempts + 1, provider_message_id = $3, last_error = NULL WHERE id = $1`,
           [row.id, now, messageId],
         );
+        if (row.customer_id) budget--;
         return "sent" as const;
       } catch (error) {
         const retryable = error instanceof EmailSendError ? error.retryable : true;
@@ -141,6 +162,14 @@ export async function deliverCampaignEmails(db: Db, cfg: CampaignDeliveryConfig,
     });
     if (!outcome) break;
     result[outcome]++;
+  }
+  if (budget <= 0) {
+    const { rows: waiting } = await db.query(
+      `SELECT 1 FROM public.ticketing_campaign_messages m JOIN public.ticketing_campaigns c ON c.id = m.campaign_id
+       WHERE m.status = 'pending' AND m.customer_id IS NOT NULL AND m.email IS NOT NULL AND m.next_attempt_at <= $1 AND c.held_at IS NULL LIMIT 1`,
+      [now],
+    );
+    result.paced = waiting.length > 0;
   }
   const { rowCount } = await db.query(
     `UPDATE public.ticketing_campaigns c SET status = 'sent', finished_at = $1

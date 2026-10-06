@@ -12,7 +12,10 @@ import { TwilioSmsSender } from "../src/delivery/sms.js";
 // Hosts that keep processes running use worker:sweeper, worker:email and worker:cancellations instead.
 const config = loadConfig();
 const email = z
-  .object({ RESEND_API_KEY: z.string().min(10), ALKAO_EMAIL_FROM: z.email(), ALKAO_EMAIL_MAX_AGE_HOURS: z.coerce.number().int().min(1).max(720).default(72) })
+  .object({
+    RESEND_API_KEY: z.string().min(10), ALKAO_EMAIL_FROM: z.email(), ALKAO_EMAIL_MAX_AGE_HOURS: z.coerce.number().int().min(1).max(720).default(72),
+    ALKAO_CAMPAIGN_EMAILS_PER_HOUR: z.coerce.number().int().min(1).max(100_000).default(300),
+  })
   .safeParse(process.env);
 
 const db = createPool(config.databaseUrl, 3);
@@ -24,6 +27,7 @@ try {
           publicUrl: config.publicUrl,
           credentialMasterSecret: config.credentialMasterSecret,
           maxAgeHours: email.data.ALKAO_EMAIL_MAX_AGE_HOURS,
+          campaignEmailsPerHour: email.data.ALKAO_CAMPAIGN_EMAILS_PER_HOUR,
         }
       : null,
     sms: config.twilio ? { sender: new TwilioSmsSender(config.twilio.accountSid, config.twilio.authToken, config.twilio.sender) } : null,

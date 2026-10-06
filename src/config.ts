@@ -40,6 +40,8 @@ export const EnvSchema = z.object({
   TWILIO_AUTH_TOKEN: z.string().min(32).optional(),
   TWILIO_MESSAGING_SERVICE_SID: z.string().regex(/^MG[0-9a-f]{32}$/).optional(),
   TWILIO_FROM_NUMBER: z.string().regex(/^\+[1-9][0-9]{7,14}$/).optional(),
+  /** Run 48: signing secret of the Resend webhook (bounces, spam complaints). */
+  RESEND_WEBHOOK_SECRET: z.string().regex(/^whsec_[A-Za-z0-9+/=]{16,}$/).optional(),
   PORT: z.coerce.number().int().min(1).max(65535).default(8787),
   NODE_ENV: z.string().optional(),
 });
@@ -61,6 +63,8 @@ export interface Config {
   metricsToken: string | null;
   /** Run 46: null until the account, its token and a sender are all set. */
   twilio: { accountSid: string; authToken: string; sender: { messagingServiceSid: string } | { from: string } } | null;
+  /** Run 48: null until the Resend webhook is set up. */
+  resendWebhookSecret: string | null;
   port: number;
 }
 
@@ -124,6 +128,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
           sender: e.TWILIO_MESSAGING_SERVICE_SID ? { messagingServiceSid: e.TWILIO_MESSAGING_SERVICE_SID } : { from: e.TWILIO_FROM_NUMBER! },
         }
       : null,
+    resendWebhookSecret: e.RESEND_WEBHOOK_SECRET ?? null,
     port: e.PORT,
   };
 }

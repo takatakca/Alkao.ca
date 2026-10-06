@@ -652,6 +652,29 @@ describe("ALKAO Operations app", () => {
     expect(rows).toEqual([{ email: "equipe@example.com", test: true }, { email: "alice@example.com", test: false }]);
   });
 
+  it("shows a campaign held for its bounces, resumes it, and marks the address that refused (Run 48)", async () => {
+    const page = await signedIn(seed.users.havanaOwner);
+    page.on("dialog", (d) => void d.accept());
+    const { rows } = await db.pool.query<{ id: string }>(
+      `UPDATE public.ticketing_campaigns SET held_at = now(), held_reason = 'bounces' WHERE name = 'Halloween 2026' RETURNING id`,
+    );
+    await db.pool.query(`UPDATE public.ticketing_customers SET email_bounced_at = now() WHERE email = 'alice@example.com'`);
+    await page.goto(`${origin}/ops#${brandPath()}/campaigns`);
+    await page.getByText("Suspendue : à vérifier").waitFor();
+    await page.goto(`${origin}/ops#${brandPath()}/campaign/${rows[0]!.id}`);
+    await page.getByText("trop d'adresses de cette liste refusent les courriels").waitFor();
+    await page.locator(".kpi").filter({ hasText: "Adresses refusées" }).waitFor();
+    await page.getByRole("button", { name: "Reprendre l'envoi" }).click();
+    await page.getByText("Envoi repris.").waitFor();
+    expect(await page.getByRole("button", { name: "Reprendre l'envoi" }).count()).toBe(0);
+    const { rows: c } = await db.pool.query<{ id: string }>(`SELECT id FROM public.ticketing_customers WHERE email = 'alice@example.com'`);
+    await page.goto(`${origin}/ops#${brandPath()}/customer/${c[0]!.id}`);
+    await page.getByText("Non : l'adresse refuse les courriels").waitFor();
+    await page.getByText("cette adresse a refusé un courriel").waitFor();
+    expect(await page.getByRole("button", { name: "Le client a consenti aux courriels" }).count()).toBe(0);
+    await db.pool.query(`UPDATE public.ticketing_customers SET email_bounced_at = NULL WHERE email = 'alice@example.com'`);
+  });
+
   it("sets up an automatic e-mail after each chalet stay and turns it on (Run 45)", async () => {
     const page = await signedIn(seed.users.havanaOwner);
     await page.goto(`${origin}/ops#${brandPath()}/campaign`);

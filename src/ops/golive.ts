@@ -106,6 +106,22 @@ export function checkEnvironment(env: NodeJS.ProcessEnv): Check[] {
   out.push(has("RESEND_API_KEY") && has("ALKAO_EMAIL_FROM")
     ? ok(area.email, `Expéditeur : ${env.ALKAO_EMAIL_FROM!.trim()}`)
     : warn(area.email, "RESEND_API_KEY ou ALKAO_EMAIL_FROM manque ici", "À définir là où tourne npm run worker:email : sans elles, aucun courriel de billets n'est envoyé."));
+  // Run 48: without the webhook, dead addresses keep getting mail and the sender's reputation drops.
+  const resendHook = `${publicUrl ? new URL(publicUrl).origin : "https://…"}/v1/webhooks/resend`;
+  if (has("RESEND_WEBHOOK_SECRET")) {
+    out.push(ok(area.email, `Rebonds et plaintes suivis (webhook ${resendHook})`));
+  } else if (has("RESEND_API_KEY")) {
+    out.push(warn(area.email, "RESEND_WEBHOOK_SECRET manque : les adresses qui rebondissent et les plaintes pour pourriel ne sont pas retirées",
+      `Resend → Webhooks : ajoutez ${resendHook} avec email.bounced, email.complained et email.suppressed, puis mettez son secret de signature dans RESEND_WEBHOOK_SECRET, là où tourne le serveur.`));
+  }
+  // npm run cron reads the e-mail settings together: one bad value there and no e-mail leaves.
+  const pace = Number(env.ALKAO_CAMPAIGN_EMAILS_PER_HOUR?.trim() || 300);
+  if (!Number.isInteger(pace) || pace < 1 || pace > 100_000) {
+    out.push(fail(area.email, "ALKAO_CAMPAIGN_EMAILS_PER_HOUR n'est pas un nombre entier de 1 à 100000 : npm run cron n'envoie alors aucun courriel, billets compris",
+      "Retirez-la (300 par heure) ou donnez-lui un nombre entier."));
+  } else if (has("RESEND_API_KEY")) {
+    out.push(ok(area.email, `Campagnes : au plus ${pace} courriels par heure (ALKAO_CAMPAIGN_EMAILS_PER_HOUR)`));
+  }
 
   if (!has("ALKAO_METRICS_TOKEN")) out.push(warn(area.monitoring, "ALKAO_METRICS_TOKEN manque : GET /metrics est coupé, donc aucune alerte", "Un jeton de 32 caractères ou plus, et les alertes de docs/ALKAO_RUNBOOK.md."));
   else if (weakSecret(env.ALKAO_METRICS_TOKEN!)) out.push(fail(area.monitoring, "ALKAO_METRICS_TOKEN ressemble à un exemple", "Générez-le : openssl rand -base64 48."));
@@ -257,8 +273,13 @@ export async function checkDatabase(q: Db | Tx, now = new Date()): Promise<Check
   const l = lag[0]!;
   const late: Check[] = [];
   // Runs 42–46: campaign e-mails, texts and sign-up confirmations that should have left.
+  // Run 48: e-mails waiting for their turn (hourly pace) or for staff (held) are not late;
+  // they are when nothing has gone out for 30 minutes.
   const { rows: mk } = await q.query<{ emails: number; texts: number; signups: number }>(
-    `SELECT (SELECT count(*) FROM public.ticketing_campaign_messages WHERE status = 'pending' AND email IS NOT NULL AND next_attempt_at < $1::timestamptz - interval '30 minutes')::int AS emails,
+    `SELECT (SELECT count(*) FROM public.ticketing_campaign_messages m JOIN public.ticketing_campaigns c ON c.id = m.campaign_id
+              WHERE m.status = 'pending' AND m.email IS NOT NULL AND m.next_attempt_at < $1::timestamptz - interval '30 minutes' AND c.held_at IS NULL
+                AND NOT EXISTS (SELECT 1 FROM public.ticketing_campaign_messages s
+                                WHERE s.status = 'sent' AND s.email IS NOT NULL AND s.sent_at > $1::timestamptz - interval '30 minutes'))::int AS emails,
             (SELECT count(*) FROM public.ticketing_campaign_messages WHERE status = 'pending' AND phone IS NOT NULL AND next_attempt_at < $1::timestamptz - interval '60 minutes')::int AS texts,
             (SELECT count(*) FROM public.ticketing_newsletter_signups WHERE email_status = 'pending' AND next_attempt_at < $1::timestamptz - interval '10 minutes')::int AS signups`,
     [now],
@@ -266,6 +287,16 @@ export async function checkDatabase(q: Db | Tx, now = new Date()): Promise<Check
   const m = mk[0]!;
   if (m.emails) late.push(warn(area.workers, `${m.emails} courriel(s) de campagne en retard : npm run cron (ou worker:email) ne tourne pas ou échoue`));
   if (m.texts) late.push(warn(area.workers, `${m.texts} texto(s) de campagne en retard`, "Twilio n'est pas configuré là où tourne npm run cron, ou il refuse : voir le journal du cron."));
+  // Run 48: a campaign held for its bounces or complaints waits for someone to look at it.
+  const { rows: held } = await q.query<{ name: string; brand: string; reason: string }>(
+    `SELECT c.name, b.name AS brand, c.held_reason AS reason FROM public.ticketing_campaigns c
+     JOIN public.ticketing_brands b ON b.id = c.brand_id AND b.client_id = c.client_id
+     WHERE c.held_at IS NOT NULL AND c.status IN ('draft', 'sending') ORDER BY c.held_at`,
+  );
+  for (const h of held) {
+    late.push(warn(area.workers, `Campagne « ${h.name} » (${h.brand}) suspendue : ${h.reason === "complaints" ? "plaintes pour pourriel" : "trop d'adresses qui rebondissent"}`,
+      "/ops → Campagnes → la campagne : vérifiez la liste, puis « Reprendre l'envoi » ou « Arrêter »."));
+  }
   if (m.signups) late.push(warn(area.workers, `${m.signups} confirmation(s) d'inscription à l'infolettre en retard : la personne attend son courriel`));
   if (l.unswept) late.push(warn(area.workers, `${l.unswept} réservation(s) expirée(s) non libérée(s) : npm run worker:sweeper ne tourne pas`));
   if ((l.email_due ?? 0) > 600) late.push(warn(area.workers, `Un courriel attend depuis ${Math.round(l.email_due! / 60)} min : npm run worker:email ne tourne pas ou échoue`));

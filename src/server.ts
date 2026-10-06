@@ -23,6 +23,7 @@ const app = createApp({
   trustedProxyHops: config.trustedProxyHops,
   metricsToken: config.metricsToken,
   twilioAuthToken: config.twilio?.authToken ?? null,
+  resendWebhookSecret: config.resendWebhookSecret,
   logRequests: process.env.ALKAO_LOG_REQUESTS !== "false",
 });
 

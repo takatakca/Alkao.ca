@@ -8,7 +8,7 @@ type Queryable = Db | Tx;
 /** Delivery state of an order's ticket emails, for staff. Never the link or its token. */
 export async function listOrderEmails(q: Queryable, s: TenantScope, orderId: string) {
   const { rows } = await q.query(
-    `SELECT id, kind, status, attempts, last_error, sent_at, next_attempt_at, created_at
+    `SELECT id, kind, status, attempts, last_error, sent_at, next_attempt_at, created_at, bounced_at
      FROM public.ticketing_email_outbox WHERE order_id = $1 AND client_id = $2 AND brand_id = $3 ORDER BY created_at, id`,
     [orderId, s.clientId, s.brandId],
   );

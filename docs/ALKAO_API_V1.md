@@ -732,7 +732,7 @@ e-mail) never merges two different people. Placeholders (an address that is only
 | `status` | Year of the last visit or next arrival: `active` this year · `lapsed` last year · `inactive` older |
 | `spentCents` | Totals of the stays made |
 | `favoriteCategory` | Most frequent: `camping`, `cabana`, `chalet`, `condo`, `villa`, `tent`, `coolbox`, `ticket` (Run 43), `other` |
-| `emailPermission` | `express` (consent recorded) · `implied` (booked within 2 years, Canada's anti-spam law, until `impliedConsentUntil`) · `expired` · `opted_out` · `none` (no e-mail) |
+| `emailPermission` | `express` (consent recorded) · `implied` (booked within 2 years, Canada's anti-spam law, until `impliedConsentUntil`) · `expired` · `opted_out` · `bounced` (the address refused a message, Run 48: `emailBouncedAt`) · `none` (no e-mail) |
 
 The booking date is not in the report: it is approximated by the first report that listed
 the booking. When reports are days apart, that date can be a few days late, and so can
@@ -854,9 +854,58 @@ link. There is no subject, heading or image: `subject` and `heading` take the ca
     allows them again. The journal records `customer.sms_stopped` and
     `customer.sms_restarted`, by the public.
 
-**Sending pace:** each pass sends up to 100 campaign messages, after the buyers' e-mails,
-so with `npm run cron` every minute, about 6,000 an hour. A campaign is marked `sent` once
-nothing is left to send.
+**Sending pace:**
+
+- Each pass sends up to 100 campaign messages, after the buyers' e-mails.
+- Run 48: at most `ALKAO_CAMPAIGN_EMAILS_PER_HOUR` campaign e-mails go out per hour, all
+  Brands together, since they share the sending address. The default is 300, about 7,000 a
+  day. A new sending domain is trusted gradually, so raise it once the first campaigns have
+  gone well.
+- Tests and the buyers' own e-mails never wait for this pace.
+- A campaign is marked `sent` once nothing is left to send.
+
+**Bounces and spam complaints (Run 48).**
+
+Resend reports what happens after a message leaves to `POST /v1/webhooks/resend`.
+
+- **Signature:** the request is signed the Svix way (`svix-id`, `svix-timestamp`,
+  `svix-signature`, with the secret `RESEND_WEBHOOK_SECRET`). A delivery more than 5 minutes
+  old is refused, with `403`.
+- **Before it is set up:** the route answers 404 until the secret is configured.
+- **Events to choose in Resend:** `email.bounced`, `email.complained`, `email.suppressed`.
+  The rest are answered `200` and ignored.
+
+How each event is handled:
+
+| Event | What ALKAO does |
+|---|---|
+| `email.bounced` with `bounce.type: "Permanent"`, or `email.suppressed` | The message gets `bounced_at`. Every customer with that address, in every Brand's file, gets `emailBouncedAt`; their `emailPermission` becomes `bounced` and they leave the audiences. A waiting message to that address is skipped (`bounced`). A ticket e-mail that bounced shows in "À traiter" (`emails[].bouncedAt`). The journal records `customer.email_bounced`, by the system. |
+| `email.bounced`, temporary | Nothing: a full mailbox may work tomorrow. |
+| `email.complained` | The message gets `complained_at`. The customer is unsubscribed from marketing e-mail, in every Brand's file. The journal records `customer.spam_complaint`. |
+
+**Why every Brand.** Resend no longer delivers to such an address from this sender anyway,
+since one sending address serves every Brand. Texts work the same way.
+
+**Getting the address back.** A new e-mail address on the customer clears `emailBouncedAt`,
+whether it comes from an import, a ticket purchase or a confirmed newsletter sign-up (the
+link was opened from that mailbox).
+
+**Held campaigns.**
+
+- **When:** mailbox providers judge the sender on bounces (keep them under 4 %) and on spam
+  complaints. A one-time campaign that is sending, or an automation that is on, is
+  **held** in two cases:
+  - more than 4 % of what it sent bounced, once it has sent 100;
+  - or it got 3 complaints, and more than 0.2 % of what it sent.
+- **While held:**
+  - Nothing more of it goes out. Automations queue nothing.
+  - The campaign shows `heldAt` and `heldReason` (`bounces` or `complaints`).
+  - The journal records `campaign.held`, with the counts, and `check:golive` names it.
+- **Resuming:** `POST /v1/admin/…/campaigns/:id/resume` (`campaigns.manage`). It answers
+  `409 campaign_not_held` if the campaign is not held. Only what is sent from then on counts
+  toward holding it again. Waiting messages older than 7 days are still dropped.
+
+`GET /campaigns` and `GET /campaigns/:id` also count `bounced` and `complained`.
 
 The tables `ticketing_campaigns` and `ticketing_campaign_messages` are server-only: RLS on, no
 grant, no policy.

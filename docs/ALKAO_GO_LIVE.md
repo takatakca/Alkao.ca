@@ -120,7 +120,7 @@ default, with no database change. To enable it:
 - In TAKATAK, set `ALKAO_OPS_URL` and `ALKAO_TICKETING_CLIENT_IDS`.
 - In ALKAO, set `ALKAO_OPS_FRAME_ANCESTORS`.
 
-## 6. Customer file and marketing (Runs 41–46)
+## 6. Customer file and marketing (Runs 41–48)
 
 Everything here is optional and can wait until after the first ticket sale. `npm run
 check:golive` reports each step that is still missing.
@@ -129,8 +129,21 @@ check:golive` reports each step that is still missing.
    --brand <uuid> <report.csv>@<YYYY-MM-DD> […]`, with the Réservation camping.ca reports,
    oldest first. It prints totals only. From then on, staff import each new report from
    `/ops` → **Clients**.
-2. **The sender.** Under `/ops` → **Campagnes** → **Expéditeur**, enter the mailing address
-   and a contact. No campaign can go out without them; the anti-spam law requires them.
+2. **The sender.**
+   - Under `/ops` → **Campagnes** → **Expéditeur**, enter the mailing address and a contact.
+     No campaign can go out without them; the anti-spam law requires them.
+   - **Bounces (Run 48), before the first campaign.** In Resend → **Webhooks**, add
+     `https://<ALKAO_PUBLIC_URL>/v1/webhooks/resend` with the events `email.bounced`,
+     `email.complained` and `email.suppressed`.
+   - Put its signing secret in `RESEND_WEBHOOK_SECRET`, wherever the server runs.
+   - Why: an old list has many dead addresses. Without the webhook, ALKAO keeps writing to
+     them, and Resend can suspend an account whose bounces pass about 4 %, ticket e-mails
+     included.
+   - With the webhook, those addresses leave the lists by themselves. A campaign that
+     bounces too much stops until someone looks at it, then **Reprendre l'envoi** sends the
+     rest.
+   - The pace is 300 campaign e-mails an hour (`ALKAO_CAMPAIGN_EMAILS_PER_HOUR`). Keep it for
+     the first campaigns on a new domain.
 3. **The welcome code.**
    - Under **Campagnes** → **Infolettre**, enter it, for example `HAVANA5`, "5 % sur vos billets".
    - Then create the same code under `/ops` → **Événements** → **Codes promo**, so that it

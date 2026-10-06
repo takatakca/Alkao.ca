@@ -83,6 +83,7 @@ const STATUS_BY_CODE: Record<string, ContentfulStatusCode> = {
   // Run 45
   campaign_is_automation: 409,
   campaign_not_automation: 409,
+  campaign_not_held: 409,
   automation_active: 409,
   // Run 46
   campaign_test_address: 400,

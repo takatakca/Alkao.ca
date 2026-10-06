@@ -14,6 +14,8 @@ export interface DeliveryConfig {
   /** Emails queued longer ago than this are skipped, never sent late (default 72 h). */
   maxAgeHours?: number;
   maxAttempts?: number;
+  /** Run 48: campaign e-mails per hour (default 300). */
+  campaignEmailsPerHour?: number;
 }
 
 export interface DeliveryResult {

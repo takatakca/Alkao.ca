@@ -81,8 +81,9 @@ export async function confirmSignup(tx: Tx, id: string, now: Date): Promise<Sign
   );
   let customerId = found[0]?.id;
   if (customerId) {
+    // Run 48: the link was opened from that mailbox, so the address works again.
     await tx.query(
-      `UPDATE public.ticketing_customers SET email_consent_at = $2, first_name = COALESCE(first_name, $3) WHERE id = $1`,
+      `UPDATE public.ticketing_customers SET email_consent_at = $2, email_bounced_at = NULL, first_name = COALESCE(first_name, $3) WHERE id = $1`,
       [customerId, now, ctx.first_name],
     );
   } else {
