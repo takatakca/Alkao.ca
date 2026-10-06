@@ -46,6 +46,8 @@ const UNGATED = new Set([
   "POST /inscription",
   // Run 46: Twilio's webhook (replies STOP and START), authenticated by Twilio's signature.
   "POST /v1/webhooks/twilio/sms",
+  // Run 48: Resend's webhook (bounces, spam complaints), authenticated by its signature.
+  "POST /v1/webhooks/resend",
 ]);
 
 // Static files of the Operations app, the buyer's tickets page and the hosted shop: no

@@ -4,6 +4,7 @@ import type { TenantScope } from "./commerce.js";
 import { mapDbErrors } from "./errors.js";
 import type { Db, Tx } from "./pool.js";
 import { DomainError } from "../domain/errors.js";
+import type { EmailEvent } from "../delivery/bounces.js";
 import { IMPLIED_CONSENT_DAYS, normalizePhone, type BookingCategory, type CustomerSegment, type CustomerStatus } from "../domain/customers.js";
 
 /**
@@ -41,7 +42,7 @@ export interface CampaignInput {
 }
 
 const COLUMNS = `id, name, language, subject, preheader, heading, body, image_url, cta_label, cta_url, audience_segments, audience_statuses,
-  status, recipients, queued_at, finished_at, created_at, updated_at, kind, delay_days, audience_categories, active, activated_at, channel`;
+  status, recipients, queued_at, finished_at, created_at, updated_at, kind, delay_days, audience_categories, active, activated_at, channel, held_at, held_reason, resumed_at`;
 const C_COLUMNS = COLUMNS.split(/,\s*/).map((col) => `c.${col}`).join(", ");
 
 /** At most this many tests per campaign: a test goes to whatever address staff type. */
@@ -133,6 +134,8 @@ const STATS = `count(*) FILTER (WHERE m.customer_id IS NOT NULL AND m.status = '
   count(*) FILTER (WHERE m.customer_id IS NOT NULL AND m.status = 'skipped')::int AS skipped,
   count(*) FILTER (WHERE m.customer_id IS NOT NULL AND m.status = 'failed')::int AS failed,
   count(*) FILTER (WHERE m.customer_id IS NOT NULL AND m.unsubscribed_at IS NOT NULL)::int AS unsubscribed,
+  count(*) FILTER (WHERE m.customer_id IS NOT NULL AND m.bounced_at IS NOT NULL)::int AS bounced,
+  count(*) FILTER (WHERE m.customer_id IS NOT NULL AND m.complained_at IS NOT NULL)::int AS complained,
   count(*) FILTER (WHERE m.customer_id IS NULL)::int AS tests`;
 
 export async function listCampaigns(q: Queryable, s: TenantScope) {
@@ -284,11 +287,11 @@ export async function queueAfterVisitMessages(db: Db, now: Date, today: string):
      FROM public.ticketing_campaigns c
      JOIN public.ticketing_customer_bookings b ON b.client_id = c.client_id AND b.brand_id = c.brand_id AND b.cancelled_on IS NULL
      JOIN public.ticketing_customers cu ON cu.id = b.customer_id AND cu.client_id = b.client_id AND cu.brand_id = b.brand_id
-     WHERE c.kind = 'after_visit' AND c.active AND c.status = 'draft'
+     WHERE c.kind = 'after_visit' AND c.active AND c.status = 'draft' AND c.held_at IS NULL
        AND b.ends_on BETWEEN $2::date - c.delay_days - 3 AND $2::date - c.delay_days
        AND b.ends_on + c.delay_days >= (c.activated_at AT TIME ZONE 'America/Toronto')::date
        AND (cardinality(c.audience_categories) = 0 OR b.category = ANY(c.audience_categories))
-       AND cu.anonymized_at IS NULL AND cu.email IS NOT NULL
+       AND cu.anonymized_at IS NULL AND cu.email IS NOT NULL AND cu.email_bounced_at IS NULL
        AND NOT (cu.email_opt_out_at IS NOT NULL AND (cu.email_consent_at IS NULL OR cu.email_opt_out_at >= cu.email_consent_at))
        AND (cu.email_consent_at IS NOT NULL OR b.first_report_on + ${IMPLIED_CONSENT_DAYS} >= $2::date)
        AND NOT EXISTS (SELECT 1 FROM public.ticketing_campaign_messages m WHERE m.campaign_id = c.id AND m.booking_id = b.id)
@@ -347,4 +350,90 @@ export async function recordSmsReply(tx: Tx, phone: string, intent: "stop" | "st
     await writeAudit(tx, { clientId: r.client_id, brandId: r.brand_id }, { type: "public", id: null }, intent === "stop" ? "customer.sms_stopped" : "customer.sms_restarted", { type: "customer", id: r.id });
   }
   return rows.length;
+}
+
+
+// ── Run 48: messages that bounced or were marked as spam (Resend's webhook) ──
+/**
+ * When a campaign is held. Mailbox providers and Resend judge the sender on its bounces
+ * (keep them under 4 %) and spam complaints (well under 0.1 %): an old list can get the
+ * whole sending domain blocked, ticket e-mails included. Counted on what the campaign sent
+ * since it started, or since staff last resumed it.
+ */
+export const HOLD_RULES = { minSent: 100, bounceRate: 0.04, minComplaints: 3, complaintRate: 0.002 };
+
+/**
+ * A bounce or a complaint, wherever it came from. The message is marked; the address gets
+ * no more marketing in any Brand's file (Resend no longer delivers to it from this sender
+ * either: one sending address serves every Brand, as for texts); a ticket e-mail that
+ * bounced shows in "À traiter". The campaign is held if it now passes HOLD_RULES.
+ */
+export async function recordEmailEvent(tx: Tx, e: EmailEvent, now: Date) {
+  const result = { customers: 0, ticketEmails: 0, held: [] as string[] };
+  const column = e.kind === "bounce" ? "bounced_at" : "complained_at";
+  let campaignIds: string[] = [];
+  if (e.emailId) {
+    const { rows } = await tx.query<{ campaign_id: string }>(
+      `UPDATE public.ticketing_campaign_messages SET ${column} = coalesce(${column}, $2) WHERE provider_message_id = $1 RETURNING campaign_id`,
+      [e.emailId, now],
+    );
+    campaignIds = [...new Set(rows.map((r) => r.campaign_id))];
+    if (e.kind === "bounce") {
+      const { rowCount } = await tx.query(
+        `UPDATE public.ticketing_email_outbox SET bounced_at = coalesce(bounced_at, $2), last_error = left($3, 500)
+         WHERE provider_message_id = $1 AND status = 'sent'`,
+        [e.emailId, now, e.detail ? `bounced: ${e.detail}` : "bounced"],
+      );
+      result.ticketEmails = rowCount ?? 0;
+    }
+  }
+  for (const email of e.to) {
+    const { rows } = await tx.query<{ id: string; client_id: string; brand_id: string }>(
+      e.kind === "bounce"
+        ? `UPDATE public.ticketing_customers SET email_bounced_at = $2 WHERE email = $1 AND email_bounced_at IS NULL RETURNING id, client_id, brand_id`
+        : `UPDATE public.ticketing_customers SET email_opt_out_at = $2
+           WHERE email = $1 AND (email_opt_out_at IS NULL OR email_opt_out_at < email_consent_at) RETURNING id, client_id, brand_id`,
+      [email, now],
+    );
+    for (const r of rows) {
+      await writeAudit(tx, { clientId: r.client_id, brandId: r.brand_id }, { type: "system", id: null },
+        e.kind === "bounce" ? "customer.email_bounced" : "customer.spam_complaint", { type: "customer", id: r.id }, e.detail ? { detail: e.detail } : {});
+    }
+    result.customers += rows.length;
+  }
+  for (const id of campaignIds) {
+    const { rows: c } = await tx.query<{ client_id: string; brand_id: string }>(
+      `SELECT client_id, brand_id FROM public.ticketing_campaigns
+       WHERE id = $1 AND held_at IS NULL AND channel = 'email' AND (status = 'sending' OR (status = 'draft' AND active)) FOR UPDATE`,
+      [id],
+    );
+    if (!c[0]) continue;
+    const { rows } = await tx.query<{ sent: number; bounced: number; complained: number }>(
+      `SELECT count(*)::int AS sent, count(*) FILTER (WHERE m.bounced_at IS NOT NULL)::int AS bounced,
+              count(*) FILTER (WHERE m.complained_at IS NOT NULL)::int AS complained
+       FROM public.ticketing_campaign_messages m JOIN public.ticketing_campaigns c ON c.id = m.campaign_id
+       WHERE m.campaign_id = $1 AND m.customer_id IS NOT NULL AND m.status = 'sent' AND m.sent_at >= coalesce(c.resumed_at, '-infinity')`,
+      [id],
+    );
+    const n = rows[0]!;
+    const reason = n.sent >= HOLD_RULES.minSent && n.bounced > n.sent * HOLD_RULES.bounceRate ? "bounces"
+      : n.complained >= HOLD_RULES.minComplaints && n.complained > n.sent * HOLD_RULES.complaintRate ? "complaints" : null;
+    if (!reason) continue;
+    await tx.query(`UPDATE public.ticketing_campaigns SET held_at = $2, held_reason = $3 WHERE id = $1`, [id, now, reason]);
+    await writeAudit(tx, { clientId: c[0].client_id, brandId: c[0].brand_id }, { type: "system", id: null }, "campaign.held", { type: "campaign", id }, { reason, ...n });
+    result.held.push(id);
+  }
+  return result;
+}
+
+/** Staff looked at a held campaign and send the rest. Holding counts again from now. */
+export async function resumeCampaign(tx: Tx, s: TenantScope, id: string, actor: Actor, now: Date) {
+  const status = await lockedStatus(tx, s, id);
+  if (status === "sent" || status === "cancelled") throw new DomainError("campaign_closed");
+  const { rowCount } = await tx.query(
+    `UPDATE public.ticketing_campaigns SET held_at = NULL, held_reason = NULL, resumed_at = $2 WHERE id = $1 AND held_at IS NOT NULL`,
+    [id, now],
+  );
+  if (!rowCount) throw new DomainError("campaign_not_held");
+  await writeAudit(tx, s, actor, "campaign.resumed", { type: "campaign", id });
 }

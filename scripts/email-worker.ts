@@ -15,6 +15,7 @@ const env = z
     ALKAO_CREDENTIAL_MASTER_SECRET: z.string().min(32),
     ALKAO_EMAIL_MAX_AGE_HOURS: z.coerce.number().int().min(1).max(720).default(72),
     ALKAO_EMAIL_INTERVAL_SECONDS: z.coerce.number().int().min(5).max(3600).default(30),
+    ALKAO_CAMPAIGN_EMAILS_PER_HOUR: z.coerce.number().int().min(1).max(100_000).default(300),
   })
   .parse(process.env);
 
@@ -26,6 +27,7 @@ const stop = startEmailWorker(
     publicUrl: env.ALKAO_PUBLIC_URL,
     credentialMasterSecret: env.ALKAO_CREDENTIAL_MASTER_SECRET,
     maxAgeHours: env.ALKAO_EMAIL_MAX_AGE_HOURS,
+    campaignEmailsPerHour: env.ALKAO_CAMPAIGN_EMAILS_PER_HOUR,
   },
   env.ALKAO_EMAIL_INTERVAL_SECONDS * 1000,
 );

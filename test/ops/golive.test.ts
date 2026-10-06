@@ -35,12 +35,13 @@ const GOOD: Record<string, string> = {
   ALKAO_CREDENTIAL_MASTER_SECRET: secret(),
   ALKAO_PUBLIC_URL: "https://billets.alkao.test",
   RESEND_API_KEY: `re_${secret()}`,
+  RESEND_WEBHOOK_SECRET: `whsec_${randomBytes(24).toString("base64")}`,
   ALKAO_EMAIL_FROM: "billets@alkao.test",
   ALKAO_METRICS_TOKEN: secret(),
   ALKAO_OPS_FRAME_ANCESTORS: "https://app.takatak.test",
 };
 const SECRETS = ["db-password-never-shown", GOOD.ALKAO_CONTROL_KEYS!.split(":")[1]!, GOOD.STRIPE_SECRET_KEY!, GOOD.STRIPE_WEBHOOK_SECRET!,
-  GOOD.ALKAO_CREDENTIAL_MASTER_SECRET!, GOOD.RESEND_API_KEY!, GOOD.ALKAO_METRICS_TOKEN!];
+  GOOD.ALKAO_CREDENTIAL_MASTER_SECRET!, GOOD.RESEND_API_KEY!, GOOD.RESEND_WEBHOOK_SECRET!.slice(6), GOOD.ALKAO_METRICS_TOKEN!];
 
 const of = (checks: Check[], status: Check["status"]) => checks.filter((c) => c.status === status).map((c) => `${c.area} : ${c.message}`);
 const text = (checks: Check[]) => checks.map((c) => `${c.message} ${c.fix ?? ""}`).join("\n");
@@ -114,6 +115,21 @@ describe("go-live check: settings", () => {
     expect(of(full, "fail")).toEqual([]);
     expect(of(full, "ok")).toContain("Textos (SMS) : Twilio configuré (Messaging Service …3210). Webhook des réponses STOP : https://billets.alkao.test/v1/webhooks/twilio/sms");
     expect(text(full)).not.toContain(token);
+  });
+
+  it("asks for Resend's webhook, so dead addresses and complaints are taken off (Run 48)", () => {
+    expect(of(checkEnvironment(GOOD), "ok")).toEqual(expect.arrayContaining([
+      "Courriels : Rebonds et plaintes suivis (webhook https://billets.alkao.test/v1/webhooks/resend)",
+      "Courriels : Campagnes : au plus 300 courriels par heure (ALKAO_CAMPAIGN_EMAILS_PER_HOUR)",
+    ]));
+    const { RESEND_WEBHOOK_SECRET: _, ...without } = GOOD;
+    const checks = checkEnvironment({ ...without, ALKAO_CAMPAIGN_EMAILS_PER_HOUR: "1000" });
+    expect(of(checks, "warn")).toEqual(["Courriels : RESEND_WEBHOOK_SECRET manque : les adresses qui rebondissent et les plaintes pour pourriel ne sont pas retirées"]);
+    expect(checks.find((c) => c.message.startsWith("RESEND_WEBHOOK_SECRET"))!.fix).toContain("https://billets.alkao.test/v1/webhooks/resend");
+    expect(of(checks, "ok")).toContain("Courriels : Campagnes : au plus 1000 courriels par heure (ALKAO_CAMPAIGN_EMAILS_PER_HOUR)");
+    expect(of(checkEnvironment({ ...GOOD, ALKAO_CAMPAIGN_EMAILS_PER_HOUR: "300/h" }), "fail")).toEqual([
+      "Courriels : ALKAO_CAMPAIGN_EMAILS_PER_HOUR n'est pas un nombre entier de 1 à 100000 : npm run cron n'envoie alors aucun courriel, billets compris",
+    ]);
   });
 });
 
@@ -210,6 +226,39 @@ describe("go-live check: database", () => {
       expect(warns).toContain("Tâches de fond : 1 confirmation(s) d'inscription à l'infolettre en retard : la personne attend son courriel");
       await tx.query(`INSERT INTO public.ticketing_promo_codes (client_id, brand_id, event_id, code, kind, percent) VALUES ($1, $2, $3, 'HAVANA5', 'percent', 5)`, [h.clientId, h.brandId, h.eventId]);
       expect(of(await checkDatabase(tx), "warn").some((w) => w.includes("HAVANA5"))).toBe(false);
+    } finally {
+      await tx.query("ROLLBACK");
+      tx.release();
+    }
+  });
+
+  it("names a campaign held for its bounces, and does not call paced e-mails late (Run 48)", async () => {
+    const tx = await db.pool.connect();
+    try {
+      await tx.query("BEGIN");
+      const h = seed.havana;
+      const campaign = async (name: string, held: boolean) => (await tx.query<{ id: string }>(
+        `INSERT INTO public.ticketing_campaigns (client_id, brand_id, name, subject, heading, body, status, queued_at, held_at, held_reason)
+         VALUES ($1, $2, $3, $3, $3, $3, 'sending', now(), ${held ? "now(), 'bounces'" : "NULL, NULL"}) RETURNING id`,
+        [h.clientId, h.brandId, name],
+      )).rows[0]!.id;
+      const message = (id: string, email: string, sentAgo: string | null) => tx.query(
+        sentAgo
+          ? `INSERT INTO public.ticketing_campaign_messages (client_id, brand_id, campaign_id, email, status, sent_at) VALUES ($1, $2, $3, $4, 'sent', now() - $5::interval)`
+          : `INSERT INTO public.ticketing_campaign_messages (client_id, brand_id, campaign_id, email, next_attempt_at) VALUES ($1, $2, $3, $4, now() - interval '2 hours')`,
+        sentAgo ? [h.clientId, h.brandId, id, email, sentAgo] : [h.clientId, h.brandId, id, email],
+      );
+      const held = await campaign("Vieille liste", true);
+      await message(held, "attend@example.com", null);
+      let warns = of(await checkDatabase(tx), "warn");
+      expect(warns).toContain("Tâches de fond : Campagne « Vieille liste » (Havana Resort — Événements) suspendue : trop d'adresses qui rebondissent");
+      expect(warns.some((w) => w.includes("courriel(s) de campagne en retard"))).toBe(false);
+      // Waiting while others go out at the hourly pace is not late either.
+      const paced = await campaign("Au rythme", false);
+      await message(paced, "plus-tard@example.com", null);
+      await message(paced, "parti@example.com", "10 minutes");
+      warns = of(await checkDatabase(tx), "warn");
+      expect(warns.some((w) => w.includes("courriel(s) de campagne en retard"))).toBe(false);
     } finally {
       await tx.query("ROLLBACK");
       tx.release();

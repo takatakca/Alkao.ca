@@ -252,7 +252,7 @@ export const CUSTOMER_STATS = `
   stats AS (
     SELECT c.id, c.first_name, c.last_name, c.email, c.mobile_phone, c.home_phone, c.work_phone, c.address_line, c.address_unit,
            c.city, c.region, c.postal_code, c.country, c.companion_name, c.email_consent_at, c.email_opt_out_at, c.sms_opt_out_at,
-           c.anonymized_at, c.created_at,
+           c.email_bounced_at, c.anonymized_at, c.created_at,
            COALESCE(d.visits, 0) AS visits, COALESCE(d.stays, 0) AS stays, d.first_visit_on, d.last_visit_on,
            COALESCE(d.spent_cents, 0) AS spent_cents, COALESCE(d.favorite_category, (SELECT b.category FROM bookings b WHERE b.customer_id = c.id AND b.state = 'upcoming' ORDER BY b.starts_on LIMIT 1)) AS favorite_category,
            COALESCE(o.upcoming, 0) AS upcoming, COALESCE(o.cancelled, 0) AS cancelled, o.next_arrival_on,
@@ -265,6 +265,7 @@ export const CUSTOMER_STATS = `
                 ELSE 'inactive' END AS status,
            CASE WHEN c.email IS NULL THEN 'none'
                 WHEN c.email_opt_out_at IS NOT NULL AND (c.email_consent_at IS NULL OR c.email_opt_out_at >= c.email_consent_at) THEN 'opted_out'
+                WHEN c.email_bounced_at IS NOT NULL THEN 'bounced'
                 WHEN c.email_consent_at IS NOT NULL THEN 'express'
                 WHEN o.last_booked_on + ${IMPLIED_CONSENT_DAYS} >= $3::date THEN 'implied'
                 ELSE 'expired' END AS email_permission,
@@ -343,7 +344,7 @@ export async function getCustomer(db: Db, s: TenantScope, id: string, today: str
   const [customer, bookings] = await Promise.all([
     db.query(
       `WITH ${CUSTOMER_STATS} SELECT ${LIST_COLUMNS}, home_phone, work_phone, address_line, address_unit, postal_code, country, companion_name,
-              email_consent_at, email_opt_out_at, sms_opt_out_at, created_at
+              email_consent_at, email_opt_out_at, sms_opt_out_at, email_bounced_at, created_at
        FROM stats WHERE id = $4`,
       [s.clientId, s.brandId, today, id],
     ),

@@ -174,6 +174,7 @@ const ERRORS_FR = {
   marketing_settings_missing: "Indiquez d'abord l'adresse postale et le moyen de vous joindre (exigés par la loi anti-pourriel).",
   audience_empty: "Aucun client ne peut recevoir cette campagne.",
   audience_changed: "Le nombre de destinataires a changé : vérifiez-le, puis envoyez de nouveau.",
+  campaign_not_held: "Cette campagne n'est pas suspendue.",
 };
 const errText = (e) => (e instanceof ApiError ? ERRORS_FR[e.code] ?? `Erreur : ${e.code}` : String(e?.message ?? e));
 
@@ -348,7 +349,7 @@ function Attention({ a, prefix }) {
     <h2 id="todo-title">À traiter (${a.total})</h2>
     ${group("Litiges Stripe ouverts", a.disputes, (d) => html`${order(d.orderId, d.reference)} · ${d.buyerName ?? d.buyerEmail} · ${money(d.amountCents)} · ${DISPUTE_FR[d.status] ?? d.status}${d.evidenceDueBy ? ` · réponse avant le ${when(d.evidenceDueBy)}` : ""}`)}
     ${group("Remboursements bloqués chez Stripe", a.refunds, (r) => html`${order(r.orderId, r.reference)} · ${money(r.amountCents)} · depuis le ${when(r.createdAt)}${r.lastError ? ` · ${r.lastError}` : ""} — « Réessayer » sur la commande`)}
-    ${group("Courriels non reçus", a.emails, (e) => html`${order(e.orderId, e.reference)} · ${EMAIL_KIND_FR[e.kind] ?? e.kind} · ${e.buyerEmail}${e.lastError ? ` · ${e.lastError}` : ""}`)}
+    ${group("Courriels non reçus", a.emails, (e) => html`${order(e.orderId, e.reference)} · ${EMAIL_KIND_FR[e.kind] ?? e.kind} · ${e.buyerEmail}${e.bouncedAt ? " · adresse refusée : appelez le client pour la corriger" : e.lastError ? ` · ${e.lastError}` : ""}`)}
     ${group("Remboursés dans Stripe, billets encore valides", a.outsideRefunds, (r) => html`${order(r.orderId, r.reference)} · ${money(r.outsideCents)} remboursés hors ALKAO`)}
     ${group("Litiges perdus en partie : billets à annuler", a.lostDisputes ?? [], (d) => html`${order(d.orderId, d.reference)} · ${money(d.amountCents)} repris par la banque — annulez les billets concernés sur la commande`)}
     ${group("Annulations de séance à reprendre", a.cancellations, (c) => html`<a href=${`#${prefix}/event/${c.eventId}`}>Séance du ${when(c.startsAt)}</a> · ${c.failed} remboursement${c.failed > 1 ? "s" : ""} en échec`)}
@@ -720,7 +721,7 @@ function OrderDetail({ api, base, orderId, role, me }) {
     <h2>Courriel des billets</h2>
     <div class="card"><div class="row">
       ${(o.emails ?? []).length === 0 ? html`<span class="muted">Aucun courriel envoyé.</span>`
-        : o.emails.map((e) => html`<span><${Badge} status=${`email_${e.status}`} /> ${e.sentAt ? when(e.sentAt) : ""}${e.lastError && e.status !== "sent" ? html` <span class="muted">(${e.lastError})</span>` : ""}</span>`)}
+        : o.emails.map((e) => html`<span><${Badge} status=${`email_${e.status}`} /> ${e.sentAt ? when(e.sentAt) : ""}${e.lastError && e.status !== "sent" ? html` <span class="muted">(${e.lastError})</span>` : ""}${e.bouncedAt ? html` <span class="badge bad">Adresse refusée</span>` : ""}</span>`)}
       ${["paid", "partially_refunded"].includes(o.status) && html`<button class="secondary" onClick=${resendEmail}>Renvoyer les billets par courriel</button>`}
     </div></div>
     <h2>Billets</h2>
@@ -1034,7 +1035,7 @@ const SEGMENTS = [
 const SEGMENT_FR = Object.fromEntries(SEGMENTS.map(([key, label]) => [key, label]));
 const CUSTOMER_STATUS = { active: ["ok", "Actif cette saison"], lapsed: ["warn", "À relancer"], inactive: ["", "Inactif"] };
 const CATEGORY_FR = { camping: "Camping", cabana: "Cabana", chalet: "Chalet", condo: "Condo", villa: "Villa", tent: "Tente en bois", coolbox: "Coolbox", ticket: "Billet", other: "Autre" };
-const PERMISSION_FR = { express: "Oui (consentement exprès)", implied: "Oui (client récent)", expired: "Non : dernier achat il y a plus de 2 ans", opted_out: "Non : désabonné", none: "Pas de courriel" };
+const PERMISSION_FR = { express: "Oui (consentement exprès)", implied: "Oui (client récent)", expired: "Non : dernier achat il y a plus de 2 ans", opted_out: "Non : désabonné", bounced: "Non : l'adresse refuse les courriels", none: "Pas de courriel" };
 const BOOKING_STATE = { done: ["ok", "Séjour fait"], upcoming: ["warn", "À venir"], cancelled: ["bad", "Annulée"] };
 const day = (iso) => (iso ? new Date(`${iso}T12:00:00`).toLocaleDateString("fr-CA", { dateStyle: "medium" }) : "—");
 const fullName = (c) => [c.firstName, c.lastName].filter(Boolean).join(" ") || (c.anonymizedAt ? "Client anonymisé" : "Sans nom");
@@ -1175,10 +1176,11 @@ function CustomerDetail({ api, base, customerId, role }) {
       <h2>Courriels et textos</h2>
       <div class="card">
         <p>Courriels promotionnels : <strong>${PERMISSION_FR[c.emailPermission]}</strong>${c.emailPermission === "implied" ? ` jusqu'au ${day(c.impliedConsentUntil)}` : ""}.</p>
+        ${c.emailBouncedAt && html`<p class="alert warn">Le ${when(c.emailBouncedAt)}, cette adresse a refusé un courriel (elle n'existe plus ou est mal écrite). ALKAO n'y écrit plus ; une nouvelle adresse (import, achat ou inscription à l'infolettre) rétablit les envois.</p>`}
         <p class="muted">Loi canadienne anti-pourriel : un achat permet d'écrire au client pendant 2 ans ; après, il faut son consentement (par exemple l'inscription à l'infolettre).</p>
         <p class="row">
           ${emailOn ? html`<button class="secondary" onClick=${patch({ emailOptOut: true })}>Désabonner des courriels</button>`
-            : c.email && html`<button class="secondary" onClick=${patch({ emailConsent: true })}>Le client a consenti aux courriels</button>`}
+            : c.email && !c.emailBouncedAt && html`<button class="secondary" onClick=${patch({ emailConsent: true })}>Le client a consenti aux courriels</button>`}
           ${c.smsOptOutAt ? html`<button class="secondary" onClick=${patch({ smsOptOut: false })}>Permettre les textos</button>`
             : html`<button class="secondary" onClick=${patch({ smsOptOut: true })}>Arrêter les textos</button>`}
         </p>
@@ -1200,8 +1202,9 @@ const SMS_STOP = { fr: "Répondez STOP pour ne plus en recevoir.", en: "Reply ST
 const GSM = /^[A-Za-z0-9 @£$¥èéùìòÇØøÅå\n\rΔ_ΦΓΛΩΠΨΣΘΞÆæßÉ!"#¤%&'()*+,\-./:;<=>?¡ÄÖÑÜ§¿äöñüà^{}\\[~\]|€]*$/;
 const smsSegments = (t) => { const [one, part] = GSM.test(t) ? [160, 153] : [70, 67]; return t.length <= one ? 1 : Math.ceil(t.length / part); };
 const EMPTY_CAMPAIGN = { name: "", language: "fr", channel: "email", kind: "one_time", delayDays: 3, subject: "", preheader: "", heading: "Bonjour {prénom},", body: "", imageUrl: "", ctaLabel: "", ctaUrl: "", audience: { segments: [], statuses: [], categories: [] } };
-// Run 45: an automation shows whether it runs instead of a send status.
-const CampaignBadge = ({ c }) => (c.kind === "after_visit" && c.status === "draft"
+// Run 45: an automation shows whether it runs instead of a send status. Run 48: held first.
+const CampaignBadge = ({ c }) => (c.heldAt && ["draft", "sending"].includes(c.status) ? html`<span class="badge bad">Suspendue : à vérifier</span>`
+  : c.kind === "after_visit" && c.status === "draft"
   ? html`<span class=${`badge ${c.active ? "ok" : ""}`}>${c.active ? "Automatique : en marche" : "Automatique : en pause"} (J+${c.delayDays})</span>`
   : html`<${CampaignStatus} s=${c.status} />`);
 
@@ -1318,6 +1321,11 @@ function CampaignEditor({ api, base, prefix, campaignId }) {
     await api(`${base}/campaigns/${loaded.id}/send`, { method: "POST", body: { expectedRecipients: count } }); reload(); setMsg("Envoi lancé.");
   });
   const cancel = act(async () => { if (!confirm("Arrêter cette campagne ? Les courriels pas encore partis ne le seront jamais.")) return; await api(`${base}/campaigns/${loaded.id}/cancel`, { method: "POST" }); reload(); });
+  const resume = act(async () => {
+    if (!confirm("Reprendre l'envoi ? Les adresses refusées sont déjà retirées ; si les rebonds continuent, l'envoi s'arrêtera de nouveau.")) return;
+    await api(`${base}/campaigns/${loaded.id}/resume`, { method: "POST" }); reload(); setMsg("Envoi repris.");
+  });
+  const held = loaded?.heldAt && ["draft", "sending"].includes(loaded.status);
   const turn = (active) => act(async () => {
     if (f) throw new Error("Enregistrez d'abord vos changements.");
     await api(`${base}/campaigns/${loaded.id}/automation`, { method: "POST", body: { active } }); reload();
@@ -1328,8 +1336,14 @@ function CampaignEditor({ api, base, prefix, campaignId }) {
     <p class="row"><a href=${`#${prefix}/campaigns`}>← Campagnes</a>${loaded && html`<${CampaignBadge} c=${loaded} />`}</p>
     ${error && html`<${Failure} error=${error} />`}${msg && html`<div class="alert ok" role="status">${msg}</div>`}
     ${loaded && (!draft || loaded.kind === "after_visit") && html`<div class="grid">
-      ${[["Destinataires", loaded.recipients], ["Envoyés", loaded.sent], ["En attente", loaded.pending], ["Non envoyés", loaded.skipped + loaded.failed], ["Désabonnés", loaded.unsubscribed]]
+      ${[["Destinataires", loaded.recipients], ["Envoyés", loaded.sent], ["En attente", loaded.pending], ["Non envoyés", loaded.skipped + loaded.failed], ["Désabonnés", loaded.unsubscribed],
+        ...(loaded.channel === "email" ? [["Adresses refusées", loaded.bounced], ["Plaintes (pourriel)", loaded.complained]] : [])]
         .map(([label, v]) => html`<div class="kpi"><div class="label">${label}</div><div class="value">${number(v)}</div></div>`)}</div>
+      ${held && html`<div class="alert warn" role="status"><p><strong>Envoi suspendu le ${when(loaded.heldAt)}</strong> : ${loaded.heldReason === "complaints"
+        ? "plusieurs personnes ont marqué ce courriel comme pourriel."
+        : "trop d'adresses de cette liste refusent les courriels (plus de 4 %)."} Continuer pourrait faire bloquer l'expéditeur, courriels de billets compris.</p>
+        <p>Vérifiez à qui elle s'adresse (une vieille liste rebondit beaucoup), puis reprenez ou arrêtez l'envoi.</p>
+        <p class="row"><button onClick=${resume}>Reprendre l'envoi</button></p></div>`}
       ${(loaded.status === "sending" || (loaded.kind === "after_visit" && loaded.status === "draft")) && html`<p class="row"><button class="danger" onClick=${cancel}>${loaded.kind === "after_visit" ? "Arrêter pour de bon" : "Arrêter l'envoi"}</button></p>`}`}
     <form class="card" aria-label="Contenu de la campagne" onSubmit=${save}>
       <div class="fields">
