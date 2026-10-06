@@ -35,6 +35,11 @@ export const EnvSchema = z.object({
   ALKAO_PUBLIC_HOLDS_PER_MINUTE: z.coerce.number().int().min(1).max(1000).default(20),
   /** Bearer token for GET /metrics (Run 24). Without it, /metrics does not exist. */
   ALKAO_METRICS_TOKEN: z.string().min(32).optional(),
+  /** Run 46: text-message campaigns through Twilio (a Messaging Service, or one sending number). */
+  TWILIO_ACCOUNT_SID: z.string().regex(/^AC[0-9a-f]{32}$/).optional(),
+  TWILIO_AUTH_TOKEN: z.string().min(32).optional(),
+  TWILIO_MESSAGING_SERVICE_SID: z.string().regex(/^MG[0-9a-f]{32}$/).optional(),
+  TWILIO_FROM_NUMBER: z.string().regex(/^\+[1-9][0-9]{7,14}$/).optional(),
   PORT: z.coerce.number().int().min(1).max(65535).default(8787),
   NODE_ENV: z.string().optional(),
 });
@@ -54,6 +59,8 @@ export interface Config {
   publicUrl: string | null;
   trustedProxyHops: number;
   metricsToken: string | null;
+  /** Run 46: null until the account, its token and a sender are all set. */
+  twilio: { accountSid: string; authToken: string; sender: { messagingServiceSid: string } | { from: string } } | null;
   port: number;
 }
 
@@ -111,6 +118,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     publicUrl: e.ALKAO_PUBLIC_URL ?? null,
     trustedProxyHops: e.ALKAO_TRUSTED_PROXY_HOPS,
     metricsToken: e.ALKAO_METRICS_TOKEN ?? null,
+    twilio: e.TWILIO_ACCOUNT_SID && e.TWILIO_AUTH_TOKEN && (e.TWILIO_MESSAGING_SERVICE_SID || e.TWILIO_FROM_NUMBER)
+      ? {
+          accountSid: e.TWILIO_ACCOUNT_SID, authToken: e.TWILIO_AUTH_TOKEN,
+          sender: e.TWILIO_MESSAGING_SERVICE_SID ? { messagingServiceSid: e.TWILIO_MESSAGING_SERVICE_SID } : { from: e.TWILIO_FROM_NUMBER! },
+        }
+      : null,
     port: e.PORT,
   };
 }

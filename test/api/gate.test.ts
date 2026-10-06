@@ -44,6 +44,8 @@ const UNGATED = new Set([
   // Run 44: the confirmation link of a newsletter sign-up, authenticated by its signature.
   "GET /inscription",
   "POST /inscription",
+  // Run 46: Twilio's webhook (replies STOP and START), authenticated by Twilio's signature.
+  "POST /v1/webhooks/twilio/sms",
 ]);
 
 // Static files of the Operations app, the buyer's tickets page and the hosted shop: no

@@ -671,6 +671,23 @@ describe("ALKAO Operations app", () => {
     expect(rows).toEqual([{ kind: "after_visit", delay_days: 2, audience_categories: ["chalet"], active: true }]);
   });
 
+  it("writes a text-message campaign with a live preview of what is sent (Run 46)", async () => {
+    const page = await signedIn(seed.users.havanaOwner);
+    await page.goto(`${origin}/ops#${brandPath()}/campaign`);
+    const form = page.getByRole("form", { name: "Contenu de la campagne" });
+    await form.getByLabel("Nom (pour l'équipe)").fill("Texto chalets");
+    await form.getByLabel("Canal").selectOption("sms");
+    await form.getByLabel("Texte du message").fill("Bonjour {prénom}, -20 % ce week-end !");
+    await form.getByText("Bonjour Marie, -20 % ce week-end ! - Votre marque. Répondez STOP pour ne plus en recevoir.").waitFor();
+    await form.getByText("1 texto(s) facturé(s) par client").waitFor();
+    await form.getByRole("button", { name: "Créer le brouillon" }).click();
+    await page.getByRole("heading", { name: "Texto chalets" }).waitFor();
+    await page.getByText("- Havana Resort — Événements. Répondez STOP").waitFor();
+    await page.getByLabel("Envoyer un essai au").waitFor();
+    const { rows } = await db.pool.query(`SELECT channel, subject, body FROM public.ticketing_campaigns WHERE name = 'Texto chalets'`);
+    expect(rows).toEqual([{ channel: "sms", subject: "Texto chalets", body: "Bonjour {prénom}, -20 % ce week-end !" }]);
+  });
+
   it("hides money from gate staff", async () => {
     const page = await signedIn(seed.users.havanaStaff);
     await page.goto(`${origin}/ops#${brandPath()}/dashboard`);
