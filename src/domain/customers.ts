@@ -102,7 +102,8 @@ export function scrubCardNumbers(value: string): { text: string; removed: number
   return { text: removed ? text.replace(/\s+/g, " ").trim() : text, removed };
 }
 
-export const BOOKING_CATEGORIES = ["camping", "cabana", "chalet", "condo", "villa", "tent", "coolbox", "other"] as const;
+/** Lodging families, and (Run 43) "ticket": an ALKAO ticket order (a day pass, an evening). */
+export const BOOKING_CATEGORIES = ["camping", "cabana", "chalet", "condo", "villa", "tent", "coolbox", "ticket", "other"] as const;
 export type BookingCategory = (typeof BOOKING_CATEGORIES)[number];
 
 /** The lodging family of a Réservation camping.ca site name ("CHALET 12", "Condo 3 Amarillo", "104"…). */

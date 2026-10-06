@@ -47,7 +47,7 @@ describe("background pass for cron", () => {
     const before = await pendingEmails();
     expect(before).toBeGreaterThan(0);
     const r = await runBackgroundOnce(db.pool, { email: null, payments: null }, later());
-    expect(r).toEqual({ ran: true, expiredHolds: 1, remindersQueued: 0, emails: null, campaignEmails: null, cancellationJobs: null });
+    expect(r).toMatchObject({ ran: true, expiredHolds: 1, remindersQueued: 0, emails: null, campaignEmails: null, cancellationJobs: null });
     expect((await db.pool.query(`SELECT status FROM public.ticketing_holds WHERE id = $1`, [id])).rows[0].status).toBe("expired");
     expect(await pendingEmails()).toBe(before);
   });

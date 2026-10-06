@@ -1,5 +1,6 @@
 import { expireStaleHolds } from "../db/commerce.js";
 import { withTransaction, type Db } from "../db/pool.js";
+import { syncTicketBuyers } from "./customer-sync.js";
 
 /** Expire every hold past its deadline, returning the seats to inventory. Safe to run anywhere, any time. */
 export async function sweepExpiredHolds(db: Db, now = new Date()): Promise<number> {
@@ -15,6 +16,9 @@ export function startSweeper(db: Db, intervalMs: number, log: (msg: string) => v
     try {
       const expired = await sweepExpiredHolds(db);
       if (expired > 0) log(`alkao sweeper: expired ${expired} hold(s)`);
+      // Run 43: ticket buyers into the customer file.
+      const synced = await syncTicketBuyers(db);
+      if (synced > 0) log(`alkao sweeper: ${synced} order(s) brought into the customer file`);
     } catch (error) {
       log(`alkao sweeper: ${(error as Error).message}`);
     } finally {

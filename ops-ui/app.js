@@ -1033,7 +1033,7 @@ const SEGMENTS = [
 ];
 const SEGMENT_FR = Object.fromEntries(SEGMENTS.map(([key, label]) => [key, label]));
 const CUSTOMER_STATUS = { active: ["ok", "Actif cette saison"], lapsed: ["warn", "À relancer"], inactive: ["", "Inactif"] };
-const CATEGORY_FR = { camping: "Camping", cabana: "Cabana", chalet: "Chalet", condo: "Condo", villa: "Villa", tent: "Tente en bois", coolbox: "Coolbox", other: "Autre" };
+const CATEGORY_FR = { camping: "Camping", cabana: "Cabana", chalet: "Chalet", condo: "Condo", villa: "Villa", tent: "Tente en bois", coolbox: "Coolbox", ticket: "Billet", other: "Autre" };
 const PERMISSION_FR = { express: "Oui (consentement exprès)", implied: "Oui (client récent)", expired: "Non : dernier achat il y a plus de 2 ans", opted_out: "Non : désabonné", none: "Pas de courriel" };
 const BOOKING_STATE = { done: ["ok", "Séjour fait"], upcoming: ["warn", "À venir"], cancelled: ["bad", "Annulée"] };
 const day = (iso) => (iso ? new Date(`${iso}T12:00:00`).toLocaleDateString("fr-CA", { dateStyle: "medium" }) : "—");
@@ -1134,7 +1134,7 @@ function Customers({ api, base, prefix, role }) {
       ${manageFile && html`<button type="button" class="secondary" onClick=${() => download(api, `${base}/customers.csv?${params({})}`, `clients-${quebecToday()}.csv`)}>Exporter (CSV)</button>`}
     </form>
     <div>${state.loading && !state.data ? html`<${Loading} />` : state.error ? html`<${Failure} error=${state.error} />` : list.length === 0 ? html`<p class="muted">Aucun client trouvé.</p>` : html`
-      <div class="table-scroll" role="region" aria-label="Liste des clients" tabindex="0"><table><thead><tr><th>Client</th><th>Fréquence</th><th class="num">Visites</th><th>Dernière visite</th><th>Prochaine arrivée</th><th>Hébergement</th><th class="num">Dépensé</th><th>Saison</th></tr></thead>
+      <div class="table-scroll" role="region" aria-label="Liste des clients" tabindex="0"><table><thead><tr><th>Client</th><th>Fréquence</th><th class="num">Visites</th><th>Dernière visite</th><th>Prochaine arrivée</th><th>Préféré</th><th class="num">Dépensé</th><th>Saison</th></tr></thead>
         <tbody>${list.map((c) => html`<tr>
           <td><a href=${`#${prefix}/customer/${c.id}`}>${fullName(c)}</a>${c.email ? html`<br /><span class="muted">${c.email}</span>` : ""}</td>
           <td><${Segment} s=${c.segment} /></td><td class="num">${c.visits}</td><td>${day(c.lastVisitOn)}</td><td>${day(c.nextArrivalOn)}</td>
@@ -1184,7 +1184,7 @@ function CustomerDetail({ api, base, customerId, role }) {
         </p>
       </div>`}
     <h2>Réservations</h2>
-    ${c.bookings.length === 0 ? html`<p class="muted">Aucune réservation.</p>` : html`<div class="table-scroll" role="region" aria-label="Réservations du client" tabindex="0"><table><thead><tr><th>Réservation</th><th>Hébergement</th><th>Arrivée</th><th>Départ</th><th class="num">Personnes</th><th class="num">Total</th><th>État</th></tr></thead>
+    ${c.bookings.length === 0 ? html`<p class="muted">Aucune réservation.</p>` : html`<div class="table-scroll" role="region" aria-label="Réservations du client" tabindex="0"><table><thead><tr><th>Réservation</th><th>Quoi</th><th>Arrivée</th><th>Départ</th><th class="num">Personnes</th><th class="num">Total</th><th>État</th></tr></thead>
       <tbody>${c.bookings.map((b) => html`<tr><td>${b.sourceRef}</td><td>${CATEGORY_FR[b.category] ?? b.category}${b.item ? html` <span class="muted">${b.item}</span>` : ""}</td>
         <td>${day(b.startsOn)}</td><td>${day(b.endsOn)}</td><td class="num">${b.adults + b.children}${b.pets ? ` + ${b.pets} animal` : ""}</td><td class="num">${money(b.totalCents)}</td>
         <td><span class=${`badge ${BOOKING_STATE[b.state][0]}`}>${BOOKING_STATE[b.state][1]}</span></td></tr>`)}</tbody></table></div>`}

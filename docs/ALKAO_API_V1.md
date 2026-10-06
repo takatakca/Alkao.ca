@@ -731,7 +731,7 @@ e-mail) never merges two different people. Placeholders (`aucun@…`, `000-000-0
 | `segment` | `loyal` 5+ visits · `regular` 3–4 · `occasional` 2 · `one_time` 1 · `upcoming` no visit yet, a booking ahead · `cancelled` only cancelled bookings · `prospect` no booking |
 | `status` | Year of the last visit or next arrival: `active` this year · `lapsed` last year · `inactive` older |
 | `spentCents` | Totals of the stays made |
-| `favoriteCategory` | Most frequent lodging: `camping`, `cabana`, `chalet`, `condo`, `villa`, `tent`, `coolbox`, `other` |
+| `favoriteCategory` | Most frequent: `camping`, `cabana`, `chalet`, `condo`, `villa`, `tent`, `coolbox`, `ticket` (Run 43), `other` |
 | `emailPermission` | `express` (consent recorded) · `implied` (booked within 2 years, Canada's anti-spam law, until `impliedConsentUntil`) · `expired` · `opted_out` · `none` (no e-mail) |
 
 The booking date is not in the report: it is approximated by the first report that listed
@@ -745,6 +745,22 @@ upcoming booking.
 
 The tables `ticketing_customers` and `ticketing_customer_bookings` are server-only: RLS on, no
 grant, no policy.
+
+**Ticket buyers (Run 43).** Every paid ALKAO order joins the customer file by itself (the
+sweeper, or `npm run cron`, each pass):
+
+- **The booking:** source `alkao_order`, reference the order id, category `ticket`, the event's
+  title, the session's date in the venue's time zone, the number of admissions, and the
+  amount kept (total less refunds).
+- **The customer:** found by the same rules as an import (same e-mail or phone and the same
+  name), so a stay and a Halloween evening make two visits of one customer.
+- **It stays current:**
+  - a session change moves the date;
+  - a full refund or a cancelled session cancels the booking.
+- **Consent:** the purchase gives implied consent from the day it was paid.
+- **Only changes are read:** orders new or changed since their booking.
+- **Anonymized buyers are never taken.** Anonymizing a buyer (Run 20) also clears the customer
+  built from their orders (`customersAnonymized` in the journal).
 
 ### E-mail campaigns (Run 42)
 
