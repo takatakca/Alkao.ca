@@ -306,3 +306,49 @@ export function campaignEmail(d: CampaignEmailData): Content {
   ];
   return { fromName: d.brandName, subject: personalize(d.subject, d.firstName), text, html: layout(l, d.brandName, heading, rows) };
 }
+
+// ── Newsletter sign-up confirmation (Run 44) ────────────────────────────────
+export interface NewsletterConfirmEmailData {
+  language: Language;
+  brandName: string;
+  firstName: string | null;
+  /** The welcome offer, e.g. "5 % sur vos billets". */
+  rewardText: string | null;
+  link: string;
+  senderAddress: string | null;
+  contact: string | null;
+}
+
+const SIGNUP = {
+  fr: {
+    subject: (brand: string) => `Confirmez votre inscription — ${brand}`,
+    title: "Confirmez votre inscription",
+    hello: (name: string | null) => (name ? `Bonjour ${name},` : "Bonjour,"),
+    intro: (brand: string, reward: string | null) => `Un clic pour recevoir les nouvelles et les promotions de ${brand}${reward ? `, et votre cadeau de bienvenue : ${reward}` : ""}.`,
+    button: "Confirmer mon inscription",
+    ignore: "Vous n'avez rien demandé ? Ignorez ce courriel : sans votre clic, vous ne recevrez rien.",
+  },
+  en: {
+    subject: (brand: string) => `Confirm your sign-up — ${brand}`,
+    title: "Confirm your sign-up",
+    hello: (name: string | null) => (name ? `Hello ${name},` : "Hello,"),
+    intro: (brand: string, reward: string | null) => `One click to get ${brand}'s news and offers${reward ? `, and your welcome gift: ${reward}` : ""}.`,
+    button: "Confirm my sign-up",
+    ignore: "Did not ask for this? Ignore this e-mail: without your click, you will receive nothing.",
+  },
+};
+
+export function newsletterConfirmEmail(d: NewsletterConfirmEmailData): Content {
+  const t = SIGNUP[d.language];
+  const hello = t.hello(d.firstName);
+  const intro = t.intro(d.brandName, d.rewardText);
+  const footer = [d.brandName, d.senderAddress, d.contact].filter(Boolean).join(" · ");
+  const text = [hello, "", intro, "", `${t.button} : ${d.link}`, "", t.ignore, "", footer].join("\n");
+  const html = layout(d.language, d.brandName, t.title, [
+    paragraph(`${esc(hello)}<br>${esc(intro)}`),
+    button(d.link, t.button),
+    note(esc(t.ignore)),
+    note(esc(footer), true),
+  ]);
+  return { fromName: d.brandName, subject: t.subject(d.brandName), text, html };
+}

@@ -55,6 +55,11 @@ describe("cleaning rules", () => {
   it("normalizes contact details and drops placeholders", () => {
     expect(normalizeEmail(" Alice.Exemple@Example.COM ")).toBe("alice.exemple@example.com");
     expect(normalizeEmail("aucun@aucun.com")).toBeNull();
+    expect(normalizeEmail("no@example.com")).toBeNull();
+    // A real name that merely starts like a placeholder is kept.
+    for (const real of ["nathalie@example.com", "nancy.test@example.com", "normand@example.com", "testard@example.com", "nadia@example.com"]) {
+      expect(normalizeEmail(real)).toBe(real);
+    }
     expect(normalizeEmail("pas une adresse")).toBeNull();
     expect(normalizePhone("1 (514) 555-0101")).toBe("5145550101");
     expect(normalizePhone("000-000-0000")).toBeNull();

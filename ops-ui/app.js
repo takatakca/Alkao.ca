@@ -1220,6 +1220,34 @@ function MarketingSettings({ api, base }) {
     </form>`;
 }
 
+function NewsletterSettings({ api, base }) {
+  const [state, reload] = useLoad(() => api(`${base}/settings/newsletter`), [base]);
+  const [f, setF] = useState(null);
+  const [msg, setMsg] = useState(null);
+  const [error, setError] = useState(null);
+  const n = state.data?.newsletter;
+  const current = f ?? { rewardCode: n?.rewardCode ?? "", rewardText: n?.rewardText ?? "" };
+  const save = async (e) => {
+    e.preventDefault(); setError(null); setMsg(null);
+    try {
+      await api(`${base}/settings/newsletter`, { method: "PUT", body: { rewardCode: current.rewardCode.trim() || null, rewardText: current.rewardText.trim() || null } });
+      setF(null); reload(); setMsg("Enregistré.");
+    } catch (err) { setError(err); }
+  };
+  return html`<form class="card" aria-label="Infolettre" onSubmit=${save}>
+      <h3>Infolettre</h3>
+      <p class="muted">Les inscriptions des sites web (Promo Havana) reçoivent un courriel de confirmation. Seul le clic de la personne l'ajoute aux clients, avec son consentement exprès ; la page de confirmation affiche alors le code de bienvenue.</p>
+      ${n && html`<p>${number(n.signups.confirmed)} inscriptions confirmées (${number(n.signups.confirmedLast30Days)} ces 30 derniers jours) · ${number(n.signups.pending)} en attente de confirmation</p>`}
+      <div class="fields">
+        <label>Code de bienvenue (facultatif)<input pattern="[A-Za-z0-9-]{3,32}" value=${current.rewardCode} onInput=${(e) => setF({ ...current, rewardCode: e.target.value })} /></label>
+        <label>Ce qu'il donne<input maxlength="200" value=${current.rewardText} onInput=${(e) => setF({ ...current, rewardText: e.target.value })} /></label>
+        <button type="submit">Enregistrer</button>
+      </div>
+      <p class="muted">Créez aussi ce code dans « Codes promo » de l'événement pour qu'il fonctionne à la caisse.</p>
+      ${msg && html`<p class="muted" role="status">${msg}</p>`}${error && html`<${Failure} error=${error} />`}
+    </form>`;
+}
+
 function Campaigns({ api, base, prefix }) {
   const [state] = useLoad(() => api(`${base}/campaigns`), [base]);
   const list = state.data?.campaigns ?? [];
@@ -1230,7 +1258,8 @@ function Campaigns({ api, base, prefix }) {
       <div class="table-scroll" role="region" aria-label="Campagnes" tabindex="0"><table><thead><tr><th>Campagne</th><th>Statut</th><th class="num">Destinataires</th><th class="num">Envoyés</th><th class="num">Désabonnés</th><th>Créée le</th></tr></thead>
         <tbody>${list.map((c) => html`<tr><td><a href=${`#${prefix}/campaign/${c.id}`}>${c.name}</a><br /><span class="muted">${c.subject}</span></td>
           <td><${CampaignStatus} s=${c.status} /></td><td class="num">${number(c.recipients)}</td><td class="num">${number(c.sent)}</td><td class="num">${number(c.unsubscribed)}</td><td>${when(c.createdAt)}</td></tr>`)}</tbody></table></div>`}</div>
-    <div><${MarketingSettings} api=${api} base=${base} /></div>`;
+    <div><${MarketingSettings} api=${api} base=${base} /></div>
+    <div><${NewsletterSettings} api=${api} base=${base} /></div>`;
 }
 
 function CampaignEditor({ api, base, prefix, campaignId }) {

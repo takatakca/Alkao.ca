@@ -35,6 +35,8 @@ import * as promoDb from "../db/promo.js";
 import * as customersDb from "../db/customers.js";
 import * as campaignsDb from "../db/campaigns.js";
 import { mountUnsubscribe } from "./unsubscribe.js";
+import * as newsletterDb from "../db/newsletter.js";
+import { mountNewsletterPage } from "./newsletter-page.js";
 import { localDate } from "../domain/customers.js";
 import * as journal from "../ops/journal.js";
 import * as sessionBatch from "../ops/session-batch.js";
@@ -96,6 +98,11 @@ export function createApp(deps: AppDeps) {
   // Run 27: "Retrouver mes billets", per caller and per address, so it cannot flood an inbox.
   const findTicketsByIp = new FixedWindowLimiter(5, 10 * 60_000);
   const findTicketsByEmail = new FixedWindowLimiter(3, 60 * 60_000);
+  // Run 44: newsletter sign-ups usually come from a website's server (one address for all its
+  // visitors), so the limits are per e-mail and per Brand, with a looser one per caller.
+  const signupByEmail = new FixedWindowLimiter(3, 60 * 60_000);
+  const signupByBrand = new FixedWindowLimiter(600, 60 * 60_000);
+  const signupByIp = new FixedWindowLimiter(120, 10 * 60_000);
   const paymentsService = new PaymentsService({
     db: deps.db,
     gateway: deps.paymentGateway ?? null,
@@ -314,6 +321,20 @@ export function createApp(deps: AppDeps) {
     const result = buildQuote(rules, body.items, event.taxRegion, undefined, promo);
     if (!result.ok) return fail(c, 422, "cart_invalid", result.violations);
     return c.json({ quote: result.quote });
+  });
+
+  // Run 44: a website's newsletter form. The answer is the same whatever the address, and
+  // nothing changes on the customer file until the person confirms by e-mail.
+  app.post(`${PUBLIC}/newsletter`, publicGate, async (c) => {
+    const scope = c.get("scope");
+    const at = now().getTime();
+    if (!signupByIp.take(`${scope.clientId}:${clientIp(c, deps.trustedProxyHops ?? 1)}`, at)) return fail(c, 429, "rate_limited");
+    const body = api.NewsletterSignup.parse(await readJson(c));
+    if (!signupByBrand.take(`${scope.clientId}:${scope.brandId}`, at)) return fail(c, 429, "rate_limited");
+    if (signupByEmail.take(`${scope.clientId}:${scope.brandId}:${body.email.toLowerCase()}`, at)) {
+      await withTransaction(deps.db, (tx) => newsletterDb.requestSignup(tx, scope, body, now()));
+    }
+    return c.json({ ok: true }, 202);
   });
 
   // Run 27: a buyer who lost the email asks for their tickets again. The answer is the same
@@ -1030,6 +1051,17 @@ export function createApp(deps: AppDeps) {
     return c.json({ marketing: await withTransaction(deps.db, (tx) => campaignsDb.setMarketingSettings(tx, c.get("scope"), body, actor(c))) });
   });
 
+  // Run 44: the welcome code shown once a newsletter sign-up is confirmed, and the counts.
+  app.get(`${ADMIN}/settings/newsletter`, ...admin, manageCampaigns, async (c) =>
+    c.json({ newsletter: await newsletterDb.getNewsletterSettings(deps.db, c.get("scope")) }),
+  );
+
+  app.put(`${ADMIN}/settings/newsletter`, ...admin, manageCampaigns, async (c) => {
+    const body = api.NewsletterSettings.parse(await readJson(c));
+    await withTransaction(deps.db, (tx) => newsletterDb.setNewsletterSettings(tx, c.get("scope"), body, actor(c)));
+    return c.json({ newsletter: await newsletterDb.getNewsletterSettings(deps.db, c.get("scope")) });
+  });
+
   app.get(`${ADMIN}/campaigns`, ...admin, manageCampaigns, async (c) =>
     c.json({ campaigns: await campaignsDb.listCampaigns(deps.db, c.get("scope")) }),
   );
@@ -1138,6 +1170,7 @@ export function createApp(deps: AppDeps) {
   mountOpsUi(app, { ...(deps.opsUi ?? { supabaseUrl: null, supabaseAnonKey: null, frameAncestors: [] }), paymentsMode: deps.paymentsMode ?? null });
   mountBuyerUi(app);
   mountUnsubscribe(app, { db: deps.db, masterSecret: deps.credentialMasterSecret ?? null, now });
+  mountNewsletterPage(app, { db: deps.db, masterSecret: deps.credentialMasterSecret ?? null, now });
   mountShopUi(app, { publicUrl: deps.publicUrl ?? null, paymentsMode: deps.paymentsMode ?? null });
 
   return app;
