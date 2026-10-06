@@ -4,7 +4,7 @@ import type { TenantScope } from "./commerce.js";
 import { mapDbErrors } from "./errors.js";
 import type { Db, Tx } from "./pool.js";
 import { DomainError } from "../domain/errors.js";
-import { IMPLIED_CONSENT_DAYS, type BookingCategory, type CustomerSegment, type CustomerStatus } from "../domain/customers.js";
+import { IMPLIED_CONSENT_DAYS, normalizePhone, type BookingCategory, type CustomerSegment, type CustomerStatus } from "../domain/customers.js";
 
 /**
  * Run 42: e-mail campaigns to the customer file. A campaign is written as a draft, tried on a
@@ -36,43 +36,60 @@ export interface CampaignInput {
   /** Run 45: "one_time" (sent once, by staff) or "after_visit" (automatic, delayDays after each visit). */
   kind?: "one_time" | "after_visit" | undefined;
   delayDays?: number | null | undefined;
+  /** Run 46: e-mail (default) or text message. A text has no subject or heading of its own. */
+  channel?: Channel | undefined;
 }
 
 const COLUMNS = `id, name, language, subject, preheader, heading, body, image_url, cta_label, cta_url, audience_segments, audience_statuses,
-  status, recipients, queued_at, finished_at, created_at, updated_at, kind, delay_days, audience_categories, active, activated_at`;
+  status, recipients, queued_at, finished_at, created_at, updated_at, kind, delay_days, audience_categories, active, activated_at, channel`;
 const C_COLUMNS = COLUMNS.split(/,\s*/).map((col) => `c.${col}`).join(", ");
 
 /** At most this many tests per campaign: a test goes to whatever address staff type. */
 export const TESTS_PER_CAMPAIGN = 20;
 
 /** Who the audience is right now: one customer per address, the most frequent first. */
-function audienceSql() {
+export type Channel = "email" | "sms";
+
+/**
+ * Who the audience is right now, one per address (`address`: the e-mail, or the mobile
+ * number for a text), the most frequent customer first. Run 46: a text needs a mobile
+ * number, no STOP, and implied consent (a booking in the last 2 years): an e-mail sign-up
+ * is consent to e-mail, not to texts.
+ */
+function audienceSql(channel: Channel = "email") {
+  const reach = channel === "sms"
+    ? `mobile_phone IS NOT NULL AND sms_opt_out_at IS NULL AND implied_consent_until >= $3::date`
+    : `email IS NOT NULL AND email_permission IN ('express', 'implied')`;
+  const address = channel === "sms" ? "mobile_phone" : "email";
   return `WITH ${CUSTOMER_STATS}
-    SELECT DISTINCT ON (email) id, email FROM stats
-    WHERE anonymized_at IS NULL AND email IS NOT NULL AND email_permission IN ('express', 'implied')
+    SELECT DISTINCT ON (${address}) id, ${address} AS address FROM stats
+    WHERE anonymized_at IS NULL AND ${reach}
       AND (cardinality($4::text[]) = 0 OR segment = ANY($4::text[]))
       AND (cardinality($5::text[]) = 0 OR status = ANY($5::text[]))
-    ORDER BY email, visits DESC, created_at`;
+    ORDER BY ${address}, visits DESC, created_at`;
 }
 
-export async function audienceCount(q: Queryable, s: TenantScope, today: string, a: Audience): Promise<number> {
+export async function audienceCount(q: Queryable, s: TenantScope, today: string, a: Audience, channel: Channel = "email"): Promise<number> {
   const { rows } = await q.query<{ n: number }>(
-    `SELECT count(*)::int AS n FROM (${audienceSql()}) a`,
+    `SELECT count(*)::int AS n FROM (${audienceSql(channel)}) a`,
     [s.clientId, s.brandId, today, a.segments, a.statuses],
   );
   return rows[0]?.n ?? 0;
 }
 
-const values = (c: CampaignInput) => [c.name, c.language, c.subject, c.preheader ?? null, c.heading, c.body, c.imageUrl ?? null,
-  c.ctaLabel ?? null, c.ctaUrl ?? null, c.audience.segments, c.audience.statuses, c.kind ?? "one_time",
-  (c.kind ?? "one_time") === "after_visit" ? c.delayDays ?? 3 : null, c.audience.categories ?? []];
+const values = (c: CampaignInput) => {
+  const sms = c.channel === "sms";
+  return [c.name, c.language, sms ? c.name.slice(0, 150) : c.subject, sms ? null : c.preheader ?? null, sms ? c.name.slice(0, 150) : c.heading, c.body,
+    sms ? null : c.imageUrl ?? null, sms ? null : c.ctaLabel ?? null, c.ctaUrl ?? null, c.audience.segments, c.audience.statuses, c.kind ?? "one_time",
+    (c.kind ?? "one_time") === "after_visit" ? c.delayDays ?? 3 : null, c.audience.categories ?? [], c.channel ?? "email"];
+};
 
 export async function createCampaign(tx: Tx, s: TenantScope, c: CampaignInput, actor: Actor) {
   return mapDbErrors(async () => {
     const { rows } = await tx.query(
       `INSERT INTO public.ticketing_campaigns (client_id, brand_id, name, language, subject, preheader, heading, body, image_url, cta_label, cta_url,
-         audience_segments, audience_statuses, kind, delay_days, audience_categories, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17) RETURNING ${COLUMNS}`,
+         audience_segments, audience_statuses, kind, delay_days, audience_categories, channel, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18) RETURNING ${COLUMNS}`,
       [s.clientId, s.brandId, ...values(c), actor.id],
     );
     await writeAudit(tx, s, actor, "campaign.created", { type: "campaign", id: rows[0].id });
@@ -92,7 +109,8 @@ export async function updateCampaign(tx: Tx, s: TenantScope, id: string, c: Camp
     if (on[0]?.active && (c.kind ?? "one_time") !== "after_visit") throw new DomainError("automation_active");
     const { rows } = await tx.query(
       `UPDATE public.ticketing_campaigns SET name = $4, language = $5, subject = $6, preheader = $7, heading = $8, body = $9, image_url = $10,
-         cta_label = $11, cta_url = $12, audience_segments = $13, audience_statuses = $14, kind = $15, delay_days = $16, audience_categories = $17
+         cta_label = $11, cta_url = $12, audience_segments = $13, audience_statuses = $14, kind = $15, delay_days = $16, audience_categories = $17,
+         channel = $18
        WHERE id = $1 AND client_id = $2 AND brand_id = $3 RETURNING ${COLUMNS}`,
       [id, s.clientId, s.brandId, ...values(c)],
     );
@@ -131,7 +149,7 @@ export async function listCampaigns(q: Queryable, s: TenantScope) {
 
 export async function getCampaign(q: Queryable, s: TenantScope, id: string, today: string) {
   const { rows } = await q.query(
-    `SELECT ${C_COLUMNS}, ${STATS}
+    `SELECT ${C_COLUMNS}, ${STATS}, (SELECT br.name FROM public.ticketing_brands br WHERE br.id = c.brand_id) AS brand_name
      FROM public.ticketing_campaigns c
      LEFT JOIN public.ticketing_campaign_messages m ON m.campaign_id = c.id AND m.client_id = c.client_id AND m.brand_id = c.brand_id
      WHERE c.id = $1 AND c.client_id = $2 AND c.brand_id = $3 GROUP BY c.id`,
@@ -141,7 +159,7 @@ export async function getCampaign(q: Queryable, s: TenantScope, id: string, toda
   const campaign = toApi(rows[0]) as Record<string, unknown>;
   // A one-time draft shows who would get it if sent now.
   if (campaign.status === "draft" && campaign.kind === "one_time") {
-    campaign.audienceNow = await audienceCount(q, s, today, { segments: rows[0].audience_segments, statuses: rows[0].audience_statuses });
+    campaign.audienceNow = await audienceCount(q, s, today, { segments: rows[0].audience_segments, statuses: rows[0].audience_statuses }, rows[0].channel);
   }
   return campaign;
 }
@@ -167,17 +185,22 @@ export async function setMarketingSettings(tx: Tx, s: TenantScope, p: { senderAd
 
 // ── Sending ─────────────────────────────────────────────────────────────────
 /** One test message to a staff address, sent by the worker like the others. */
-export async function queueTest(tx: Tx, s: TenantScope, id: string, email: string, actor: Actor, now: Date) {
+export async function queueTest(tx: Tx, s: TenantScope, id: string, to: { email?: string | null | undefined; phone?: string | null | undefined }, actor: Actor, now: Date) {
   const status = await lockedStatus(tx, s, id);
   if (status === "cancelled" || status === "sent") throw new DomainError("campaign_closed");
+  const { rows: c } = await tx.query<{ channel: Channel }>(`SELECT channel FROM public.ticketing_campaigns WHERE id = $1`, [id]);
+  const sms = c[0]?.channel === "sms";
+  const email = sms ? null : to.email?.trim().toLowerCase() || null;
+  const phone = sms ? normalizePhone(to.phone) : null;
+  if (!email && !phone) throw new DomainError("campaign_test_address");
   const { rows } = await tx.query<{ n: number }>(
     `SELECT count(*)::int AS n FROM public.ticketing_campaign_messages WHERE campaign_id = $1 AND customer_id IS NULL`,
     [id],
   );
   if ((rows[0]?.n ?? 0) >= TESTS_PER_CAMPAIGN) throw new DomainError("campaign_test_limit");
   await tx.query(
-    `INSERT INTO public.ticketing_campaign_messages (client_id, brand_id, campaign_id, email, created_at, next_attempt_at) VALUES ($1, $2, $3, $4, $5, $5)`,
-    [s.clientId, s.brandId, id, email.trim().toLowerCase(), now],
+    `INSERT INTO public.ticketing_campaign_messages (client_id, brand_id, campaign_id, email, phone, created_at, next_attempt_at) VALUES ($1, $2, $3, $4, $5, $6, $6)`,
+    [s.clientId, s.brandId, id, email, phone, now],
   );
   await writeAudit(tx, s, actor, "campaign.test_queued", { type: "campaign", id });
   return { queued: true };
@@ -194,14 +217,15 @@ export async function sendCampaign(tx: Tx, s: TenantScope, id: string, expectedR
   if (kind[0]?.kind !== "one_time") throw new DomainError("campaign_is_automation");
   const sender = await getMarketingSettings(tx, s);
   if (!sender.senderAddress || !sender.contact) throw new DomainError("marketing_settings_missing");
-  const { rows: c } = await tx.query<{ audience_segments: CustomerSegment[]; audience_statuses: CustomerStatus[] }>(
-    `SELECT audience_segments, audience_statuses FROM public.ticketing_campaigns WHERE id = $1`,
+  const { rows: c } = await tx.query<{ audience_segments: CustomerSegment[]; audience_statuses: CustomerStatus[]; channel: Channel }>(
+    `SELECT audience_segments, audience_statuses, channel FROM public.ticketing_campaigns WHERE id = $1`,
     [id],
   );
   const audience = { segments: c[0]!.audience_segments, statuses: c[0]!.audience_statuses };
+  const channel = c[0]!.channel;
   const { rowCount } = await tx.query(
-    `INSERT INTO public.ticketing_campaign_messages (client_id, brand_id, campaign_id, customer_id, email, created_at, next_attempt_at)
-     SELECT $1, $2, $6::uuid, a.id, a.email, $7, $7 FROM (${audienceSql()}) a`,
+    `INSERT INTO public.ticketing_campaign_messages (client_id, brand_id, campaign_id, customer_id, ${channel === "sms" ? "phone" : "email"}, created_at, next_attempt_at)
+     SELECT $1, $2, $6::uuid, a.id, a.address, $7, $7 FROM (${audienceSql(channel)}) a`,
     [s.clientId, s.brandId, today, audience.segments, audience.statuses, id, now],
   );
   const recipients = rowCount ?? 0;
@@ -305,4 +329,22 @@ export async function unsubscribe(tx: Tx, messageId: string, now: Date) {
     await writeAudit(tx, { clientId: ctx.client_id, brandId: ctx.brand_id }, { type: "public", id: null }, "customer.unsubscribed", { type: "customer", id: ctx.customer_id }, { messageId });
   }
   return { ...ctx, test: false };
+}
+
+// ── Run 46: replies to texts (Twilio's webhook) ─────────────────────────────
+/**
+ * STOP: no more texts to this number, for every Brand that has it (the sending number is
+ * shared, and an opt-out must never be missed). START: texts again, as the person asked.
+ */
+export async function recordSmsReply(tx: Tx, phone: string, intent: "stop" | "start", now: Date) {
+  const { rows } = await tx.query<{ id: string; client_id: string; brand_id: string }>(
+    intent === "stop"
+      ? `UPDATE public.ticketing_customers SET sms_opt_out_at = $2 WHERE mobile_phone = $1 AND sms_opt_out_at IS NULL RETURNING id, client_id, brand_id`
+      : `UPDATE public.ticketing_customers SET sms_opt_out_at = NULL WHERE mobile_phone = $1 AND sms_opt_out_at IS NOT NULL RETURNING id, client_id, brand_id`,
+    intent === "stop" ? [phone, now] : [phone],
+  );
+  for (const r of rows) {
+    await writeAudit(tx, { clientId: r.client_id, brandId: r.brand_id }, { type: "public", id: null }, intent === "stop" ? "customer.sms_stopped" : "customer.sms_restarted", { type: "customer", id: r.id });
+  }
+  return rows.length;
 }

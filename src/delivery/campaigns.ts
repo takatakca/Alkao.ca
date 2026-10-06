@@ -94,7 +94,7 @@ export async function deliverCampaignEmails(db: Db, cfg: CampaignDeliveryConfig,
          LEFT JOIN public.ticketing_brand_settings bs ON bs.client_id = m.client_id AND bs.brand_id = m.brand_id
          LEFT JOIN public.ticketing_customers cu ON cu.id = m.customer_id AND cu.client_id = m.client_id AND cu.brand_id = m.brand_id
          LEFT JOIN public.ticketing_customer_bookings bk ON bk.id = m.booking_id AND bk.client_id = m.client_id AND bk.brand_id = m.brand_id
-         WHERE m.status = 'pending' AND m.next_attempt_at <= $1
+         WHERE m.status = 'pending' AND m.email IS NOT NULL AND m.next_attempt_at <= $1
          ORDER BY m.next_attempt_at, m.id
          LIMIT 1
          FOR UPDATE OF m SKIP LOCKED`,

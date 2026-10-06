@@ -84,6 +84,8 @@ const STATUS_BY_CODE: Record<string, ContentfulStatusCode> = {
   campaign_is_automation: 409,
   campaign_not_automation: 409,
   automation_active: 409,
+  // Run 46
+  campaign_test_address: 400,
 };
 
 /** Domain error details safe to return to callers (never constraint or column names). */

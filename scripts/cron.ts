@@ -5,6 +5,7 @@ import { ResendEmailSender } from "../src/delivery/email.js";
 import { runBackgroundOnce } from "../src/ops/cron.js";
 import { PaymentsService } from "../src/payments/service.js";
 import { StripeGateway } from "../src/payments/stripe-gateway.js";
+import { TwilioSmsSender } from "../src/delivery/sms.js";
 
 // Run 39: one pass of every background worker, then exit. For cPanel cron, every minute:
 //   cd ~/alkao/current && node --env-file=.env --import tsx scripts/cron.ts
@@ -25,6 +26,7 @@ try {
           maxAgeHours: email.data.ALKAO_EMAIL_MAX_AGE_HOURS,
         }
       : null,
+    sms: config.twilio ? { sender: new TwilioSmsSender(config.twilio.accountSid, config.twilio.authToken, config.twilio.sender) } : null,
     payments: config.stripe
       ? new PaymentsService({
           db,

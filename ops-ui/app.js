@@ -1195,7 +1195,11 @@ function CustomerDetail({ api, base, customerId, role }) {
 // ── Run 42: e-mail campaigns ────────────────────────────────────────────────
 const CAMPAIGN_STATUS = { draft: ["", "Brouillon"], sending: ["warn", "Envoi en cours"], sent: ["ok", "Envoyée"], cancelled: ["bad", "Annulée"] };
 const CampaignStatus = ({ s }) => html`<span class=${`badge ${CAMPAIGN_STATUS[s][0]}`}>${CAMPAIGN_STATUS[s][1]}</span>`;
-const EMPTY_CAMPAIGN = { name: "", language: "fr", kind: "one_time", delayDays: 3, subject: "", preheader: "", heading: "Bonjour {prénom},", body: "", imageUrl: "", ctaLabel: "", ctaUrl: "", audience: { segments: [], statuses: [], categories: [] } };
+// Run 46: a text's footer, and its length in texts (GSM-7: 160, or 153 each when split; otherwise 70 / 67).
+const SMS_STOP = { fr: "Répondez STOP pour ne plus en recevoir.", en: "Reply STOP to opt out." };
+const GSM = /^[A-Za-z0-9 @£$¥èéùìòÇØøÅå\n\rΔ_ΦΓΛΩΠΨΣΘΞÆæßÉ!"#¤%&'()*+,\-./:;<=>?¡ÄÖÑÜ§¿äöñüà^{}\\[~\]|€]*$/;
+const smsSegments = (t) => { const [one, part] = GSM.test(t) ? [160, 153] : [70, 67]; return t.length <= one ? 1 : Math.ceil(t.length / part); };
+const EMPTY_CAMPAIGN = { name: "", language: "fr", channel: "email", kind: "one_time", delayDays: 3, subject: "", preheader: "", heading: "Bonjour {prénom},", body: "", imageUrl: "", ctaLabel: "", ctaUrl: "", audience: { segments: [], statuses: [], categories: [] } };
 // Run 45: an automation shows whether it runs instead of a send status.
 const CampaignBadge = ({ c }) => (c.kind === "after_visit" && c.status === "draft"
   ? html`<span class=${`badge ${c.active ? "ok" : ""}`}>${c.active ? "Automatique : en marche" : "Automatique : en pause"} (J+${c.delayDays})</span>`
@@ -1260,7 +1264,7 @@ function Campaigns({ api, base, prefix }) {
       <span class="muted">Courriels aux clients qui peuvent en recevoir (consentement exprès, ou client depuis moins de 2 ans).</span></p>
     <div>${state.loading && !state.data ? html`<${Loading} />` : state.error ? html`<${Failure} error=${state.error} />` : list.length === 0 ? html`<p class="muted">Aucune campagne.</p>` : html`
       <div class="table-scroll" role="region" aria-label="Campagnes" tabindex="0"><table><thead><tr><th>Campagne</th><th>Statut</th><th class="num">Destinataires</th><th class="num">Envoyés</th><th class="num">Désabonnés</th><th>Créée le</th></tr></thead>
-        <tbody>${list.map((c) => html`<tr><td><a href=${`#${prefix}/campaign/${c.id}`}>${c.name}</a><br /><span class="muted">${c.subject}</span></td>
+        <tbody>${list.map((c) => html`<tr><td><a href=${`#${prefix}/campaign/${c.id}`}>${c.name}</a><br /><span class="muted">${c.channel === "sms" ? "Texto" : c.subject}</span></td>
           <td><${CampaignBadge} c=${c} /></td><td class="num">${number(c.kind === "after_visit" ? c.sent + c.pending : c.recipients)}</td><td class="num">${number(c.sent)}</td><td class="num">${number(c.unsubscribed)}</td><td>${when(c.createdAt)}</td></tr>`)}</tbody></table></div>`}</div>
     <div><${MarketingSettings} api=${api} base=${base} /></div>
     <div><${NewsletterSettings} api=${api} base=${base} /></div>`;
@@ -1278,13 +1282,14 @@ function CampaignEditor({ api, base, prefix, campaignId }) {
     audience: { segments: loaded.audienceSegments, statuses: loaded.audienceStatuses, categories: loaded.audienceCategories ?? [] } } : EMPTY_CAMPAIGN);
   const draft = !loaded || loaded.status === "draft";
   const automatic = c.kind === "after_visit";
+  const sms = c.channel === "sms";
   const audienceKey = JSON.stringify(c.audience);
   useEffect(() => {
     if (!draft || automatic) return;
     let live = true;
-    api(`${base}/campaigns/audience`, { method: "POST", body: c.audience }).then((r) => live && setCount(r.recipients), () => live && setCount(null));
+    api(`${base}/campaigns/audience`, { method: "POST", body: { ...c.audience, channel: c.channel } }).then((r) => live && setCount(r.recipients), () => live && setCount(null));
     return () => { live = false; };
-  }, [base, audienceKey, draft, automatic]);
+  }, [base, audienceKey, draft, automatic, c.channel]);
   if (state.loading && !state.data) return html`<h1>Campagne</h1><${Loading} />`;
   if (state.error) return html`<h1>Campagne</h1><${Failure} error=${state.error} />`;
   const set = (patch) => setF({ ...c, ...patch });
@@ -1293,16 +1298,20 @@ function CampaignEditor({ api, base, prefix, campaignId }) {
     set({ audience: { ...c.audience, [kind]: list.includes(key) ? list.filter((k) => k !== key) : [...list, key] } });
   };
   const body = () => ({
-    name: c.name, language: c.language, subject: c.subject, preheader: c.preheader || null, heading: c.heading, body: c.body,
-    imageUrl: c.imageUrl || null, ctaLabel: c.ctaLabel || null, ctaUrl: c.ctaUrl || null, audience: c.audience,
+    name: c.name, language: c.language, channel: c.channel, ctaUrl: c.ctaUrl || null, audience: c.audience, body: c.body,
     kind: c.kind, delayDays: automatic ? Number(c.delayDays) : null,
+    ...(sms ? {} : { subject: c.subject, preheader: c.preheader || null, heading: c.heading, imageUrl: c.imageUrl || null, ctaLabel: c.ctaLabel || null }),
   });
   const act = (fn) => async (e) => { e?.preventDefault?.(); setError(null); setMsg(null); try { await fn(); } catch (err) { setError(err); } };
   const save = act(async () => {
     if (loaded) { await api(`${base}/campaigns/${loaded.id}`, { method: "PUT", body: body() }); setF(null); reload(); setMsg("Brouillon enregistré."); }
     else { const r = await api(`${base}/campaigns`, { method: "POST", body: body() }); location.hash = `#${prefix}/campaign/${r.campaign.id}`; }
   });
-  const test = act(async () => { await api(`${base}/campaigns/${loaded.id}/test`, { method: "POST", body: { email: testTo } }); setMsg(`Essai en route vers ${testTo} (moins d'une minute).`); reload(); });
+  const test = act(async () => {
+    await api(`${base}/campaigns/${loaded.id}/test`, { method: "POST", body: loaded.channel === "sms" ? { phone: testTo } : { email: testTo } });
+    setMsg(`Essai en route vers ${testTo} (moins d'une minute${loaded.channel === "sms" ? ", entre 9 h et 21 h" : ""}).`); reload();
+  });
+  const smsPreview = [c.body.replace(/(\s?)\{(?:prénom|prenom|first_name)\}/giu, "$1Marie").replace(/\s+/g, " ").trim(), c.ctaUrl, `- ${loaded?.brandName ?? "Votre marque"}. ${SMS_STOP[c.language]}`].filter(Boolean).join(" ");
   const send = act(async () => {
     if (f) throw new Error("Enregistrez d'abord vos changements.");
     if (!confirm(`Envoyer « ${loaded.subject} » à ${number(count)} clients ? Un envoi ne s'annule plus pour les courriels déjà partis.`)) return;
@@ -1326,11 +1335,17 @@ function CampaignEditor({ api, base, prefix, campaignId }) {
       <div class="fields">
         ${field("Nom (pour l'équipe)", "name", { required: true, maxlength: 120 })}
         <label>Langue<select value=${c.language} disabled=${!draft} onChange=${(e) => set({ language: e.target.value })}><option value="fr">Français</option><option value="en">English</option></select></label>
-        <label>Type<select value=${c.kind} disabled=${!draft || loaded?.active} onChange=${(e) => set({ kind: e.target.value })}>
+        <label>Canal<select value=${c.channel} disabled=${!draft || automatic} onChange=${(e) => set({ channel: e.target.value })}>
+          <option value="email">Courriel</option><option value="sms">Texto (SMS)</option></select></label>
+        <label>Type<select value=${c.kind} disabled=${!draft || loaded?.active || sms} onChange=${(e) => set({ kind: e.target.value })}>
           <option value="one_time">Envoi unique</option><option value="after_visit">Automatique après chaque visite</option></select></label>
         ${automatic && html`<label>Jours après le départ<input type="number" min="0" max="60" required value=${c.delayDays} disabled=${!draft} onInput=${(e) => set({ delayDays: e.target.value })} /></label>`}
       </div>
-      <div class="stack">
+      ${sms ? html`<div class="stack">
+        <label>Texte du message<textarea rows="4" required maxlength="300" disabled=${!draft} value=${c.body} onInput=${(e) => set({ body: e.target.value })}></textarea></label>
+        ${field("Lien (https, facultatif)", "ctaUrl", { type: "url", maxlength: 500 })}
+        <p class="muted">Aperçu, avec le nom de la marque et la façon d'arrêter, ajoutés à chaque texto : « ${smsPreview} » — ${smsPreview.length} caractères, ${smsSegments(smsPreview)} texto(s) facturé(s) par client. {prénom} est remplacé par le prénom. Les lettres ê, â, ô, î, û, ç passent dans un alphabet plus court (70 caractères par texto). Envoi entre 9 h et 21 h seulement.</p>
+      </div>` : html`<div class="stack">
         ${field("Objet du courriel", "subject", { required: true, maxlength: 150 })}
         ${field("Aperçu dans la boîte de réception (facultatif)", "preheader", { maxlength: 150 })}
         ${field("Titre", "heading", { required: true, maxlength: 150 })}
@@ -1338,7 +1353,7 @@ function CampaignEditor({ api, base, prefix, campaignId }) {
         <p class="muted">Une ligne vide sépare les paragraphes. {prénom} est remplacé par le prénom du client${automatic ? ", {visite} par ce qu'il a réservé (le site ou l'événement)" : ""}.</p>
         ${field("Image (lien https, facultatif)", "imageUrl", { type: "url", maxlength: 500 })}
         <div class="fields">${field("Bouton : texte (facultatif)", "ctaLabel", { maxlength: 60 })}${field("Bouton : lien https", "ctaUrl", { type: "url", maxlength: 500 })}</div>
-      </div>
+      </div>`}
       <h3>Destinataires</h3>
       ${automatic && html`<fieldset disabled=${!draft}><legend>Après quelles visites (aucune case : toutes)</legend>
         <div class="row">${Object.entries(CATEGORY_FR).map(([key, label]) => html`<label class="check"><input type="checkbox" checked=${c.audience.categories.includes(key)} onChange=${() => toggle("categories", key)} /> ${label}</label>`)}</div></fieldset>`}
@@ -1354,7 +1369,9 @@ function CampaignEditor({ api, base, prefix, campaignId }) {
     ${loaded && draft && html`<form class="card" aria-label="Essai et envoi" onSubmit=${test}>
       <h3>Essayer, puis envoyer</h3>
       <div class="fields">
-        <label>Envoyer un essai à<input type="email" required value=${testTo} onInput=${(e) => setTestTo(e.target.value)} /></label>
+        ${loaded.channel === "sms"
+          ? html`<label>Envoyer un essai au<input type="tel" required value=${testTo} onInput=${(e) => setTestTo(e.target.value)} /></label>`
+          : html`<label>Envoyer un essai à<input type="email" required value=${testTo} onInput=${(e) => setTestTo(e.target.value)} /></label>`}
         <button type="submit" class="secondary">Envoyer l'essai</button>
         ${loaded.kind === "after_visit"
           ? (loaded.active ? html`<button type="button" class="secondary" onClick=${turn(false)}>Mettre en pause</button>` : html`<button type="button" onClick=${turn(true)}>Mettre en marche</button>`)

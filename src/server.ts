@@ -22,6 +22,7 @@ const app = createApp({
   publicUrl: config.publicUrl,
   trustedProxyHops: config.trustedProxyHops,
   metricsToken: config.metricsToken,
+  twilioAuthToken: config.twilio?.authToken ?? null,
   logRequests: process.env.ALKAO_LOG_REQUESTS !== "false",
 });
 

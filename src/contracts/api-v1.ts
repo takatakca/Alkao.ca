@@ -392,9 +392,11 @@ export const CampaignInput = z
   .object({
     name: z.string().trim().min(1).max(120),
     language: z.enum(["fr", "en"]).default("fr"),
-    subject: z.string().trim().min(1).max(150),
+    /** Run 46: e-mail, or a text message (body only, at most 300 characters before the footer). */
+    channel: z.enum(["email", "sms"]).default("email"),
+    subject: z.string().trim().min(1).max(150).nullish(),
     preheader: z.string().trim().max(150).nullish(),
-    heading: z.string().trim().min(1).max(150),
+    heading: z.string().trim().min(1).max(150).nullish(),
     body: z.string().trim().min(1).max(10_000),
     imageUrl: campaignUrl.nullish(),
     ctaLabel: z.string().trim().min(1).max(60).nullish(),
@@ -404,10 +406,17 @@ export const CampaignInput = z
     kind: z.enum(["one_time", "after_visit"]).default("one_time"),
     delayDays: z.number().int().min(0).max(60).nullish(),
   })
-  .refine((c) => (c.ctaLabel == null) === (c.ctaUrl == null), { message: "ctaLabel and ctaUrl go together", path: ["ctaUrl"] })
-  .refine((c) => c.kind === "one_time" || c.delayDays != null, { message: "delayDays is required after a visit", path: ["delayDays"] });
+  .refine((c) => c.channel === "sms" || (c.ctaLabel == null) === (c.ctaUrl == null), { message: "ctaLabel and ctaUrl go together", path: ["ctaUrl"] })
+  .refine((c) => c.kind === "one_time" || c.delayDays != null, { message: "delayDays is required after a visit", path: ["delayDays"] })
+  .refine((c) => c.channel === "sms" || (c.subject != null && c.heading != null), { message: "an e-mail needs a subject and a heading", path: ["subject"] })
+  .refine((c) => c.channel === "email" || (c.body.length <= 300 && c.kind === "one_time"), { message: "a text is one-time and at most 300 characters", path: ["body"] })
+  .transform((c) => ({ ...c, subject: c.subject ?? c.name, heading: c.heading ?? c.name }));
 export const CampaignAutomation = z.object({ active: z.boolean() });
-export const CampaignTest = z.object({ email: z.string().trim().max(320).pipe(z.email()) });
+/** A test to a staff e-mail address, or (Run 46, a text) to a staff mobile number. */
+export const CampaignTest = z
+  .object({ email: z.string().trim().max(320).pipe(z.email()).optional(), phone: z.string().trim().max(40).optional() })
+  .refine((t) => Boolean(t.email) !== Boolean(t.phone), { message: "email or phone", path: ["email"] });
+export const CampaignAudienceQuery = CampaignAudience.extend({ channel: z.enum(["email", "sms"]).default("email") });
 /** The number of recipients staff were shown: sending is refused if it changed since. */
 export const CampaignSend = z.object({ expectedRecipients: z.number().int().min(1).max(10_000_000) });
 export const MarketingSettings = z.object({

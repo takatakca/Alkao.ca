@@ -37,6 +37,8 @@ import * as campaignsDb from "../db/campaigns.js";
 import { mountUnsubscribe } from "./unsubscribe.js";
 import * as newsletterDb from "../db/newsletter.js";
 import { mountNewsletterPage } from "./newsletter-page.js";
+import { replyIntent, twilioSignatureValid } from "../delivery/sms.js";
+import { normalizePhone } from "../domain/customers.js";
 import { localDate } from "../domain/customers.js";
 import * as journal from "../ops/journal.js";
 import * as sessionBatch from "../ops/session-batch.js";
@@ -76,6 +78,8 @@ export interface AppDeps {
   logRequests?: boolean;
   /** Bearer token for GET /metrics (Run 24); without it the route answers 404. */
   metricsToken?: string | null;
+  /** Run 46: Twilio's auth token, to check its webhook's signature; null until texts are configured. */
+  twilioAuthToken?: string | null;
   now?: () => Date;
 }
 
@@ -789,6 +793,21 @@ export function createApp(deps: AppDeps) {
   // Authenticated by the Stripe signature, not by the Ticketing gate: a checkout opened
   // while Ticketing was active must still be fulfilled (or refunded) if it is revoked
   // before the buyer pays.
+  // ── Run 46: Twilio's webhook for replies to texts (STOP, START) ────────────
+  // Authenticated by Twilio's signature over the public URL; 404 until texts are configured.
+  app.post("/v1/webhooks/twilio/sms", async (c) => {
+    if (!deps.twilioAuthToken || !deps.publicUrl) return fail(c, 404, "not_found");
+    const form = await c.req.parseBody();
+    const params = Object.fromEntries(Object.entries(form).filter(([, v]) => typeof v === "string")) as Record<string, string>;
+    const url = `${deps.publicUrl.replace(/\/+$/, "")}/v1/webhooks/twilio/sms`;
+    if (!twilioSignatureValid(deps.twilioAuthToken, url, params, c.req.header("x-twilio-signature") ?? "")) return fail(c, 403, "invalid_signature");
+    const phone = normalizePhone(params.From);
+    const intent = replyIntent(params.Body ?? "");
+    if (phone && intent) await withTransaction(deps.db, (tx) => campaignsDb.recordSmsReply(tx, phone, intent, now()));
+    // Twilio sends its own STOP/START confirmation; ALKAO answers nothing more.
+    return c.body('<?xml version="1.0" encoding="UTF-8"?><Response></Response>', 200, { "content-type": "text/xml; charset=utf-8" });
+  });
+
   app.post("/v1/webhooks/stripe", async (c) => {
     if (!deps.paymentGateway) return fail(c, 503, "payments_not_configured");
     const rawBody = await c.req.text();
@@ -1068,8 +1087,8 @@ export function createApp(deps: AppDeps) {
 
   // How many customers an audience reaches right now (may receive e-mail, once per address).
   app.post(`${ADMIN}/campaigns/audience`, ...admin, manageCampaigns, async (c) => {
-    const body = api.CampaignAudience.parse(await readJson(c));
-    return c.json({ recipients: await campaignsDb.audienceCount(deps.db, c.get("scope"), today(), body) });
+    const body = api.CampaignAudienceQuery.parse(await readJson(c));
+    return c.json({ recipients: await campaignsDb.audienceCount(deps.db, c.get("scope"), today(), body, body.channel) });
   });
 
   app.post(`${ADMIN}/campaigns`, ...admin, manageCampaigns, async (c) => {
@@ -1095,7 +1114,7 @@ export function createApp(deps: AppDeps) {
     const id = param(c, "campaignId");
     if (!id) return fail(c, 404, "campaign_not_found");
     const body = api.CampaignTest.parse(await readJson(c));
-    return c.json(await withTransaction(deps.db, (tx) => campaignsDb.queueTest(tx, c.get("scope"), id, body.email, actor(c), now())), 202);
+    return c.json(await withTransaction(deps.db, (tx) => campaignsDb.queueTest(tx, c.get("scope"), id, body, actor(c), now())), 202);
   });
 
   app.post(`${ADMIN}/campaigns/:campaignId/send`, ...admin, manageCampaigns, async (c) => {

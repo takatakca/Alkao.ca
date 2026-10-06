@@ -829,6 +829,31 @@ itself while it is on:
   (`409 automation_active`).
 - `cancel` stops it for good.
 
+**By text message (Run 46).** A campaign with `channel: "sms"` sends one text instead of an
+e-mail. It has `body` (at most 300 characters, `{prénom}` allowed) and an optional `ctaUrl`
+link. There is no subject, heading or image: `subject` and `heading` take the campaign's name.
+
+- **Who:** customers with a mobile number, no STOP, and implied consent (a booking in the
+  last 2 years). An e-mail sign-up is consent to e-mail, not to texts. Once per number.
+- **The text:** the words, the link, then `- {Brand}. Répondez STOP pour ne plus en recevoir.`
+  The footer uses a plain hyphen: `—` is outside the SMS alphabet and would double the price
+  of every text. `/ops` shows the length and how many texts each customer costs.
+- **When:** between 9:00 and 21:00 (Québec). Texts due at night wait for 9:00.
+- **Opt-out:**
+  - When Twilio answers `21610` (the number replied STOP), ALKAO records the opt-out on the
+    customer.
+  - Tests go to a staff mobile (`{ phone }`).
+  - Texts are one-time only: automations stay e-mail.
+- **Twilio:**
+  - **Settings:** `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and `TWILIO_MESSAGING_SERVICE_SID`
+    (recommended) or `TWILIO_FROM_NUMBER`. Without them, texts wait in the queue.
+  - **Who sends:** `npm run cron` and `worker:email` send the texts.
+  - **Replies:** `POST /v1/webhooks/twilio/sms`, Twilio's webhook. It is authenticated by
+    `X-Twilio-Signature` over `ALKAO_PUBLIC_URL` and answers 404 until Twilio is configured.
+    STOP (ARRÊT, DÉSABONNER, UNSUBSCRIBE…) stops texts to that number for every Brand. START
+    allows them again. The journal records `customer.sms_stopped` and
+    `customer.sms_restarted`, by the public.
+
 **Sending pace:** each pass sends up to 100 campaign messages, after the buyers' e-mails,
 so with `npm run cron` every minute, about 6,000 an hour. A campaign is marked `sent` once
 nothing is left to send.
