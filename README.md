@@ -56,6 +56,7 @@ npm run worker:email    # sends buyers their tickets (needs RESEND_API_KEY, ALKA
 npm run worker:cancellations  # finishes session cancellations and retries refunds (needs Stripe)
 npm run check:golive    # read-only go-live check: settings, database, and --url for the running service
 npm run cron            # every worker once, for a cron job every minute (MochaHost, Run 39)
+npm run customers:import -- --client <uuid> --brand <uuid> report.csv@2026-10-02  # customer history (Run 41)
 ```
 
 Operations app: open `http://localhost:8787/ops` and sign in with a Supabase account that has a
@@ -118,3 +119,4 @@ TAKATAK membership (set `SUPABASE_URL` and `SUPABASE_ANON_KEY`). See
 | Run 38 | `npm run check:golive`: one read-only go-live check of the settings, the database (migrations, RLS and grants, setup, workers) and the running service (HTTPS, Stripe mode and webhook, sign-in, a Brand's shop), in French, never printing a secret |
 | Run 39 | MochaHost hosting next to TAKATAK ([guide](docs/ALKAO_DEPLOY_MOCHAHOST.md)): Passenger startup file `passenger.cjs`, a ready Linux release built by the **Package** workflow (`npm run pack:mochahost`), `npm run cron` for the background work, verified TLS to Supabase, and a check that ALKAO sees each buyer's address |
 | Run 40 | `/ops` in the TAKATAK dashboard's look: dark 260 px sidebar, light grey page, white slate cards, indigo buttons, orange brand tile; inside the TAKATAK dashboard no second sidebar (tabs in the top bar); roles in French; light and dark at WCAG AA |
+| Run 41 | The customer file (CRM): Réservation camping.ca reports imported (read in the browser, no comments, plates, payments or card numbers), one customer per person, visits counted, colours by frequency (Fidèle, Régulier, Occasionnel…), season status, e-mail permission under the anti-spam law, CSV export, Law 25 anonymization; `/ops` **Clients** page and `npm run customers:import` for the history |

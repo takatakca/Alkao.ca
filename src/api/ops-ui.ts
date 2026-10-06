@@ -22,6 +22,8 @@ const require = createRequire(import.meta.url);
 const FILES: Record<string, { path: string; type: string }> = {
   "app.js": { path: join(UI_DIR, "app.js"), type: "text/javascript; charset=utf-8" },
   "offline.js": { path: join(UI_DIR, "offline.js"), type: "text/javascript; charset=utf-8" },
+  // Run 41: reads a reservations report in the browser, so only the kept fields are uploaded.
+  "reservations-csv.js": { path: join(UI_DIR, "reservations-csv.js"), type: "text/javascript; charset=utf-8" },
   "styles.css": { path: join(UI_DIR, "styles.css"), type: "text/css; charset=utf-8" },
   // htm's export map only resolves CommonJS here; serve its ES module build from the package dir.
   "vendor/htm-preact.js": { path: join(dirname(require.resolve("htm")), "..", "preact", "standalone.mjs"), type: "text/javascript; charset=utf-8" },

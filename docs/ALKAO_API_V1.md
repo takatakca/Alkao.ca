@@ -668,6 +668,84 @@ hold, refuses the order, and the buyer starts again without it.
 **Shop:** a **Code promo** field at the quantity step shows the "Rabais" line, or explains in
 French or English why a code cannot be used.
 
+### The customer file (CRM, Run 41)
+
+Who comes, how often, and how to reach them, for one Client and Brand. Customers and their
+bookings come from an outside system's reports: first, the daily **Réservation camping.ca**
+reservations report ("Données de réservations", `reservations.csv`).
+
+| Method | Path | Who | Result |
+|---|---|---|---|
+| GET | `/v1/admin/…/customers` | `customers.read` | `?segment&status&q&emailable=true&limit&offset` → `{ customers, total, summary: { customers, emailable, segments, statuses } }`, most visits first |
+| GET | `/v1/admin/…/customers/:id` | `customers.read` | `{ customer }`: contact details, figures, consent, and `bookings` (newest first, each with `state`: `done`, `upcoming` or `cancelled`) |
+| PATCH | `/v1/admin/…/customers/:id` | `customers.write` | `{ emailConsent?, emailOptOut?, smsOptOut? }` (booleans) → `{ customer }` |
+| POST | `/v1/admin/…/customers/:id/anonymize` | `buyers.erase` | Law 25: name and contact details wiped for good → `{ anonymizedAt, alreadyDone }` |
+| GET | `/v1/admin/…/customers.csv` | `customers.export` | The same filters as the list. UTF-8 with a byte-order mark, so Excel reads accents. Anonymized customers are left out. Logged in the journal |
+| POST | `/v1/admin/…/customers/import` | `customers.import` | `{ source?, reportDate, rows: [≤ 400] }` → `{ import: { rows, customersCreated, customersMatched, bookingsCreated, bookingsUpdated, cardNumbersRemoved } }` |
+| POST | `/v1/admin/…/customers/import/complete` | `customers.import` | `{ source?, reportDate }` → `{ import: { cancelled } }`. `409 import_empty` if nothing was imported for that date |
+
+`source` defaults to `reservation_camping`. A `reportDate` later than today (Québec) is
+refused with `422 report_date_in_future`.
+
+**What is kept, and what never is**
+
+- **Kept:** the reservation number, the site, arrival and departure dates, adults, children,
+  pets, a group flag, check-in, and the total (taxes included). For the person: name,
+  second person's name, e-mail, phones, address.
+- **Never stored:** comments, licence plates, extra people's names, payment and tax details,
+  and anything that looks like a payment-card number. The import contract has no field for
+  them, and unknown fields are dropped. On top of that, every kept text field loses any
+  13–19 digit sequence with a valid card checksum (`cardNumbersRemoved` counts them).
+- In `/ops`, the report is read **in the browser** (`/ops/reservations-csv.js`): only the kept
+  fields are uploaded.
+- The journal records each import, export and change with counts only, never a name or an
+  address.
+
+**One customer per person**
+
+A booking already known keeps its customer. A new booking goes to an existing customer with:
+
+1. the same e-mail, mobile or home phone **and** the same family name or first name; or
+2. the same first name, family name and postal code.
+
+Otherwise it starts a new customer. A shared address (a front-desk placeholder, a family
+e-mail) never merges two different people. Placeholders (`aucun@…`, `000-000-0000`,
+`555-5555`) are ignored.
+
+**Reports in any order**
+
+- A newer report updates a booking. An older one only moves its first-seen date back.
+- Contact details follow the newest report that has them, and a blank field never erases a
+  known one.
+- **Cancellations:** call `…/import/complete` once every batch of a complete report is in. A
+  booking that report no longer lists, while its arrival was still ahead, is taken for
+  cancelled (never one marked "Arrivé"). If a later report lists it again, it is booked
+  again.
+
+**Figures, computed when read (never stale)**
+
+| Field | Meaning |
+|---|---|
+| `visits` | Stays already made. Bookings that overlap or follow each other (several sites, a stay extended) count as one visit |
+| `stays` | Bookings already made |
+| `segment` | `loyal` 5+ visits · `regular` 3–4 · `occasional` 2 · `one_time` 1 · `upcoming` no visit yet, a booking ahead · `cancelled` only cancelled bookings · `prospect` no booking |
+| `status` | Year of the last visit or next arrival: `active` this year · `lapsed` last year · `inactive` older |
+| `spentCents` | Totals of the stays made |
+| `favoriteCategory` | Most frequent lodging: `camping`, `cabana`, `chalet`, `condo`, `villa`, `tent`, `coolbox`, `other` |
+| `emailPermission` | `express` (consent recorded) · `implied` (booked within 2 years, Canada's anti-spam law, until `impliedConsentUntil`) · `expired` · `opted_out` · `none` (no e-mail) |
+
+The booking date is not in the report: it is approximated by the first report that listed
+the booking. When reports are days apart, that date can be a few days late, and so can
+`impliedConsentUntil`.
+
+**Loading the history:** `npm run customers:import -- --client <uuid> --brand <uuid>
+<report.csv>@<YYYY-MM-DD> […]` reads reports straight into the database (`DATABASE_URL`),
+oldest first. It prints totals only. Add `--incomplete` when the files do not list every
+upcoming booking.
+
+The tables `ticketing_customers` and `ticketing_customer_bookings` are server-only: RLS on, no
+grant, no policy.
+
 ### Role → permission
 
 | Role | catalog.read · inventory.read · holds.read | catalog.write | orders.read · buyers.read | audit.read |
@@ -679,6 +757,7 @@ Run 02 adds `payments.manage` (owner, admin) and `refunds.create` (owner, admin,
 Run 03 adds `scan` (owner, admin, manager, staff), `credentials.manage` (owner, admin, manager)
 and `keys.manage` (owner, admin). Its routes are listed in [ALKAO_SCANNER_V1.md](ALKAO_SCANNER_V1.md).
 Run 20 adds `buyers.erase` (owner, admin).
+Run 41 adds `customers.read` and `customers.write` (owner, admin, manager), and `customers.import` and `customers.export` (owner, admin).
 | editor | ✓ | ✓ | | |
 | staff, viewer | ✓ | | | |
 

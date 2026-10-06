@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { CUSTOMER_SEGMENTS, CUSTOMER_STATUSES } from "../domain/customers.js";
 
 /**
  * ALKAO API v1 request contracts. Unknown keys are stripped: a client can never send a
@@ -316,3 +317,65 @@ export const DisputesQuery = z.object({
   status: z.enum(["open", "all"]).default("open"),
   limit: z.coerce.number().int().min(1).max(200).default(100),
 });
+
+// ── Run 41: the customer file (CRM) ─────────────────────────────────────────
+const optionalText = (max: number) => z.string().max(max).nullish();
+const isoDate = z.iso.date();
+const source = z.string().regex(/^[a-z][a-z0-9_]{1,39}$/).default("reservation_camping");
+const headcount = z.number().int().min(0).max(500).default(0);
+/**
+ * One booking and the customer named on it. Only these fields exist: anything else a report
+ * carries (comments, plates, payment details) is dropped before it is stored.
+ */
+export const CustomerImportRow = z
+  .object({
+    sourceRef: z.string().trim().min(1).max(80),
+    item: optionalText(80),
+    startsOn: isoDate,
+    endsOn: isoDate,
+    adults: headcount,
+    children: headcount,
+    pets: z.number().int().min(0).max(100).default(0),
+    groupBooking: z.boolean().default(false),
+    checkedIn: z.boolean().default(false),
+    totalCents: z.number().int().min(0).max(100_000_000).default(0),
+    firstName: optionalText(120),
+    lastName: optionalText(120),
+    companionName: optionalText(200),
+    email: optionalText(320),
+    mobilePhone: optionalText(40),
+    homePhone: optionalText(40),
+    workPhone: optionalText(40),
+    addressLine: optionalText(200),
+    addressUnit: optionalText(40),
+    city: optionalText(120),
+    region: optionalText(60),
+    postalCode: optionalText(20),
+    country: optionalText(60),
+  })
+  .refine((r) => r.startsOn <= r.endsOn, { message: "endsOn must not be before startsOn", path: ["endsOn"] });
+export const CustomerImportRequest = z.object({
+  source,
+  /** The day the report was produced: a newer report's details win over an older one's. */
+  reportDate: isoDate,
+  rows: z.array(CustomerImportRow).min(1).max(400),
+});
+/** Every batch of the report is in: bookings it no longer lists are taken for cancelled. */
+export const CustomerImportComplete = z.object({ source, reportDate: isoDate });
+const customerFilters = {
+  segment: z.enum(CUSTOMER_SEGMENTS).optional(),
+  status: z.enum(CUSTOMER_STATUSES).optional(),
+  q: z.string().trim().min(2).max(120).optional(),
+  /** Only customers who may receive marketing e-mail (express or implied consent). */
+  emailable: z.enum(["true", "false"]).transform((v) => v === "true").optional(),
+};
+export const CustomersQuery = z.object({
+  ...customerFilters,
+  limit: z.coerce.number().int().min(1).max(500).default(100),
+  offset: z.coerce.number().int().min(0).max(1_000_000).default(0),
+});
+export const CustomersExportQuery = z.object(customerFilters);
+export const UpdateCustomer = z
+  .object({ emailConsent: z.boolean(), emailOptOut: z.boolean(), smsOptOut: z.boolean() })
+  .partial()
+  .refine((o) => Object.keys(o).length > 0, "empty update");

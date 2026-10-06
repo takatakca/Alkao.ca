@@ -155,6 +155,35 @@ describe.each(["light", "dark"] as const)("accessibility (%s)", (scheme) => {
     await visit(`${prefix}/scanner`, () => page.getByRole("heading", { name: "Scanner" }).waitFor(), "scanner");
     await visit(`${prefix}/payments`, () => page.getByRole("heading", { name: "Paiements (Stripe)" }).waitFor(), "payments");
     await visit(`${prefix}/journal`, () => page.getByRole("cell", { name: "Commande payée" }).first().waitFor(), "journal");
+    // Run 41: the customer file, with one customer in every frequency colour.
+    const customerId = await seedCustomers(h.clientId, h.brandId);
+    await visit(`${prefix}/customers`, () => page.getByRole("heading", { name: "Par fréquence" }).waitFor(), "customers");
+    await visit(`${prefix}/customer/${customerId}`, () => page.getByRole("heading", { name: "Réservations" }).waitFor(), "customer");
     expect(problems).toEqual([]);
   }, 90_000);
 });
+
+/** Made-up customers with 5, 3, 2, 1 and 0 visits (one upcoming, one cancelled); once per database. */
+async function seedCustomers(clientId: string, brandId: string): Promise<string> {
+  const { rows: done } = await db.pool.query<{ id: string }>(`SELECT id FROM public.ticketing_customers WHERE client_id = $1 AND email = 'axe-5@example.com'`, [clientId]);
+  if (done[0]) return done[0].id;
+  let first = "";
+  for (const [n, visits, extra] of [[5, 5, ""], [3, 3, ""], [2, 2, ""], [1, 1, ""], [0, 0, "upcoming"], [9, 0, "cancelled"]] as const) {
+    const { rows } = await db.pool.query<{ id: string }>(
+      `INSERT INTO public.ticketing_customers (client_id, brand_id, first_name, last_name, email, mobile_phone, city, region, country)
+       VALUES ($1, $2, 'Client', $3, $4, '5145550100', 'Maricourt', 'QC', 'CA') RETURNING id`,
+      [clientId, brandId, `Exemple ${n}`, `axe-${n}@example.com`],
+    );
+    first ||= rows[0]!.id;
+    const stays = Array.from({ length: visits }, (_, i) => [`${2020 + i}-07-01`, `${2020 + i}-07-03`]);
+    if (extra) stays.push(["2099-07-01", "2099-07-03"]);
+    for (const [i, [from, to]] of stays.entries()) {
+      await db.pool.query(
+        `INSERT INTO public.ticketing_customer_bookings (client_id, brand_id, customer_id, source, source_ref, category, item, starts_on, ends_on, first_report_on, last_report_on, cancelled_on, total_cents)
+         VALUES ($1, $2, $3, 'reservation_camping', $4, 'chalet', 'CHALET 5', $5, $6, '2020-01-01', '2020-01-01', $7, 25000)`,
+        [clientId, brandId, rows[0]!.id, `AXE-${n}-${i}`, from, to, extra === "cancelled" ? "2020-01-02" : null],
+      );
+    }
+  }
+  return first;
+}

@@ -50,6 +50,9 @@ async function festiSnapshot() {
     disputes: await q(`SELECT id, status, updated_at FROM public.ticketing_payment_disputes WHERE client_id = $1 ORDER BY id`),
     chargeRefunds: await q(`SELECT order_id, refunded_cents FROM public.ticketing_charge_refund_totals WHERE client_id = $1`),
     settings: await q(`SELECT checkout_return_origins, reminder_emails FROM public.ticketing_brand_settings WHERE client_id = $1`),
+    // Run 41
+    customers: await q(`SELECT id, email, email_opt_out_at, anonymized_at, updated_at FROM public.ticketing_customers WHERE client_id = $1 ORDER BY id`),
+    bookings: await q(`SELECT id, customer_id, cancelled_on, updated_at FROM public.ticketing_customer_bookings WHERE client_id = $1 ORDER BY id`),
   });
 }
 
@@ -62,7 +65,17 @@ describe("tenant isolation sweep", () => {
       `INSERT INTO public.ticketing_promo_codes (client_id, brand_id, event_id, code, kind, percent) VALUES ($1, $2, $3, 'FESTIONLY', 'percent', 10) RETURNING id`,
       [f.clientId, f.brandId, f.eventId],
     );
+    const { rows: customer } = await db.pool.query<{ id: string }>(
+      `INSERT INTO public.ticketing_customers (client_id, brand_id, first_name, email) VALUES ($1, $2, 'Festi', 'festi-client@example.com') RETURNING id`,
+      [f.clientId, f.brandId],
+    );
+    await db.pool.query(
+      `INSERT INTO public.ticketing_customer_bookings (client_id, brand_id, customer_id, source, source_ref, category, starts_on, ends_on, first_report_on, last_report_on)
+       VALUES ($1, $2, $3, 'reservation_camping', 'F-1', 'chalet', '2027-01-10', '2027-01-12', '2026-01-01', '2026-01-01')`,
+      [f.clientId, f.brandId, customer[0]!.id],
+    );
     const ids: Record<string, string> = {
+      customerId: customer[0]!.id,
       venueId: f.venueId, eventId: f.eventId, sessionId: f.sessionId, ticketTypeId: f.types[0]!.id,
       orderId: f.orderId, ticketId: f.ticketIds[0]!, refundId: refunds[0]!.id, holdId: f.holdId, promoCodeId: promo[0]!.id,
     };
@@ -84,6 +97,8 @@ describe("tenant isolation sweep", () => {
       // Run 36
       "POST /events/:eventId/promo-codes": { code: "PIRATE", kind: "percent", percent: 10 },
       "PATCH /promo-codes/:promoCodeId": { active: false },
+      // Run 41
+      "PATCH /customers/:customerId": { emailOptOut: true },
     };
     const { rows: festiOrder } = await db.pool.query<{ reference: string }>(`SELECT reference FROM public.ticketing_orders WHERE id = $1`, [f.orderId]);
     const queries: Record<string, string> = {
@@ -109,7 +124,8 @@ describe("tenant isolation sweep", () => {
     expect(results.length).toBeGreaterThanOrEqual(25);
     for (const key of ["GET /orders/:orderId/buyer/export", "POST /orders/:orderId/buyer/anonymize", "POST /orders/:orderId/tickets/void", "GET /sessions/:sessionId/lookup",
       "POST /events/:eventId/duplicate", "POST /events/:eventId/sessions/batch", "POST /events/:eventId/sessions/status", "GET /orders/:orderId/history",
-      "GET /events/:eventId/promo-codes", "POST /events/:eventId/promo-codes", "PATCH /promo-codes/:promoCodeId"]) {
+      "GET /events/:eventId/promo-codes", "POST /events/:eventId/promo-codes", "PATCH /promo-codes/:promoCodeId",
+      "GET /customers/:customerId", "PATCH /customers/:customerId", "POST /customers/:customerId/anonymize"]) {
       expect(results.some((r) => r.startsWith(`${key} → 404`)), `${key}: ${results.find((r) => r.startsWith(key))}`).toBe(true);
     }
 

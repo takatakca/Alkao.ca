@@ -68,6 +68,9 @@ const STATUS_BY_CODE: Record<string, ContentfulStatusCode> = {
   // Run 29
   too_many_sessions: 422,
   venue_time_zone_invalid: 422,
+  // Run 41
+  import_empty: 409,
+  report_date_in_future: 422,
 };
 
 /** Domain error details safe to return to callers (never constraint or column names). */

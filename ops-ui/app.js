@@ -3,6 +3,7 @@
 // signed-in user's Supabase access token; the app itself holds no data.
 import { html, render, useEffect, useState, useCallback, useRef } from "/ops/vendor/htm-preact.js";
 import { loadOffline, newOfflineStore, offlineScan, saveOffline, syncOffline } from "/ops/offline.js";
+import { parseReservationsReport } from "/ops/reservations-csv.js";
 
 const SESSION_KEY = "alkao.ops.session";
 const money = (cents) => (Number(cents ?? 0) / 100).toLocaleString("fr-CA", { style: "currency", currency: "CAD" });
@@ -165,6 +166,9 @@ const ERRORS_FR = {
   buyer_anonymized: "Cet acheteur a été anonymisé : il n'a plus d'adresse courriel.",
   too_many_sessions: "Plus de 1000 séances d'un coup : raccourcissez la période ou espacez les séances.",
   venue_time_zone_invalid: "Le fuseau horaire du lieu est invalide : corrigez le lieu.",
+  import_empty: "Rien n'a été importé pour cette date : importez le rapport d'abord.",
+  report_date_in_future: "La date du rapport ne peut pas être dans le futur.",
+  customer_not_found: "Client introuvable.",
 };
 const errText = (e) => (e instanceof ApiError ? ERRORS_FR[e.code] ?? `Erreur : ${e.code}` : String(e?.message ?? e));
 
@@ -1015,6 +1019,174 @@ function Payments({ api, base }) {
 
 // ── Shell and routing ───────────────────────────────────────────────────────
 // Run 40: the TAKATAK dashboard's brand block (orange tile, name, small caps line).
+// ── Run 41: the customer file (CRM) ─────────────────────────────────────────
+// Who comes, how often, how to reach them. Colours by frequency, from the bookings.
+const SEGMENTS = [
+  ["loyal", "Fidèle", "5 visites et plus"], ["regular", "Régulier", "3 ou 4 visites"], ["occasional", "Occasionnel", "2 visites"],
+  ["one_time", "Une visite", "1 visite"], ["upcoming", "À venir", "Pas encore venu, réservation à venir"],
+  ["cancelled", "Annulé", "Seulement des réservations annulées"], ["prospect", "Contact", "Aucune réservation"],
+];
+const SEGMENT_FR = Object.fromEntries(SEGMENTS.map(([key, label]) => [key, label]));
+const CUSTOMER_STATUS = { active: ["ok", "Actif cette saison"], lapsed: ["warn", "À relancer"], inactive: ["", "Inactif"] };
+const CATEGORY_FR = { camping: "Camping", cabana: "Cabana", chalet: "Chalet", condo: "Condo", villa: "Villa", tent: "Tente en bois", coolbox: "Coolbox", other: "Autre" };
+const PERMISSION_FR = { express: "Oui (consentement exprès)", implied: "Oui (client récent)", expired: "Non : dernier achat il y a plus de 2 ans", opted_out: "Non : désabonné", none: "Pas de courriel" };
+const BOOKING_STATE = { done: ["ok", "Séjour fait"], upcoming: ["warn", "À venir"], cancelled: ["bad", "Annulée"] };
+const day = (iso) => (iso ? new Date(`${iso}T12:00:00`).toLocaleDateString("fr-CA", { dateStyle: "medium" }) : "—");
+const fullName = (c) => [c.firstName, c.lastName].filter(Boolean).join(" ") || (c.anonymizedAt ? "Client anonymisé" : "Sans nom");
+const phone = (d) => (d && d.length === 10 ? `${d.slice(0, 3)} ${d.slice(3, 6)}-${d.slice(6)}` : d ?? "");
+const quebecToday = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Toronto" }).format(new Date());
+const Segment = ({ s }) => html`<span class=${`seg seg-${s}`}>${SEGMENT_FR[s] ?? s}</span>`;
+const CustomerStatus = ({ s }) => (s ? html`<span class=${`badge ${CUSTOMER_STATUS[s][0]}`}>${CUSTOMER_STATUS[s][1]}</span>` : "—");
+const number = (n) => Number(n ?? 0).toLocaleString("fr-CA");
+// Reading the whole file is for managers and up; importing and exporting it, owners and admins.
+const CUSTOMER_ROLES = ["owner", "admin", "manager"];
+const CUSTOMER_FILE_ROLES = ["owner", "admin"];
+
+function CustomerImport({ api, base, onDone }) {
+  const [file, setFile] = useState(null);
+  const [reportDate, setReportDate] = useState(quebecToday());
+  const [complete, setComplete] = useState(true);
+  const [progress, setProgress] = useState("");
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const run = async (e) => {
+    e.preventDefault();
+    setError(null); setResult(null); setBusy(true);
+    try {
+      let parsed;
+      try { parsed = parseReservationsReport(new Uint8Array(await file.arrayBuffer())); } catch {
+        throw new Error("Ce fichier n'est pas un rapport de réservations Réservation camping.ca (reservations.csv).");
+      }
+      const total = { rows: 0, customersCreated: 0, bookingsCreated: 0, bookingsUpdated: 0, cardNumbersRemoved: 0, cancelled: 0 };
+      const size = 250;
+      const batches = Math.ceil(parsed.rows.length / size);
+      for (let i = 0; i < batches; i++) {
+        setProgress(`Envoi du lot ${i + 1} sur ${batches}…`);
+        const { import: r } = await api(`${base}/customers/import`, { method: "POST", body: { reportDate, rows: parsed.rows.slice(i * size, (i + 1) * size) } });
+        for (const k of ["rows", "customersCreated", "bookingsCreated", "bookingsUpdated", "cardNumbersRemoved"]) total[k] += r[k];
+      }
+      if (complete && parsed.rows.length) {
+        setProgress("Repérage des réservations annulées…");
+        total.cancelled = (await api(`${base}/customers/import/complete`, { method: "POST", body: { reportDate } })).import.cancelled;
+      }
+      setResult({ ...total, unreadable: parsed.unreadable });
+      onDone();
+    } catch (err) { setError(err); } finally { setBusy(false); setProgress(""); }
+  };
+  return html`<form class="card" aria-label="Importer un rapport de réservations" onSubmit=${run}>
+      <h3>Importer un rapport de réservations</h3>
+      <p class="muted">Le fichier reservations.csv de Réservation camping.ca. Il est lu sur cet ordinateur : seuls le nom, les coordonnées, le site, les dates, le nombre de personnes et le total sont envoyés. Les commentaires, les plaques, les paiements et tout numéro de carte n'en sortent jamais.</p>
+      <div class="fields">
+        <label>Rapport (CSV)<input type="file" accept=".csv,text/csv" required onChange=${(e) => setFile(e.target.files[0] ?? null)} /></label>
+        <label>Date du rapport<input type="date" required max=${quebecToday()} value=${reportDate} onInput=${(e) => setReportDate(e.target.value)} /></label>
+        <label class="check"><input type="checkbox" checked=${complete} onChange=${(e) => setComplete(e.target.checked)} /> Ce rapport liste toutes les réservations à venir (celles qui n'y sont plus sont annulées)</label>
+        <button type="submit" disabled=${busy || !file}>Importer</button>
+      </div>
+      <p class="muted" role="status" aria-live="polite">${progress}</p>
+      ${error && html`<${Failure} error=${error} />`}
+      ${result && html`<div class="alert ok" role="status"><strong>Import terminé.</strong> ${number(result.rows)} réservations lues · ${number(result.customersCreated)} nouveaux clients ·
+        ${number(result.bookingsCreated)} nouvelles réservations · ${number(result.bookingsUpdated)} mises à jour${complete ? html` · ${number(result.cancelled)} annulées` : ""}${result.cardNumbersRemoved ? html` · ${number(result.cardNumbersRemoved)} numéro(s) de carte retiré(s)` : ""}${result.unreadable ? html` · ${number(result.unreadable)} ligne(s) illisible(s)` : ""}.</div>`}
+    </form>`;
+}
+
+function Customers({ api, base, prefix, role }) {
+  const [filters, setFilters] = useState({ segment: "", status: "", q: "", emailable: "" });
+  const [search, setSearch] = useState("");
+  const [offset, setOffset] = useState(0);
+  const PAGE = 100;
+  const params = (extra) => new URLSearchParams(Object.entries({ ...filters, ...extra }).filter(([, v]) => v !== "")).toString();
+  const qs = params({ limit: String(PAGE), offset: String(offset) });
+  const [state, reload] = useLoad(() => api(`${base}/customers?${qs}`), [base, qs]);
+  const pick = (patch) => { setOffset(0); setFilters({ ...filters, ...patch }); };
+  const manageFile = CUSTOMER_FILE_ROLES.includes(role);
+  const summary = state.data?.summary;
+  const list = state.data?.customers ?? [];
+  const total = state.data?.total ?? 0;
+  // Each area sits in its own element, so redrawing the list never remounts the import form
+  // (Preact matches unkeyed siblings by type).
+  return html`<h1>Clients</h1>
+    <div>${summary && html`<div class="grid">
+      <div class="kpi"><div class="label">Clients</div><div class="value">${number(summary.customers)}</div></div>
+      <div class="kpi"><div class="label">Joignables par courriel</div><div class="value">${number(summary.emailable)}</div></div>
+      <div class="kpi"><div class="label">Actifs cette saison</div><div class="value">${number(summary.statuses.active)}</div></div>
+      <div class="kpi"><div class="label">À relancer</div><div class="value">${number(summary.statuses.lapsed)}</div></div>
+    </div>
+    <h2>Par fréquence</h2>
+    <div class="segments" role="group" aria-label="Filtrer par fréquence">
+      ${SEGMENTS.filter(([key]) => key !== "prospect" || summary.segments.prospect > 0).map(([key, label, hint]) => html`<button type="button" class=${`seg-tile s-${key}`}
+        aria-pressed=${filters.segment === key ? "true" : "false"} onClick=${() => pick({ segment: filters.segment === key ? "" : key })}>
+        <span class="n">${number(summary.segments[key])}</span><span><${Segment} s=${key} /></span><span class="hint">${hint}</span></button>`)}
+    </div>`}</div>
+    <form class="inline card" role="search" onSubmit=${(e) => { e.preventDefault(); pick({ q: search.trim().length >= 2 ? search.trim() : "" }); }}>
+      <label>Rechercher (nom, courriel ou téléphone)<input type="search" value=${search} onInput=${(e) => setSearch(e.target.value)} /></label>
+      <label>Fréquence<select value=${filters.segment} onChange=${(e) => pick({ segment: e.target.value })}>
+        <option value="">Toutes</option>${SEGMENTS.map(([key, label]) => html`<option value=${key}>${label}</option>`)}</select></label>
+      <label>Saison<select value=${filters.status} onChange=${(e) => pick({ status: e.target.value })}>
+        <option value="">Toutes</option>${Object.entries(CUSTOMER_STATUS).map(([key, [, label]]) => html`<option value=${key}>${label}</option>`)}</select></label>
+      <label class="check"><input type="checkbox" checked=${filters.emailable === "true"} onChange=${(e) => pick({ emailable: e.target.checked ? "true" : "" })} /> Courriel permis seulement</label>
+      <button type="submit">Rechercher</button>
+      ${manageFile && html`<button type="button" class="secondary" onClick=${() => download(api, `${base}/customers.csv?${params({})}`, `clients-${quebecToday()}.csv`)}>Exporter (CSV)</button>`}
+    </form>
+    <div>${state.loading && !state.data ? html`<${Loading} />` : state.error ? html`<${Failure} error=${state.error} />` : list.length === 0 ? html`<p class="muted">Aucun client trouvé.</p>` : html`
+      <div class="table-scroll" role="region" aria-label="Liste des clients" tabindex="0"><table><thead><tr><th>Client</th><th>Fréquence</th><th class="num">Visites</th><th>Dernière visite</th><th>Prochaine arrivée</th><th>Hébergement</th><th class="num">Dépensé</th><th>Saison</th></tr></thead>
+        <tbody>${list.map((c) => html`<tr>
+          <td><a href=${`#${prefix}/customer/${c.id}`}>${fullName(c)}</a>${c.email ? html`<br /><span class="muted">${c.email}</span>` : ""}</td>
+          <td><${Segment} s=${c.segment} /></td><td class="num">${c.visits}</td><td>${day(c.lastVisitOn)}</td><td>${day(c.nextArrivalOn)}</td>
+          <td>${CATEGORY_FR[c.favoriteCategory] ?? "—"}</td><td class="num">${money(c.spentCents)}</td><td><${CustomerStatus} s=${c.status} /></td></tr>`)}</tbody></table></div>
+      <p class="row"><span class="muted">${number(offset + 1)}–${number(offset + list.length)} sur ${number(total)}</span>
+        <button class="secondary" disabled=${offset === 0} onClick=${() => setOffset(Math.max(0, offset - PAGE))}>Précédent</button>
+        <button class="secondary" disabled=${offset + PAGE >= total} onClick=${() => setOffset(offset + PAGE)}>Suivant</button></p>`}</div>
+    <div>${manageFile && html`<h2>Importer</h2><${CustomerImport} api=${api} base=${base} onDone=${reload} />`}</div>`;
+}
+
+function CustomerDetail({ api, base, customerId, role }) {
+  const [state, reload] = useLoad(() => api(`${base}/customers/${customerId}`), [base, customerId]);
+  const [error, setError] = useState(null);
+  const act = (fn) => async () => { setError(null); try { await fn(); reload(); } catch (err) { setError(err); } };
+  if (state.loading && !state.data) return html`<h1>Client</h1><${Loading} />`;
+  if (state.error) return html`<h1>Client</h1><${Failure} error=${state.error} />`;
+  const c = state.data.customer;
+  const patch = (body) => act(() => api(`${base}/customers/${c.id}`, { method: "PATCH", body }));
+  const anonymize = act(async () => {
+    if (!confirm("Anonymiser ce client pour de bon ? Son nom et ses coordonnées seront effacés ; ses séjours restent dans les statistiques.")) return;
+    await api(`${base}/customers/${c.id}/anonymize`, { method: "POST" });
+  });
+  const address = [[c.addressUnit, c.addressLine].filter(Boolean).join("-"), c.city, c.region, c.postalCode, c.country].filter(Boolean).join(", ");
+  const emailOn = ["express", "implied"].includes(c.emailPermission);
+  return html`<h1>${fullName(c)}</h1>
+    <p class="row"><${Segment} s=${c.segment} /> <${CustomerStatus} s=${c.status} />${c.anonymizedAt ? html`<span class="badge">Anonymisé le ${when(c.anonymizedAt)}</span>` : ""}</p>
+    ${error && html`<${Failure} error=${error} />`}
+    <div class="grid">
+      ${[["Visites", c.visits], ["Séjours", c.stays], ["À venir", c.upcoming], ["Dépensé", money(c.spentCents)], ["Première visite", day(c.firstVisitOn)], ["Dernière visite", day(c.lastVisitOn)], ["Prochaine arrivée", day(c.nextArrivalOn)]]
+        .map(([label, v]) => html`<div class="kpi"><div class="label">${label}</div><div class="value">${v}</div></div>`)}
+    </div>
+    ${!c.anonymizedAt && html`<h2>Coordonnées</h2>
+      <div class="card"><dl class="facts">
+        <dt>Courriel</dt><dd>${c.email ?? "—"}</dd><dt>Cellulaire</dt><dd>${phone(c.mobilePhone) || "—"}</dd>
+        <dt>Téléphone maison</dt><dd>${phone(c.homePhone) || "—"}</dd><dt>Téléphone travail</dt><dd>${phone(c.workPhone) || "—"}</dd>
+        <dt>Adresse</dt><dd>${address || "—"}</dd><dt>Deuxième personne</dt><dd>${c.companionName ?? "—"}</dd>
+      </dl></div>
+      <h2>Courriels et textos</h2>
+      <div class="card">
+        <p>Courriels promotionnels : <strong>${PERMISSION_FR[c.emailPermission]}</strong>${c.emailPermission === "implied" ? ` jusqu'au ${day(c.impliedConsentUntil)}` : ""}.</p>
+        <p class="muted">Loi canadienne anti-pourriel : un achat permet d'écrire au client pendant 2 ans ; après, il faut son consentement (par exemple l'inscription à l'infolettre).</p>
+        <p class="row">
+          ${emailOn ? html`<button class="secondary" onClick=${patch({ emailOptOut: true })}>Désabonner des courriels</button>`
+            : c.email && html`<button class="secondary" onClick=${patch({ emailConsent: true })}>Le client a consenti aux courriels</button>`}
+          ${c.smsOptOutAt ? html`<button class="secondary" onClick=${patch({ smsOptOut: false })}>Permettre les textos</button>`
+            : html`<button class="secondary" onClick=${patch({ smsOptOut: true })}>Arrêter les textos</button>`}
+        </p>
+      </div>`}
+    <h2>Réservations</h2>
+    ${c.bookings.length === 0 ? html`<p class="muted">Aucune réservation.</p>` : html`<div class="table-scroll" role="region" aria-label="Réservations du client" tabindex="0"><table><thead><tr><th>Réservation</th><th>Hébergement</th><th>Arrivée</th><th>Départ</th><th class="num">Personnes</th><th class="num">Total</th><th>État</th></tr></thead>
+      <tbody>${c.bookings.map((b) => html`<tr><td>${b.sourceRef}</td><td>${CATEGORY_FR[b.category] ?? b.category}${b.item ? html` <span class="muted">${b.item}</span>` : ""}</td>
+        <td>${day(b.startsOn)}</td><td>${day(b.endsOn)}</td><td class="num">${b.adults + b.children}${b.pets ? ` + ${b.pets} animal` : ""}</td><td class="num">${money(b.totalCents)}</td>
+        <td><span class=${`badge ${BOOKING_STATE[b.state][0]}`}>${BOOKING_STATE[b.state][1]}</span></td></tr>`)}</tbody></table></div>`}
+    ${CUSTOMER_FILE_ROLES.includes(role) && !c.anonymizedAt && html`<h2>Loi 25</h2>
+      <p class="row"><button class="danger" onClick=${anonymize}>Anonymiser ce client</button><span class="muted">À sa demande : efface son nom et ses coordonnées pour de bon.</span></p>`}`;
+}
+
 function Brand() {
   return html`<div class="brand"><span class="mark" aria-hidden="true">A</span>
     <span><span class="name">ALKAO</span><span class="sub">Billetterie · TAKATAK</span></span></div>`;
@@ -1040,7 +1212,7 @@ function Shell({ api, route, email, me, testMode, onLogout }) {
   const base = `/v1/admin/clients/${route.clientId}/brands/${route.brandId}`;
   const [status] = useLoad(() => api(`${base}/status`), [base]);
   const page = route.page;
-  const tab = page === "event" ? "events" : page === "order" ? "orders" : page;
+  const tab = page === "event" ? "events" : page === "order" ? "orders" : page === "customer" ? "customers" : page;
   const disabled = status.data && !status.data.ticketing.active;
   const body = disabled ? html`<div class="alert warn">${REASON_FR[status.data.ticketing.reason] ?? status.data.ticketing.reason}</div>`
     : page === "dashboard" ? html`<${Dashboard} api=${api} base=${base} prefix=${prefix} />`
@@ -1052,8 +1224,10 @@ function Shell({ api, route, email, me, testMode, onLogout }) {
     : page === "journal" ? html`<${Journal} api=${api} base=${base} prefix=${prefix} me=${me} />`
     : page === "scanner" ? html`<${Scanner} api=${api} base=${base} />`
     : page === "payments" ? html`<${Payments} api=${api} base=${base} />`
+    : page === "customers" ? html`<${Customers} api=${api} base=${base} prefix=${prefix} role=${status.data?.role} />`
+    : page === "customer" ? html`<${CustomerDetail} api=${api} base=${base} customerId=${route.id} role=${status.data?.role} />`
     : html`<p>Page inconnue.</p>`;
-  const links = [...TABS, ...(JOURNAL_ROLES.includes(status.data?.role) ? [["journal", "Journal"]] : [])]
+  const links = [...TABS, ...(CUSTOMER_ROLES.includes(status.data?.role) ? [["customers", "Clients"]] : []), ...(JOURNAL_ROLES.includes(status.data?.role) ? [["journal", "Journal"]] : [])]
     .map(([key, label]) => html`<a class=${tab === key ? "active" : ""} aria-current=${tab === key ? "page" : null} href=${`#${prefix}/${key}`}>${label}</a>`);
   // Run 40: standalone, a TAKATAK-style dark sidebar; inside the TAKATAK dashboard, which has
   // its own, the links sit in the white top bar instead.

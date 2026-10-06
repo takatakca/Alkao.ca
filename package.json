@@ -25,6 +25,7 @@
     "db:migrate": "tsx scripts/migrate.ts",
     "check:golive": "tsx scripts/golive-check.ts",
     "cron": "tsx scripts/cron.ts",
+    "customers:import": "tsx scripts/customers-import.ts",
     "pack:mochahost": "bash scripts/pack-artifact.sh"
   },
   "dependencies": {
