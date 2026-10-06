@@ -4,7 +4,7 @@ import type { TenantScope } from "./commerce.js";
 import { mapDbErrors } from "./errors.js";
 import type { Db, Tx } from "./pool.js";
 import { DomainError } from "../domain/errors.js";
-import type { CustomerSegment, CustomerStatus } from "../domain/customers.js";
+import { IMPLIED_CONSENT_DAYS, type BookingCategory, type CustomerSegment, type CustomerStatus } from "../domain/customers.js";
 
 /**
  * Run 42: e-mail campaigns to the customer file. A campaign is written as a draft, tried on a
@@ -18,6 +18,8 @@ type Actor = { type: "user"; id: string | null };
 export interface Audience {
   segments: CustomerSegment[];
   statuses: CustomerStatus[];
+  /** Run 45, automations: the visits that start it (empty: all). */
+  categories?: BookingCategory[] | undefined;
 }
 
 export interface CampaignInput {
@@ -31,10 +33,13 @@ export interface CampaignInput {
   ctaLabel?: string | null | undefined;
   ctaUrl?: string | null | undefined;
   audience: Audience;
+  /** Run 45: "one_time" (sent once, by staff) or "after_visit" (automatic, delayDays after each visit). */
+  kind?: "one_time" | "after_visit" | undefined;
+  delayDays?: number | null | undefined;
 }
 
 const COLUMNS = `id, name, language, subject, preheader, heading, body, image_url, cta_label, cta_url, audience_segments, audience_statuses,
-  status, recipients, queued_at, finished_at, created_at, updated_at`;
+  status, recipients, queued_at, finished_at, created_at, updated_at, kind, delay_days, audience_categories, active, activated_at`;
 const C_COLUMNS = COLUMNS.split(/,\s*/).map((col) => `c.${col}`).join(", ");
 
 /** At most this many tests per campaign: a test goes to whatever address staff type. */
@@ -59,14 +64,15 @@ export async function audienceCount(q: Queryable, s: TenantScope, today: string,
 }
 
 const values = (c: CampaignInput) => [c.name, c.language, c.subject, c.preheader ?? null, c.heading, c.body, c.imageUrl ?? null,
-  c.ctaLabel ?? null, c.ctaUrl ?? null, c.audience.segments, c.audience.statuses];
+  c.ctaLabel ?? null, c.ctaUrl ?? null, c.audience.segments, c.audience.statuses, c.kind ?? "one_time",
+  (c.kind ?? "one_time") === "after_visit" ? c.delayDays ?? 3 : null, c.audience.categories ?? []];
 
 export async function createCampaign(tx: Tx, s: TenantScope, c: CampaignInput, actor: Actor) {
   return mapDbErrors(async () => {
     const { rows } = await tx.query(
       `INSERT INTO public.ticketing_campaigns (client_id, brand_id, name, language, subject, preheader, heading, body, image_url, cta_label, cta_url,
-         audience_segments, audience_statuses, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING ${COLUMNS}`,
+         audience_segments, audience_statuses, kind, delay_days, audience_categories, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17) RETURNING ${COLUMNS}`,
       [s.clientId, s.brandId, ...values(c), actor.id],
     );
     await writeAudit(tx, s, actor, "campaign.created", { type: "campaign", id: rows[0].id });
@@ -74,14 +80,19 @@ export async function createCampaign(tx: Tx, s: TenantScope, c: CampaignInput, a
   });
 }
 
-/** Drafts only: once sent, a campaign is what its recipients received. */
+/**
+ * Drafts only: once sent, a campaign is what its recipients received. An automation stays a
+ * draft while it runs, so its wording can be improved; it cannot change kind while on.
+ */
 export async function updateCampaign(tx: Tx, s: TenantScope, id: string, c: CampaignInput, actor: Actor) {
   return mapDbErrors(async () => {
     const status = await lockedStatus(tx, s, id);
     if (status !== "draft") throw new DomainError("campaign_not_draft");
+    const { rows: on } = await tx.query<{ active: boolean }>(`SELECT active FROM public.ticketing_campaigns WHERE id = $1`, [id]);
+    if (on[0]?.active && (c.kind ?? "one_time") !== "after_visit") throw new DomainError("automation_active");
     const { rows } = await tx.query(
       `UPDATE public.ticketing_campaigns SET name = $4, language = $5, subject = $6, preheader = $7, heading = $8, body = $9, image_url = $10,
-         cta_label = $11, cta_url = $12, audience_segments = $13, audience_statuses = $14
+         cta_label = $11, cta_url = $12, audience_segments = $13, audience_statuses = $14, kind = $15, delay_days = $16, audience_categories = $17
        WHERE id = $1 AND client_id = $2 AND brand_id = $3 RETURNING ${COLUMNS}`,
       [id, s.clientId, s.brandId, ...values(c)],
     );
@@ -128,8 +139,8 @@ export async function getCampaign(q: Queryable, s: TenantScope, id: string, toda
   );
   if (!rows[0]) throw new DomainError("campaign_not_found");
   const campaign = toApi(rows[0]) as Record<string, unknown>;
-  // A draft shows who would get it if sent now.
-  if (campaign.status === "draft") {
+  // A one-time draft shows who would get it if sent now.
+  if (campaign.status === "draft" && campaign.kind === "one_time") {
     campaign.audienceNow = await audienceCount(q, s, today, { segments: rows[0].audience_segments, statuses: rows[0].audience_statuses });
   }
   return campaign;
@@ -179,6 +190,8 @@ export async function queueTest(tx: Tx, s: TenantScope, id: string, email: strin
 export async function sendCampaign(tx: Tx, s: TenantScope, id: string, expectedRecipients: number, today: string, actor: Actor, now: Date) {
   const status = await lockedStatus(tx, s, id);
   if (status !== "draft") throw new DomainError("campaign_not_draft");
+  const { rows: kind } = await tx.query<{ kind: string }>(`SELECT kind FROM public.ticketing_campaigns WHERE id = $1`, [id]);
+  if (kind[0]?.kind !== "one_time") throw new DomainError("campaign_is_automation");
   const sender = await getMarketingSettings(tx, s);
   if (!sender.senderAddress || !sender.contact) throw new DomainError("marketing_settings_missing");
   const { rows: c } = await tx.query<{ audience_segments: CustomerSegment[]; audience_statuses: CustomerStatus[] }>(
@@ -210,9 +223,58 @@ export async function cancelCampaign(tx: Tx, s: TenantScope, id: string, actor: 
     `UPDATE public.ticketing_campaign_messages SET status = 'skipped', last_error = 'cancelled' WHERE campaign_id = $1 AND status = 'pending'`,
     [id],
   );
-  await tx.query(`UPDATE public.ticketing_campaigns SET status = 'cancelled', finished_at = $2 WHERE id = $1`, [id, now]);
+  await tx.query(`UPDATE public.ticketing_campaigns SET status = 'cancelled', active = false, finished_at = $2 WHERE id = $1`, [id, now]);
   await writeAudit(tx, s, actor, "campaign.cancelled", { type: "campaign", id }, { notSent: rowCount ?? 0 });
   return { notSent: rowCount ?? 0 };
+}
+
+
+// ── Run 45: automations ─────────────────────────────────────────────────────
+/** On or off. Turning it on needs the sender's footer; it then writes about visits ending from now on. */
+export async function setAutomation(tx: Tx, s: TenantScope, id: string, active: boolean, actor: Actor, now: Date) {
+  const status = await lockedStatus(tx, s, id);
+  if (status !== "draft") throw new DomainError("campaign_closed");
+  const { rows } = await tx.query<{ kind: string }>(`SELECT kind FROM public.ticketing_campaigns WHERE id = $1`, [id]);
+  if (rows[0]?.kind !== "after_visit") throw new DomainError("campaign_not_automation");
+  if (active) {
+    const sender = await getMarketingSettings(tx, s);
+    if (!sender.senderAddress || !sender.contact) throw new DomainError("marketing_settings_missing");
+  }
+  await tx.query(
+    `UPDATE public.ticketing_campaigns SET active = $2, activated_at = CASE WHEN $2 THEN coalesce(activated_at, $3) ELSE activated_at END WHERE id = $1`,
+    [id, active, now],
+  );
+  await writeAudit(tx, s, actor, active ? "campaign.automation_started" : "campaign.automation_paused", { type: "campaign", id });
+}
+
+/**
+ * Queue today's automatic messages: for each active automation, the visits (bookings not
+ * cancelled) that ended `delay_days` ago (up to 3 days late if a pass was missed), of the
+ * chosen kinds, never before the automation was turned on; to customers who may receive
+ * e-mail; one per visit, and never twice in 7 days to the same address.
+ */
+export async function queueAfterVisitMessages(db: Db, now: Date, today: string): Promise<number> {
+  const { rowCount } = await db.query(
+    `INSERT INTO public.ticketing_campaign_messages (client_id, brand_id, campaign_id, customer_id, booking_id, email, created_at, next_attempt_at)
+     SELECT DISTINCT ON (c.id, cu.email) c.client_id, c.brand_id, c.id, cu.id, b.id, cu.email, $1, $1
+     FROM public.ticketing_campaigns c
+     JOIN public.ticketing_customer_bookings b ON b.client_id = c.client_id AND b.brand_id = c.brand_id AND b.cancelled_on IS NULL
+     JOIN public.ticketing_customers cu ON cu.id = b.customer_id AND cu.client_id = b.client_id AND cu.brand_id = b.brand_id
+     WHERE c.kind = 'after_visit' AND c.active AND c.status = 'draft'
+       AND b.ends_on BETWEEN $2::date - c.delay_days - 3 AND $2::date - c.delay_days
+       AND b.ends_on + c.delay_days >= (c.activated_at AT TIME ZONE 'America/Toronto')::date
+       AND (cardinality(c.audience_categories) = 0 OR b.category = ANY(c.audience_categories))
+       AND cu.anonymized_at IS NULL AND cu.email IS NOT NULL
+       AND NOT (cu.email_opt_out_at IS NOT NULL AND (cu.email_consent_at IS NULL OR cu.email_opt_out_at >= cu.email_consent_at))
+       AND (cu.email_consent_at IS NOT NULL OR b.first_report_on + ${IMPLIED_CONSENT_DAYS} >= $2::date)
+       AND NOT EXISTS (SELECT 1 FROM public.ticketing_campaign_messages m WHERE m.campaign_id = c.id AND m.booking_id = b.id)
+       AND NOT EXISTS (SELECT 1 FROM public.ticketing_campaign_messages m
+                       WHERE m.campaign_id = c.id AND m.email = cu.email AND m.created_at > $1::timestamptz - interval '7 days')
+     ORDER BY c.id, cu.email, b.ends_on DESC, b.id
+     ON CONFLICT DO NOTHING`,
+    [now, today],
+  );
+  return rowCount ?? 0;
 }
 
 // ── Unsubscribe (public, through the link in each e-mail) ───────────────────

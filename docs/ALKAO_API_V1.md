@@ -812,6 +812,23 @@ Newsletters and promotions to the customer file (Run 41), sent by the e-mail wor
 - The journal records `customer.unsubscribed`, by the public.
 - Express consent recorded later (e.g. a newsletter sign-up) allows e-mail again.
 
+**Automatic, after each visit (Run 45).** A campaign of `kind: "after_visit"` with `delayDays`
+(0–60) and `audience.categories` (lodging families or `ticket`; empty means all) runs by
+itself while it is on:
+
+- **Turning it on and off:** `POST …/campaigns/:id/automation { active }`. Turning it on needs
+  the sender's footer. `send` answers `409 campaign_is_automation`.
+- **Each pass:** a message is queued for every visit (booking not cancelled) that ended
+  `delayDays` ago, up to 3 days late if a pass was missed, to a customer who may receive
+  e-mail.
+- **Limits:** once per visit, and never twice in 7 days to the same address.
+- **No catching up:** only visits ending after the automation was first turned on count,
+  never past ones.
+- **`{visite}`** becomes what was booked: the site, or the event.
+- **Editing:** the wording can be improved while it runs, but its kind cannot change
+  (`409 automation_active`).
+- `cancel` stops it for good.
+
 **Sending pace:** each pass sends up to 100 campaign messages, after the buyers' e-mails,
 so with `npm run cron` every minute, about 6,000 an hour. A campaign is marked `sent` once
 nothing is left to send.

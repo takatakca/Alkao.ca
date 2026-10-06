@@ -1,5 +1,7 @@
 import { hkdfSync, timingSafeEqual } from "node:crypto";
+import { queueAfterVisitMessages } from "../db/campaigns.js";
 import { withTransaction, type Db } from "../db/pool.js";
+import { localDate } from "../domain/customers.js";
 import { EmailSendError, type EmailSender } from "./email.js";
 import { campaignEmail } from "./templates.js";
 
@@ -34,6 +36,8 @@ export interface CampaignDeliveryResult {
   retried: number;
   failed: number;
   finished: number;
+  /** Run 45: automatic messages queued this pass. */
+  queued: number;
 }
 
 /** A campaign is news: a message still waiting after this long is dropped, never sent late. */
@@ -61,6 +65,8 @@ interface DueRow {
   first_name: string | null;
   opted_out: boolean;
   anonymized: boolean;
+  visit_item: string | null;
+  visit_category: string | null;
 }
 
 /**
@@ -70,7 +76,9 @@ interface DueRow {
  * A campaign with nothing left to send is marked sent.
  */
 export async function deliverCampaignEmails(db: Db, cfg: CampaignDeliveryConfig, now = new Date(), limit = 100): Promise<CampaignDeliveryResult> {
-  const result: CampaignDeliveryResult = { sent: 0, skipped: 0, retried: 0, failed: 0, finished: 0 };
+  const result: CampaignDeliveryResult = { sent: 0, skipped: 0, retried: 0, failed: 0, finished: 0, queued: 0 };
+  // Run 45: today's "after the visit" messages join the queue first.
+  result.queued = await queueAfterVisitMessages(db, now, localDate(now));
   const maxAttempts = cfg.maxAttempts ?? 6;
   for (let i = 0; i < limit; i++) {
     const outcome = await withTransaction(db, async (tx) => {
@@ -79,12 +87,13 @@ export async function deliverCampaignEmails(db: Db, cfg: CampaignDeliveryConfig,
                 c.heading, c.body, c.image_url, c.cta_label, c.cta_url, br.name AS brand_name,
                 bs.marketing_sender_address AS sender_address, bs.marketing_contact AS contact, cu.first_name,
                 (cu.email_opt_out_at IS NOT NULL AND (cu.email_consent_at IS NULL OR cu.email_opt_out_at >= cu.email_consent_at)) AS opted_out,
-                (cu.anonymized_at IS NOT NULL) AS anonymized
+                (cu.anonymized_at IS NOT NULL) AS anonymized, bk.item AS visit_item, bk.category AS visit_category
          FROM public.ticketing_campaign_messages m
          JOIN public.ticketing_campaigns c ON c.id = m.campaign_id AND c.client_id = m.client_id AND c.brand_id = m.brand_id
          JOIN public.ticketing_brands br ON br.id = m.brand_id AND br.client_id = m.client_id
          LEFT JOIN public.ticketing_brand_settings bs ON bs.client_id = m.client_id AND bs.brand_id = m.brand_id
          LEFT JOIN public.ticketing_customers cu ON cu.id = m.customer_id AND cu.client_id = m.client_id AND cu.brand_id = m.brand_id
+         LEFT JOIN public.ticketing_customer_bookings bk ON bk.id = m.booking_id AND bk.client_id = m.client_id AND bk.brand_id = m.brand_id
          WHERE m.status = 'pending' AND m.next_attempt_at <= $1
          ORDER BY m.next_attempt_at, m.id
          LIMIT 1
@@ -107,6 +116,7 @@ export async function deliverCampaignEmails(db: Db, cfg: CampaignDeliveryConfig,
         language: row.language, brandName: row.brand_name, subject: row.subject, preheader: row.preheader, heading: row.heading, body: row.body,
         imageUrl: row.image_url, cta: row.cta_label && row.cta_url ? { label: row.cta_label, url: row.cta_url } : null,
         firstName: row.first_name, senderAddress: row.sender_address, contact: row.contact, unsubscribeUrl: link,
+        visit: row.visit_item ?? null,
       });
       try {
         const messageId = await cfg.sender.send({
