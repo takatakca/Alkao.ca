@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { CUSTOMER_SEGMENTS, CUSTOMER_STATUSES } from "../domain/customers.js";
+import { BOOKING_CATEGORIES, CUSTOMER_SEGMENTS, CUSTOMER_STATUSES } from "../domain/customers.js";
 
 /**
  * ALKAO API v1 request contracts. Unknown keys are stripped: a client can never send a
@@ -385,6 +385,8 @@ const campaignUrl = z.url({ protocol: /^https$/ }).max(500);
 export const CampaignAudience = z.object({
   segments: z.array(z.enum(CUSTOMER_SEGMENTS)).max(CUSTOMER_SEGMENTS.length).default([]),
   statuses: z.array(z.enum(CUSTOMER_STATUSES)).max(CUSTOMER_STATUSES.length).default([]),
+  /** Run 45, automations only: the visits that start it (empty: all). */
+  categories: z.array(z.enum(BOOKING_CATEGORIES)).max(BOOKING_CATEGORIES.length).default([]),
 });
 export const CampaignInput = z
   .object({
@@ -398,8 +400,13 @@ export const CampaignInput = z
     ctaLabel: z.string().trim().min(1).max(60).nullish(),
     ctaUrl: campaignUrl.nullish(),
     audience: CampaignAudience,
+    /** Run 45: sent once by staff, or automatic after each visit. */
+    kind: z.enum(["one_time", "after_visit"]).default("one_time"),
+    delayDays: z.number().int().min(0).max(60).nullish(),
   })
-  .refine((c) => (c.ctaLabel == null) === (c.ctaUrl == null), { message: "ctaLabel and ctaUrl go together", path: ["ctaUrl"] });
+  .refine((c) => (c.ctaLabel == null) === (c.ctaUrl == null), { message: "ctaLabel and ctaUrl go together", path: ["ctaUrl"] })
+  .refine((c) => c.kind === "one_time" || c.delayDays != null, { message: "delayDays is required after a visit", path: ["delayDays"] });
+export const CampaignAutomation = z.object({ active: z.boolean() });
 export const CampaignTest = z.object({ email: z.string().trim().max(320).pipe(z.email()) });
 /** The number of recipients staff were shown: sending is refused if it changed since. */
 export const CampaignSend = z.object({ expectedRecipients: z.number().int().min(1).max(10_000_000) });

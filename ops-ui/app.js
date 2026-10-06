@@ -1195,7 +1195,11 @@ function CustomerDetail({ api, base, customerId, role }) {
 // ── Run 42: e-mail campaigns ────────────────────────────────────────────────
 const CAMPAIGN_STATUS = { draft: ["", "Brouillon"], sending: ["warn", "Envoi en cours"], sent: ["ok", "Envoyée"], cancelled: ["bad", "Annulée"] };
 const CampaignStatus = ({ s }) => html`<span class=${`badge ${CAMPAIGN_STATUS[s][0]}`}>${CAMPAIGN_STATUS[s][1]}</span>`;
-const EMPTY_CAMPAIGN = { name: "", language: "fr", subject: "", preheader: "", heading: "Bonjour {prénom},", body: "", imageUrl: "", ctaLabel: "", ctaUrl: "", audience: { segments: [], statuses: [] } };
+const EMPTY_CAMPAIGN = { name: "", language: "fr", kind: "one_time", delayDays: 3, subject: "", preheader: "", heading: "Bonjour {prénom},", body: "", imageUrl: "", ctaLabel: "", ctaUrl: "", audience: { segments: [], statuses: [], categories: [] } };
+// Run 45: an automation shows whether it runs instead of a send status.
+const CampaignBadge = ({ c }) => (c.kind === "after_visit" && c.status === "draft"
+  ? html`<span class=${`badge ${c.active ? "ok" : ""}`}>${c.active ? "Automatique : en marche" : "Automatique : en pause"} (J+${c.delayDays})</span>`
+  : html`<${CampaignStatus} s=${c.status} />`);
 
 function MarketingSettings({ api, base }) {
   const [state, reload] = useLoad(() => api(`${base}/settings/marketing`), [base]);
@@ -1257,7 +1261,7 @@ function Campaigns({ api, base, prefix }) {
     <div>${state.loading && !state.data ? html`<${Loading} />` : state.error ? html`<${Failure} error=${state.error} />` : list.length === 0 ? html`<p class="muted">Aucune campagne.</p>` : html`
       <div class="table-scroll" role="region" aria-label="Campagnes" tabindex="0"><table><thead><tr><th>Campagne</th><th>Statut</th><th class="num">Destinataires</th><th class="num">Envoyés</th><th class="num">Désabonnés</th><th>Créée le</th></tr></thead>
         <tbody>${list.map((c) => html`<tr><td><a href=${`#${prefix}/campaign/${c.id}`}>${c.name}</a><br /><span class="muted">${c.subject}</span></td>
-          <td><${CampaignStatus} s=${c.status} /></td><td class="num">${number(c.recipients)}</td><td class="num">${number(c.sent)}</td><td class="num">${number(c.unsubscribed)}</td><td>${when(c.createdAt)}</td></tr>`)}</tbody></table></div>`}</div>
+          <td><${CampaignBadge} c=${c} /></td><td class="num">${number(c.kind === "after_visit" ? c.sent + c.pending : c.recipients)}</td><td class="num">${number(c.sent)}</td><td class="num">${number(c.unsubscribed)}</td><td>${when(c.createdAt)}</td></tr>`)}</tbody></table></div>`}</div>
     <div><${MarketingSettings} api=${api} base=${base} /></div>
     <div><${NewsletterSettings} api=${api} base=${base} /></div>`;
 }
@@ -1270,15 +1274,17 @@ function CampaignEditor({ api, base, prefix, campaignId }) {
   const [msg, setMsg] = useState(null);
   const [error, setError] = useState(null);
   const loaded = state.data?.campaign;
-  const c = f ?? (loaded ? { ...EMPTY_CAMPAIGN, ...Object.fromEntries(Object.entries(loaded).map(([k, v]) => [k, v ?? ""])), audience: { segments: loaded.audienceSegments, statuses: loaded.audienceStatuses } } : EMPTY_CAMPAIGN);
+  const c = f ?? (loaded ? { ...EMPTY_CAMPAIGN, ...Object.fromEntries(Object.entries(loaded).map(([k, v]) => [k, v ?? ""])), delayDays: loaded.delayDays ?? 3,
+    audience: { segments: loaded.audienceSegments, statuses: loaded.audienceStatuses, categories: loaded.audienceCategories ?? [] } } : EMPTY_CAMPAIGN);
   const draft = !loaded || loaded.status === "draft";
+  const automatic = c.kind === "after_visit";
   const audienceKey = JSON.stringify(c.audience);
   useEffect(() => {
-    if (!draft) return;
+    if (!draft || automatic) return;
     let live = true;
     api(`${base}/campaigns/audience`, { method: "POST", body: c.audience }).then((r) => live && setCount(r.recipients), () => live && setCount(null));
     return () => { live = false; };
-  }, [base, audienceKey, draft]);
+  }, [base, audienceKey, draft, automatic]);
   if (state.loading && !state.data) return html`<h1>Campagne</h1><${Loading} />`;
   if (state.error) return html`<h1>Campagne</h1><${Failure} error=${state.error} />`;
   const set = (patch) => setF({ ...c, ...patch });
@@ -1289,6 +1295,7 @@ function CampaignEditor({ api, base, prefix, campaignId }) {
   const body = () => ({
     name: c.name, language: c.language, subject: c.subject, preheader: c.preheader || null, heading: c.heading, body: c.body,
     imageUrl: c.imageUrl || null, ctaLabel: c.ctaLabel || null, ctaUrl: c.ctaUrl || null, audience: c.audience,
+    kind: c.kind, delayDays: automatic ? Number(c.delayDays) : null,
   });
   const act = (fn) => async (e) => { e?.preventDefault?.(); setError(null); setMsg(null); try { await fn(); } catch (err) { setError(err); } };
   const save = act(async () => {
@@ -1302,34 +1309,46 @@ function CampaignEditor({ api, base, prefix, campaignId }) {
     await api(`${base}/campaigns/${loaded.id}/send`, { method: "POST", body: { expectedRecipients: count } }); reload(); setMsg("Envoi lancé.");
   });
   const cancel = act(async () => { if (!confirm("Arrêter cette campagne ? Les courriels pas encore partis ne le seront jamais.")) return; await api(`${base}/campaigns/${loaded.id}/cancel`, { method: "POST" }); reload(); });
+  const turn = (active) => act(async () => {
+    if (f) throw new Error("Enregistrez d'abord vos changements.");
+    await api(`${base}/campaigns/${loaded.id}/automation`, { method: "POST", body: { active } }); reload();
+    setMsg(active ? "Automatisation en marche : elle écrira après chaque visite qui se termine à partir d'aujourd'hui." : "Automatisation en pause.");
+  });
   const field = (label, key, attrs = {}) => html`<label>${label}<input value=${c[key] ?? ""} disabled=${!draft} onInput=${(e) => set({ [key]: e.target.value })} ...${attrs} /></label>`;
   return html`<h1>${loaded ? loaded.name : "Nouvelle campagne"}</h1>
-    <p class="row"><a href=${`#${prefix}/campaigns`}>← Campagnes</a>${loaded && html`<${CampaignStatus} s=${loaded.status} />`}</p>
+    <p class="row"><a href=${`#${prefix}/campaigns`}>← Campagnes</a>${loaded && html`<${CampaignBadge} c=${loaded} />`}</p>
     ${error && html`<${Failure} error=${error} />`}${msg && html`<div class="alert ok" role="status">${msg}</div>`}
-    ${loaded && !draft && html`<div class="grid">
+    ${loaded && (!draft || loaded.kind === "after_visit") && html`<div class="grid">
       ${[["Destinataires", loaded.recipients], ["Envoyés", loaded.sent], ["En attente", loaded.pending], ["Non envoyés", loaded.skipped + loaded.failed], ["Désabonnés", loaded.unsubscribed]]
         .map(([label, v]) => html`<div class="kpi"><div class="label">${label}</div><div class="value">${number(v)}</div></div>`)}</div>
-      ${loaded.status === "sending" && html`<p class="row"><button class="danger" onClick=${cancel}>Arrêter l'envoi</button></p>`}`}
+      ${(loaded.status === "sending" || (loaded.kind === "after_visit" && loaded.status === "draft")) && html`<p class="row"><button class="danger" onClick=${cancel}>${loaded.kind === "after_visit" ? "Arrêter pour de bon" : "Arrêter l'envoi"}</button></p>`}`}
     <form class="card" aria-label="Contenu de la campagne" onSubmit=${save}>
       <div class="fields">
         ${field("Nom (pour l'équipe)", "name", { required: true, maxlength: 120 })}
         <label>Langue<select value=${c.language} disabled=${!draft} onChange=${(e) => set({ language: e.target.value })}><option value="fr">Français</option><option value="en">English</option></select></label>
+        <label>Type<select value=${c.kind} disabled=${!draft || loaded?.active} onChange=${(e) => set({ kind: e.target.value })}>
+          <option value="one_time">Envoi unique</option><option value="after_visit">Automatique après chaque visite</option></select></label>
+        ${automatic && html`<label>Jours après le départ<input type="number" min="0" max="60" required value=${c.delayDays} disabled=${!draft} onInput=${(e) => set({ delayDays: e.target.value })} /></label>`}
       </div>
       <div class="stack">
         ${field("Objet du courriel", "subject", { required: true, maxlength: 150 })}
         ${field("Aperçu dans la boîte de réception (facultatif)", "preheader", { maxlength: 150 })}
         ${field("Titre", "heading", { required: true, maxlength: 150 })}
         <label>Texte<textarea rows="8" required maxlength="10000" disabled=${!draft} value=${c.body} onInput=${(e) => set({ body: e.target.value })}></textarea></label>
-        <p class="muted">Une ligne vide sépare les paragraphes. {prénom} est remplacé par le prénom du client.</p>
+        <p class="muted">Une ligne vide sépare les paragraphes. {prénom} est remplacé par le prénom du client${automatic ? ", {visite} par ce qu'il a réservé (le site ou l'événement)" : ""}.</p>
         ${field("Image (lien https, facultatif)", "imageUrl", { type: "url", maxlength: 500 })}
         <div class="fields">${field("Bouton : texte (facultatif)", "ctaLabel", { maxlength: 60 })}${field("Bouton : lien https", "ctaUrl", { type: "url", maxlength: 500 })}</div>
       </div>
       <h3>Destinataires</h3>
+      ${automatic && html`<fieldset disabled=${!draft}><legend>Après quelles visites (aucune case : toutes)</legend>
+        <div class="row">${Object.entries(CATEGORY_FR).map(([key, label]) => html`<label class="check"><input type="checkbox" checked=${c.audience.categories.includes(key)} onChange=${() => toggle("categories", key)} /> ${label}</label>`)}</div></fieldset>`}
       <fieldset disabled=${!draft}><legend>Fréquence (aucune case : tous)</legend>
         <div class="row">${SEGMENTS.map(([key, label]) => html`<label class="check"><input type="checkbox" checked=${c.audience.segments.includes(key)} onChange=${() => toggle("segments", key)} /> <${Segment} s=${key} /></label>`)}</div></fieldset>
       <fieldset disabled=${!draft}><legend>Saison (aucune case : toutes)</legend>
         <div class="row">${Object.entries(CUSTOMER_STATUS).map(([key, [, label]]) => html`<label class="check"><input type="checkbox" checked=${c.audience.statuses.includes(key)} onChange=${() => toggle("statuses", key)} /> ${label}</label>`)}</div></fieldset>
-      ${draft && html`<p role="status" aria-live="polite"><strong>${count === null ? "…" : number(count)}</strong> clients peuvent recevoir cette campagne (une fois par adresse).</p>
+      ${draft && !automatic && html`<p role="status" aria-live="polite"><strong>${count === null ? "…" : number(count)}</strong> clients peuvent recevoir cette campagne (une fois par adresse).</p>`}
+      ${draft && automatic && html`<p class="muted">Chaque client qui peut recevoir des courriels l'aura ${c.delayDays} jour(s) après son départ, une fois par visite et jamais deux fois en 7 jours. Seules les visites qui se terminent après la mise en marche comptent.</p>`}
+      ${draft && html`
         <p class="row"><button type="submit">${loaded ? "Enregistrer le brouillon" : "Créer le brouillon"}</button></p>`}
     </form>
     ${loaded && draft && html`<form class="card" aria-label="Essai et envoi" onSubmit=${test}>
@@ -1337,9 +1356,11 @@ function CampaignEditor({ api, base, prefix, campaignId }) {
       <div class="fields">
         <label>Envoyer un essai à<input type="email" required value=${testTo} onInput=${(e) => setTestTo(e.target.value)} /></label>
         <button type="submit" class="secondary">Envoyer l'essai</button>
-        <button type="button" disabled=${!count} onClick=${send}>Envoyer à ${count === null ? "…" : number(count)} clients</button>
+        ${loaded.kind === "after_visit"
+          ? (loaded.active ? html`<button type="button" class="secondary" onClick=${turn(false)}>Mettre en pause</button>` : html`<button type="button" onClick=${turn(true)}>Mettre en marche</button>`)
+          : html`<button type="button" disabled=${!count} onClick=${send}>Envoyer à ${count === null ? "…" : number(count)} clients</button>`}
       </div>
-      <p class="muted">${loaded.tests ? `${loaded.tests} essai(s) envoyé(s). ` : ""}Les courriels partent par lots, en quelques minutes à quelques heures selon le nombre.</p>
+      <p class="muted">${loaded.tests ? `${loaded.tests} essai(s) envoyé(s). ` : ""}${loaded.kind === "after_visit" ? "Les messages sont préparés chaque jour, puis partent avec les autres courriels." : "Les courriels partent par lots, en quelques minutes à quelques heures selon le nombre."}</p>
     </form>`}`;
 }
 

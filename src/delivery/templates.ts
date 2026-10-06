@@ -267,6 +267,8 @@ export interface CampaignEmailData {
   senderAddress: string;
   contact: string;
   unsubscribeUrl: string;
+  /** Run 45: what the visit was (a site, an event), for {visite} in an automatic message. */
+  visit?: string | null;
 }
 
 const CAMPAIGN = {
@@ -284,16 +286,22 @@ const CAMPAIGN = {
   },
 };
 
-/** `{prénom}` (or `{prenom}`, `{first_name}`) becomes the customer's first name, or disappears with its space. */
-export function personalize(text: string, firstName: string | null): string {
-  return text.replace(/(\s?)\{(?:prénom|prenom|first_name)\}/giu, (_, space: string) => (firstName ? `${space}${firstName}` : ""));
+/**
+ * `{prénom}` (or `{prenom}`, `{first_name}`) becomes the customer's first name, or disappears
+ * with its space; `{visite}` (or `{visit}`, Run 45) becomes what the visit was, else "votre visite".
+ */
+export function personalize(text: string, firstName: string | null, visit: string | null = null, language: Language = "fr"): string {
+  return text
+    .replace(/(\s?)\{(?:prénom|prenom|first_name)\}/giu, (_, space: string) => (firstName ? `${space}${firstName}` : ""))
+    .replace(/\{(?:visite|visit)\}/giu, () => visit ?? (language === "en" ? "your visit" : "votre visite"));
 }
 
 export function campaignEmail(d: CampaignEmailData): Content {
   const l = d.language;
   const t = CAMPAIGN[l];
-  const heading = personalize(d.heading, d.firstName);
-  const paragraphs = personalize(d.body, d.firstName).split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
+  const fill = (text: string) => personalize(text, d.firstName, d.visit ?? null, l);
+  const heading = fill(d.heading);
+  const paragraphs = fill(d.body).split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
   const footer = `${d.brandName} · ${d.senderAddress}`;
   const text = [heading, "", ...paragraphs.flatMap((p) => [p, ""]), ...(d.cta ? [`${d.cta.label} : ${d.cta.url}`, ""] : []),
     "—", t.why(d.brandName), footer, `${t.contact}${d.contact}`, `${t.stopText}${d.unsubscribeUrl}`].join("\n");
@@ -304,7 +312,7 @@ export function campaignEmail(d: CampaignEmailData): Content {
     ...(d.cta ? [button(d.cta.url, d.cta.label)] : []),
     note(`${esc(t.why(d.brandName))}<br>${esc(footer)}<br>${t.contact}${esc(d.contact)}<br><a href="${esc(d.unsubscribeUrl)}" style="color:#57534e">${t.stop}</a>`, true),
   ];
-  return { fromName: d.brandName, subject: personalize(d.subject, d.firstName), text, html: layout(l, d.brandName, heading, rows) };
+  return { fromName: d.brandName, subject: fill(d.subject), text, html: layout(l, d.brandName, heading, rows) };
 }
 
 // ── Newsletter sign-up confirmation (Run 44) ────────────────────────────────

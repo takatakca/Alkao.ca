@@ -1106,6 +1106,15 @@ export function createApp(deps: AppDeps) {
     return c.json({ campaign: await campaignsDb.getCampaign(deps.db, c.get("scope"), id, today()) }, 202);
   });
 
+  // Run 45: an automation on or off.
+  app.post(`${ADMIN}/campaigns/:campaignId/automation`, ...admin, manageCampaigns, async (c) => {
+    const id = param(c, "campaignId");
+    if (!id) return fail(c, 404, "campaign_not_found");
+    const body = api.CampaignAutomation.parse(await readJson(c));
+    await withTransaction(deps.db, (tx) => campaignsDb.setAutomation(tx, c.get("scope"), id, body.active, actor(c), now()));
+    return c.json({ campaign: await campaignsDb.getCampaign(deps.db, c.get("scope"), id, today()) });
+  });
+
   app.post(`${ADMIN}/campaigns/:campaignId/cancel`, ...admin, manageCampaigns, async (c) => {
     const id = param(c, "campaignId");
     if (!id) return fail(c, 404, "campaign_not_found");

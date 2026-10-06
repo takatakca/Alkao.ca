@@ -652,6 +652,25 @@ describe("ALKAO Operations app", () => {
     expect(rows).toEqual([{ email: "equipe@example.com", test: true }, { email: "alice@example.com", test: false }]);
   });
 
+  it("sets up an automatic e-mail after each chalet stay and turns it on (Run 45)", async () => {
+    const page = await signedIn(seed.users.havanaOwner);
+    await page.goto(`${origin}/ops#${brandPath()}/campaign`);
+    const form = page.getByRole("form", { name: "Contenu de la campagne" });
+    await form.getByLabel("Nom (pour l'équipe)").fill("Merci après un chalet");
+    await form.getByLabel("Type").selectOption("after_visit");
+    await form.getByLabel("Jours après le départ").fill("2");
+    await form.getByLabel("Objet du courriel").fill("Merci {prénom} !");
+    await form.getByLabel("Texte", { exact: true }).fill("Comment était {visite} ?");
+    await form.getByRole("checkbox", { name: "Chalet" }).check();
+    await form.getByText("2 jour(s) après son départ").waitFor();
+    await form.getByRole("button", { name: "Créer le brouillon" }).click();
+    await page.getByText("Automatique : en pause (J+2)").waitFor();
+    await page.getByRole("button", { name: "Mettre en marche" }).click();
+    await page.getByText("Automatique : en marche (J+2)").waitFor();
+    const { rows } = await db.pool.query(`SELECT kind, delay_days, audience_categories, active FROM public.ticketing_campaigns WHERE name = 'Merci après un chalet'`);
+    expect(rows).toEqual([{ kind: "after_visit", delay_days: 2, audience_categories: ["chalet"], active: true }]);
+  });
+
   it("hides money from gate staff", async () => {
     const page = await signedIn(seed.users.havanaStaff);
     await page.goto(`${origin}/ops#${brandPath()}/dashboard`);
