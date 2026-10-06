@@ -41,6 +41,9 @@ const UNGATED = new Set([
   // anti-spam law wants it to keep working after the campaign, whatever Ticketing's state.
   "GET /desabonnement",
   "POST /desabonnement",
+  // Run 44: the confirmation link of a newsletter sign-up, authenticated by its signature.
+  "GET /inscription",
+  "POST /inscription",
 ]);
 
 // Static files of the Operations app, the buyer's tickets page and the hosted shop: no

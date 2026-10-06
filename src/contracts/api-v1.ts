@@ -409,3 +409,17 @@ export const MarketingSettings = z.object({
   /** And a way to reach them: an e-mail address, a phone number or a web page. */
   contact: z.string().trim().min(3).max(200),
 });
+
+// ── Run 44: newsletter sign-up (double opt-in) ──────────────────────────────
+/** From a website's sign-up form: the person then confirms by e-mail. */
+export const NewsletterSignup = z.object({
+  email: z.string().trim().max(320).pipe(z.email()),
+  firstName: z.string().trim().max(120).nullish(),
+  language: z.enum(["fr", "en"]).default("fr"),
+  /** Where it came from, e.g. "promohavana". */
+  source: z.string().trim().toLowerCase().regex(/^[a-z0-9][a-z0-9_.-]{0,59}$/).nullish(),
+});
+export const NewsletterSettings = z.object({
+  rewardCode: z.string().trim().toUpperCase().regex(/^[A-Z0-9-]{3,32}$/).nullable(),
+  rewardText: z.string().trim().min(1).max(200).nullable(),
+});

@@ -2,6 +2,7 @@ import { withTransaction, type Db } from "../db/pool.js";
 import { EmailSendError, type EmailMessage, type EmailSender } from "./email.js";
 import { orderEmailToken, ticketsUrl } from "./links.js";
 import { deliverCampaignEmails } from "./campaigns.js";
+import { deliverSignupConfirmations } from "./newsletter.js";
 import { queueReminders } from "./reminders.js";
 import { refundEmail, reminderEmail, sessionCancelledEmail, ticketsEmail } from "./templates.js";
 
@@ -182,6 +183,9 @@ export function startEmailWorker(db: Db, cfg: DeliveryConfig, intervalMs: number
       if (queued > 0) log(`alkao email: ${queued} reminder(s) queued`);
       const r = await deliverTicketEmails(db, cfg);
       if (r.sent + r.skipped + r.retried + r.failed > 0) log(`alkao email: ${JSON.stringify(r)}`);
+      // Run 44: sign-up confirmations, which the person is waiting for.
+      const n = await deliverSignupConfirmations(db, cfg);
+      if (n.sent + n.skipped + n.retried + n.failed > 0) log(`alkao signups: ${JSON.stringify(n)}`);
       // Run 42: campaigns after the buyers' own emails, which never wait behind them.
       const c = await deliverCampaignEmails(db, cfg);
       if (c.sent + c.skipped + c.retried + c.failed + c.finished > 0) log(`alkao campaigns: ${JSON.stringify(c)}`);

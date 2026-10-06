@@ -620,6 +620,14 @@ describe("ALKAO Operations app", () => {
     await sender.getByLabel("Nous joindre (courriel, téléphone ou site)").fill("info@example.com");
     await sender.getByRole("button", { name: "Enregistrer" }).click();
     await sender.getByText("Enregistré.").waitFor();
+    // Run 44: the newsletter's welcome code.
+    const newsletter = page.getByRole("form", { name: "Infolettre" });
+    await newsletter.getByLabel("Code de bienvenue (facultatif)").fill("HAVANA5");
+    await newsletter.getByLabel("Ce qu'il donne").fill("5 % sur vos billets");
+    await newsletter.getByRole("button", { name: "Enregistrer" }).click();
+    await newsletter.getByText("Enregistré.").waitFor();
+    const { rows: nl } = await db.pool.query(`SELECT newsletter_reward_code, newsletter_reward_text FROM public.ticketing_brand_settings WHERE brand_id = $1`, [seed.havana.brandId]);
+    expect(nl[0]).toEqual({ newsletter_reward_code: "HAVANA5", newsletter_reward_text: "5 % sur vos billets" });
 
     await page.getByRole("link", { name: "Nouvelle campagne" }).click();
     const form = page.getByRole("form", { name: "Contenu de la campagne" });

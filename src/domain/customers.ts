@@ -20,12 +20,13 @@ export function tidyText(value: string | null | undefined, max: number): string 
   return s.slice(0, max);
 }
 
-const PLACEHOLDER_EMAIL = /^(no|non|na|n\/a|aucun|none|pasde|noemail|nomail|test)[^@]*@/;
+/** Front-desk placeholders: the whole part before the @ is one of these (never "nathalie@", "nora@"). */
+const PLACEHOLDER_LOCAL = /^(no|non|na|n\/a|aucun|aucune|none|pas|pasde|noemail|nomail|test|x+|0+)$/;
 
 /** A usable e-mail address in lower case, or null (missing, malformed or a placeholder). */
 export function normalizeEmail(value: string | null | undefined): string | null {
   const e = (value ?? "").trim().toLowerCase().replace(/\s+/g, "");
-  if (e.length > 320 || !/^[^@\s;,]+@[^@\s;,]+\.[a-z]{2,}$/.test(e) || PLACEHOLDER_EMAIL.test(e)) return null;
+  if (e.length > 320 || !/^[^@\s;,]+@[^@\s;,]+\.[a-z]{2,}$/.test(e) || PLACEHOLDER_LOCAL.test(e.split("@")[0]!)) return null;
   return e;
 }
 

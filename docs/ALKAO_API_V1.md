@@ -709,8 +709,8 @@ A booking already known keeps its customer. A new booking goes to an existing cu
 2. the same first name, family name and postal code.
 
 Otherwise it starts a new customer. A shared address (a front-desk placeholder, a family
-e-mail) never merges two different people. Placeholders (`aucun@…`, `000-000-0000`,
-`555-5555`) are ignored.
+e-mail) never merges two different people. Placeholders (an address that is only `aucun@…`, `no@…`, `test@…`; `000-000-0000`,
+`555-5555`) are ignored; `nathalie@…` or `nora@…` are of course kept.
 
 **Reports in any order**
 
@@ -818,6 +818,42 @@ nothing is left to send.
 
 The tables `ticketing_campaigns` and `ticketing_campaign_messages` are server-only: RLS on, no
 grant, no policy.
+
+### Newsletter sign-up, confirmed by e-mail (Run 44)
+
+A website's newsletter form (Promo Havana) sends the address to ALKAO, and ALKAO e-mails a
+confirmation link (double opt-in). Only the person's own click records their express
+consent on the customer file, so nobody can subscribe someone else.
+
+| Method | Path | Who | Result |
+|---|---|---|---|
+| POST | `/v1/public/…/newsletter` | public (Ticketing active) | `{ email, firstName?, language?, source? }` → always `202 { ok: true }`, whatever the address |
+| GET, POST | `/inscription?s=<sign-up>&k=<signature>` | the person | GET shows one button (a mail scanner opening the link confirms nothing); POST confirms and shows the welcome code. `404` for a wrong signature, `410` after 7 days |
+| GET, PUT | `/v1/admin/…/settings/newsletter` | `campaigns.manage` | `{ rewardCode, rewardText }`, and GET also returns `signups: { pending, confirmed, confirmedLast30Days }` |
+
+**Limits:** 3 sign-ups per address per hour, 600 per Brand per hour, and 120 per caller every
+10 minutes. Sign-ups usually come from the website's server, a single address for all its
+visitors. The same address asking again within 10 minutes gets no second e-mail.
+
+**Confirming:**
+
+- The oldest customer with this address, or a new contact (`prospect`), gets
+  `emailPermission: express`. This also lifts an earlier unsubscribe, since it is the
+  person's own new consent.
+- The journal records `customer.subscribed`, by the public.
+- Confirming twice shows the code again and changes nothing.
+
+**The e-mail** (sent by the e-mail worker or `npm run cron`, before campaigns):
+
+- It greets the person by first name and mentions the welcome offer (`rewardText`).
+- The code itself only appears on the confirmation page.
+- Its footer carries the sender's address and contact (Run 42).
+- An e-mail that cannot leave within 72 hours is dropped.
+
+**The welcome code** must also exist as a promo code (Run 36) on the event, so that it works
+at checkout.
+
+The table `ticketing_newsletter_signups` is server-only: RLS on, no grant, no policy.
 
 ### Role → permission
 
