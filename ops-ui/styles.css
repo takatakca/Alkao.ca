@@ -125,3 +125,30 @@ header.top .brand { padding: 0; }
 header.top .brand .name, .login .brand .name { color: var(--ink); }
 header.top .brand .sub, .login .brand .sub { color: var(--muted); }
 header.top .badge:first-letter { text-transform: uppercase; }
+
+/* Run 41: the customer file. Frequency colours (the same in the exported spreadsheet), each
+   with a text colour at WCAG AA contrast on it, in light and dark mode alike. */
+.seg { display: inline-block; padding: .12rem .6rem; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; border: 1px solid transparent; }
+.seg-loyal { background: #1b5e20; color: #fff; }
+.seg-regular { background: #66bb6a; color: #0b2a10; }
+.seg-occasional { background: #ffd54f; color: #3a2c00; }
+.seg-one_time { background: #81d4fa; color: #08304a; }
+.seg-upcoming { background: #ce93d8; color: #2e0b36; }
+.seg-cancelled { background: #d6d6d6; color: #333; }
+.seg-prospect { background: transparent; color: var(--ink); border-color: var(--muted); border-style: dashed; }
+.segments { display: grid; gap: .6rem; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); margin-bottom: 1rem; }
+button.seg-tile { display: flex; flex-direction: column; align-items: flex-start; gap: .3rem; text-align: left; background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-left: 6px solid var(--line); }
+button.seg-tile:hover:not(:disabled) { background: var(--soft); border-color: var(--line); color: var(--ink); }
+button.seg-tile[aria-pressed="true"] { outline: 2px solid var(--brand); outline-offset: 1px; background: var(--soft); }
+button.seg-tile .n { font-size: 1.4rem; font-weight: 700; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+button.seg-tile .hint { color: var(--muted); font-size: 12px; }
+button.s-loyal { border-left-color: #1b5e20; } button.s-regular { border-left-color: #66bb6a; } button.s-occasional { border-left-color: #ffd54f; }
+button.s-one_time { border-left-color: #81d4fa; } button.s-upcoming { border-left-color: #ce93d8; } button.s-cancelled { border-left-color: #d6d6d6; }
+button.s-prospect { border-left-style: dashed; border-left-color: var(--muted); }
+dl.facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: .45rem 1.25rem; margin: 0; }
+dl.facts dt { color: var(--muted); font-size: 13px; }
+dl.facts dd { margin: 0; overflow-wrap: anywhere; }
+/* Wide tables scroll inside their box on a phone; the page itself never scrolls sideways. */
+.table-scroll { overflow-x: auto; border-radius: var(--radius); }
+.table-scroll > table { min-width: 720px; }
+.fields { display: flex; flex-wrap: wrap; gap: .6rem 1rem; align-items: end; }

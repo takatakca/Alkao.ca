@@ -6,6 +6,7 @@ import { chromium, type Browser, type Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { adm, call, pub, testApp, tokenFor, type TestApp } from "../helpers/app.js";
 import { createTestDatabase, type TestDatabase } from "../helpers/db.js";
+import { line, report } from "../helpers/reservations.js";
 import { seedAfterSale, seedPaidOrder, seedTwoTenants, TEST_CREDENTIAL_SECRET, type SeedResult } from "../helpers/seed.js";
 
 /**
@@ -569,6 +570,44 @@ describe("ALKAO Operations app", () => {
     await row.getByText("Désactivé").waitFor();
     const { rows } = await db.pool.query(`SELECT kind, amount_cents, max_uses, active FROM public.ticketing_promo_codes WHERE code = 'FAMILLE-10'`);
     expect(rows).toEqual([{ kind: "amount", amount_cents: 1000, max_uses: 50, active: false }]);
+  });
+
+  it("imports a reservations report, colours customers by frequency and opens one (Run 41)", async () => {
+    const page = await signedIn(seed.users.havanaOwner);
+    await page.goto(`${origin}/ops#${brandPath()}/customers`);
+    await page.getByRole("heading", { name: "Clients", exact: true }).waitFor();
+    await page.getByText("Aucun client trouvé.").waitFor();
+    const who = { Nom: "FIDÈLE", Prénom: "DENIS", Courriel: "denis@example.com", Cellulaire: "514-555-0199", Commentaires: "carte 4111 1111 1111 1111" };
+    const stays = [["301", "2023-07-01"], ["302", "2023-08-01"], ["303", "2024-07-01"], ["304", "2024-08-01"], ["305", "2025-07-01"]];
+    const file = report([
+      ...stays.map(([n, d]) => line(n!, "CHALET 5", d!, d!.replace(/-01$/, "-03"), who)),
+      line("401", "CABANA 2", "2025-07-15", "2025-07-16", { Nom: "Exemple", Prénom: "Alice", Courriel: "alice@example.com" }),
+    ]);
+    const form = page.getByRole("form", { name: "Importer un rapport de réservations" });
+    await form.getByLabel("Rapport (CSV)").setInputFiles({ name: "reservations.csv", mimeType: "text/csv", buffer: Buffer.from(file) });
+    await form.getByRole("button", { name: "Importer" }).click();
+    await page.getByText("Import terminé.").waitFor();
+    expect(await page.getByRole("status").filter({ hasText: "Import terminé." }).textContent()).toContain("6 réservations lues · 2 nouveaux clients");
+    // The comment (and the card number in it) never left the browser.
+    const { rows } = await db.pool.query(`SELECT count(*)::int AS n FROM public.ticketing_customer_bookings b JOIN public.ticketing_customers c ON c.id = b.customer_id WHERE row_to_json(b)::text LIKE '%4111%' OR row_to_json(c)::text LIKE '%4111%'`);
+    expect(rows[0].n).toBe(0);
+
+    const loyal = page.getByRole("button", { name: /Fidèle/ });
+    await loyal.click();
+    expect(await loyal.getAttribute("aria-pressed")).toBe("true");
+    await page.getByRole("row").filter({ hasText: "Alice" }).waitFor({ state: "detached" });
+    await page.getByRole("link", { name: "Denis Fidèle" }).click();
+    await page.getByRole("heading", { name: "Réservations" }).waitFor();
+    expect(await page.locator(".kpi").filter({ hasText: "Visites" }).locator(".value").textContent()).toBe("5");
+    await page.getByRole("button", { name: "Désabonner des courriels" }).click();
+    await page.getByText("Non : désabonné").waitFor();
+  });
+
+  it("keeps the customer file away from gate staff (Run 41)", async () => {
+    const page = await signedIn(seed.users.havanaStaff);
+    await page.goto(`${origin}/ops#${brandPath()}/scanner`);
+    await page.getByRole("heading", { name: "Scanner" }).waitFor();
+    expect(await page.getByRole("link", { name: "Clients" }).count()).toBe(0);
   });
 
   it("hides money from gate staff", async () => {

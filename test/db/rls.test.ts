@@ -51,6 +51,9 @@ const EXPECTED: Record<string, Visibility> = {
   ticketing_buyer_erasures: "none",
   // Run 36: read and written by the server only.
   ticketing_promo_codes: "none",
+  // Run 41: the customer file, server only.
+  ticketing_customers: "none",
+  ticketing_customer_bookings: "none",
 };
 
 const clientColumn = (table: string) => (table === "ticketing_clients" ? "id" : "client_id");

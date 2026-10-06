@@ -32,6 +32,8 @@ import * as reminders from "../delivery/reminders.js";
 import * as privacy from "../ops/privacy.js";
 import * as reports from "../ops/reports.js";
 import * as promoDb from "../db/promo.js";
+import * as customersDb from "../db/customers.js";
+import { localDate } from "../domain/customers.js";
 import * as journal from "../ops/journal.js";
 import * as sessionBatch from "../ops/session-batch.js";
 import { exchangeOrder } from "../ops/exchange.js";
@@ -958,6 +960,60 @@ export function createApp(deps: AppDeps) {
         rows,
       ),
     );
+  });
+
+  // ── Run 41: the customer file (CRM) ───────────────────────────────────────
+  // Visits, segments and e-mail permission are computed for "today" in Québec.
+  const today = () => localDate(now());
+
+  app.get(`${ADMIN}/customers`, ...admin, can("ticketing.customers.read"), async (c) => {
+    const q = api.CustomersQuery.parse(c.req.query());
+    return c.json(await customersDb.listCustomers(deps.db, c.get("scope"), today(), q));
+  });
+
+  app.get(`${ADMIN}/customers.csv`, ...admin, can("ticketing.customers.export"), async (c) => {
+    const q = api.CustomersExportQuery.parse(c.req.query());
+    const scope = c.get("scope");
+    const rows = await customersDb.exportCustomers(deps.db, scope, today(), q);
+    await catalog.writeAudit(deps.db, scope, actor(c), "customers.exported", { type: "brand", id: scope.brandId }, { rows: rows.length, ...q });
+    const columns = ["id", "segment", "status", "visits", "stays", "upcoming", "cancelled", "first_visit_on", "last_visit_on", "next_arrival_on",
+      "favorite_category", "spent_cents", "first_name", "last_name", "email", "email_permission", "implied_consent_until", "mobile_phone",
+      "home_phone", "work_phone", "address_line", "address_unit", "city", "region", "postal_code", "country", "companion_name"];
+    // A byte-order mark, so a spreadsheet reads the accents in names as UTF-8.
+    return csv(c, `alkao-clients-${today()}.csv`, `\uFEFF${toCsv(columns, rows.map((r) => columns.map((k) => r[k])))}`);
+  });
+
+  app.get(`${ADMIN}/customers/:customerId`, ...admin, can("ticketing.customers.read"), async (c) => {
+    const id = param(c, "customerId");
+    if (!id) return fail(c, 404, "customer_not_found");
+    return c.json({ customer: await customersDb.getCustomer(deps.db, c.get("scope"), id, today()) });
+  });
+
+  app.patch(`${ADMIN}/customers/:customerId`, ...admin, can("ticketing.customers.write"), async (c) => {
+    const id = param(c, "customerId");
+    if (!id) return fail(c, 404, "customer_not_found");
+    const body = api.UpdateCustomer.parse(await readJson(c));
+    await withTransaction(deps.db, (tx) => customersDb.updateCustomer(tx, c.get("scope"), id, body, actor(c), now()));
+    return c.json({ customer: await customersDb.getCustomer(deps.db, c.get("scope"), id, today()) });
+  });
+
+  app.post(`${ADMIN}/customers/:customerId/anonymize`, ...admin, can("ticketing.buyers.erase"), async (c) => {
+    const id = param(c, "customerId");
+    if (!id) return fail(c, 404, "customer_not_found");
+    return c.json(await withTransaction(deps.db, (tx) => customersDb.anonymizeCustomer(tx, c.get("scope"), id, actor(c), now())));
+  });
+
+  // A report goes in by batches (each one transaction), then …/import/complete once.
+  app.post(`${ADMIN}/customers/import`, ...admin, can("ticketing.customers.import"), async (c) => {
+    const body = api.CustomerImportRequest.parse(await readJson(c));
+    if (body.reportDate > today()) throw new DomainError("report_date_in_future");
+    return c.json({ import: await withTransaction(deps.db, (tx) => customersDb.importRows(tx, c.get("scope"), body, actor(c))) });
+  });
+
+  app.post(`${ADMIN}/customers/import/complete`, ...admin, can("ticketing.customers.import"), async (c) => {
+    const body = api.CustomerImportComplete.parse(await readJson(c));
+    if (body.reportDate > today()) throw new DomainError("report_date_in_future");
+    return c.json({ import: await withTransaction(deps.db, (tx) => customersDb.completeImport(tx, c.get("scope"), body, actor(c))) });
   });
 
   // ── Run 04: Flex Météo session change ────────────────────────────────────
