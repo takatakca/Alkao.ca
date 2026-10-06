@@ -250,3 +250,59 @@ export function refundEmail(d: RefundEmailData): Content {
   ]);
   return { fromName: d.brandName, subject, text, html };
 }
+
+// ── Campaigns (Run 42) ──────────────────────────────────────────────────────
+export interface CampaignEmailData {
+  language: Language;
+  brandName: string;
+  subject: string;
+  preheader: string | null;
+  heading: string;
+  /** Staff's plain text: paragraphs split by blank lines. */
+  body: string;
+  imageUrl: string | null;
+  cta: { label: string; url: string } | null;
+  firstName: string | null;
+  /** Canada's anti-spam law: who sends, where they are, how to reach them, how to stop. */
+  senderAddress: string;
+  contact: string;
+  unsubscribeUrl: string;
+}
+
+const CAMPAIGN = {
+  fr: {
+    why: (brand: string) => `Vous recevez ce courriel parce que vous êtes client de ${brand} ou que vous vous êtes inscrit à ses nouvelles.`,
+    stop: "Se désabonner",
+    stopText: "Pour ne plus recevoir ces courriels : ",
+    contact: "Nous joindre : ",
+  },
+  en: {
+    why: (brand: string) => `You are receiving this e-mail because you are a customer of ${brand} or signed up for its news.`,
+    stop: "Unsubscribe",
+    stopText: "To stop receiving these e-mails: ",
+    contact: "Contact us: ",
+  },
+};
+
+/** `{prénom}` (or `{prenom}`, `{first_name}`) becomes the customer's first name, or disappears with its space. */
+export function personalize(text: string, firstName: string | null): string {
+  return text.replace(/(\s?)\{(?:prénom|prenom|first_name)\}/giu, (_, space: string) => (firstName ? `${space}${firstName}` : ""));
+}
+
+export function campaignEmail(d: CampaignEmailData): Content {
+  const l = d.language;
+  const t = CAMPAIGN[l];
+  const heading = personalize(d.heading, d.firstName);
+  const paragraphs = personalize(d.body, d.firstName).split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
+  const footer = `${d.brandName} · ${d.senderAddress}`;
+  const text = [heading, "", ...paragraphs.flatMap((p) => [p, ""]), ...(d.cta ? [`${d.cta.label} : ${d.cta.url}`, ""] : []),
+    "—", t.why(d.brandName), footer, `${t.contact}${d.contact}`, `${t.stopText}${d.unsubscribeUrl}`].join("\n");
+  const rows = [
+    ...(d.preheader ? [`<tr><td style="display:none;max-height:0;overflow:hidden;font-size:1px;color:#ffffff">${esc(d.preheader)}</td></tr>`] : []),
+    ...(d.imageUrl ? [`<tr><td style="padding-bottom:16px"><img src="${esc(d.imageUrl)}" alt="" width="504" style="display:block;width:100%;max-width:504px;height:auto;border-radius:8px"></td></tr>`] : []),
+    ...paragraphs.map((p) => paragraph(esc(p).replace(/\n/g, "<br>"))),
+    ...(d.cta ? [button(d.cta.url, d.cta.label)] : []),
+    note(`${esc(t.why(d.brandName))}<br>${esc(footer)}<br>${t.contact}${esc(d.contact)}<br><a href="${esc(d.unsubscribeUrl)}" style="color:#57534e">${t.stop}</a>`, true),
+  ];
+  return { fromName: d.brandName, subject: personalize(d.subject, d.firstName), text, html: layout(l, d.brandName, heading, rows) };
+}

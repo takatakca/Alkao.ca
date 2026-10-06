@@ -22,6 +22,8 @@ export const TICKETING_PERMISSIONS = [
   "ticketing.customers.write",
   "ticketing.customers.import",
   "ticketing.customers.export",
+  /** Run 42: write and send e-mail campaigns to the customer file, and the sender's footer. */
+  "ticketing.campaigns.manage",
 ] as const;
 export type TicketingPermission = (typeof TICKETING_PERMISSIONS)[number];
 
@@ -41,8 +43,8 @@ const MANAGE: TicketingPermission[] = [
   "ticketing.customers.read",
   "ticketing.customers.write",
 ];
-/** Run 41: bringing in or taking out the whole customer file is for owners and admins. */
-const CUSTOMER_FILE: TicketingPermission[] = ["ticketing.customers.import", "ticketing.customers.export"];
+/** Run 41: bringing in or taking out the whole customer file, and (Run 42) writing to all of it, is for owners and admins. */
+const CUSTOMER_FILE: TicketingPermission[] = ["ticketing.customers.import", "ticketing.customers.export", "ticketing.campaigns.manage"];
 
 /**
  * Role → Ticketing permissions. Matches the RLS policies: buyer data, order money and

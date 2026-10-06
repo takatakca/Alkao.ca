@@ -746,6 +746,63 @@ upcoming booking.
 The tables `ticketing_customers` and `ticketing_customer_bookings` are server-only: RLS on, no
 grant, no policy.
 
+### E-mail campaigns (Run 42)
+
+Newsletters and promotions to the customer file (Run 41), sent by the e-mail worker
+(`worker:email` or `npm run cron`, after the buyers' own e-mails). Owners and admins only
+(`campaigns.manage`).
+
+| Method | Path | Result |
+|---|---|---|
+| GET, PUT | `/v1/admin/…/settings/marketing` | `{ senderAddress, contact }`: the sender's mailing address and a way to reach them (e-mail, phone or web page), printed at the bottom of every campaign. Required before a campaign can go out |
+| GET | `/v1/admin/…/campaigns` | `{ campaigns }`, newest first, each with `recipients`, `pending`, `sent`, `skipped`, `failed`, `unsubscribed`, `tests` |
+| POST | `/v1/admin/…/campaigns/audience` | `{ segments?, statuses? }` → `{ recipients }` right now |
+| POST | `/v1/admin/…/campaigns` | A draft: `{ name, language, subject, preheader?, heading, body, imageUrl?, ctaLabel?, ctaUrl?, audience: { segments, statuses } }` → `201` |
+| GET, PUT | `/v1/admin/…/campaigns/:id` | Read (a draft also has `audienceNow`); replace a draft (`409 campaign_not_draft` once sent) |
+| POST | `/v1/admin/…/campaigns/:id/test` | `{ email }` → `202`: one test to a staff address. At most 20 per campaign (`409 campaign_test_limit`) |
+| POST | `/v1/admin/…/campaigns/:id/send` | `{ expectedRecipients }` → `202`, status `sending`. Refused with `409 audience_changed` (`details.recipients`) if the number staff saw is no longer right, `409 audience_empty`, or `409 marketing_settings_missing` |
+| POST | `/v1/admin/…/campaigns/:id/cancel` | Stops it: messages not sent yet never will be |
+
+**Who gets it (Canada's anti-spam law, CASL)**
+
+- Only customers with an e-mail permission of `express` or `implied` (a booking in the last
+  2 years). Never an opted-out, anonymized or e-mail-less customer.
+- **Once per address:** two customers sharing an address get one e-mail, addressed to the
+  more frequent one.
+- `segments` and `statuses` filter the audience (see Run 41). Empty means everyone allowed.
+- The recipients are taken at the moment of sending. A customer who unsubscribes or is
+  anonymized after that is skipped. A message still waiting after 7 days is dropped, never
+  sent late.
+
+**The e-mail**
+
+- **Fields:** subject, an optional preheader (the line shown in the inbox), a heading, and
+  the text (paragraphs split by blank lines, all escaped). Optionally an image and one
+  button, both `https://` only.
+- **Personalization:** `{prénom}` (also `{prenom}` or `{first_name}`) becomes the first name,
+  or disappears with its space.
+- **Footer, on every message:** why the person gets it, the Brand, the mailing address, the
+  contact, and an unsubscribe link.
+- **Headers:** `List-Unsubscribe` and `List-Unsubscribe-Post: List-Unsubscribe=One-Click`
+  (RFC 8058), as Gmail and Yahoo require of bulk senders.
+
+**Unsubscribe:** `/desabonnement?m=<message>&k=<signature>`.
+
+- It is public and needs no sign-in. It keeps working even if Ticketing is turned off.
+- **GET** shows one button. **POST** (that button, or the mailbox's one-click) records the
+  opt-out on the customer and on the message.
+- The signature is derived from `ALKAO_CREDENTIAL_MASTER_SECRET` and the message id, so
+  nothing is stored. A wrong signature answers 404.
+- The journal records `customer.unsubscribed`, by the public.
+- Express consent recorded later (e.g. a newsletter sign-up) allows e-mail again.
+
+**Sending pace:** each pass sends up to 100 campaign messages, after the buyers' e-mails,
+so with `npm run cron` every minute, about 6,000 an hour. A campaign is marked `sent` once
+nothing is left to send.
+
+The tables `ticketing_campaigns` and `ticketing_campaign_messages` are server-only: RLS on, no
+grant, no policy.
+
 ### Role → permission
 
 | Role | catalog.read · inventory.read · holds.read | catalog.write | orders.read · buyers.read | audit.read |
@@ -758,6 +815,7 @@ Run 03 adds `scan` (owner, admin, manager, staff), `credentials.manage` (owner, 
 and `keys.manage` (owner, admin). Its routes are listed in [ALKAO_SCANNER_V1.md](ALKAO_SCANNER_V1.md).
 Run 20 adds `buyers.erase` (owner, admin).
 Run 41 adds `customers.read` and `customers.write` (owner, admin, manager), and `customers.import` and `customers.export` (owner, admin).
+Run 42 adds `campaigns.manage` (owner, admin).
 | editor | ✓ | ✓ | | |
 | staff, viewer | ✓ | | | |
 

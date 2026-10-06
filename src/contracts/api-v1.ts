@@ -379,3 +379,33 @@ export const UpdateCustomer = z
   .object({ emailConsent: z.boolean(), emailOptOut: z.boolean(), smsOptOut: z.boolean() })
   .partial()
   .refine((o) => Object.keys(o).length > 0, "empty update");
+
+// ── Run 42: e-mail campaigns ────────────────────────────────────────────────
+const campaignUrl = z.url({ protocol: /^https$/ }).max(500);
+export const CampaignAudience = z.object({
+  segments: z.array(z.enum(CUSTOMER_SEGMENTS)).max(CUSTOMER_SEGMENTS.length).default([]),
+  statuses: z.array(z.enum(CUSTOMER_STATUSES)).max(CUSTOMER_STATUSES.length).default([]),
+});
+export const CampaignInput = z
+  .object({
+    name: z.string().trim().min(1).max(120),
+    language: z.enum(["fr", "en"]).default("fr"),
+    subject: z.string().trim().min(1).max(150),
+    preheader: z.string().trim().max(150).nullish(),
+    heading: z.string().trim().min(1).max(150),
+    body: z.string().trim().min(1).max(10_000),
+    imageUrl: campaignUrl.nullish(),
+    ctaLabel: z.string().trim().min(1).max(60).nullish(),
+    ctaUrl: campaignUrl.nullish(),
+    audience: CampaignAudience,
+  })
+  .refine((c) => (c.ctaLabel == null) === (c.ctaUrl == null), { message: "ctaLabel and ctaUrl go together", path: ["ctaUrl"] });
+export const CampaignTest = z.object({ email: z.string().trim().max(320).pipe(z.email()) });
+/** The number of recipients staff were shown: sending is refused if it changed since. */
+export const CampaignSend = z.object({ expectedRecipients: z.number().int().min(1).max(10_000_000) });
+export const MarketingSettings = z.object({
+  /** Canada's anti-spam law: a valid mailing address of the sender. */
+  senderAddress: z.string().trim().min(5).max(300),
+  /** And a way to reach them: an e-mail address, a phone number or a web page. */
+  contact: z.string().trim().min(3).max(200),
+});

@@ -169,6 +169,11 @@ const ERRORS_FR = {
   import_empty: "Rien n'a été importé pour cette date : importez le rapport d'abord.",
   report_date_in_future: "La date du rapport ne peut pas être dans le futur.",
   customer_not_found: "Client introuvable.",
+  campaign_not_found: "Campagne introuvable.", campaign_not_draft: "Cette campagne est déjà envoyée : elle ne change plus.",
+  campaign_closed: "Cette campagne est terminée.", campaign_test_limit: "Limite de 20 essais atteinte pour cette campagne.",
+  marketing_settings_missing: "Indiquez d'abord l'adresse postale et le moyen de vous joindre (exigés par la loi anti-pourriel).",
+  audience_empty: "Aucun client ne peut recevoir cette campagne.",
+  audience_changed: "Le nombre de destinataires a changé : vérifiez-le, puis envoyez de nouveau.",
 };
 const errText = (e) => (e instanceof ApiError ? ERRORS_FR[e.code] ?? `Erreur : ${e.code}` : String(e?.message ?? e));
 
@@ -1187,6 +1192,128 @@ function CustomerDetail({ api, base, customerId, role }) {
       <p class="row"><button class="danger" onClick=${anonymize}>Anonymiser ce client</button><span class="muted">À sa demande : efface son nom et ses coordonnées pour de bon.</span></p>`}`;
 }
 
+// ── Run 42: e-mail campaigns ────────────────────────────────────────────────
+const CAMPAIGN_STATUS = { draft: ["", "Brouillon"], sending: ["warn", "Envoi en cours"], sent: ["ok", "Envoyée"], cancelled: ["bad", "Annulée"] };
+const CampaignStatus = ({ s }) => html`<span class=${`badge ${CAMPAIGN_STATUS[s][0]}`}>${CAMPAIGN_STATUS[s][1]}</span>`;
+const EMPTY_CAMPAIGN = { name: "", language: "fr", subject: "", preheader: "", heading: "Bonjour {prénom},", body: "", imageUrl: "", ctaLabel: "", ctaUrl: "", audience: { segments: [], statuses: [] } };
+
+function MarketingSettings({ api, base }) {
+  const [state, reload] = useLoad(() => api(`${base}/settings/marketing`), [base]);
+  const [f, setF] = useState(null);
+  const [msg, setMsg] = useState(null);
+  const [error, setError] = useState(null);
+  const current = f ?? state.data?.marketing ?? { senderAddress: "", contact: "" };
+  const save = async (e) => {
+    e.preventDefault(); setError(null); setMsg(null);
+    try { await api(`${base}/settings/marketing`, { method: "PUT", body: { senderAddress: current.senderAddress ?? "", contact: current.contact ?? "" } }); setF(null); reload(); setMsg("Enregistré."); }
+    catch (err) { setError(err); }
+  };
+  return html`<form class="card" aria-label="Expéditeur des campagnes" onSubmit=${save}>
+      <h3>Expéditeur</h3>
+      <p class="muted">La loi canadienne anti-pourriel exige, au bas de chaque courriel, l'adresse postale de l'expéditeur et un moyen de le joindre. Chaque courriel a aussi un lien de désabonnement en un clic.</p>
+      <div class="fields">
+        <label>Adresse postale<input required minlength="5" maxlength="300" value=${current.senderAddress ?? ""} onInput=${(e) => setF({ ...current, senderAddress: e.target.value })} /></label>
+        <label>Nous joindre (courriel, téléphone ou site)<input required minlength="3" maxlength="200" value=${current.contact ?? ""} onInput=${(e) => setF({ ...current, contact: e.target.value })} /></label>
+        <button type="submit">Enregistrer</button>
+      </div>
+      ${msg && html`<p class="muted" role="status">${msg}</p>`}${error && html`<${Failure} error=${error} />`}
+    </form>`;
+}
+
+function Campaigns({ api, base, prefix }) {
+  const [state] = useLoad(() => api(`${base}/campaigns`), [base]);
+  const list = state.data?.campaigns ?? [];
+  return html`<h1>Campagnes</h1>
+    <p class="row"><a class="button" href=${`#${prefix}/campaign`}>Nouvelle campagne</a>
+      <span class="muted">Courriels aux clients qui peuvent en recevoir (consentement exprès, ou client depuis moins de 2 ans).</span></p>
+    <div>${state.loading && !state.data ? html`<${Loading} />` : state.error ? html`<${Failure} error=${state.error} />` : list.length === 0 ? html`<p class="muted">Aucune campagne.</p>` : html`
+      <div class="table-scroll" role="region" aria-label="Campagnes" tabindex="0"><table><thead><tr><th>Campagne</th><th>Statut</th><th class="num">Destinataires</th><th class="num">Envoyés</th><th class="num">Désabonnés</th><th>Créée le</th></tr></thead>
+        <tbody>${list.map((c) => html`<tr><td><a href=${`#${prefix}/campaign/${c.id}`}>${c.name}</a><br /><span class="muted">${c.subject}</span></td>
+          <td><${CampaignStatus} s=${c.status} /></td><td class="num">${number(c.recipients)}</td><td class="num">${number(c.sent)}</td><td class="num">${number(c.unsubscribed)}</td><td>${when(c.createdAt)}</td></tr>`)}</tbody></table></div>`}</div>
+    <div><${MarketingSettings} api=${api} base=${base} /></div>`;
+}
+
+function CampaignEditor({ api, base, prefix, campaignId }) {
+  const [state, reload] = useLoad(() => (campaignId ? api(`${base}/campaigns/${campaignId}`) : Promise.resolve({ campaign: null })), [base, campaignId]);
+  const [f, setF] = useState(null);
+  const [count, setCount] = useState(null);
+  const [testTo, setTestTo] = useState("");
+  const [msg, setMsg] = useState(null);
+  const [error, setError] = useState(null);
+  const loaded = state.data?.campaign;
+  const c = f ?? (loaded ? { ...EMPTY_CAMPAIGN, ...Object.fromEntries(Object.entries(loaded).map(([k, v]) => [k, v ?? ""])), audience: { segments: loaded.audienceSegments, statuses: loaded.audienceStatuses } } : EMPTY_CAMPAIGN);
+  const draft = !loaded || loaded.status === "draft";
+  const audienceKey = JSON.stringify(c.audience);
+  useEffect(() => {
+    if (!draft) return;
+    let live = true;
+    api(`${base}/campaigns/audience`, { method: "POST", body: c.audience }).then((r) => live && setCount(r.recipients), () => live && setCount(null));
+    return () => { live = false; };
+  }, [base, audienceKey, draft]);
+  if (state.loading && !state.data) return html`<h1>Campagne</h1><${Loading} />`;
+  if (state.error) return html`<h1>Campagne</h1><${Failure} error=${state.error} />`;
+  const set = (patch) => setF({ ...c, ...patch });
+  const toggle = (kind, key) => {
+    const list = c.audience[kind];
+    set({ audience: { ...c.audience, [kind]: list.includes(key) ? list.filter((k) => k !== key) : [...list, key] } });
+  };
+  const body = () => ({
+    name: c.name, language: c.language, subject: c.subject, preheader: c.preheader || null, heading: c.heading, body: c.body,
+    imageUrl: c.imageUrl || null, ctaLabel: c.ctaLabel || null, ctaUrl: c.ctaUrl || null, audience: c.audience,
+  });
+  const act = (fn) => async (e) => { e?.preventDefault?.(); setError(null); setMsg(null); try { await fn(); } catch (err) { setError(err); } };
+  const save = act(async () => {
+    if (loaded) { await api(`${base}/campaigns/${loaded.id}`, { method: "PUT", body: body() }); setF(null); reload(); setMsg("Brouillon enregistré."); }
+    else { const r = await api(`${base}/campaigns`, { method: "POST", body: body() }); location.hash = `#${prefix}/campaign/${r.campaign.id}`; }
+  });
+  const test = act(async () => { await api(`${base}/campaigns/${loaded.id}/test`, { method: "POST", body: { email: testTo } }); setMsg(`Essai en route vers ${testTo} (moins d'une minute).`); reload(); });
+  const send = act(async () => {
+    if (f) throw new Error("Enregistrez d'abord vos changements.");
+    if (!confirm(`Envoyer « ${loaded.subject} » à ${number(count)} clients ? Un envoi ne s'annule plus pour les courriels déjà partis.`)) return;
+    await api(`${base}/campaigns/${loaded.id}/send`, { method: "POST", body: { expectedRecipients: count } }); reload(); setMsg("Envoi lancé.");
+  });
+  const cancel = act(async () => { if (!confirm("Arrêter cette campagne ? Les courriels pas encore partis ne le seront jamais.")) return; await api(`${base}/campaigns/${loaded.id}/cancel`, { method: "POST" }); reload(); });
+  const field = (label, key, attrs = {}) => html`<label>${label}<input value=${c[key] ?? ""} disabled=${!draft} onInput=${(e) => set({ [key]: e.target.value })} ...${attrs} /></label>`;
+  return html`<h1>${loaded ? loaded.name : "Nouvelle campagne"}</h1>
+    <p class="row"><a href=${`#${prefix}/campaigns`}>← Campagnes</a>${loaded && html`<${CampaignStatus} s=${loaded.status} />`}</p>
+    ${error && html`<${Failure} error=${error} />`}${msg && html`<div class="alert ok" role="status">${msg}</div>`}
+    ${loaded && !draft && html`<div class="grid">
+      ${[["Destinataires", loaded.recipients], ["Envoyés", loaded.sent], ["En attente", loaded.pending], ["Non envoyés", loaded.skipped + loaded.failed], ["Désabonnés", loaded.unsubscribed]]
+        .map(([label, v]) => html`<div class="kpi"><div class="label">${label}</div><div class="value">${number(v)}</div></div>`)}</div>
+      ${loaded.status === "sending" && html`<p class="row"><button class="danger" onClick=${cancel}>Arrêter l'envoi</button></p>`}`}
+    <form class="card" aria-label="Contenu de la campagne" onSubmit=${save}>
+      <div class="fields">
+        ${field("Nom (pour l'équipe)", "name", { required: true, maxlength: 120 })}
+        <label>Langue<select value=${c.language} disabled=${!draft} onChange=${(e) => set({ language: e.target.value })}><option value="fr">Français</option><option value="en">English</option></select></label>
+      </div>
+      <div class="stack">
+        ${field("Objet du courriel", "subject", { required: true, maxlength: 150 })}
+        ${field("Aperçu dans la boîte de réception (facultatif)", "preheader", { maxlength: 150 })}
+        ${field("Titre", "heading", { required: true, maxlength: 150 })}
+        <label>Texte<textarea rows="8" required maxlength="10000" disabled=${!draft} value=${c.body} onInput=${(e) => set({ body: e.target.value })}></textarea></label>
+        <p class="muted">Une ligne vide sépare les paragraphes. {prénom} est remplacé par le prénom du client.</p>
+        ${field("Image (lien https, facultatif)", "imageUrl", { type: "url", maxlength: 500 })}
+        <div class="fields">${field("Bouton : texte (facultatif)", "ctaLabel", { maxlength: 60 })}${field("Bouton : lien https", "ctaUrl", { type: "url", maxlength: 500 })}</div>
+      </div>
+      <h3>Destinataires</h3>
+      <fieldset disabled=${!draft}><legend>Fréquence (aucune case : tous)</legend>
+        <div class="row">${SEGMENTS.map(([key, label]) => html`<label class="check"><input type="checkbox" checked=${c.audience.segments.includes(key)} onChange=${() => toggle("segments", key)} /> <${Segment} s=${key} /></label>`)}</div></fieldset>
+      <fieldset disabled=${!draft}><legend>Saison (aucune case : toutes)</legend>
+        <div class="row">${Object.entries(CUSTOMER_STATUS).map(([key, [, label]]) => html`<label class="check"><input type="checkbox" checked=${c.audience.statuses.includes(key)} onChange=${() => toggle("statuses", key)} /> ${label}</label>`)}</div></fieldset>
+      ${draft && html`<p role="status" aria-live="polite"><strong>${count === null ? "…" : number(count)}</strong> clients peuvent recevoir cette campagne (une fois par adresse).</p>
+        <p class="row"><button type="submit">${loaded ? "Enregistrer le brouillon" : "Créer le brouillon"}</button></p>`}
+    </form>
+    ${loaded && draft && html`<form class="card" aria-label="Essai et envoi" onSubmit=${test}>
+      <h3>Essayer, puis envoyer</h3>
+      <div class="fields">
+        <label>Envoyer un essai à<input type="email" required value=${testTo} onInput=${(e) => setTestTo(e.target.value)} /></label>
+        <button type="submit" class="secondary">Envoyer l'essai</button>
+        <button type="button" disabled=${!count} onClick=${send}>Envoyer à ${count === null ? "…" : number(count)} clients</button>
+      </div>
+      <p class="muted">${loaded.tests ? `${loaded.tests} essai(s) envoyé(s). ` : ""}Les courriels partent par lots, en quelques minutes à quelques heures selon le nombre.</p>
+    </form>`}`;
+}
+
 function Brand() {
   return html`<div class="brand"><span class="mark" aria-hidden="true">A</span>
     <span><span class="name">ALKAO</span><span class="sub">Billetterie · TAKATAK</span></span></div>`;
@@ -1212,7 +1339,7 @@ function Shell({ api, route, email, me, testMode, onLogout }) {
   const base = `/v1/admin/clients/${route.clientId}/brands/${route.brandId}`;
   const [status] = useLoad(() => api(`${base}/status`), [base]);
   const page = route.page;
-  const tab = page === "event" ? "events" : page === "order" ? "orders" : page === "customer" ? "customers" : page;
+  const tab = page === "event" ? "events" : page === "order" ? "orders" : page === "customer" ? "customers" : page === "campaign" ? "campaigns" : page;
   const disabled = status.data && !status.data.ticketing.active;
   const body = disabled ? html`<div class="alert warn">${REASON_FR[status.data.ticketing.reason] ?? status.data.ticketing.reason}</div>`
     : page === "dashboard" ? html`<${Dashboard} api=${api} base=${base} prefix=${prefix} />`
@@ -1226,8 +1353,10 @@ function Shell({ api, route, email, me, testMode, onLogout }) {
     : page === "payments" ? html`<${Payments} api=${api} base=${base} />`
     : page === "customers" ? html`<${Customers} api=${api} base=${base} prefix=${prefix} role=${status.data?.role} />`
     : page === "customer" ? html`<${CustomerDetail} api=${api} base=${base} customerId=${route.id} role=${status.data?.role} />`
+    : page === "campaigns" ? html`<${Campaigns} api=${api} base=${base} prefix=${prefix} />`
+    : page === "campaign" ? html`<${CampaignEditor} key=${route.id ?? "new"} api=${api} base=${base} prefix=${prefix} campaignId=${route.id ?? null} />`
     : html`<p>Page inconnue.</p>`;
-  const links = [...TABS, ...(CUSTOMER_ROLES.includes(status.data?.role) ? [["customers", "Clients"]] : []), ...(JOURNAL_ROLES.includes(status.data?.role) ? [["journal", "Journal"]] : [])]
+  const links = [...TABS, ...(CUSTOMER_ROLES.includes(status.data?.role) ? [["customers", "Clients"]] : []), ...(CUSTOMER_FILE_ROLES.includes(status.data?.role) ? [["campaigns", "Campagnes"]] : []), ...(JOURNAL_ROLES.includes(status.data?.role) ? [["journal", "Journal"]] : [])]
     .map(([key, label]) => html`<a class=${tab === key ? "active" : ""} aria-current=${tab === key ? "page" : null} href=${`#${prefix}/${key}`}>${label}</a>`);
   // Run 40: standalone, a TAKATAK-style dark sidebar; inside the TAKATAK dashboard, which has
   // its own, the links sit in the white top bar instead.

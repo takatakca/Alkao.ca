@@ -610,6 +610,40 @@ describe("ALKAO Operations app", () => {
     expect(await page.getByRole("link", { name: "Clients" }).count()).toBe(0);
   });
 
+  it("writes a campaign, tries it, and sends it to the customers who may receive it (Run 42)", async () => {
+    const page = await signedIn(seed.users.havanaOwner);
+    page.on("dialog", (d) => void d.accept());
+    await page.goto(`${origin}/ops#${brandPath()}/campaigns`);
+    await page.getByRole("heading", { name: "Campagnes", exact: true }).waitFor();
+    const sender = page.getByRole("form", { name: "Expéditeur des campagnes" });
+    await sender.getByLabel("Adresse postale").fill("1 rue Exemple, Maricourt (Québec) J0E 2L2");
+    await sender.getByLabel("Nous joindre (courriel, téléphone ou site)").fill("info@example.com");
+    await sender.getByRole("button", { name: "Enregistrer" }).click();
+    await sender.getByText("Enregistré.").waitFor();
+
+    await page.getByRole("link", { name: "Nouvelle campagne" }).click();
+    const form = page.getByRole("form", { name: "Contenu de la campagne" });
+    await form.getByLabel("Nom (pour l'équipe)").fill("Halloween 2026");
+    await form.getByLabel("Objet du courriel").fill("{prénom}, Halloween revient !");
+    await form.getByLabel("Texte", { exact: true }).fill("Les soirées Halloween reviennent.\n\nRéservez votre chalet.");
+    await form.getByLabel("Bouton : texte (facultatif)").fill("Acheter mes billets");
+    await form.getByLabel("Bouton : lien https").fill("https://promohavana.ca/promos/halloween");
+    // Denis unsubscribed in the Run 41 test: only Alice may receive it.
+    await form.getByText("1 clients peuvent recevoir cette campagne").waitFor();
+    await form.getByRole("button", { name: "Créer le brouillon" }).click();
+    await page.getByRole("heading", { name: "Halloween 2026" }).waitFor();
+
+    const send = page.getByRole("form", { name: "Essai et envoi" });
+    await send.getByLabel("Envoyer un essai à").fill("equipe@example.com");
+    await send.getByRole("button", { name: "Envoyer l'essai" }).click();
+    await page.getByText("Essai en route vers equipe@example.com").waitFor();
+    await send.getByRole("button", { name: "Envoyer à 1 clients" }).click();
+    await page.getByText("Envoi lancé.").waitFor();
+    await page.getByText("Envoi en cours").waitFor();
+    const { rows } = await db.pool.query(`SELECT m.email, m.customer_id IS NULL AS test FROM public.ticketing_campaign_messages m ORDER BY m.created_at`);
+    expect(rows).toEqual([{ email: "equipe@example.com", test: true }, { email: "alice@example.com", test: false }]);
+  });
+
   it("hides money from gate staff", async () => {
     const page = await signedIn(seed.users.havanaStaff);
     await page.goto(`${origin}/ops#${brandPath()}/dashboard`);

@@ -54,6 +54,9 @@ const EXPECTED: Record<string, Visibility> = {
   // Run 41: the customer file, server only.
   ticketing_customers: "none",
   ticketing_customer_bookings: "none",
+  // Run 42: campaigns, server only.
+  ticketing_campaigns: "none",
+  ticketing_campaign_messages: "none",
 };
 
 const clientColumn = (table: string) => (table === "ticketing_clients" ? "id" : "client_id");

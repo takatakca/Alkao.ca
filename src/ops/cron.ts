@@ -1,5 +1,6 @@
 import type { Db } from "../db/pool.js";
 import { queueReminders } from "../delivery/reminders.js";
+import { deliverCampaignEmails } from "../delivery/campaigns.js";
 import { deliverTicketEmails, type DeliveryConfig } from "../delivery/worker.js";
 import type { PaymentsService } from "../payments/service.js";
 import { advanceCancellations } from "./cancellation.js";
@@ -25,13 +26,15 @@ export interface CronResult {
   expiredHolds: number;
   remindersQueued: number;
   emails: { sent: number; skipped: number; retried: number; failed: number } | null;
+  /** Run 42: campaign messages, after the buyers' emails; `finished` campaigns marked sent. */
+  campaignEmails: { sent: number; skipped: number; retried: number; failed: number; finished: number } | null;
   cancellationJobs: number | null;
 }
 
 const LOCK = "alkao_cron";
 
 export async function runBackgroundOnce(db: Db, deps: CronDeps, now = new Date()): Promise<CronResult> {
-  const result: CronResult = { ran: false, expiredHolds: 0, remindersQueued: 0, emails: null, cancellationJobs: null };
+  const result: CronResult = { ran: false, expiredHolds: 0, remindersQueued: 0, emails: null, campaignEmails: null, cancellationJobs: null };
   const lock = await db.connect();
   try {
     const { rows } = await lock.query<{ ok: boolean }>(`SELECT pg_try_advisory_lock(hashtext($1)) AS ok`, [LOCK]);
@@ -43,6 +46,7 @@ export async function runBackgroundOnce(db: Db, deps: CronDeps, now = new Date()
         result.remindersQueued = await queueReminders(db, now);
         const r = await deliverTicketEmails(db, deps.email, now);
         result.emails = { sent: r.sent, skipped: r.skipped, retried: r.retried, failed: r.failed };
+        result.campaignEmails = await deliverCampaignEmails(db, deps.email, now);
       }
       if (deps.payments) result.cancellationJobs = await advanceCancellations(db, deps.payments);
     } finally {

@@ -33,6 +33,8 @@ import * as privacy from "../ops/privacy.js";
 import * as reports from "../ops/reports.js";
 import * as promoDb from "../db/promo.js";
 import * as customersDb from "../db/customers.js";
+import * as campaignsDb from "../db/campaigns.js";
+import { mountUnsubscribe } from "./unsubscribe.js";
 import { localDate } from "../domain/customers.js";
 import * as journal from "../ops/journal.js";
 import * as sessionBatch from "../ops/session-batch.js";
@@ -1016,6 +1018,69 @@ export function createApp(deps: AppDeps) {
     return c.json({ import: await withTransaction(deps.db, (tx) => customersDb.completeImport(tx, c.get("scope"), body, actor(c))) });
   });
 
+  // ── Run 42: e-mail campaigns ──────────────────────────────────────────────
+  const manageCampaigns = can("ticketing.campaigns.manage");
+
+  app.get(`${ADMIN}/settings/marketing`, ...admin, manageCampaigns, async (c) =>
+    c.json({ marketing: await campaignsDb.getMarketingSettings(deps.db, c.get("scope")) }),
+  );
+
+  app.put(`${ADMIN}/settings/marketing`, ...admin, manageCampaigns, async (c) => {
+    const body = api.MarketingSettings.parse(await readJson(c));
+    return c.json({ marketing: await withTransaction(deps.db, (tx) => campaignsDb.setMarketingSettings(tx, c.get("scope"), body, actor(c))) });
+  });
+
+  app.get(`${ADMIN}/campaigns`, ...admin, manageCampaigns, async (c) =>
+    c.json({ campaigns: await campaignsDb.listCampaigns(deps.db, c.get("scope")) }),
+  );
+
+  // How many customers an audience reaches right now (may receive e-mail, once per address).
+  app.post(`${ADMIN}/campaigns/audience`, ...admin, manageCampaigns, async (c) => {
+    const body = api.CampaignAudience.parse(await readJson(c));
+    return c.json({ recipients: await campaignsDb.audienceCount(deps.db, c.get("scope"), today(), body) });
+  });
+
+  app.post(`${ADMIN}/campaigns`, ...admin, manageCampaigns, async (c) => {
+    const body = api.CampaignInput.parse(await readJson(c));
+    return c.json({ campaign: await withTransaction(deps.db, (tx) => campaignsDb.createCampaign(tx, c.get("scope"), body, actor(c))) }, 201);
+  });
+
+  app.get(`${ADMIN}/campaigns/:campaignId`, ...admin, manageCampaigns, async (c) => {
+    const id = param(c, "campaignId");
+    if (!id) return fail(c, 404, "campaign_not_found");
+    return c.json({ campaign: await campaignsDb.getCampaign(deps.db, c.get("scope"), id, today()) });
+  });
+
+  app.put(`${ADMIN}/campaigns/:campaignId`, ...admin, manageCampaigns, async (c) => {
+    const id = param(c, "campaignId");
+    if (!id) return fail(c, 404, "campaign_not_found");
+    const body = api.CampaignInput.parse(await readJson(c));
+    await withTransaction(deps.db, (tx) => campaignsDb.updateCampaign(tx, c.get("scope"), id, body, actor(c)));
+    return c.json({ campaign: await campaignsDb.getCampaign(deps.db, c.get("scope"), id, today()) });
+  });
+
+  app.post(`${ADMIN}/campaigns/:campaignId/test`, ...admin, manageCampaigns, async (c) => {
+    const id = param(c, "campaignId");
+    if (!id) return fail(c, 404, "campaign_not_found");
+    const body = api.CampaignTest.parse(await readJson(c));
+    return c.json(await withTransaction(deps.db, (tx) => campaignsDb.queueTest(tx, c.get("scope"), id, body.email, actor(c), now())), 202);
+  });
+
+  app.post(`${ADMIN}/campaigns/:campaignId/send`, ...admin, manageCampaigns, async (c) => {
+    const id = param(c, "campaignId");
+    if (!id) return fail(c, 404, "campaign_not_found");
+    const body = api.CampaignSend.parse(await readJson(c));
+    await withTransaction(deps.db, (tx) => campaignsDb.sendCampaign(tx, c.get("scope"), id, body.expectedRecipients, today(), actor(c), now()));
+    return c.json({ campaign: await campaignsDb.getCampaign(deps.db, c.get("scope"), id, today()) }, 202);
+  });
+
+  app.post(`${ADMIN}/campaigns/:campaignId/cancel`, ...admin, manageCampaigns, async (c) => {
+    const id = param(c, "campaignId");
+    if (!id) return fail(c, 404, "campaign_not_found");
+    await withTransaction(deps.db, (tx) => campaignsDb.cancelCampaign(tx, c.get("scope"), id, actor(c), now()));
+    return c.json({ campaign: await campaignsDb.getCampaign(deps.db, c.get("scope"), id, today()) });
+  });
+
   // ── Run 04: Flex Météo session change ────────────────────────────────────
   app.post(`${PUBLIC}/orders/:orderId/exchange`, publicGate, async (c) => {
     const orderId = param(c, "orderId");
@@ -1072,6 +1137,7 @@ export function createApp(deps: AppDeps) {
 
   mountOpsUi(app, { ...(deps.opsUi ?? { supabaseUrl: null, supabaseAnonKey: null, frameAncestors: [] }), paymentsMode: deps.paymentsMode ?? null });
   mountBuyerUi(app);
+  mountUnsubscribe(app, { db: deps.db, masterSecret: deps.credentialMasterSecret ?? null, now });
   mountShopUi(app, { publicUrl: deps.publicUrl ?? null, paymentsMode: deps.paymentsMode ?? null });
 
   return app;
