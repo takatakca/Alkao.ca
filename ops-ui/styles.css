@@ -152,3 +152,9 @@ dl.facts dd { margin: 0; overflow-wrap: anywhere; }
 .table-scroll { overflow-x: auto; border-radius: var(--radius); }
 .table-scroll > table { min-width: 720px; }
 .fields { display: flex; flex-wrap: wrap; gap: .6rem 1rem; align-items: end; }
+/* Run 42: the campaign editor. */
+.stack { display: grid; gap: .75rem; margin: .75rem 0; }
+.stack label, .stack textarea { width: 100%; }
+.stack textarea { resize: vertical; min-height: 10rem; line-height: 1.5; }
+form.card fieldset { border: 1px solid var(--line); border-radius: 8px; padding: .5rem .75rem; margin: 0 0 .75rem; }
+form.card fieldset legend { font-size: 12px; font-weight: 500; color: var(--muted); padding: 0 .25rem; }

@@ -49,10 +49,13 @@ async function festiSnapshot() {
     erasures: await q(`SELECT buyer_id FROM public.ticketing_buyer_erasures WHERE client_id = $1`),
     disputes: await q(`SELECT id, status, updated_at FROM public.ticketing_payment_disputes WHERE client_id = $1 ORDER BY id`),
     chargeRefunds: await q(`SELECT order_id, refunded_cents FROM public.ticketing_charge_refund_totals WHERE client_id = $1`),
-    settings: await q(`SELECT checkout_return_origins, reminder_emails FROM public.ticketing_brand_settings WHERE client_id = $1`),
+    settings: await q(`SELECT checkout_return_origins, reminder_emails, marketing_sender_address, marketing_contact FROM public.ticketing_brand_settings WHERE client_id = $1`),
     // Run 41
     customers: await q(`SELECT id, email, email_opt_out_at, anonymized_at, updated_at FROM public.ticketing_customers WHERE client_id = $1 ORDER BY id`),
     bookings: await q(`SELECT id, customer_id, cancelled_on, updated_at FROM public.ticketing_customer_bookings WHERE client_id = $1 ORDER BY id`),
+    // Run 42
+    campaigns: await q(`SELECT id, status, subject, updated_at FROM public.ticketing_campaigns WHERE client_id = $1 ORDER BY id`),
+    campaignMessages: await q(`SELECT id, status FROM public.ticketing_campaign_messages WHERE client_id = $1 ORDER BY id`),
   });
 }
 
@@ -74,7 +77,17 @@ describe("tenant isolation sweep", () => {
        VALUES ($1, $2, $3, 'reservation_camping', 'F-1', 'chalet', '2027-01-10', '2027-01-12', '2026-01-01', '2026-01-01')`,
       [f.clientId, f.brandId, customer[0]!.id],
     );
+    const { rows: campaign } = await db.pool.query<{ id: string }>(
+      `INSERT INTO public.ticketing_campaigns (client_id, brand_id, name, subject, heading, body) VALUES ($1, $2, 'Festi', 'Festi', 'Festi', 'Festi') RETURNING id`,
+      [f.clientId, f.brandId],
+    );
+    await db.pool.query(
+      `INSERT INTO public.ticketing_brand_settings (client_id, brand_id, marketing_sender_address, marketing_contact) VALUES ($1, $2, '1 rue Festi, Montréal', 'festi@example.com')
+       ON CONFLICT (client_id, brand_id) DO UPDATE SET marketing_sender_address = EXCLUDED.marketing_sender_address, marketing_contact = EXCLUDED.marketing_contact`,
+      [f.clientId, f.brandId],
+    );
     const ids: Record<string, string> = {
+      campaignId: campaign[0]!.id,
       customerId: customer[0]!.id,
       venueId: f.venueId, eventId: f.eventId, sessionId: f.sessionId, ticketTypeId: f.types[0]!.id,
       orderId: f.orderId, ticketId: f.ticketIds[0]!, refundId: refunds[0]!.id, holdId: f.holdId, promoCodeId: promo[0]!.id,
@@ -99,6 +112,10 @@ describe("tenant isolation sweep", () => {
       "PATCH /promo-codes/:promoCodeId": { active: false },
       // Run 41
       "PATCH /customers/:customerId": { emailOptOut: true },
+      // Run 42
+      "PUT /campaigns/:campaignId": { name: "Pirate", subject: "Pirate", heading: "Pirate", body: "Pirate", audience: {} },
+      "POST /campaigns/:campaignId/test": { email: "pirate@example.com" },
+      "POST /campaigns/:campaignId/send": { expectedRecipients: 1 },
     };
     const { rows: festiOrder } = await db.pool.query<{ reference: string }>(`SELECT reference FROM public.ticketing_orders WHERE id = $1`, [f.orderId]);
     const queries: Record<string, string> = {
@@ -125,7 +142,8 @@ describe("tenant isolation sweep", () => {
     for (const key of ["GET /orders/:orderId/buyer/export", "POST /orders/:orderId/buyer/anonymize", "POST /orders/:orderId/tickets/void", "GET /sessions/:sessionId/lookup",
       "POST /events/:eventId/duplicate", "POST /events/:eventId/sessions/batch", "POST /events/:eventId/sessions/status", "GET /orders/:orderId/history",
       "GET /events/:eventId/promo-codes", "POST /events/:eventId/promo-codes", "PATCH /promo-codes/:promoCodeId",
-      "GET /customers/:customerId", "PATCH /customers/:customerId", "POST /customers/:customerId/anonymize"]) {
+      "GET /customers/:customerId", "PATCH /customers/:customerId", "POST /customers/:customerId/anonymize",
+      "GET /campaigns/:campaignId", "PUT /campaigns/:campaignId", "POST /campaigns/:campaignId/test", "POST /campaigns/:campaignId/send", "POST /campaigns/:campaignId/cancel"]) {
       expect(results.some((r) => r.startsWith(`${key} → 404`)), `${key}: ${results.find((r) => r.startsWith(key))}`).toBe(true);
     }
 

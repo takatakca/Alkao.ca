@@ -159,6 +159,9 @@ describe.each(["light", "dark"] as const)("accessibility (%s)", (scheme) => {
     const customerId = await seedCustomers(h.clientId, h.brandId);
     await visit(`${prefix}/customers`, () => page.getByRole("heading", { name: "Par fréquence" }).waitFor(), "customers");
     await visit(`${prefix}/customer/${customerId}`, () => page.getByRole("heading", { name: "Réservations" }).waitFor(), "customer");
+    // Run 42: campaigns and the editor.
+    await visit(`${prefix}/campaigns`, () => page.getByRole("heading", { name: "Expéditeur" }).waitFor(), "campaigns");
+    await visit(`${prefix}/campaign`, () => page.getByText("clients peuvent recevoir cette campagne").waitFor(), "campaign editor");
     expect(problems).toEqual([]);
   }, 90_000);
 });

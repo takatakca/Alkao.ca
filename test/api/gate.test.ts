@@ -37,6 +37,10 @@ const UNGATED = new Set([
   "GET /v1/admin/clients/:clientId/brands/:brandId/status",
   // The caller's own memberships (no tenant id in the request).
   "GET /v1/admin/me",
+  // Run 42: the unsubscribe link of a campaign e-mail, authenticated by its signature. The
+  // anti-spam law wants it to keep working after the campaign, whatever Ticketing's state.
+  "GET /desabonnement",
+  "POST /desabonnement",
 ]);
 
 // Static files of the Operations app, the buyer's tickets page and the hosted shop: no

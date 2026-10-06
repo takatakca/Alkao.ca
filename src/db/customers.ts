@@ -213,12 +213,12 @@ export async function completeImport(tx: Tx, s: TenantScope, input: { source: st
 
 // ── Reading ─────────────────────────────────────────────────────────────────
 /**
- * Per-customer figures for one tenant ($1 client, $2 brand, $3 today as a date).
+ * Per-customer figures for one tenant ($1 client, $2 brand, $3 today as a date), as the CTE `stats`.
  * A visit is one stay: bookings that overlap or follow each other (several sites, a stay
  * extended) count once. Segments count visits already made; the status follows the year of
  * the latest visit or upcoming arrival.
  */
-const STATS = `
+export const CUSTOMER_STATS = `
   bookings AS (
     SELECT b.*, CASE WHEN b.cancelled_on IS NOT NULL THEN 'cancelled' WHEN b.starts_on <= $3::date THEN 'done' ELSE 'upcoming' END AS state
     FROM public.ticketing_customer_bookings b WHERE b.client_id = $1 AND b.brand_id = $2
@@ -305,10 +305,10 @@ export async function listCustomers(db: Db, s: TenantScope, today: string, f: Cu
   const params: unknown[] = [s.clientId, s.brandId, today];
   const filter = where(f, params);
   const [page, count, totals] = await Promise.all([
-    db.query(`WITH ${STATS} SELECT ${LIST_COLUMNS} FROM stats ${filter} ${ORDER} LIMIT ${f.limit} OFFSET ${f.offset}`, params),
-    db.query<{ n: number }>(`WITH ${STATS} SELECT count(*)::int AS n FROM stats ${filter}`, params),
+    db.query(`WITH ${CUSTOMER_STATS} SELECT ${LIST_COLUMNS} FROM stats ${filter} ${ORDER} LIMIT ${f.limit} OFFSET ${f.offset}`, params),
+    db.query<{ n: number }>(`WITH ${CUSTOMER_STATS} SELECT count(*)::int AS n FROM stats ${filter}`, params),
     db.query<{ segment: string; status: string | null; n: number; emailable: number }>(
-      `WITH ${STATS} SELECT segment, status, count(*)::int AS n, count(*) FILTER (WHERE email_permission IN ('express', 'implied'))::int AS emailable
+      `WITH ${CUSTOMER_STATS} SELECT segment, status, count(*)::int AS n, count(*) FILTER (WHERE email_permission IN ('express', 'implied'))::int AS emailable
        FROM stats GROUP BY segment, status`,
       [s.clientId, s.brandId, today],
     ),
@@ -333,7 +333,7 @@ export async function listCustomers(db: Db, s: TenantScope, today: string, f: Cu
 export async function getCustomer(db: Db, s: TenantScope, id: string, today: string) {
   const [customer, bookings] = await Promise.all([
     db.query(
-      `WITH ${STATS} SELECT ${LIST_COLUMNS}, home_phone, work_phone, address_line, address_unit, postal_code, country, companion_name,
+      `WITH ${CUSTOMER_STATS} SELECT ${LIST_COLUMNS}, home_phone, work_phone, address_line, address_unit, postal_code, country, companion_name,
               email_consent_at, email_opt_out_at, sms_opt_out_at, created_at
        FROM stats WHERE id = $4`,
       [s.clientId, s.brandId, today, id],
@@ -355,7 +355,7 @@ export async function getCustomer(db: Db, s: TenantScope, id: string, today: str
 export async function exportCustomers(db: Db, s: TenantScope, today: string, f: CustomerFilters) {
   const params: unknown[] = [s.clientId, s.brandId, today];
   const { rows } = await db.query(
-    `WITH ${STATS} SELECT ${LIST_COLUMNS}, home_phone, work_phone, address_line, address_unit, postal_code, country, companion_name
+    `WITH ${CUSTOMER_STATS} SELECT ${LIST_COLUMNS}, home_phone, work_phone, address_line, address_unit, postal_code, country, companion_name
      FROM stats ${where(f, params, ["anonymized_at IS NULL"])} ${ORDER} LIMIT 200000`,
     params,
   );

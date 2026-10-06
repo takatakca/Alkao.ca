@@ -1,4 +1,4 @@
-/** Outgoing email. ALKAO sends one kind today: the buyer's tickets. */
+/** Outgoing email: the buyer's emails, and the Brand's campaigns (Run 42). */
 export interface EmailMessage {
   to: string;
   /** Display name, e.g. the Brand ("Havana Resort"). The address is ALKAO_EMAIL_FROM. */
@@ -8,6 +8,8 @@ export interface EmailMessage {
   html: string;
   /** Same key for every attempt of the same message: the provider sends it once. */
   idempotencyKey: string;
+  /** Run 42: extra headers (List-Unsubscribe on campaigns). */
+  headers?: Record<string, string>;
 }
 
 export class EmailSendError extends Error {
@@ -43,7 +45,10 @@ export class ResendEmailSender implements EmailSender {
           "content-type": "application/json",
           "idempotency-key": m.idempotencyKey,
         },
-        body: JSON.stringify({ from: `${displayName(m.fromName)} <${this.fromAddress}>`, to: [m.to], subject: m.subject.replace(/[\r\n]+/g, " ").slice(0, 300), text: m.text, html: m.html }),
+        body: JSON.stringify({
+          from: `${displayName(m.fromName)} <${this.fromAddress}>`, to: [m.to], subject: m.subject.replace(/[\r\n]+/g, " ").slice(0, 300), text: m.text, html: m.html,
+          ...(m.headers ? { headers: m.headers } : {}),
+        }),
         signal: AbortSignal.timeout(15_000),
       });
     } catch (error) {
