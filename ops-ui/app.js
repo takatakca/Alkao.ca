@@ -208,6 +208,7 @@ function Login({ config, onSession }) {
     } catch (err) { setError(err); }
   };
   return html`<div class="login card">
+    <${Brand} />
     <h1>ALKAO — Opérations</h1>
     <p class="muted">Billetterie GROUPE TAKATAK</p>
     ${error && html`<${Failure} error=${error} />`}
@@ -232,7 +233,7 @@ function Workspaces({ api }) {
     <h1>Choisir un espace</h1>
     ${list.length === 0 && html`<p class="muted">Aucun accès Ticketing pour ce compte.</p>`}
     ${list.map((m) => html`<div class="card">
-      <div class="row"><strong>${m.clientName}</strong><span class="badge">${m.role}</span></div>
+      <div class="row"><strong>${m.clientName}</strong><span class="badge">${ROLE_FR[m.role] ?? m.role}</span></div>
       <table><tbody>${m.brands.map((b) => html`<tr>
         <td><a href=${`#/c/${m.clientId}/b/${b.brandId}/dashboard`}>${b.name}</a></td>
         <td>${b.ticketing.active ? html`<span class="badge ok">Ticketing actif</span>` : html`<span class="badge warn">${REASON_FR[b.ticketing.reason] ?? b.ticketing.reason}</span>`}</td>
@@ -1013,6 +1014,12 @@ function Payments({ api, base }) {
 }
 
 // ── Shell and routing ───────────────────────────────────────────────────────
+// Run 40: the TAKATAK dashboard's brand block (orange tile, name, small caps line).
+function Brand() {
+  return html`<div class="brand"><span class="mark" aria-hidden="true">A</span>
+    <span><span class="name">ALKAO</span><span class="sub">Billetterie · TAKATAK</span></span></div>`;
+}
+
 const TABS = [["dashboard", "Tableau de bord"], ["events", "Événements"], ["venues", "Lieux"], ["orders", "Commandes"], ["scanner", "Scanner"], ["payments", "Paiements"]];
 // Run 30: the journal needs audit.read (owner, admin).
 const JOURNAL_ROLES = ["owner", "admin"];
@@ -1046,12 +1053,23 @@ function Shell({ api, route, email, me, testMode, onLogout }) {
     : page === "scanner" ? html`<${Scanner} api=${api} base=${base} />`
     : page === "payments" ? html`<${Payments} api=${api} base=${base} />`
     : html`<p>Page inconnue.</p>`;
-  return html`
-    <header class="top"><span class="logo">ALKAO</span><a class="where" href="#/">Changer d'espace</a>
-      ${status.data && html`<span class="badge">${status.data.role}</span>`}${testMode}<span class="spacer"></span>
-      <span class="muted">${email ?? ""}</span>${onLogout && html`<button class="secondary" onClick=${onLogout}>Déconnexion</button>`}</header>
-    <nav class="tabs">${[...TABS, ...(JOURNAL_ROLES.includes(status.data?.role) ? [["journal", "Journal"]] : [])].map(([key, label]) => html`<a class=${tab === key ? "active" : ""} href=${`#${prefix}/${key}`}>${label}</a>`)}</nav>
-    <main>${status.error ? html`<${Failure} error=${status.error} />` : body}</main>`;
+  const links = [...TABS, ...(JOURNAL_ROLES.includes(status.data?.role) ? [["journal", "Journal"]] : [])]
+    .map(([key, label]) => html`<a class=${tab === key ? "active" : ""} aria-current=${tab === key ? "page" : null} href=${`#${prefix}/${key}`}>${label}</a>`);
+  // Run 40: standalone, a TAKATAK-style dark sidebar; inside the TAKATAK dashboard, which has
+  // its own, the links sit in the white top bar instead.
+  return html`<div class=${embedded ? "layout embedded" : "layout"}>
+    ${!embedded && html`<aside class="side">
+      <${Brand} />
+      <nav class="side-nav" aria-label="Billetterie"><p class="section">Billetterie</p>${links}</nav>
+    </aside>`}
+    <div class="page">
+      <header class="top">
+        ${embedded && html`<nav class="tabs" aria-label="Billetterie">${links}</nav>`}<a class="where" href="#/">Changer d'espace</a>
+        ${status.data && html`<span class="badge">${ROLE_FR[status.data.role] ?? status.data.role}</span>`}${testMode}<span class="spacer"></span>
+        <span class="who">${email ?? ""}</span>${onLogout && html`<button class="secondary" onClick=${onLogout}>Déconnexion</button>`}</header>
+      <main>${status.error ? html`<${Failure} error=${status.error} />` : body}</main>
+    </div>
+  </div>`;
 }
 
 function App() {
@@ -1100,7 +1118,7 @@ function App() {
   // Run 32: with Stripe test keys, every screen says nothing is real.
   const testMode = config.paymentsMode === "test" ? html`<span class="badge warn" role="status">Stripe en mode test : aucun paiement réel</span>` : null;
   return route ? html`<${Shell} api=${api} route=${route} email=${session.email} me=${tokenSubject(session.accessToken)} testMode=${testMode} onLogout=${onLogout} />`
-    : html`<header class="top"><span class="logo">ALKAO</span>${testMode}<span class="spacer"></span>${onLogout && html`<button class="secondary" onClick=${onLogout}>Déconnexion</button>`}</header><${Workspaces} api=${api} />`;
+    : html`<header class="top"><${Brand} />${testMode}<span class="spacer"></span>${onLogout && html`<button class="secondary" onClick=${onLogout}>Déconnexion</button>`}</header><${Workspaces} api=${api} />`;
 }
 
 render(html`<${App} />`, document.getElementById("app"));
