@@ -1,6 +1,6 @@
 import {
   bookingCategory, CUSTOMER_SEGMENTS, CUSTOMER_STATUSES, fold, IMPLIED_CONSENT_DAYS, normalizeCountry, normalizeEmail, normalizePhone, normalizePostalCode,
-  normalizeRegion, samePerson, scrubCardNumbers, tidyText, type CustomerSegment, type CustomerStatus,
+  normalizeRegion, samePerson, scrubCardNumbers, tidyText, type BookingCategory, type CustomerSegment, type CustomerStatus,
 } from "../domain/customers.js";
 import { DomainError } from "../domain/errors.js";
 import { toApi, writeAudit } from "./catalog.js";
@@ -40,6 +40,13 @@ export interface ImportRow {
   region?: string | null | undefined;
   postalCode?: string | null | undefined;
   country?: string | null | undefined;
+  // Run 43, set by ALKAO itself (ticket orders), never by the import API:
+  /** The lodging family, instead of guessing it from `item`. */
+  category?: BookingCategory | undefined;
+  /** The day it was booked (paid), instead of the report's date. */
+  bookedOn?: string | undefined;
+  /** The day it was cancelled (refunded, session cancelled); absent means booked. */
+  cancelledOn?: string | null | undefined;
 }
 
 export interface ImportResult {
@@ -158,28 +165,30 @@ export async function importRows(
         customerId = rows[0]!.id;
         result.customersCreated++;
       }
-      const booking = [bookingCategory(item), item, row.startsOn, row.endsOn, row.adults ?? 0, row.children ?? 0, row.pets ?? 0,
+      const booking = [row.category ?? bookingCategory(item), item, row.startsOn, row.endsOn, row.adults ?? 0, row.children ?? 0, row.pets ?? 0,
         row.groupBooking ?? false, row.checkedIn ?? false, row.totalCents ?? 0];
+      const bookedOn = row.bookedOn && row.bookedOn < input.reportDate ? row.bookedOn : input.reportDate;
       if (!known[0]) {
         await tx.query(
           `INSERT INTO public.ticketing_customer_bookings
              (client_id, brand_id, customer_id, source, source_ref, category, item, starts_on, ends_on, adults, children, pets,
-              group_booking, checked_in, total_cents, first_report_on, last_report_on)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $16)`,
-          [s.clientId, s.brandId, customerId, input.source, row.sourceRef, ...booking, input.reportDate],
+              group_booking, checked_in, total_cents, first_report_on, last_report_on, cancelled_on)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)`,
+          [s.clientId, s.brandId, customerId, input.source, row.sourceRef, ...booking, bookedOn, input.reportDate, row.cancelledOn ?? null],
         );
         result.bookingsCreated++;
       } else if (known[0].last_report_on <= input.reportDate) {
         await tx.query(
           `UPDATE public.ticketing_customer_bookings
            SET category = $2, item = $3, starts_on = $4, ends_on = $5, adults = $6, children = $7, pets = $8, group_booking = $9,
-               checked_in = checked_in OR $10, total_cents = $11, last_report_on = $12, cancelled_on = NULL
+               checked_in = checked_in OR $10, total_cents = $11, last_report_on = $12, cancelled_on = $13::date,
+               first_report_on = LEAST(first_report_on, $14::date)
            WHERE id = $1`,
-          [known[0].id, ...booking, input.reportDate],
+          [known[0].id, ...booking, input.reportDate, row.cancelledOn ?? null, bookedOn],
         );
         result.bookingsUpdated++;
       } else {
-        await tx.query(`UPDATE public.ticketing_customer_bookings SET first_report_on = LEAST(first_report_on, $2) WHERE id = $1`, [known[0].id, input.reportDate]);
+        await tx.query(`UPDATE public.ticketing_customer_bookings SET first_report_on = LEAST(first_report_on, $2) WHERE id = $1`, [known[0].id, bookedOn]);
         result.bookingsUpdated++;
       }
     }

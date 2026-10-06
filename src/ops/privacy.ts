@@ -160,8 +160,18 @@ export async function anonymizeBuyer(db: Db, s: TenantScope, orderId: string, ac
       [...params, actor.id ?? "unknown", now],
     );
     const { rows: count } = await tx.query<{ n: number }>(`SELECT count(*)::int AS n FROM (${buyerOrders}) x`, params);
+    // Run 43: the customer file entry built from these orders is cleared too (bookings stay).
+    const customers = await tx.query(
+      `UPDATE public.ticketing_customers SET first_name = NULL, last_name = NULL, email = NULL, mobile_phone = NULL, home_phone = NULL,
+         work_phone = NULL, address_line = NULL, address_unit = NULL, postal_code = NULL, companion_name = NULL,
+         email_consent_at = NULL, anonymized_at = $4
+       WHERE client_id = $2 AND brand_id = $3 AND anonymized_at IS NULL AND id IN (
+         SELECT b.customer_id FROM public.ticketing_customer_bookings b
+         WHERE b.client_id = $2 AND b.brand_id = $3 AND b.source = 'alkao_order' AND b.source_ref IN (SELECT id::text FROM (${buyerOrders}) o))`,
+      [...params, now],
+    );
     // The audit entry names the buyer row only, never what it held.
-    await writeAudit(tx, s, actor, "buyer.anonymized", { type: "buyer", id: buyer.id }, { orders: count[0]!.n, emailsDropped: dropped.rowCount ?? 0 });
+    await writeAudit(tx, s, actor, "buyer.anonymized", { type: "buyer", id: buyer.id }, { orders: count[0]!.n, emailsDropped: dropped.rowCount ?? 0, customersAnonymized: customers.rowCount ?? 0 });
     return { anonymizedAt: rows[0]!.erased_at, alreadyAnonymized: false };
   });
 }
