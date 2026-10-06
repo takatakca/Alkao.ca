@@ -119,3 +119,35 @@ default, with no database change. To enable it:
 
 - In TAKATAK, set `ALKAO_OPS_URL` and `ALKAO_TICKETING_CLIENT_IDS`.
 - In ALKAO, set `ALKAO_OPS_FRAME_ANCESTORS`.
+
+## 6. Customer file and marketing (Runs 41–46)
+
+Everything here is optional and can wait until after the first ticket sale. `npm run
+check:golive` reports each step that is still missing.
+
+1. **Load the history.** On the server, run `npm run customers:import -- --client <uuid>
+   --brand <uuid> <report.csv>@<YYYY-MM-DD> […]`, with the Réservation camping.ca reports,
+   oldest first. It prints totals only. From then on, staff import each new report from
+   `/ops` → **Clients**.
+2. **The sender.** Under `/ops` → **Campagnes** → **Expéditeur**, enter the mailing address
+   and a contact. No campaign can go out without them; the anti-spam law requires them.
+3. **The welcome code.**
+   - Under **Campagnes** → **Infolettre**, enter it, for example `HAVANA5`, "5 % sur vos billets".
+   - Then create the same code under `/ops` → **Événements** → **Codes promo**, so that it
+     works at checkout.
+4. **Promo Havana.**
+   - Set `ALKAO_URL`, `ALKAO_CLIENT_ID` and `ALKAO_BRAND_ID` on the site.
+   - Its newsletter form then hands each sign-up to ALKAO, which sends the confirmation
+     e-mail.
+5. **Texts (optional).**
+   - Set `TWILIO_ACCOUNT_SID` and `TWILIO_AUTH_TOKEN`, plus either
+     `TWILIO_MESSAGING_SERVICE_SID` (recommended) or `TWILIO_FROM_NUMBER`. They are needed
+     wherever the server and `npm run cron` run.
+   - In Twilio, point the Messaging Service's incoming-message webhook to
+     `https://<ALKAO_PUBLIC_URL>/v1/webhooks/twilio/sms`, so that STOP and START are
+     recorded.
+   - Twilio bills per text. French letters such as ê, â, ç cut a text to 70 characters, and
+     `/ops` shows the count before you send.
+6. **Try it.**
+   - Write a campaign and send a test to yourself (e-mail and text).
+   - Click its unsubscribe link and check that the customer is marked unsubscribed.

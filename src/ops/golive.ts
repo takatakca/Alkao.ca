@@ -42,7 +42,7 @@ export function checkEnvironment(env: NodeJS.ProcessEnv): Check[] {
   const area = {
     config: "Configuration", db: "Base de données", switch: "Mise en service", control: "Contrat de contrôle TAKATAK",
     auth: "Connexion du personnel", stripe: "Paiements Stripe", qr: "Codes QR et liens", email: "Courriels",
-    monitoring: "Surveillance", embed: "Intégration au tableau de bord TAKATAK",
+    monitoring: "Surveillance", embed: "Intégration au tableau de bord TAKATAK", sms: "Textos (SMS)",
   };
 
   // The server refuses to start on any of these: report them all, never the values.
@@ -110,6 +110,20 @@ export function checkEnvironment(env: NodeJS.ProcessEnv): Check[] {
   if (!has("ALKAO_METRICS_TOKEN")) out.push(warn(area.monitoring, "ALKAO_METRICS_TOKEN manque : GET /metrics est coupé, donc aucune alerte", "Un jeton de 32 caractères ou plus, et les alertes de docs/ALKAO_RUNBOOK.md."));
   else if (weakSecret(env.ALKAO_METRICS_TOKEN!)) out.push(fail(area.monitoring, "ALKAO_METRICS_TOKEN ressemble à un exemple", "Générez-le : openssl rand -base64 48."));
   else out.push(ok(area.monitoring, "GET /metrics protégé par jeton"));
+
+  // Run 46: texts are optional; half a Twilio setup is a mistake.
+  const twilio = ["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN"].filter(has);
+  const twilioSender = has("TWILIO_MESSAGING_SERVICE_SID") ? `Messaging Service …${env.TWILIO_MESSAGING_SERVICE_SID!.trim().slice(-4)}`
+    : has("TWILIO_FROM_NUMBER") ? `numéro ${env.TWILIO_FROM_NUMBER!.trim()}` : null;
+  if (twilio.length === 0 && !twilioSender) {
+    out.push(ok(area.sms, "Non configurés (optionnel) : les campagnes par texto attendent dans la file"));
+  } else if (twilio.length < 2 || !twilioSender) {
+    out.push(fail(area.sms, "Réglages Twilio incomplets : aucun texto ne part", "TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN et TWILIO_MESSAGING_SERVICE_SID (ou TWILIO_FROM_NUMBER), là où tournent le serveur et npm run cron."));
+  } else if (weakSecret(env.TWILIO_AUTH_TOKEN!)) {
+    out.push(fail(area.sms, "TWILIO_AUTH_TOKEN ressemble à un exemple", "Le jeton du compte, dans la console Twilio."));
+  } else {
+    out.push(ok(area.sms, `Twilio configuré (${twilioSender}). Webhook des réponses STOP : ${publicUrl ? new URL(publicUrl).origin : "https://…"}/v1/webhooks/twilio/sms`));
+  }
 
   const raw = (env.ALKAO_OPS_FRAME_ANCESTORS ?? "").split(",").map((s) => s.trim()).filter(Boolean);
   if (raw.length === 0) {
@@ -217,6 +231,18 @@ export async function checkDatabase(q: Db | Tx, now = new Date()): Promise<Check
        ORDER BY c.name`,
     );
     if (unpaid.length) out.push(warn(area.setup, `Stripe pas encore terminé pour : ${unpaid.map((r) => r.name).join(", ")}`, "Un propriétaire du Client ouvre /ops → Paiements et termine la connexion Stripe."));
+    // Run 44: the welcome code shown after a newsletter sign-up must work at checkout.
+    const { rows: codes } = await q.query<{ brand: string; code: string }>(
+      `SELECT b.name AS brand, bs.newsletter_reward_code AS code FROM public.ticketing_brand_settings bs
+       JOIN public.ticketing_brands b ON b.id = bs.brand_id AND b.client_id = bs.client_id
+       WHERE bs.newsletter_reward_code IS NOT NULL
+         AND NOT EXISTS (SELECT 1 FROM public.ticketing_promo_codes p
+                         WHERE p.client_id = bs.client_id AND p.brand_id = bs.brand_id AND p.code = bs.newsletter_reward_code AND p.active)
+       ORDER BY 1`,
+    );
+    for (const c of codes) {
+      out.push(warn(area.setup, `Le code de bienvenue ${c.code} (${c.brand}) n'existe dans aucun événement : il sera refusé à la caisse`, "/ops → Événements → l'événement → Codes promo : créez ce code."));
+    }
   }
 
   const { rows: lag } = await q.query<{ unswept: number; email_due: number | null; cancellations: number; refunds: number }>(
@@ -230,11 +256,22 @@ export async function checkDatabase(q: Db | Tx, now = new Date()): Promise<Check
   );
   const l = lag[0]!;
   const late: Check[] = [];
+  // Runs 42–46: campaign e-mails, texts and sign-up confirmations that should have left.
+  const { rows: mk } = await q.query<{ emails: number; texts: number; signups: number }>(
+    `SELECT (SELECT count(*) FROM public.ticketing_campaign_messages WHERE status = 'pending' AND email IS NOT NULL AND next_attempt_at < $1::timestamptz - interval '30 minutes')::int AS emails,
+            (SELECT count(*) FROM public.ticketing_campaign_messages WHERE status = 'pending' AND phone IS NOT NULL AND next_attempt_at < $1::timestamptz - interval '60 minutes')::int AS texts,
+            (SELECT count(*) FROM public.ticketing_newsletter_signups WHERE email_status = 'pending' AND next_attempt_at < $1::timestamptz - interval '10 minutes')::int AS signups`,
+    [now],
+  );
+  const m = mk[0]!;
+  if (m.emails) late.push(warn(area.workers, `${m.emails} courriel(s) de campagne en retard : npm run cron (ou worker:email) ne tourne pas ou échoue`));
+  if (m.texts) late.push(warn(area.workers, `${m.texts} texto(s) de campagne en retard`, "Twilio n'est pas configuré là où tourne npm run cron, ou il refuse : voir le journal du cron."));
+  if (m.signups) late.push(warn(area.workers, `${m.signups} confirmation(s) d'inscription à l'infolettre en retard : la personne attend son courriel`));
   if (l.unswept) late.push(warn(area.workers, `${l.unswept} réservation(s) expirée(s) non libérée(s) : npm run worker:sweeper ne tourne pas`));
   if ((l.email_due ?? 0) > 600) late.push(warn(area.workers, `Un courriel attend depuis ${Math.round(l.email_due! / 60)} min : npm run worker:email ne tourne pas ou échoue`));
   if (l.cancellations) late.push(warn(area.workers, `${l.cancellations} annulation(s) de séance en cours depuis plus de 30 min`, "npm run worker:cancellations doit tourner ; voir « À traiter » dans /ops."));
   if (l.refunds) late.push(warn(area.workers, `${l.refunds} remboursement(s) bloqué(s)`, "/ops → À traiter, puis docs/ALKAO_RUNBOOK.md."));
-  out.push(...(late.length ? late : [ok(area.workers, "Rien en retard (réservations, courriels, annulations, remboursements)")]));
+  out.push(...(late.length ? late : [ok(area.workers, "Rien en retard (réservations, courriels, campagnes, textos, inscriptions, annulations, remboursements)")]));
   return out;
 }
 

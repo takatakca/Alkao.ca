@@ -103,6 +103,18 @@ describe("go-live check: settings", () => {
     expect(of(test, "fail")).toEqual([]);
     expect(of(test, "warn")).toEqual(["Paiements Stripe : Clé de TEST : aucun vrai paiement, le bandeau « Mode test » est affiché"]);
   });
+
+  it("checks the optional Twilio setup for texts (Run 46)", () => {
+    expect(of(checkEnvironment(GOOD), "ok")).toContain("Textos (SMS) : Non configurés (optionnel) : les campagnes par texto attendent dans la file");
+    const sid = `AC${"0123456789abcdef".repeat(2)}`;
+    const half = checkEnvironment({ ...GOOD, TWILIO_ACCOUNT_SID: sid });
+    expect(of(half, "fail")).toEqual(["Textos (SMS) : Réglages Twilio incomplets : aucun texto ne part"]);
+    const token = secret();
+    const full = checkEnvironment({ ...GOOD, TWILIO_ACCOUNT_SID: sid, TWILIO_AUTH_TOKEN: token, TWILIO_MESSAGING_SERVICE_SID: `MG${"fedcba9876543210".repeat(2)}` });
+    expect(of(full, "fail")).toEqual([]);
+    expect(of(full, "ok")).toContain("Textos (SMS) : Twilio configuré (Messaging Service …3210). Webhook des réponses STOP : https://billets.alkao.test/v1/webhooks/twilio/sms");
+    expect(text(full)).not.toContain(token);
+  });
 });
 
 describe("go-live check: database", () => {
@@ -158,6 +170,46 @@ describe("go-live check: database", () => {
         `Clients et billetterie : Stripe pas encore terminé pour : ${rows[0]!.name}`,
         "Tâches de fond : 1 réservation(s) expirée(s) non libérée(s) : npm run worker:sweeper ne tourne pas",
       ]);
+    } finally {
+      await tx.query("ROLLBACK");
+      tx.release();
+    }
+  });
+
+  it("says when campaign e-mails, texts or sign-up confirmations are late, and when the welcome code does not exist (Runs 42–46)", async () => {
+    const tx = await db.pool.connect();
+    try {
+      await tx.query("BEGIN");
+      const h = seed.havana;
+      const { rows: c } = await tx.query<{ id: string }>(
+        `INSERT INTO public.ticketing_campaigns (client_id, brand_id, name, subject, heading, body) VALUES ($1, $2, 'Retard', 'Retard', 'Retard', 'Retard') RETURNING id`,
+        [h.clientId, h.brandId],
+      );
+      await tx.query(
+        `INSERT INTO public.ticketing_campaign_messages (client_id, brand_id, campaign_id, email, next_attempt_at) VALUES ($1, $2, $3, 'retard@example.com', now() - interval '2 hours')`,
+        [h.clientId, h.brandId, c[0]!.id],
+      );
+      await tx.query(
+        `INSERT INTO public.ticketing_campaign_messages (client_id, brand_id, campaign_id, phone, next_attempt_at) VALUES ($1, $2, $3, '5145550101', now() - interval '2 hours')`,
+        [h.clientId, h.brandId, c[0]!.id],
+      );
+      await tx.query(
+        `INSERT INTO public.ticketing_newsletter_signups (client_id, brand_id, email, next_attempt_at) VALUES ($1, $2, 'nouvelle@example.com', now() - interval '1 hour')`,
+        [h.clientId, h.brandId],
+      );
+      await tx.query(
+        `INSERT INTO public.ticketing_brand_settings (client_id, brand_id, newsletter_reward_code) VALUES ($1, $2, 'HAVANA5')
+         ON CONFLICT (client_id, brand_id) DO UPDATE SET newsletter_reward_code = 'HAVANA5'`,
+        [h.clientId, h.brandId],
+      );
+      const checks = await checkDatabase(tx);
+      const warns = of(checks, "warn");
+      expect(warns).toContain("Clients et billetterie : Le code de bienvenue HAVANA5 (Havana Resort — Événements) n'existe dans aucun événement : il sera refusé à la caisse");
+      expect(warns).toContain("Tâches de fond : 1 courriel(s) de campagne en retard : npm run cron (ou worker:email) ne tourne pas ou échoue");
+      expect(warns).toContain("Tâches de fond : 1 texto(s) de campagne en retard");
+      expect(warns).toContain("Tâches de fond : 1 confirmation(s) d'inscription à l'infolettre en retard : la personne attend son courriel");
+      await tx.query(`INSERT INTO public.ticketing_promo_codes (client_id, brand_id, event_id, code, kind, percent) VALUES ($1, $2, $3, 'HAVANA5', 'percent', 5)`, [h.clientId, h.brandId, h.eventId]);
+      expect(of(await checkDatabase(tx), "warn").some((w) => w.includes("HAVANA5"))).toBe(false);
     } finally {
       await tx.query("ROLLBACK");
       tx.release();
