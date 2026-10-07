@@ -107,7 +107,7 @@ const ticketTypeFields = {
   stockPerSession: z.number().int().min(0).max(100_000).nullish(),
   active: z.boolean().default(true),
   sortOrder: z.number().int().min(0).max(10_000).default(0),
-  /** Add-ons only: buying it allows one session change (FESTI-ICE Flex Météo). */
+  /** Add-ons only: buying it allows one session change (a weather or flex option). */
   grantsSessionChange: z.boolean().default(false),
   /** Run 37, admissions only: "billet ouvert", its order can change session as often as needed. */
   openDate: z.boolean().default(false),
@@ -453,7 +453,7 @@ export const NewsletterSignup = z.object({
   email: z.string().trim().max(320).pipe(z.email()),
   firstName: z.string().trim().max(120).nullish(),
   language: z.enum(["fr", "en"]).default("fr"),
-  /** Where it came from, e.g. "promohavana". */
+  /** Where it came from, e.g. the storefront's short name. */
   source: z.string().trim().toLowerCase().regex(/^[a-z0-9][a-z0-9_.-]{0,59}$/).nullish(),
 });
 export const NewsletterSettings = z.object({
