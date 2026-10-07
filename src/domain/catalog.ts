@@ -1,7 +1,11 @@
 import type { Cents } from "./money.js";
 
 export type TicketKind = "admission" | "add_on";
-export type AddOnScope = "per_admission";
+/**
+ * How many of an add-on an order may take (Run 49): exactly one per person, from one up to
+ * the number of people, or any quantity within its minimum and maximum.
+ */
+export type AddOnScope = "per_admission" | "up_to_admissions" | "per_order";
 
 /** The purchase rules of one ticket type (mirrors ticketing_ticket_types). */
 export interface TicketTypeRule {
@@ -129,6 +133,8 @@ export function validateCart(
       if (admissions === 0) {
         violations.push({ code: "add_on_without_admission", ...ref });
       } else if (type.addOnScope === "per_admission" && quantity !== admissions) {
+        violations.push({ code: "add_on_quantity_mismatch", ...ref, limit: admissions, actual: quantity });
+      } else if (type.addOnScope === "up_to_admissions" && quantity > admissions) {
         violations.push({ code: "add_on_quantity_mismatch", ...ref, limit: admissions, actual: quantity });
       }
     }

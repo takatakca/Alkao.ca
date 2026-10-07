@@ -23,7 +23,7 @@ const EVENT_COLUMNS =
   "id, venue_id, slug, title, description, status, sales_open_at, sales_close_at, admission_opens_before_minutes, admission_closes_after_minutes, created_at, updated_at";
 const SESSION_COLUMNS = "id, event_id, starts_at, ends_at, capacity, reserved_count, sold_count, status, created_at, updated_at";
 const TYPE_COLUMNS =
-  "id, event_id, code, name, description, kind, price_cents, min_quantity, max_quantity, max_adults_in_order, counts_as_adult, add_on_scope, grants_session_change, open_date, active, sort_order, created_at, updated_at";
+  "id, event_id, code, name, description, kind, price_cents, min_quantity, max_quantity, max_adults_in_order, counts_as_adult, add_on_scope, grants_session_change, open_date, active, sort_order, created_at, updated_at, stock_per_session";
 
 /** camelCase body field → column, for whitelisted updates. */
 function updateSet(fields: Record<string, unknown>, allowed: Record<string, string>, startAt: number) {
@@ -158,16 +158,18 @@ export function createTicketType(q: Queryable, s: TenantScope, eventId: string, 
   maxAdultsInOrder?: number | null; countsAsAdult: boolean; addOnScope?: string | null; active: boolean; sortOrder: number;
   grantsSessionChange?: boolean | undefined;
   openDate?: boolean | undefined;
+  stockPerSession?: number | null | undefined;
 }) {
   return mapDbErrors(() =>
     one(
       q,
       `INSERT INTO public.ticketing_ticket_types
          (client_id, brand_id, event_id, code, name, description, kind, price_cents, min_quantity, max_quantity,
-          max_adults_in_order, counts_as_adult, add_on_scope, active, sort_order, grants_session_change, open_date)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17) RETURNING ${TYPE_COLUMNS}`,
+          max_adults_in_order, counts_as_adult, add_on_scope, active, sort_order, grants_session_change, open_date, stock_per_session)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18) RETURNING ${TYPE_COLUMNS}`,
       [s.clientId, s.brandId, eventId, t.code, t.name, t.description ?? null, t.kind, t.priceCents, t.minQuantity, t.maxQuantity,
-        t.maxAdultsInOrder ?? null, t.countsAsAdult, t.addOnScope ?? null, t.active, t.sortOrder, t.grantsSessionChange ?? false, t.openDate ?? false],
+        t.maxAdultsInOrder ?? null, t.countsAsAdult, t.addOnScope ?? null, t.active, t.sortOrder, t.grantsSessionChange ?? false, t.openDate ?? false,
+        t.stockPerSession ?? null],
       "ticket_type_not_found",
     ),
   );
@@ -177,11 +179,41 @@ export function updateTicketType(q: Queryable, s: TenantScope, ticketTypeId: str
   const set = updateSet(fields, {
     name: "name", description: "description", priceCents: "price_cents", minQuantity: "min_quantity",
     maxQuantity: "max_quantity", maxAdultsInOrder: "max_adults_in_order", active: "active", sortOrder: "sort_order",
-    openDate: "open_date",
+    openDate: "open_date", stockPerSession: "stock_per_session",
   }, 4);
-  return mapDbErrors(() =>
-    one(q, `UPDATE public.ticketing_ticket_types SET ${set.sql} WHERE id = $1 AND client_id = $2 AND brand_id = $3 RETURNING ${TYPE_COLUMNS}`,
-      [ticketTypeId, s.clientId, s.brandId, ...set.values], "ticket_type_not_found"),
+  return mapDbErrors(async () => {
+    const row = await one(q, `UPDATE public.ticketing_ticket_types SET ${set.sql} WHERE id = $1 AND client_id = $2 AND brand_id = $3 RETURNING ${TYPE_COLUMNS}`,
+      [ticketTypeId, s.clientId, s.brandId, ...set.values], "ticket_type_not_found");
+    // Run 49: a stock set (or changed) later counts what is already held and sold.
+    if ("stockPerSession" in fields) await recountAddOnStock(q, s, ticketTypeId);
+    return row;
+  });
+}
+
+/**
+ * Run 49: an add-on's per-session counts, rebuilt from the active holds and the orders that
+ * took money (fully refunded and session-change orders aside), so a stock set on an add-on
+ * already on sale starts from the truth.
+ */
+export async function recountAddOnStock(q: Queryable, s: TenantScope, ticketTypeId: string) {
+  await q.query(`DELETE FROM public.ticketing_add_on_stock WHERE ticket_type_id = $1 AND client_id = $2 AND brand_id = $3`,
+    [ticketTypeId, s.clientId, s.brandId]);
+  await q.query(
+    `INSERT INTO public.ticketing_add_on_stock (session_id, ticket_type_id, client_id, brand_id, event_id, reserved_count, sold_count)
+     SELECT x.session_id, t.id, t.client_id, t.brand_id, t.event_id, sum(x.reserved)::int, sum(x.sold)::int
+     FROM public.ticketing_ticket_types t
+     JOIN (
+       SELECT h.session_id, i.ticket_type_id, i.quantity AS reserved, 0 AS sold
+       FROM public.ticketing_hold_items i JOIN public.ticketing_holds h ON h.id = i.hold_id
+       WHERE i.ticket_type_id = $1 AND h.status = 'active'
+       UNION ALL
+       SELECT o.session_id, l.ticket_type_id, 0, l.quantity
+       FROM public.ticketing_order_lines l JOIN public.ticketing_orders o ON o.id = l.order_id
+       WHERE l.ticket_type_id = $1 AND o.status IN ('paid', 'partially_refunded') AND o.exchange_of_order_id IS NULL
+     ) x ON x.ticket_type_id = t.id
+     WHERE t.id = $1 AND t.client_id = $2 AND t.brand_id = $3 AND t.stock_per_session IS NOT NULL
+     GROUP BY x.session_id, t.id, t.client_id, t.brand_id, t.event_id`,
+    [ticketTypeId, s.clientId, s.brandId],
   );
 }
 
@@ -189,7 +221,7 @@ export function updateTicketType(q: Queryable, s: TenantScope, ticketTypeId: str
 export async function loadTicketTypeRules(q: Queryable, s: TenantScope, eventId: string): Promise<TicketTypeRule[]> {
   const { rows } = await q.query<{
     id: string; code: string; name: string; kind: "admission" | "add_on"; price_cents: number; min_quantity: number;
-    max_quantity: number; max_adults_in_order: number | null; counts_as_adult: boolean; add_on_scope: "per_admission" | null; active: boolean;
+    max_quantity: number; max_adults_in_order: number | null; counts_as_adult: boolean; add_on_scope: TicketTypeRule["addOnScope"]; active: boolean;
     open_date: boolean;
   }>(
     `SELECT id, code, name, kind, price_cents, min_quantity, max_quantity, max_adults_in_order, counts_as_adult, add_on_scope, active, open_date
@@ -258,8 +290,18 @@ export const listPublicSessions = (q: Queryable, s: TenantScope, eventId: string
   many(
     q,
     // Holds past their deadline still count in reserved_count until swept; never show them as taken.
+    // Run 49: what is left of each add-on that has a stock, by its id (lapsed holds aside too).
     `SELECT s.id, s.starts_at, s.ends_at,
-            GREATEST(s.capacity - s.sold_count - (s.reserved_count - coalesce(lapsed.quantity, 0)), 0) AS available
+            GREATEST(s.capacity - s.sold_count - (s.reserved_count - coalesce(lapsed.quantity, 0)), 0) AS available,
+            coalesce((
+              SELECT jsonb_object_agg(t.id, GREATEST(t.stock_per_session - coalesce(st.sold_count, 0)
+                       - (coalesce(st.reserved_count, 0) - coalesce((
+                           SELECT sum(i.quantity) FROM public.ticketing_hold_items i JOIN public.ticketing_holds h ON h.id = i.hold_id
+                           WHERE h.session_id = s.id AND h.status = 'active' AND h.expires_at <= $4 AND i.ticket_type_id = t.id), 0)), 0))
+              FROM public.ticketing_ticket_types t
+              LEFT JOIN public.ticketing_add_on_stock st ON st.session_id = s.id AND st.ticket_type_id = t.id
+              WHERE t.event_id = s.event_id AND t.kind = 'add_on' AND t.active AND t.stock_per_session IS NOT NULL
+            ), '{}'::jsonb) AS add_ons_available
      FROM public.ticketing_sessions s
      LEFT JOIN LATERAL (
        SELECT sum(h.quantity)::int AS quantity FROM public.ticketing_holds h
@@ -335,7 +377,8 @@ export async function getOrder(q: Queryable, s: TenantScope, orderId: string): P
     `SELECT o.id, o.reference, o.status, o.event_id, o.session_id, o.currency, o.subtotal_cents, o.tax_cents, o.total_cents,
             o.commission_cents, o.refunded_cents, o.commission_refunded_cents, o.paid_at, o.created_at,
             b.email AS buyer_email, b.full_name AS buyer_name, b.phone AS buyer_phone,
-            o.discount_cents, (SELECT p.code FROM public.ticketing_promo_codes p WHERE p.id = o.promo_code_id) AS promo_code
+            o.discount_cents, (SELECT p.code FROM public.ticketing_promo_codes p WHERE p.id = o.promo_code_id) AS promo_code,
+            o.attribution
      FROM public.ticketing_orders o
      JOIN public.ticketing_buyers b ON b.id = o.buyer_id AND b.client_id = o.client_id AND b.brand_id = o.brand_id
      WHERE o.id = $1 AND o.client_id = $2 AND o.brand_id = $3`,

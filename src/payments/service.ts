@@ -125,7 +125,7 @@ export class PaymentsService {
   async startCheckout(
     scope: TenantScope,
     holdId: string,
-    input: { buyer: BuyerInput; successUrl: string; cancelUrl: string },
+    input: { buyer: BuyerInput; successUrl: string; cancelUrl: string; attribution?: Record<string, string> | null | undefined },
   ): Promise<CheckoutResult> {
     const now = this.deps.now();
     const prepared = await withTransaction(this.deps.db, (tx) =>
@@ -166,7 +166,9 @@ export class PaymentsService {
         // start again without it). Its last use is enforced by the database on insert.
         const problem = promo ? promoDb.promoProblem(promo, now) : null;
         if (problem && problem !== "used_up") throw new DomainError("promo_code_invalid", { reason: problem });
-        const order = await createOrderFromHold(tx, { ...scope, holdId, buyer: input.buyer, quote, commissionCents: commission, promoCodeId: promo?.id ?? null }, now);
+        const order = await createOrderFromHold(tx, {
+          ...scope, holdId, buyer: input.buyer, quote, commissionCents: commission, promoCodeId: promo?.id ?? null, attribution: input.attribution ?? null,
+        }, now);
         const orderToken = await issueOrderToken(tx, scope, order.id);
 
         if (quote.totalCents === 0) {

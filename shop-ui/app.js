@@ -24,6 +24,7 @@ const T = {
       return_url_not_allowed: "Configuration de paiement incomplète chez l'organisateur.",
       invalid_request: "Vérifiez vos informations.",
       promo_code_invalid: "Le code promo n'est plus valide. Changez votre sélection et retirez-le.",
+      add_on_sold_out: "Une option choisie vient de s'épuiser pour cette séance. Retirez-la ou changez de séance.",
     },
     generic: "Une erreur est survenue. Réessayez dans un instant.",
     promo: {
@@ -36,7 +37,7 @@ const T = {
       below_minimum: (n, l) => `${n} : ${l} au minimum.`,
       max_adults_exceeded: (n, l) => `${n} : ${l} adulte${l > 1 ? "s" : ""} au maximum dans la commande.`,
       add_on_without_admission: (n) => `${n} s'ajoute à une entrée : choisissez d'abord vos billets.`,
-      add_on_quantity_mismatch: (n, l) => `${n} : choisissez-en ${l}, un par entrée.`,
+      add_on_quantity_mismatch: (n, l, scope) => scope === "up_to_admissions" ? `${n} : ${l} au maximum, un par entrée.` : `${n} : choisissez-en ${l}, un par entrée.`,
       order_too_large: () => "Commande trop grande.",
       other: () => "Sélection invalide.",
     },
@@ -55,6 +56,9 @@ const T = {
     step2: "2. Vos billets",
     free: "Gratuit",
     perAdmission: " · option, une par entrée",
+    upToAdmissions: " · option, une par personne au plus",
+    perOrder: " · option",
+    addOnLeft: (n) => (n === 0 ? " · épuisé" : n <= 10 ? ` · plus que ${n}` : ""),
     openDate: " · date modifiable",
     minimum: (n) => ` · minimum ${n}`,
     remove: (n) => `Retirer ${n}`,
@@ -99,6 +103,7 @@ const T = {
       return_url_not_allowed: "The organizer's payment setup is incomplete.",
       invalid_request: "Please check your details.",
       promo_code_invalid: "The promo code is no longer valid. Change your selection and remove it.",
+      add_on_sold_out: "An option you chose just sold out for this session. Remove it or pick another session.",
     },
     generic: "Something went wrong. Please try again in a moment.",
     promo: {
@@ -111,7 +116,7 @@ const T = {
       below_minimum: (n, l) => `${n}: at least ${l}.`,
       max_adults_exceeded: (n, l) => `${n}: at most ${l} adult${l > 1 ? "s" : ""} in the order.`,
       add_on_without_admission: (n) => `${n} goes with an admission: choose your tickets first.`,
-      add_on_quantity_mismatch: (n, l) => `${n}: choose ${l}, one per admission.`,
+      add_on_quantity_mismatch: (n, l, scope) => scope === "up_to_admissions" ? `${n}: ${l} at most, one per admission.` : `${n}: choose ${l}, one per admission.`,
       order_too_large: () => "Order too large.",
       other: () => "Invalid selection.",
     },
@@ -130,6 +135,9 @@ const T = {
     step2: "2. Your tickets",
     free: "Free",
     perAdmission: " · option, one per admission",
+    upToAdmissions: " · option, at most one per person",
+    perOrder: " · option",
+    addOnLeft: (n) => (n === 0 ? " · sold out" : n <= 10 ? ` · only ${n} left` : ""),
     openDate: " · date can be changed",
     minimum: (n) => ` · minimum ${n}`,
     remove: (n) => `Remove ${n}`,
@@ -181,6 +189,20 @@ const route = (() => {
 })();
 const base = route && `/v1/public/clients/${route.c}/brands/${route.b}`;
 const STORE = (holdId) => `alkao.checkout.${holdId}`;
+const SCOPE_TEXT = (t) => (t.addOnScope === "per_order" ? T.perOrder : t.addOnScope === "up_to_admissions" ? T.upToAdmissions : T.perAdmission);
+
+// Run 49: the ad's UTM tags on the shop's link go with the order, for the campaign report.
+const ATTRIBUTION = (() => {
+  const q = new URLSearchParams(location.search);
+  const a = {};
+  for (const key of ["source", "medium", "campaign", "content", "term"]) {
+    const v = q.get(`utm_${key}`)?.trim();
+    if (v && v.length <= 100 && !/[<>\u0000-\u001f]/.test(v)) a[key] = v;
+  }
+  if (Object.keys(a).length === 0) return null;
+  a.landing = location.pathname.slice(0, 200);
+  return a;
+})();
 const saved = (holdId) => { try { return JSON.parse(sessionStorage.getItem(STORE(holdId)) ?? "null"); } catch { return null; } };
 const save = (holdId, value) => { try { sessionStorage.setItem(STORE(holdId), JSON.stringify(value)); } catch {} };
 
@@ -205,7 +227,9 @@ async function call(path, { method = "GET", body, headers = {} } = {}) {
 const errText = (e) => T.errors[e?.code] ?? T.generic;
 
 function violationText(v, types) {
-  const name = types.find((t) => t.id === v.ticketTypeId)?.name ?? "";
+  const type = types.find((t) => t.id === v.ticketTypeId);
+  const name = type?.name ?? "";
+  if (v.code === "add_on_quantity_mismatch") return T.v.add_on_quantity_mismatch(name, v.limit, type?.addOnScope);
   switch (v.code) {
     case "above_maximum":
     case "below_minimum":
@@ -282,6 +306,8 @@ function EventShop({ config }) {
   const sessions = DOOR ? data.sessions.filter((s) => dayIn(new Date(s.startsAt), tz) === today) : data.sessions;
   const session = sessions.find((s) => s.id === sessionId);
   const set = (id, n) => setQty((q) => ({ ...q, [id]: Math.max(0, n) }));
+  // Run 49: what is left of an add-on with a stock, for the chosen session (null: no limit).
+  const left = (t) => (t.kind === "add_on" && session?.addOnsAvailable && t.id in session.addOnsAvailable ? session.addOnsAvailable[t.id] : null);
 
   const reserve = async () => {
     setBusy(true); setError(null);
@@ -291,7 +317,7 @@ function EventShop({ config }) {
     } catch (e) {
       if (e.code === "promo_code_invalid") { setPromoError(e.details?.reason ?? "unknown"); setPromo(null); }
       else setError(e);
-      if (e.code === "sold_out" || e.code === "session_not_available") load();
+      if (e.code === "sold_out" || e.code === "add_on_sold_out" || e.code === "session_not_available") load();
     }
     finally { setBusy(false); }
   };
@@ -308,6 +334,7 @@ function EventShop({ config }) {
         buyer: { email: who.email.trim(), fullName: who.fullName.trim() || null, phone: who.phone.trim() || null, language: LANG },
         successUrl: `${shop}/acheter/merci/${route.c}/${route.b}/${h.id}`,
         cancelUrl: `${shop}/acheter/${route.c}/${route.b}/${route.eventId}${DOOR ? "?porte=1" : ""}#annule=${h.id}`,
+        ...(ATTRIBUTION ? { attribution: ATTRIBUTION } : {}),
       },
     });
     save(h.id, { orderId: r.order.id, token: r.order.token, holdToken: h.token, buyer: who, door: DOOR });
@@ -351,11 +378,11 @@ function EventShop({ config }) {
         <h2>${T.step2}</h2>
         <div class="card">
           ${[...admissions, ...addOns].map((t) => html`<div class="type">
-            <div><div class="name">${t.name}</div><div class="muted">${t.priceCents === 0 ? T.free : money(t.priceCents)}${t.kind === "add_on" ? T.perAdmission : ""}${t.openDate ? T.openDate : ""}${t.minQuantity > 1 ? T.minimum(t.minQuantity) : ""}</div></div>
+            <div><div class="name">${t.name}</div><div class="muted">${t.priceCents === 0 ? T.free : money(t.priceCents)}${t.kind === "add_on" ? SCOPE_TEXT(t) : ""}${t.openDate ? T.openDate : ""}${t.minQuantity > 1 ? T.minimum(t.minQuantity) : ""}${left(t) !== null ? T.addOnLeft(left(t)) : ""}</div></div>
             <div class="stepper">
               <button class="secondary" aria-label=${T.remove(t.name)} disabled=${!(qty[t.id] > 0)} onClick=${() => set(t.id, (qty[t.id] ?? 0) - 1)}>−</button>
               <output aria-label=${T.quantity(t.name)}>${qty[t.id] ?? 0}</output>
-              <button class="secondary" aria-label=${T.add(t.name)} disabled=${(qty[t.id] ?? 0) >= t.maxQuantity} onClick=${() => set(t.id, (qty[t.id] ?? 0) + 1)}>+</button>
+              <button class="secondary" aria-label=${T.add(t.name)} disabled=${(qty[t.id] ?? 0) >= Math.min(t.maxQuantity, left(t) ?? Infinity)} onClick=${() => set(t.id, (qty[t.id] ?? 0) + 1)}>+</button>
             </div></div>`)}
         </div>
         ${violations.length > 0 && html`<div class="alert" role="alert"><ul class="violations">${violations.map((v) => html`<li>${violationText(v, data.ticketTypes)}</li>`)}</ul></div>`}

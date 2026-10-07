@@ -25,6 +25,9 @@ const STATUS_BY_CODE: Record<string, ContentfulStatusCode> = {
   empty_update: 400,
   invalid_json: 400,
   sold_out: 409,
+  // Run 49
+  add_on_sold_out: 409,
+  stock_only_for_add_ons: 422,
   session_not_available: 409,
   session_not_on_sale: 409,
   capacity_below_committed: 409,

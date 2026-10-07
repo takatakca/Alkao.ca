@@ -90,6 +90,8 @@ export interface CreateOrderInput extends TenantScope {
   commissionCents: number;
   /** Run 36: counts one use of the code (the database refuses it past the limit). */
   promoCodeId?: string | null;
+  /** Run 49: where the buyer came from (UTM tags, landing page). */
+  attribution?: Record<string, string> | null;
 }
 
 export interface CreatedOrder {
@@ -131,13 +133,13 @@ export async function createOrderFromHold(tx: Tx, input: CreateOrderInput, now =
         const { rows } = await tx.query<{ id: string; reference: string }>(
           `INSERT INTO public.ticketing_orders
              (client_id, brand_id, event_id, session_id, hold_id, buyer_id, reference,
-              subtotal_cents, tax_cents, total_cents, commission_cents, discount_cents, promo_code_id)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+              subtotal_cents, tax_cents, total_cents, commission_cents, discount_cents, promo_code_id, attribution)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
            RETURNING id, reference`,
           [
             input.clientId, input.brandId, hold.event_id, hold.session_id, input.holdId, buyerId,
             newOrderReference(), q.subtotalCents, q.taxCents, q.totalCents, input.commissionCents,
-            q.discountCents, input.promoCodeId ?? null,
+            q.discountCents, input.promoCodeId ?? null, input.attribution ?? null,
           ],
         );
         order = rows[0];

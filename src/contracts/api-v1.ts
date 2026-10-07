@@ -101,7 +101,10 @@ const ticketTypeFields = {
   maxQuantity: z.number().int().min(1).max(1000),
   maxAdultsInOrder: z.number().int().min(0).max(1000).nullish(),
   countsAsAdult: z.boolean().default(false),
-  addOnScope: z.enum(["per_admission"]).nullish(),
+  /** Run 49: per_admission (one each), up_to_admissions (1 to the number of people), per_order (any quantity). */
+  addOnScope: z.enum(["per_admission", "up_to_admissions", "per_order"]).nullish(),
+  /** Run 49, add-ons only: how many can be sold per session (per evening); null = no limit. */
+  stockPerSession: z.number().int().min(0).max(100_000).nullish(),
   active: z.boolean().default(true),
   sortOrder: z.number().int().min(0).max(10_000).default(0),
   /** Add-ons only: buying it allows one session change (FESTI-ICE Flex Météo). */
@@ -114,7 +117,8 @@ export const CreateTicketType = z
   .refine((t) => t.minQuantity <= t.maxQuantity, { message: "minQuantity must not exceed maxQuantity" })
   .refine((t) => (t.kind === "add_on") === Boolean(t.addOnScope), { message: "add-ons need addOnScope; admissions must not have one" })
   .refine((t) => !t.grantsSessionChange || t.kind === "add_on", { message: "only add-ons can grant a session change" })
-  .refine((t) => !t.openDate || t.kind === "admission", { message: "only admissions can be open-date" });
+  .refine((t) => !t.openDate || t.kind === "admission", { message: "only admissions can be open-date" })
+  .refine((t) => t.stockPerSession == null || t.kind === "add_on", { message: "only add-ons have a stock" });
 export const UpdateTicketType = z
   .object({
     name,
@@ -126,6 +130,7 @@ export const UpdateTicketType = z
     active: z.boolean(),
     sortOrder: z.number().int().min(0).max(10_000),
     openDate: z.boolean(),
+    stockPerSession: z.number().int().min(0).max(100_000).nullable(),
   })
   .partial()
   .refine((o) => Object.keys(o).length > 0, "empty update");
@@ -149,7 +154,23 @@ export const CheckoutRequest = z.object({
   /** Must use an origin listed in the Brand's checkout settings. */
   successUrl: httpsUrl,
   cancelUrl: httpsUrl,
+  /** Run 49: where the buyer came from (the website keeps the ad's UTM tags until checkout). */
+  attribution: z.lazy(() => Attribution).nullish(),
 });
+
+const tag = z.string().trim().min(1).max(100).regex(/^[^<>\u0000-\u001f]*$/);
+/** Run 49: UTM tags and the landing page path. Unknown keys are dropped, never stored. */
+export const Attribution = z
+  .object({
+    source: tag.optional(),
+    medium: tag.optional(),
+    campaign: tag.optional(),
+    content: tag.optional(),
+    term: tag.optional(),
+    landing: z.string().trim().min(1).max(200).regex(/^\/[^\s<>]*$/).optional(),
+  })
+  .strip()
+  .transform((a) => (Object.keys(a).length ? a : null));
 
 export const CheckoutSettings = z.object({
   checkoutReturnOrigins: z
