@@ -201,7 +201,7 @@ export async function ordersRows(db: Db, s: TenantScope, f: ReportFilter) {
   const { rows } = await db.query(
     `SELECT o.reference, o.status, o.paid_at, b.email, o.subtotal_cents, o.tax_cents, o.total_cents,
             o.refunded_cents, o.commission_cents, o.commission_refunded_cents, o.discount_cents,
-            (SELECT p.code FROM public.ticketing_promo_codes p WHERE p.id = o.promo_code_id) AS promo_code
+            (SELECT p.code FROM public.ticketing_promo_codes p WHERE p.id = o.promo_code_id) AS promo_code, o.attribution
      FROM public.ticketing_orders o
      JOIN public.ticketing_buyers b ON b.id = o.buyer_id AND b.client_id = o.client_id AND b.brand_id = o.brand_id
      WHERE o.client_id = $1 AND o.brand_id = $2 AND ${PAID}${w.sql}
@@ -211,5 +211,27 @@ export async function ordersRows(db: Db, s: TenantScope, f: ReportFilter) {
   return rows.map((r) => [
     r.reference, r.status, r.paid_at, r.email, r.subtotal_cents, r.tax_cents, r.total_cents,
     r.refunded_cents, r.commission_cents, r.commission_refunded_cents, r.discount_cents, r.promo_code ?? "",
+    r.attribution?.source ?? "", r.attribution?.medium ?? "", r.attribution?.campaign ?? "", r.attribution?.content ?? "", r.attribution?.landing ?? "",
   ]);
+}
+
+/**
+ * Run 49: orders that took money, by where they came from (utm_source, utm_medium,
+ * utm_campaign); orders without tags are "direct". Revenue is net of refunds, before taxes
+ * are taken out (what the buyer paid, less what was given back).
+ */
+export async function campaignReport(db: Db, s: TenantScope, f: ReportFilter) {
+  const w = where(f, 3);
+  const { rows } = await db.query(
+    `SELECT coalesce(o.attribution->>'source', '') AS source, coalesce(o.attribution->>'medium', '') AS medium,
+            coalesce(o.attribution->>'campaign', '') AS campaign, count(*)::int AS orders,
+            coalesce(sum((SELECT sum(l.quantity) FROM public.ticketing_order_lines l WHERE l.order_id = o.id AND l.kind = 'admission')), 0)::int AS admissions,
+            coalesce(sum((SELECT sum(l.line_total_cents) FROM public.ticketing_order_lines l WHERE l.order_id = o.id AND l.kind = 'add_on')), 0)::bigint AS "addOnCents",
+            coalesce(sum(o.total_cents - o.refunded_cents), 0)::bigint AS "netCents"
+     FROM public.ticketing_orders o
+     WHERE o.client_id = $1 AND o.brand_id = $2 AND ${PAID}${w.sql}
+     GROUP BY 1, 2, 3 ORDER BY "netCents" DESC, orders DESC LIMIT 500`,
+    [s.clientId, s.brandId, ...w.params],
+  );
+  return { currency: "CAD", filter: { eventId: f.eventId ?? null, from: f.from ?? null, to: f.to ?? null }, rows };
 }

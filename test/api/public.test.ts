@@ -50,7 +50,8 @@ describe("public catalog", () => {
     expect(sessionIds).toContain(t.sessionId);
     expect(sessionIds).not.toContain(draft);
     for (const s of detail.body.sessions) {
-      expect(Object.keys(s).sort()).toEqual(["available", "endsAt", "id", "startsAt"]);
+      // Run 49: what is left of each add-on with a stock, by its id (still no counts of sales).
+      expect(Object.keys(s).sort()).toEqual(["addOnsAvailable", "available", "endsAt", "id", "startsAt"]);
     }
   });
 

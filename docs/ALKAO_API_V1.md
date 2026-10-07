@@ -34,7 +34,7 @@ while Ticketing is off, and that a refused hold request writes nothing.
 
 | Method | Path | Body | Result |
 |---|---|---|---|
-| POST | `/holds/:holdId/checkout` | header `X-Alkao-Hold-Token`; `{ buyer: { email, fullName?, phone?, language? }, successUrl, cancelUrl }` | `201 { order: { id, reference, token, status }, checkoutUrl }`. A free order is `paid` at once and `checkoutUrl` is `null`. Calling again for the same hold returns the same Checkout and rotates the order token. Errors: `422 return_url_not_allowed`, `409 payments_unavailable`, `409 hold_not_active`, `502 payment_provider_error` (safe to retry) |
+| POST | `/holds/:holdId/checkout` | header `X-Alkao-Hold-Token`; `{ buyer: { email, fullName?, phone?, language? }, successUrl, cancelUrl, attribution? }` (Run 49: `attribution` = `{ source?, medium?, campaign?, content?, term?, landing? }`, the ad's UTM tags and the landing path; other keys are dropped, markup is refused with `400`) | `201 { order: { id, reference, token, status }, checkoutUrl }`. A free order is `paid` at once and `checkoutUrl` is `null`. Calling again for the same hold returns the same Checkout and rotates the order token. Errors: `422 return_url_not_allowed`, `409 payments_unavailable`, `409 hold_not_active`, `502 payment_provider_error` (safe to retry) |
 | GET | `/orders/:orderId` | header `X-Alkao-Order-Token` | Order status, lines, taxes and tickets, for the buyer's confirmation page. Each valid ticket has `credential`, its QR payload (Run 03, [format](ALKAO_SCANNER_V1.md)) |
 
 How a payment works:
@@ -134,7 +134,8 @@ Every admin write is recorded in `ticketing_audit_log` in the same transaction.
 |---|---|---|---|
 | GET | `/reports/sales?eventId&from&to` | `orders.read` | Gross, subtotal, taxes (GST/QST), TAKATAK commission, refunds and **net to the Client** (before Stripe processing fees); sessions (capacity, sold, held, available, admitted); revenue per ticket type. Dates filter on payment time |
 | GET | `/reports/attendees.csv?sessionId` | `buyers.read` | One row per ticket: order reference, ticket type, buyer, status, admission time. Audited |
-| GET | `/reports/orders.csv?eventId&from&to` | `buyers.read` | One row per paid, partially refunded or refunded order, with money columns in cents. Audited |
+| GET | `/reports/orders.csv?eventId&from&to` | `buyers.read` | One row per paid, partially refunded or refunded order, with money columns in cents; Run 49 adds `utm_source`, `utm_medium`, `utm_campaign`, `utm_content`, `landing` at the end. Audited |
+| GET | `/reports/campaigns?eventId&from&to` | `orders.read` | Run 49: orders that took money grouped by `source`, `medium`, `campaign` (empty = direct): `orders`, `admissions`, `addOnCents`, `netCents` (paid less refunded) |
 
 The CSV exports neutralize spreadsheet formulas: a cell starting with `= + - @` gets a leading
 apostrophe, because buyer names are untrusted input.
@@ -191,6 +192,40 @@ start without `RESEND_API_KEY`, `ALKAO_EMAIL_FROM`, `ALKAO_PUBLIC_URL` (HTTPS) a
 
 `ticketing_email_outbox` holds personal data. It has RLS on, with no grants and no policy, so
 nobody reads it through the Data API.
+
+### Add-ons with a quantity rule and a stock (Run 49)
+
+A ticket type of kind `add_on` has an `addOnScope`:
+
+| `addOnScope` | Quantity in an order | Example |
+|---|---|---|
+| `per_admission` | exactly the number of admissions | FESTI-ICE Flex Météo |
+| `up_to_admissions` | 1 up to the number of admissions | a meal, the inflatables |
+| `per_order` | any quantity within `minQuantity`–`maxQuantity` | glow sticks |
+
+Every add-on needs at least one admission in the order. Totals are always computed by the
+server from the catalog.
+
+**Stock.** `stockPerSession` (add-ons only, `null` = no limit) is how many can be sold per
+session, that is, per evening.
+
+- **A cart:** the hold reserves the add-ons. A cart that would go over is refused with
+  `409 add_on_sold_out`.
+- **Payment:** the hold becomes a sale. A payment whose hold had already expired is still
+  counted, never refused.
+- **Release:** the stock comes back when a hold expires or is released, and when an order is
+  refunded in full.
+- **Not moved:**
+  - A partial refund keeps the add-ons sold.
+  - A session change leaves them counted on the original session.
+- **Setting or changing the stock** of an add-on already on sale recounts what is held and sold.
+- **Errors:** a stock on an admission is refused (`422 stock_only_for_add_ons`).
+- **Public view:** the event's `sessions[].addOnsAvailable` gives what is left of each add-on
+  that has a stock, by ticket type id. Lapsed holds do not count as taken.
+- **Price first:** an add-on created with `active: false` stays hidden from buyers until staff
+  confirm its price and put it on sale.
+
+The table `ticketing_add_on_stock` is server-only: RLS on, no grant, no policy.
 
 ### Hosted ticket shop (Run 08)
 

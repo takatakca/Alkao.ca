@@ -783,7 +783,7 @@ export function createApp(deps: AppDeps) {
     );
     if (!rowCount) return fail(c, 404, "order_not_found");
     const order = await catalog.getOrder(deps.db, scope, orderId);
-    const { commissionCents: _c, commissionRefundedCents: _cr, buyerPhone: _p, ...publicOrder } = order;
+    const { commissionCents: _c, commissionRefundedCents: _cr, buyerPhone: _p, attribution: _a, ...publicOrder } = order;
     // QR payload per valid ticket (null for void tickets, or until credentials are configured).
     const payloads = await credentials.payloadsForOrder(scope, orderId);
     const tickets = (order.tickets as { id: string }[]).map((t) => ({ ...t, credential: payloads.get(t.id) ?? null }));
@@ -1000,6 +1000,12 @@ export function createApp(deps: AppDeps) {
     );
   });
 
+  // Run 49: sales by campaign (UTM tags the website passed at checkout), to see which ad sells.
+  app.get(`${ADMIN}/reports/campaigns`, ...admin, can("ticketing.orders.read"), async (c) => {
+    const q = api.ReportQuery.parse(c.req.query());
+    return c.json({ report: await reports.campaignReport(deps.db, c.get("scope"), q) });
+  });
+
   app.get(`${ADMIN}/reports/attendees.csv`, ...admin, can("ticketing.buyers.read"), async (c) => {
     const { sessionId } = api.AttendeesQuery.parse(c.req.query());
     const rows = await reports.attendeesRows(deps.db, c.get("scope"), sessionId);
@@ -1019,7 +1025,9 @@ export function createApp(deps: AppDeps) {
       c,
       "alkao-orders.csv",
       toCsv(
-        ["order_reference", "status", "paid_at", "buyer_email", "subtotal_cents", "tax_cents", "total_cents", "refunded_cents", "commission_cents", "commission_refunded_cents", "discount_cents", "promo_code"],
+        // Run 49: where each order came from, last, so earlier columns keep their place.
+        ["order_reference", "status", "paid_at", "buyer_email", "subtotal_cents", "tax_cents", "total_cents", "refunded_cents", "commission_cents", "commission_refunded_cents", "discount_cents", "promo_code",
+          "utm_source", "utm_medium", "utm_campaign", "utm_content", "landing"],
         rows,
       ),
     );

@@ -279,6 +279,7 @@ function Dashboard({ api, base, prefix }) {
   const [events] = useLoad(() => api(`${base}/events`), [base]);
   const [state] = useLoad(() => api(`${base}/reports/sales${query}`), [base, query]);
   const [daily] = useLoad(() => api(`${base}/reports/daily${query}`), [base, query]);
+  const [campaigns] = useLoad(() => api(`${base}/reports/campaigns${query}`), [base, query]);
   const [todo] = useLoad(() => api(`${base}/attention`), [base]);
   const filters = html`<div class="inline card row" role="group" aria-label="Filtres du rapport">
       <label>Période<select value=${period} onChange=${(e) => setPeriod(e.target.value)}>
@@ -315,6 +316,10 @@ function Dashboard({ api, base, prefix }) {
       <table><thead><tr><th>Jour</th><th class="num">Commandes</th><th class="num">Avant taxes</th><th class="num">TPS</th><th class="num">TVQ</th><th class="num">Brut</th><th class="num">Remboursé</th><th class="num">Commission nette</th><th class="num">Net client</th></tr></thead>
         <tbody>${days.days.map((r) => html`<tr><td>${r.day}</td><td class="num">${r.orders}</td><td class="num">${money(r.subtotalCents)}</td><td class="num">${money(r.gstCents)}</td><td class="num">${money(r.qstCents)}</td><td class="num">${money(r.grossCents)}</td><td class="num">${money(r.refundedCents)}</td><td class="num">${money(r.commissionCents - r.commissionRefundedCents)}</td><td class="num">${money(r.netToClientCents)}</td></tr>`)}
           <tr><th>Total</th><th class="num">${days.totals.orders}</th><th class="num">${money(days.totals.subtotalCents)}</th><th class="num">${money(days.totals.gstCents)}</th><th class="num">${money(days.totals.qstCents)}</th><th class="num">${money(days.totals.grossCents)}</th><th class="num">${money(days.totals.refundedCents)}</th><th class="num">${money(days.totals.commissionCents - days.totals.commissionRefundedCents)}</th><th class="num">${money(days.totals.netToClientCents)}</th></tr></tbody></table>`}`}
+    ${campaigns.data?.report.rows.some((r) => r.source || r.campaign) && html`<h2>Par provenance (publicités)</h2>
+      <p class="muted">Selon les étiquettes UTM des liens. « Direct » : sans étiquette. Net = payé moins remboursé, taxes comprises.</p>
+      <div class="table-scroll" role="region" aria-label="Ventes par provenance" tabindex="0"><table><thead><tr><th>Source</th><th>Support</th><th>Campagne</th><th class="num">Commandes</th><th class="num">Entrées</th><th class="num">Options</th><th class="num">Net</th></tr></thead>
+        <tbody>${campaigns.data.report.rows.map((r) => html`<tr><td>${r.source || "Direct"}</td><td>${r.medium || "—"}</td><td>${r.campaign || "—"}</td><td class="num">${r.orders}</td><td class="num">${r.admissions}</td><td class="num">${money(r.addOnCents)}</td><td class="num">${money(r.netCents)}</td></tr>`)}</tbody></table></div>`}
     <p class="row">
       <button class="secondary" onClick=${() => download(api, `${base}/reports/orders.csv${query}`, "alkao-commandes.csv")}>Exporter les commandes (CSV)</button>
       <button class="secondary" onClick=${() => download(api, `${base}/reports/daily.csv${query}`, "alkao-ventes-par-jour.csv")}>Exporter par jour (CSV)</button>
@@ -505,7 +510,7 @@ function EventDetail({ api, base, eventId }) {
   const [types, reloadTypes] = useLoad(() => api(`${base}/events/${eventId}/ticket-types`), [base, eventId]);
   const [error, setError] = useState(null);
   const [sess, setSess] = useState({ startsAt: "", capacity: 100 });
-  const [tt, setTt] = useState({ code: "", name: "", price: "", maxQuantity: 10, minQuantity: 0, kind: "admission", countsAsAdult: true, grantsSessionChange: false, openDate: false });
+  const [tt, setTt] = useState({ code: "", name: "", price: "", maxQuantity: 10, minQuantity: 0, kind: "admission", countsAsAdult: true, grantsSessionChange: false, openDate: false, addOnScope: "up_to_admissions", stock: "", active: true });
   const [cancelling, setCancelling] = useState(null);
   const [copied, setCopied] = useState(false);
   const act = (fn) => async (e) => { e?.preventDefault?.(); setError(null); try { await fn(); } catch (err) { setError(err); } };
@@ -551,9 +556,24 @@ function EventDetail({ api, base, eventId }) {
     await api(`${base}/events/${eventId}/ticket-types`, { method: "POST", body: {
       code: tt.code.toUpperCase(), name: tt.name, kind: tt.kind, priceCents: Math.round(Number(tt.price.replace(",", ".")) * 100),
       minQuantity: Number(tt.minQuantity), maxQuantity: Number(tt.maxQuantity), countsAsAdult: !addOn && tt.countsAsAdult,
-      addOnScope: addOn ? "per_admission" : null, grantsSessionChange: addOn && tt.grantsSessionChange, openDate: !addOn && tt.openDate,
+      addOnScope: addOn ? tt.addOnScope : null, grantsSessionChange: addOn && tt.grantsSessionChange, openDate: !addOn && tt.openDate,
+      stockPerSession: addOn && String(tt.stock).trim() !== "" ? Number(tt.stock) : null, active: tt.active,
     } });
-    setTt({ ...tt, code: "", name: "", price: "" }); reloadTypes();
+    setTt({ ...tt, code: "", name: "", price: "", stock: "" }); reloadTypes();
+  });
+  // Run 49: change a price, a stock, or take a type off sale (an add-on stays hidden until its price is confirmed).
+  const editType = (t, field) => act(async () => {
+    let body;
+    if (field === "price") {
+      const v = prompt(`Prix de ${t.name} ($)`, (t.priceCents / 100).toFixed(2)); if (v === null) return;
+      const cents = Math.round(Number(v.replace(",", ".")) * 100);
+      if (!Number.isInteger(cents) || cents < 0) throw new Error("Prix invalide.");
+      body = { priceCents: cents };
+    } else if (field === "stock") {
+      const v = prompt(`Stock de ${t.name} par séance (vide = sans limite)`, t.stockPerSession ?? ""); if (v === null) return;
+      body = { stockPerSession: v.trim() === "" ? null : Number(v.trim()) };
+    } else body = { active: !t.active };
+    await api(`${base}/ticket-types/${t.id}`, { method: "PATCH", body }); reloadTypes();
   });
   // Run 28: next week's evening, next year's edition: a draft copy with the same ticket types.
   const duplicate = act(async () => {
@@ -622,17 +642,26 @@ function EventDetail({ api, base, eventId }) {
       <label>Prix ($)<input required inputmode="decimal" value=${tt.price} onInput=${(e) => setTt({ ...tt, price: e.target.value })} /></label>
       <label>Min<input type="number" min="0" value=${tt.minQuantity} onInput=${(e) => setTt({ ...tt, minQuantity: e.target.value })} /></label>
       <label>Max<input type="number" min="1" value=${tt.maxQuantity} onInput=${(e) => setTt({ ...tt, maxQuantity: e.target.value })} /></label>
-      <label>Genre<select value=${tt.kind} onChange=${(e) => setTt({ ...tt, kind: e.target.value })}><option value="admission">Admission</option><option value="add_on">Option par billet</option></select></label>
+      <label>Genre<select value=${tt.kind} onChange=${(e) => setTt({ ...tt, kind: e.target.value })}><option value="admission">Admission</option><option value="add_on">Option (ajout)</option></select></label>
       ${tt.kind === "admission"
         ? html`<label class="check"><input type="checkbox" checked=${tt.countsAsAdult} onChange=${(e) => setTt({ ...tt, countsAsAdult: e.target.checked })} /> Adulte</label>
             <label class="check"><input type="checkbox" checked=${tt.openDate} onChange=${(e) => setTt({ ...tt, openDate: e.target.checked })} /> Billet ouvert (date modifiable)</label>`
-        : html`<label class="check"><input type="checkbox" checked=${tt.grantsSessionChange} onChange=${(e) => setTt({ ...tt, grantsSessionChange: e.target.checked })} /> Permet un changement de séance (Flex)</label>`}
+        : html`<label>Quantité<select value=${tt.addOnScope} onChange=${(e) => setTt({ ...tt, addOnScope: e.target.value })}>
+              <option value="up_to_admissions">Jusqu'à une par personne</option><option value="per_admission">Exactement une par personne</option><option value="per_order">Libre (min–max)</option></select></label>
+            <label>Stock par séance<input type="number" min="0" placeholder="sans limite" value=${tt.stock} onInput=${(e) => setTt({ ...tt, stock: e.target.value })} /></label>
+            <label class="check"><input type="checkbox" checked=${tt.grantsSessionChange} onChange=${(e) => setTt({ ...tt, grantsSessionChange: e.target.checked })} /> Permet un changement de séance (Flex)</label>`}
+      <label class="check"><input type="checkbox" checked=${tt.active} onChange=${(e) => setTt({ ...tt, active: e.target.checked })} /> En vente dès maintenant</label>
       <button type="submit">Ajouter</button>
     </form>
-    ${types.loading ? html`<${Loading} />` : html`<table><thead><tr><th>Code</th><th>Nom</th><th class="num">Prix</th><th class="num">Min–Max</th><th>Genre</th></tr></thead>
-      <tbody>${(types.data?.ticketTypes ?? []).map((t) => html`<tr><td>${t.code}</td><td>${t.name}</td><td class="num">${money(t.priceCents)}</td><td class="num">${t.minQuantity}–${t.maxQuantity}</td>
-        <td>${t.kind === "add_on" ? (t.grantsSessionChange ? "Option (Flex)" : "Option") : t.countsAsAdult ? "Admission adulte" : "Admission"}${t.openDate ? " · billet ouvert" : ""}</td></tr>`)}</tbody></table>`}`;
+    ${types.loading ? html`<${Loading} />` : html`<div class="table-scroll" role="region" aria-label="Types de billets" tabindex="0"><table><thead><tr><th>Code</th><th>Nom</th><th class="num">Prix</th><th class="num">Min–Max</th><th>Genre</th><th class="num">Stock / séance</th><th>Vente</th></tr></thead>
+      <tbody>${(types.data?.ticketTypes ?? []).map((t) => html`<tr><td>${t.code}</td><td>${t.name}</td>
+        <td class="num"><button class="link" onClick=${editType(t, "price")}>${money(t.priceCents)}</button></td><td class="num">${t.minQuantity}–${t.maxQuantity}</td>
+        <td>${t.kind === "add_on" ? `${t.grantsSessionChange ? "Option (Flex)" : "Option"} · ${ADD_ON_SCOPE_FR[t.addOnScope] ?? ""}` : t.countsAsAdult ? "Admission adulte" : "Admission"}${t.openDate ? " · billet ouvert" : ""}</td>
+        <td class="num">${t.kind === "add_on" ? html`<button class="link" onClick=${editType(t, "stock")}>${t.stockPerSession ?? "sans limite"}</button>` : "—"}</td>
+        <td><button class=${t.active ? "secondary" : ""} onClick=${editType(t, "active")}>${t.active ? "Retirer de la vente" : "Mettre en vente"}</button></td></tr>`)}</tbody></table></div>`}`;
 }
+
+const ADD_ON_SCOPE_FR = { per_admission: "une par personne", up_to_admissions: "jusqu'à une par personne", per_order: "quantité libre" };
 
 // ── Orders ──────────────────────────────────────────────────────────────────
 function Orders({ api, base, prefix }) {
@@ -714,7 +743,8 @@ function OrderDetail({ api, base, orderId, role, me }) {
     ${o.outsideRefundCents > 0 && html`<div class="alert warn">Remboursé directement dans Stripe, hors ALKAO : <strong>${money(o.outsideRefundCents)}</strong>.
       ALKAO n'a annulé aucun billet et ses rapports ne comptent pas ce montant.</div>`}
     <div class="card"><div class="row"><strong>${o.buyerName ?? ""}</strong><span class="muted">${o.buyerEmail}</span><span class="muted">${o.buyerPhone ?? ""}</span></div>
-      <p class="muted">Payée le ${when(o.paidAt)} · Total ${money(o.totalCents)}${o.discountCents > 0 ? ` (rabais ${money(o.discountCents)}, code ${o.promoCode})` : ""} · Remboursé ${money(o.refundedCents)} · Commission ${money(o.commissionCents - o.commissionRefundedCents)}</p></div>
+      <p class="muted">Payée le ${when(o.paidAt)} · Total ${money(o.totalCents)}${o.discountCents > 0 ? ` (rabais ${money(o.discountCents)}, code ${o.promoCode})` : ""} · Remboursé ${money(o.refundedCents)} · Commission ${money(o.commissionCents - o.commissionRefundedCents)}</p>
+      ${o.attribution && html`<p class="muted">Provenance : ${[o.attribution.source, o.attribution.medium, o.attribution.campaign].filter(Boolean).join(" / ") || "—"}${o.attribution.landing ? ` · page ${o.attribution.landing}` : ""}</p>`}</div>
     <table><thead><tr><th>Ligne</th><th class="num">Qté</th><th class="num">Prix</th><th class="num">Total</th></tr></thead>
       <tbody>${o.lines.map((l) => html`<tr><td>${l.nameSnapshot}</td><td class="num">${l.quantity}</td><td class="num">${money(l.unitPriceCents)}</td><td class="num">${money(l.lineTotalCents)}</td></tr>`)}
         ${o.taxes.map((t) => html`<tr><td class="muted">${t.code === "GST" ? "TPS" : "TVQ"}</td><td></td><td></td><td class="num">${money(t.amountCents)}</td></tr>`)}</tbody></table>

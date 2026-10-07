@@ -141,8 +141,9 @@ describe("promo codes", () => {
     expect(daily.body.report.totals.discountCents).toBeGreaterThanOrEqual(q.discountCents);
     const res = await app.request(`${adm(h.clientId, h.brandId)}/reports/orders.csv`, { headers: { authorization: `Bearer ${await owner()}` } });
     const csv = (await res.text()).trim().split("\r\n");
-    expect(csv[0]!.endsWith(",discount_cents,promo_code")).toBe(true);
-    expect(csv.some((l) => l.includes(co.body.order.reference) && l.endsWith(`,${q.discountCents},VIP15`))).toBe(true);
+    // Run 49 added the UTM columns after promo_code (empty here: no tags on this order).
+    expect(csv[0]!.endsWith(",discount_cents,promo_code,utm_source,utm_medium,utm_campaign,utm_content,landing")).toBe(true);
+    expect(csv.some((l) => l.includes(co.body.order.reference) && l.endsWith(`,${q.discountCents},VIP15,,,,,`))).toBe(true);
   });
 
   it("give the use back when the order expires unpaid, and never sell past the last use", async () => {
