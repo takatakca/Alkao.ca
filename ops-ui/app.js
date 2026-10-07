@@ -153,7 +153,7 @@ const ERRORS_FR = {
   sold_out: "Plus assez de places.", capacity_below_committed: "Impossible : des places sont déjà vendues ou réservées.",
   refund_exceeds_paid: "Montant supérieur au montant remboursable.", refund_in_progress: "Un remboursement est déjà en cours.",
   order_not_refundable: "Commande non remboursable.", refund_provider_error: "Stripe a échoué : réessayez le remboursement.",
-  flex_not_purchased: "Cette commande n'a pas l'option Flex Météo.", already_exchanged: "Le changement Flex a déjà été utilisé.",
+  flex_not_purchased: "Cette commande n'a pas l'option de changement de séance.", already_exchanged: "Le changement de séance a déjà été utilisé.",
   ticket_already_used: "Un billet est déjà entré : changement impossible.", session_not_available: "Séance non disponible.",
   payments_not_configured: "Paiements non configurés sur ce déploiement.", credentials_not_configured: "Codes QR non configurés sur ce déploiement.",
   invalid_request: "Données invalides.", conflict: "Existe déjà.", invalid_reference: "Référence invalide.",
@@ -180,11 +180,12 @@ const errText = (e) => (e instanceof ApiError ? ERRORS_FR[e.code] ?? `Erreur : $
 
 function useLoad(fn, deps) {
   const [state, setState] = useState({ loading: true, data: null, error: null });
+  // Returns the load, so an action can show its message once the screen shows the new state.
   const reload = useCallback(() => {
     setState((s) => ({ ...s, loading: true }));
-    fn().then((data) => setState({ loading: false, data, error: null }), (error) => setState({ loading: false, data: null, error }));
+    return fn().then((data) => setState({ loading: false, data, error: null }), (error) => setState({ loading: false, data: null, error }));
   }, deps);
-  useEffect(reload, [reload]);
+  useEffect(() => { reload(); }, [reload]);
   return [state, reload];
 }
 
@@ -768,7 +769,7 @@ function OrderDetail({ api, base, orderId, role, me }) {
         <span class="muted">${selected.length} billet(s) coché(s) seront annulés</span>
         <button type="submit" class="danger">Rembourser</button>
       </form>
-      <h2>Changement de séance (Flex Météo ou billet ouvert)</h2>
+      <h2>Changement de séance (option de changement ou billet ouvert)</h2>
       ${sessions === null ? html`<button class="secondary" onClick=${loadSessions}>Choisir une autre séance</button>` : html`
         <table><tbody>${sessions.map((s) => html`<tr><td>${when(s.startsAt)}</td><td class="num">${s.capacity - s.soldCount - s.reservedCount} places</td><td><button onClick=${exchange(s.id)}>Déplacer ici</button></td></tr>`)}</tbody></table>`}`}
     <h2>Données personnelles (Loi 25)</h2>
@@ -1047,7 +1048,7 @@ function Payments({ api, base }) {
     </div>`}
     <h2>Sites autorisés après le paiement</h2>
     <form class="card" onSubmit=${save}>
-      <label>Origines HTTPS (une par ligne), ex. https://festi-ice.ca
+      <label>Origines HTTPS (une par ligne), ex. https://www.exemple.ca
         <textarea rows="3" value=${origins ?? current.join("\n")} onInput=${(e) => setOrigins(e.target.value)}></textarea></label>
       <div class="row"><button type="submit">Enregistrer</button>${saved && html`<span class="badge ok">Enregistré</span>`}</div>
     </form>`;
@@ -1277,7 +1278,7 @@ function NewsletterSettings({ api, base }) {
   };
   return html`<form class="card" aria-label="Infolettre" onSubmit=${save}>
       <h3>Infolettre</h3>
-      <p class="muted">Les inscriptions des sites web (Promo Havana) reçoivent un courriel de confirmation. Seul le clic de la personne l'ajoute aux clients, avec son consentement exprès ; la page de confirmation affiche alors le code de bienvenue.</p>
+      <p class="muted">Les inscriptions des sites web (les vitrines) reçoivent un courriel de confirmation. Seul le clic de la personne l'ajoute aux clients, avec son consentement exprès ; la page de confirmation affiche alors le code de bienvenue.</p>
       ${n && html`<p>${number(n.signups.confirmed)} inscriptions confirmées (${number(n.signups.confirmedLast30Days)} ces 30 derniers jours) · ${number(n.signups.pending)} en attente de confirmation</p>`}
       <div class="fields">
         <label>Code de bienvenue (facultatif)<input pattern="[A-Za-z0-9-]{3,32}" value=${current.rewardCode} onInput=${(e) => setF({ ...current, rewardCode: e.target.value })} /></label>
@@ -1348,12 +1349,12 @@ function CampaignEditor({ api, base, prefix, campaignId }) {
   const send = act(async () => {
     if (f) throw new Error("Enregistrez d'abord vos changements.");
     if (!confirm(`Envoyer « ${loaded.subject} » à ${number(count)} clients ? Un envoi ne s'annule plus pour les courriels déjà partis.`)) return;
-    await api(`${base}/campaigns/${loaded.id}/send`, { method: "POST", body: { expectedRecipients: count } }); reload(); setMsg("Envoi lancé.");
+    await api(`${base}/campaigns/${loaded.id}/send`, { method: "POST", body: { expectedRecipients: count } }); await reload(); setMsg("Envoi lancé.");
   });
   const cancel = act(async () => { if (!confirm("Arrêter cette campagne ? Les courriels pas encore partis ne le seront jamais.")) return; await api(`${base}/campaigns/${loaded.id}/cancel`, { method: "POST" }); reload(); });
   const resume = act(async () => {
     if (!confirm("Reprendre l'envoi ? Les adresses refusées sont déjà retirées ; si les rebonds continuent, l'envoi s'arrêtera de nouveau.")) return;
-    await api(`${base}/campaigns/${loaded.id}/resume`, { method: "POST" }); reload(); setMsg("Envoi repris.");
+    await api(`${base}/campaigns/${loaded.id}/resume`, { method: "POST" }); await reload(); setMsg("Envoi repris.");
   });
   const held = loaded?.heldAt && ["draft", "sending"].includes(loaded.status);
   const turn = (active) => act(async () => {

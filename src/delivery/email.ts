@@ -1,7 +1,7 @@
 /** Outgoing email: the buyer's emails, and the Brand's campaigns (Run 42). */
 export interface EmailMessage {
   to: string;
-  /** Display name, e.g. the Brand ("Havana Resort"). The address is ALKAO_EMAIL_FROM. */
+  /** Display name, e.g. the Brand's name. The address is ALKAO_EMAIL_FROM. */
   fromName: string;
   subject: string;
   text: string;
