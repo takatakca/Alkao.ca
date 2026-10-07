@@ -147,6 +147,36 @@ export function createApp(deps: AppDeps) {
     if (!c.res.headers.has("cache-control")) c.header("cache-control", "no-store");
   });
 
+  // Run 49: a Brand's own website (its sales funnel) calls the public API from the buyer's
+  // browser, so each buyer keeps their own address for the rate limits. Only the origins the
+  // Brand lists for checkout returns get CORS; no cookies are ever involved.
+  const corsCache = new Map<string, { origins: string[]; at: number }>();
+  const corsOrigins = async (clientId: string, brandId: string) => {
+    const key = `${clientId}:${brandId}`;
+    const hit = corsCache.get(key);
+    if (hit && now().getTime() - hit.at < 60_000) return hit.origins;
+    const origins = await paymentsDb.getCheckoutReturnOrigins(deps.db, { clientId, brandId });
+    corsCache.set(key, { origins, at: now().getTime() });
+    return origins;
+  };
+  app.use(`${PUBLIC}/*`, async (c, next) => {
+    const origin = c.req.header("origin");
+    const clientId = c.req.param("clientId");
+    const brandId = c.req.param("brandId");
+    const allowed = Boolean(origin && clientId && brandId && isUuid(clientId) && isUuid(brandId)
+      && (await corsOrigins(clientId, brandId)).includes(origin));
+    if (c.req.method === "OPTIONS") {
+      return c.body(null, 204, allowed ? {
+        "access-control-allow-origin": origin!, "access-control-allow-methods": "GET, POST, DELETE",
+        "access-control-allow-headers": "content-type, x-alkao-hold-token, x-alkao-order-token",
+        "access-control-max-age": "600", vary: "Origin",
+      } : { vary: "Origin" });
+    }
+    await next();
+    c.header("vary", "Origin");
+    if (allowed) c.header("access-control-allow-origin", origin!);
+  });
+
   /** A parent record from the URL exists in this exact Client and Brand (lists answer 404 otherwise). */
   async function inScope(table: "ticketing_events" | "ticketing_sessions" | "ticketing_orders", id: string, s: TenantScope): Promise<boolean> {
     const { rowCount } = await deps.db.query(`SELECT 1 FROM public.${table} WHERE id = $1 AND client_id = $2 AND brand_id = $3`, [id, s.clientId, s.brandId]);

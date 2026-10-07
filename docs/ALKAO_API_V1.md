@@ -227,6 +227,19 @@ session, that is, per evening.
 
 The table `ticketing_add_on_stock` is server-only: RLS on, no grant, no policy.
 
+**The Brand's own website (CORS, Run 49).** The public routes
+(`/v1/public/clients/:clientId/brands/:brandId/…`) answer cross-origin requests only from the
+origins the Brand lists in its checkout settings (`checkoutReturnOrigins`), the same list that
+allows the return after payment:
+
+- preflight `OPTIONS` allows `GET`, `POST`, `DELETE` and the headers `content-type`,
+  `x-alkao-hold-token` and `x-alkao-order-token`;
+- no cookies are ever used;
+- the list is re-read every minute.
+
+So a sales funnel on the Brand's site calls ALKAO from the buyer's browser, and each buyer
+keeps their own address for the rate limits.
+
 ### Hosted ticket shop (Run 08)
 
 A Brand can sell with a plain link, without changing its website:

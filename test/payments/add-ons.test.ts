@@ -186,3 +186,19 @@ describe("where an order came from", () => {
     expect(bad.status).toBe(400);
   });
 });
+
+describe("the Brand's website calls the public API from the buyer's browser", () => {
+  it("gets CORS only from the origins the Brand lists for checkout returns", async () => {
+    const url = `${pub(t.clientId, t.brandId)}/events`;
+    const pre = await app.request(url, { method: "OPTIONS", headers: { origin: t.returnOrigin, "access-control-request-method": "POST" } });
+    expect(pre.status).toBe(204);
+    expect(pre.headers.get("access-control-allow-origin")).toBe(t.returnOrigin);
+    expect(pre.headers.get("access-control-allow-headers")).toContain("x-alkao-hold-token");
+    const other = await app.request(url, { method: "OPTIONS", headers: { origin: seed.festi.returnOrigin } });
+    expect(other.headers.get("access-control-allow-origin")).toBeNull();
+    const get = await app.request(url, { headers: { origin: t.returnOrigin } });
+    expect(get.status).toBe(200);
+    expect(get.headers.get("access-control-allow-origin")).toBe(t.returnOrigin);
+    expect((await app.request(url, { headers: { origin: "https://ailleurs.example" } })).headers.get("access-control-allow-origin")).toBeNull();
+  });
+});
