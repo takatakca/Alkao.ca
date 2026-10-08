@@ -7,22 +7,24 @@
 --   * Supabase's default privileges, which GRANT ALL on new public tables to anon and
 --     authenticated. Migrations must revoke these; the tests prove they do.
 
+-- Roles belong to the whole server: test files create them at the same moment, and the
+-- loser of that race gets unique_violation rather than duplicate_object.
 DO $$
 BEGIN
   CREATE ROLE anon NOLOGIN NOINHERIT;
-EXCEPTION WHEN duplicate_object THEN NULL;
+EXCEPTION WHEN duplicate_object OR unique_violation THEN NULL;
 END $$;
 
 DO $$
 BEGIN
   CREATE ROLE authenticated NOLOGIN NOINHERIT;
-EXCEPTION WHEN duplicate_object THEN NULL;
+EXCEPTION WHEN duplicate_object OR unique_violation THEN NULL;
 END $$;
 
 DO $$
 BEGIN
   CREATE ROLE service_role NOLOGIN NOINHERIT BYPASSRLS;
-EXCEPTION WHEN duplicate_object THEN NULL;
+EXCEPTION WHEN duplicate_object OR unique_violation THEN NULL;
 END $$;
 
 CREATE SCHEMA IF NOT EXISTS auth;

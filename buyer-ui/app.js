@@ -18,6 +18,7 @@ const T = {
       session_not_available: "Cette séance n'est plus disponible.",
       sold_out: "Plus assez de places dans cette séance.",
       flex_not_purchased: "Cette commande ne comprend pas l'option de changement de séance.",
+      offline: "Pas de réseau. Ouvrez cette page une fois avec du réseau : vos billets resteront ensuite sur cet appareil.",
     },
     generic: "Une erreur est survenue. Réessayez dans un instant.",
     void: { refunded: "Remboursé", cancelled: "Annulé", reissued: "Remplacé par un nouveau billet", admin: "Annulé" },
@@ -55,6 +56,8 @@ const T = {
     close: "Fermer",
     contact: "Une question ?",
     valid: "Valide",
+    offline: (d) => `Hors ligne : voici vos billets tels qu'enregistrés sur cet appareil le ${d}. Présentez-les normalement à l'entrée.`,
+    kept: "Billets enregistrés sur cet appareil : ils s'afficheront même sans réseau.",
   },
   en: {
     errors: {
@@ -65,6 +68,7 @@ const T = {
       session_not_available: "This session is no longer available.",
       sold_out: "Not enough seats left in this session.",
       flex_not_purchased: "This order does not include the session change option.",
+      offline: "No network. Open this page once with a network: your tickets will then stay on this device.",
     },
     generic: "Something went wrong. Please try again in a moment.",
     void: { refunded: "Refunded", cancelled: "Cancelled", reissued: "Replaced by a new ticket", admin: "Cancelled" },
@@ -102,6 +106,8 @@ const T = {
     close: "Close",
     contact: "Questions?",
     valid: "Valid",
+    offline: (d) => `Offline: here are your tickets as saved on this device on ${d}. Show them at the entrance as usual.`,
+    kept: "Tickets saved on this device: they will show even without a network.",
   },
 }[LANG];
 
@@ -114,14 +120,53 @@ const link = (() => {
 const base = link && `/v1/public/clients/${link.c}/brands/${link.b}`;
 
 async function call(path, { method = "GET", body, token } = {}) {
-  const res = await fetch(`${base}${path}`, {
-    method,
-    headers: { "x-alkao-order-token": token, ...(body ? { "content-type": "application/json" } : {}) },
-    ...(body ? { body: JSON.stringify(body) } : {}),
-  });
+  let res;
+  try {
+    res = await fetch(`${base}${path}`, {
+      method,
+      headers: { "x-alkao-order-token": token, ...(body ? { "content-type": "application/json" } : {}) },
+      ...(body ? { body: JSON.stringify(body) } : {}),
+    });
+  } catch {
+    throw new Error("offline");
+  }
   const data = await res.json().catch(() => null);
-  if (!res.ok) throw new Error(data?.error?.code ?? "error");
+  // A page from a proxy instead of ALKAO's JSON: the server cannot be reached either.
+  if (!res.ok) throw new Error(data?.error?.code ?? (res.status >= 500 ? "offline" : "error"));
   return data;
+}
+
+// Run 51: the tickets stay on this device, so they show without a network at the gate.
+// Not on a door-sale device (the staff's own), never while payment is confirming, and
+// forgotten two days after the session.
+const SAVED = "alkao.billets.";
+const KEEP_MS = 2 * 86_400_000;
+function forgetPastTickets() {
+  try {
+    for (const key of Object.keys(localStorage)) {
+      if (!key.startsWith(SAVED)) continue;
+      const kept = JSON.parse(localStorage.getItem(key) ?? "null");
+      const end = Date.parse(kept?.order?.event?.endsAt ?? kept?.order?.event?.startsAt ?? "");
+      if (!(end + KEEP_MS > Date.now())) localStorage.removeItem(key);
+    }
+  } catch {}
+}
+function keepTickets(order) {
+  if (link.door || order.status === "pending_payment") return false;
+  try {
+    localStorage.setItem(SAVED + link.o, JSON.stringify({ k: link.k, savedAt: new Date().toISOString(), order }));
+    return true;
+  } catch {
+    return false;
+  }
+}
+function keptTickets() {
+  try {
+    const kept = JSON.parse(localStorage.getItem(SAVED + link.o) ?? "null");
+    return kept && kept.k === link.k ? kept : null;
+  } catch {
+    return null;
+  }
 }
 const message = (e) => T.errors[e.message] ?? T.generic;
 
@@ -295,9 +340,16 @@ function App() {
     let tries = 0;
     let timer;
     const load = () => call(`/orders/${link.o}`, { token: link.k }).then(
-      (d) => { setState({ order: d.order }); if (d.order.status === "pending_payment" && ++tries < 40) timer = setTimeout(load, 3000); },
-      (e) => setState({ error: message(e) }),
+      (d) => {
+        setState({ order: d.order, kept: keepTickets(d.order) && "serviceWorker" in navigator });
+        if (d.order.status === "pending_payment" && ++tries < 40) timer = setTimeout(load, 3000);
+      },
+      (e) => {
+        const kept = e.message === "offline" && keptTickets();
+        setState(kept ? { order: kept.order, offlineSince: kept.savedAt } : { error: message(e) });
+      },
     );
+    forgetPastTickets();
     load();
     return () => clearTimeout(timer);
   }, []);
@@ -327,21 +379,28 @@ function App() {
       <p class="muted">${T.order} ${o.reference}${o.buyerName ? ` · ${o.buyerName}` : ""}</p>
       ${valid.length > 0 && !o.exchanged && html`<p class="noprint"><button class="ghost" onClick=${() => addToCalendar(o)}>${T.addToCalendar}</button></p>`}
     </div>
+    ${state.offlineSince && html`<div class="alert" role="status">${T.offline(savedOn(state.offlineSince))}</div>`}
     ${o.status === "pending_payment" && html`<div class="alert">${T.pending}</div>`}
     ${o.exchanged && html`<div class="alert">${T.replaced}</div>`}
     ${o.exchangeOfOrderId && html`<div class="alert ok">${T.exchanged}</div>`}
     ${valid.length > 0 && html`<p class="present">${T.present(valid.length)}</p>`}
+    ${state.kept && valid.length > 0 && html`<p class="kept noprint">${T.kept}</p>`}
     <div class="tickets">
       ${o.tickets.map((t, k) => html`<${Ticket} t=${t} name=${names.get(t.ticketTypeId) ?? T.ticket} index=${k} count=${o.tickets.length}
         onFullscreen=${() => setGate(Math.max(0, scannable.findIndex((x) => x.id === t.id)))} />`)}
     </div>
-    ${o.canChangeSession && valid.length > 0 && html`<${ChangeSession} order=${o} token=${link.k} />`}
+    ${o.canChangeSession && valid.length > 0 && !state.offlineSince && html`<${ChangeSession} order=${o} token=${link.k} />`}
     ${link.door && html`<p class="noprint"><a class="button" href=${`/acheter/${link.c}/${link.b}/${o.event.id}?porte=1`}>${T.nextSale}</a></p>`}
     <${Contact} brand=${o.brand} />
     <footer>${T.footer}</footer>
   </main>
   ${gate !== null && scannable.length > 0 && html`<${GateMode} tickets=${scannable} names=${names} start=${gate} onClose=${() => setGate(null)} />`}`;
 }
+
+const savedOn = (iso) => new Intl.DateTimeFormat(localeOf(LANG), { dateStyle: "long", timeStyle: "short" }).format(new Date(iso));
+
+// Run 51: the page itself opens without a network (its own files only, see sw.js).
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("/billets/sw.js", { scope: "/billets" }).catch(() => {});
 
 // The page's static "Chargement…" goes: the app renders a band, the page and the gate side by side.
 const root = document.getElementById("app");

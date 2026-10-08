@@ -994,6 +994,22 @@ at checkout.
 
 The table `ticketing_newsletter_signups` is server-only: RLS on, no grant, no policy.
 
+### Tickets without a network (Run 51)
+
+A campground's signal is often weak at the gate. Once the buyer has opened their tickets page
+with a network, it opens again without one, on the same device.
+
+- **The page**: `/billets/sw.js`, a service worker (scope `/billets`, header
+  `Service-Worker-Allowed: /billets`) keeps the page's own files only, network first. Online,
+  the buyer always gets the newest page; offline, the last one seen.
+- **The order**: the page keeps its last copy in the browser (`localStorage`), with the
+  link's token. Offline, it shows that copy with « Hors ligne : voici vos billets tels
+  qu'enregistrés sur cet appareil le … », only for the same link. Session changes are hidden
+  until the network is back. Online, a line says the tickets are kept on the device.
+- **Not kept**: on a door-sale device (`porte=1`, the staff's own), and while a payment is
+  still confirming. Copies are deleted two days after the session.
+- The gate still decides: a ticket refunded since the copy was made is refused by the scanner.
+
 ### A Brand's look: logo, colour, contact and event photo (Run 50)
 
 Every business sells in its own look, with no code: the tickets page, the hosted shop and every
