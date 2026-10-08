@@ -1067,7 +1067,7 @@ function Payments({ api, base }) {
 }
 
 // ── Shell and routing ───────────────────────────────────────────────────────
-// Run 40: the TAKATAK dashboard's brand block (orange tile, name, small caps line).
+// Run 40: the brand block (electric-blue tile, name, small caps line), in the TAKATAK brand (BRAND.md).
 // ── Run 41: the customer file (CRM) ─────────────────────────────────────────
 // Who comes, how often, how to reach them. Colours by frequency, from the bookings.
 const SEGMENTS = [
