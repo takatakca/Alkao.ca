@@ -1,39 +1,91 @@
+/*
+ * The buyer's tickets page. Run 50: in the Brand's colours (--accent, --on-accent, set from
+ * its appearance), with its logo and the event's photo; ALKAO's neutral look otherwise.
+ */
 :root {
   --bg: #f5f5f4; --panel: #fff; --ink: #1c1917; --muted: #57534e; --line: #e7e5e4;
-  --ok: #0f7a3d; --ok-bg: #e5f5ec; --bad: #b42318; --bad-bg: #fdecea; --warn: #8a5a00; --warn-bg: #fff4dc; --radius: 14px;
+  --accent: #1c1917; --on-accent: #ffffff;
+  --ok: #0f7a3d; --ok-bg: #e5f5ec; --bad: #b42318; --bad-bg: #fdecea; --warn: #8a5a00; --warn-bg: #fff4dc; --radius: 16px;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: var(--ink); background: var(--bg);
 }
 @media (prefers-color-scheme: dark) {
   :root { --bg: #0f0f0e; --panel: #1c1b1a; --ink: #f0efed; --muted: #a8a29e; --line: #2e2c2a; --ok-bg: #0f2c1c; --bad-bg: #3a1513; --warn-bg: #3a2c0c; --ok: #6fdc9b; --bad: #ff8b7e; --warn: #f3c969; }
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 body { margin: 0; }
 main { max-width: 560px; margin: 0 auto; padding: 1rem 16px 3rem; }
 .boot { padding: 2rem 16px; color: var(--muted); }
+
+/* The Brand's band: its colour, its logo (or name), the language switch. */
+.top { background: var(--accent); color: var(--on-accent); }
+.top-row { max-width: 560px; margin: 0 auto; padding: .75rem 16px; display: flex; align-items: center; justify-content: space-between; gap: 1rem; min-height: 64px; }
+.top .logo { display: block; max-height: 44px; max-width: 60%; width: auto; height: auto; }
+.top .brand { margin: 0; font-weight: 800; font-size: 1.05rem; color: inherit; }
+.top .lang { margin: 0; }
+.top button.link { color: inherit; opacity: .9; }
 .brand { color: var(--muted); font-size: .9rem; margin: .5rem 0 0; }
-h1 { font-size: 1.5rem; margin: .25rem 0 .5rem; }
+
+.photo { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: var(--radius); margin: .25rem 0 1rem; background: var(--line); }
+h1 { font-size: 1.6rem; line-height: 1.15; margin: .5rem 0 .75rem; letter-spacing: -.01em; }
 h2 { font-size: 1.1rem; margin: 1.5rem 0 .6rem; }
 .muted { color: var(--muted); }
 .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 1rem; margin-bottom: 1rem; }
 .event p { margin: .2rem 0; }
-.ticket { text-align: center; }
-.ticket .type { font-weight: 700; font-size: 1.05rem; }
+.event .when { font-weight: 700; font-size: 1.05rem; }
+.present { color: var(--muted); margin: 1.25rem 0 .75rem; }
+
+/* A ticket: the Brand's band (type, "Ticket 1 of 3"), then the QR code on white. */
+.tickets { display: grid; gap: 1rem; }
+.ticket { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; break-inside: avoid; box-shadow: 0 10px 24px -18px rgb(0 0 0 / 45%); }
+.ticket-band { display: flex; justify-content: space-between; align-items: baseline; gap: .75rem; padding: .7rem 1rem; background: var(--accent); color: var(--on-accent); }
+.ticket .type { font-weight: 800; font-size: 1.05rem; }
+.ticket-count { font-size: .85rem; opacity: .9; white-space: nowrap; }
+.ticket-body { text-align: center; padding: .5rem 1rem 1rem; position: relative; }
+/* The stub's perforation, between the band and the code. */
+.ticket-body::before { content: ""; position: absolute; left: 12px; right: 12px; top: 0; border-top: 2px dashed var(--line); }
+.ticket.void .ticket-band { background: var(--line); color: var(--muted); }
 /* QR codes stay dark on white, in dark mode too: gate scanners need the contrast. */
-.qr { display: block; width: min(76vw, 300px); height: auto; margin: .75rem auto; background: #fff; padding: 10px; border-radius: 10px; image-rendering: pixelated; }
-.ticket code { font-size: .85rem; color: var(--muted); }
+.qr { display: block; width: min(76vw, 300px); height: auto; margin: .9rem auto .5rem; background: #fff; padding: 10px; border-radius: 10px; image-rendering: pixelated; }
+.ticket code { display: block; font-size: .85rem; color: var(--muted); margin-bottom: .5rem; letter-spacing: .06em; }
+
 .badge { display: inline-block; padding: .15rem .55rem; border-radius: 999px; font-size: .8rem; font-weight: 600; background: var(--line); }
 .badge.ok { background: var(--ok-bg); color: var(--ok); }
 .badge.bad { background: var(--bad-bg); color: var(--bad); }
 .alert { padding: .75rem 1rem; border-radius: 10px; background: var(--warn-bg); color: var(--warn); margin-bottom: 1rem; }
 .alert.bad { background: var(--bad-bg); color: var(--bad); }
 .alert.ok { background: var(--ok-bg); color: var(--ok); }
-button { font: inherit; padding: .65rem 1rem; border-radius: 10px; border: 0; background: var(--ink); color: var(--bg); font-weight: 600; cursor: pointer; }
-button:disabled { opacity: .6; cursor: default; }
+
+button { font: inherit; padding: .65rem 1rem; border-radius: 10px; border: 0; background: var(--accent); color: var(--on-accent); font-weight: 600; cursor: pointer; min-height: 44px; }
+button.ghost { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+button:disabled { opacity: .5; cursor: default; }
+button:focus-visible, a:focus-visible { outline: 3px solid #f59e0b; outline-offset: 2px; }
 ul.sessions { list-style: none; padding: 0; margin: 0; }
 ul.sessions li { display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding: .6rem 0; border-bottom: 1px solid var(--line); }
+
+.contact { margin-top: 2rem; padding-top: 1rem; border-top: 1px solid var(--line); }
+.contact h2 { margin-top: 0; font-size: 1rem; }
+.contact p { margin: 0; color: var(--muted); line-height: 1.7; }
+.contact a { color: inherit; }
 footer { color: var(--muted); font-size: .8rem; text-align: center; margin-top: 2rem; }
-@media print { button, .noprint { display: none; } .card { break-inside: avoid; } }
 .lang { text-align: right; margin: 0; }
-button.link { background: none; color: var(--muted); padding: .25rem 0; text-decoration: underline; font-weight: 400; border: 0; }
+button.link { background: none; color: var(--muted); padding: .25rem 0; text-decoration: underline; font-weight: 400; border: 0; min-height: 0; }
 /* Run 35: "Nouvelle vente à la porte", a link that looks like the page's buttons. */
-a.button { display: inline-block; padding: .65rem 1rem; border-radius: 10px; background: var(--ink); color: var(--bg); font-weight: 600; text-decoration: none; }
+a.button { display: inline-block; padding: .65rem 1rem; border-radius: 10px; background: var(--accent); color: var(--on-accent); font-weight: 600; text-decoration: none; }
+
+/* Run 50: the gate view, white and full screen, one large QR code at a time. */
+.gate { position: fixed; inset: 0; z-index: 50; background: #ffffff; color: #111111; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .6rem; padding: 1rem; text-align: center; }
+.gate-count { margin: 0; font-weight: 800; font-size: 1.1rem; }
+.gate-qr { width: min(92vw, 72vh); height: auto; image-rendering: pixelated; }
+.gate code { color: #444; letter-spacing: .08em; }
+.gate-tip { margin: 0; color: #555; font-size: .9rem; }
+.gate-actions { display: flex; gap: .5rem; flex-wrap: wrap; justify-content: center; }
+.gate button.ghost { color: #111; border-color: #ccc; }
+.gate button:not(.ghost) { background: #111; color: #fff; }
+
+@media print {
+  button, .noprint, .top .lang { display: none; }
+  .top { background: none; color: var(--ink); }
+  .card, .ticket { break-inside: avoid; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }

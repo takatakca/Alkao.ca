@@ -2,6 +2,7 @@ import { toApi, writeAudit } from "../db/catalog.js";
 import type { TenantScope } from "../db/commerce.js";
 import type { Db, Tx } from "../db/pool.js";
 import { DomainError } from "../domain/errors.js";
+import { APPEARANCE_COLUMNS, appearanceJoin, appearanceOf } from "../db/appearance.js";
 
 type Queryable = Db | Tx;
 
@@ -51,7 +52,7 @@ export async function requestTicketsEmail(tx: Tx, s: TenantScope, orderId: strin
 /** What the buyer's ticket page shows besides the order itself. */
 export async function publicOrderContext(q: Queryable, s: TenantScope, orderId: string) {
   const { rows } = await q.query(
-    `SELECT br.name AS brand_name, e.id AS event_id, e.title AS event_title, se.starts_at, se.ends_at,
+    `SELECT br.name AS brand_name, ${APPEARANCE_COLUMNS}, e.image_url AS event_image_url, e.id AS event_id, e.title AS event_title, se.starts_at, se.ends_at,
             v.name AS venue_name, v.address_line1, v.city, v.timezone, o.exchange_of_order_id,
             EXISTS (SELECT 1 FROM public.ticketing_order_lines l
                     JOIN public.ticketing_ticket_types t ON t.id = l.ticket_type_id AND t.client_id = l.client_id AND t.brand_id = l.brand_id
@@ -75,16 +76,18 @@ export async function publicOrderContext(q: Queryable, s: TenantScope, orderId: 
      JOIN public.ticketing_events e ON e.id = o.event_id AND e.client_id = o.client_id AND e.brand_id = o.brand_id
      JOIN public.ticketing_sessions se ON se.id = o.session_id AND se.client_id = o.client_id AND se.brand_id = o.brand_id
      JOIN public.ticketing_venues v ON v.id = e.venue_id AND v.client_id = e.client_id AND v.brand_id = e.brand_id
+     ${appearanceJoin("o")}
      WHERE o.id = $1 AND o.client_id = $2 AND o.brand_id = $3`,
     [orderId, s.clientId, s.brandId],
   );
   const r = rows[0];
   if (!r) throw new DomainError("order_not_found");
   return {
-    brand: { name: r.brand_name },
+    brand: { name: r.brand_name, ...appearanceOf(r) },
     event: {
       id: r.event_id,
       title: r.event_title,
+      imageUrl: r.event_image_url ?? null,
       startsAt: r.starts_at,
       endsAt: r.ends_at,
       venue: { name: r.venue_name, addressLine1: r.address_line1, city: r.city, timezone: r.timezone },

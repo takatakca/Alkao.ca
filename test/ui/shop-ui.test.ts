@@ -334,6 +334,34 @@ describe("hosted ticket shop", () => {
     await page.getByText("Vente à la porte", { exact: true }).waitFor();
   });
 
+  it("sells in the Brand's look: logo, colour and the event's photo (Run 50)", async () => {
+    const accent = () => {
+      const g = globalThis as any;
+      return String(g.getComputedStyle(g.document.documentElement).getPropertyValue("--accent")).trim();
+    };
+    const h = seed.havana;
+    await db.pool.query(
+      `INSERT INTO public.ticketing_brand_settings (client_id, brand_id, logo_url, accent_color, on_accent_color)
+       VALUES ($1, $2, 'https://cdn.example.com/logo.svg', '#0f766e', '#ffffff')
+       ON CONFLICT (client_id, brand_id) DO UPDATE SET logo_url = EXCLUDED.logo_url, accent_color = EXCLUDED.accent_color, on_accent_color = EXCLUDED.on_accent_color`,
+      [h.clientId, h.brandId],
+    );
+    await db.pool.query(`UPDATE public.ticketing_events SET image_url = 'https://cdn.example.com/photo.svg' WHERE id = $1`, [h.eventId]);
+    const context = await browser.newContext({ locale: "fr-CA" });
+    await context.route("https://cdn.example.com/**", (r) =>
+      r.fulfill({ contentType: "image/svg+xml", body: `<svg xmlns="http://www.w3.org/2000/svg" width="160" height="40"><rect width="160" height="40" fill="#fff"/></svg>` }));
+    const page = await context.newPage();
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    await page.goto(`${origin}/acheter/${h.clientId}/${h.brandId}/${h.eventId}`);
+    await page.getByRole("img", { name: "Havana Resort — Événements" }).waitFor();
+    expect(await page.locator("img.photo").getAttribute("src")).toBe("https://cdn.example.com/photo.svg");
+    expect(await page.evaluate(accent)).toBe("#0f766e");
+    // FESTI-ICE keeps its own (neutral) look.
+    const other = await shop(seed.festi);
+    expect(await other.evaluate(accent)).not.toBe("#0f766e");
+    expect(await other.locator("img.photo").count()).toBe(0);
+  });
+
   it("ran without script errors", () => {
     expect(pageErrors).toEqual([]);
   });

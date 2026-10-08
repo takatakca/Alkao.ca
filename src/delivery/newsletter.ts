@@ -2,6 +2,7 @@ import { hkdfSync, timingSafeEqual } from "node:crypto";
 import { withTransaction, type Db } from "../db/pool.js";
 import { EmailSendError, type EmailSender } from "./email.js";
 import { newsletterConfirmEmail } from "./templates.js";
+import { APPEARANCE_COLUMNS, appearanceOf, type LookRow } from "../db/appearance.js";
 
 /**
  * Run 44: the confirmation e-mail of a newsletter sign-up. Its link is signed from the server
@@ -36,12 +37,13 @@ export async function deliverSignupConfirmations(db: Db, cfg: SignupDeliveryConf
   const result = { sent: 0, skipped: 0, retried: 0, failed: 0 };
   for (let i = 0; i < limit; i++) {
     const outcome = await withTransaction(db, async (tx) => {
-      const { rows } = await tx.query<{
+      const { rows } = await tx.query<LookRow & {
         id: string; email: string; first_name: string | null; language: "fr" | "en"; status: string; attempts: number; created_at: Date;
         brand_name: string; reward_text: string | null; sender_address: string | null; contact: string | null;
       }>(
         `SELECT n.id, n.email, n.first_name, n.language, n.status, n.attempts, n.created_at, br.name AS brand_name,
-                bs.newsletter_reward_text AS reward_text, bs.marketing_sender_address AS sender_address, bs.marketing_contact AS contact
+                bs.newsletter_reward_text AS reward_text, bs.marketing_sender_address AS sender_address, bs.marketing_contact AS contact,
+                ${APPEARANCE_COLUMNS}
          FROM public.ticketing_newsletter_signups n
          JOIN public.ticketing_brands br ON br.id = n.brand_id AND br.client_id = n.client_id
          LEFT JOIN public.ticketing_brand_settings bs ON bs.client_id = n.client_id AND bs.brand_id = n.brand_id
@@ -59,6 +61,8 @@ export async function deliverSignupConfirmations(db: Db, cfg: SignupDeliveryConf
         language: row.language, brandName: row.brand_name, firstName: row.first_name, rewardText: row.reward_text,
         link: confirmUrl(cfg.publicUrl, row.id, signupToken(cfg.credentialMasterSecret, row.id)),
         senderAddress: row.sender_address, contact: row.contact,
+        // Run 50: the Brand's logo and colours; its address and contact are already in the footer.
+        look: { ...appearanceOf(row), websiteUrl: null, supportEmail: null, supportPhone: null, addressLine: null },
       });
       try {
         const messageId = await cfg.sender.send({ ...content, to: row.email, idempotencyKey: `alkao-signup-${row.id}-${row.attempts}` });

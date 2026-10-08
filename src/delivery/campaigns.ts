@@ -4,6 +4,7 @@ import { withTransaction, type Db } from "../db/pool.js";
 import { localDate } from "../domain/customers.js";
 import { EmailSendError, type EmailSender } from "./email.js";
 import { campaignEmail } from "./templates.js";
+import { APPEARANCE_COLUMNS, appearanceOf, type LookRow } from "../db/appearance.js";
 
 /**
  * Run 42: sending campaigns. Each message carries its own unsubscribe link, derived from the
@@ -54,7 +55,7 @@ export interface CampaignDeliveryResult {
 const MAX_AGE_MS = 7 * 86_400_000;
 const backoffMs = (attempts: number) => Math.min(60_000 * 2 ** attempts, 6 * 3600_000);
 
-interface DueRow {
+interface DueRow extends LookRow {
   id: string;
   customer_id: string | null;
   email: string;
@@ -102,7 +103,7 @@ export async function deliverCampaignEmails(db: Db, cfg: CampaignDeliveryConfig,
     const outcome = await withTransaction(db, async (tx) => {
       const { rows } = await tx.query<DueRow>(
         `SELECT m.id, m.customer_id, m.email, m.attempts, m.created_at, c.status AS campaign_status, c.language, c.subject, c.preheader,
-                c.heading, c.body, c.image_url, c.cta_label, c.cta_url, br.name AS brand_name,
+                c.heading, c.body, c.image_url, c.cta_label, c.cta_url, br.name AS brand_name, ${APPEARANCE_COLUMNS},
                 bs.marketing_sender_address AS sender_address, bs.marketing_contact AS contact, cu.first_name,
                 (cu.email_opt_out_at IS NOT NULL AND (cu.email_consent_at IS NULL OR cu.email_opt_out_at >= cu.email_consent_at)) AS opted_out,
                 (cu.email_bounced_at IS NOT NULL AND cu.email = m.email) AS bounced, (cu.anonymized_at IS NOT NULL) AS anonymized, bk.item AS visit_item, bk.category AS visit_category
@@ -137,6 +138,8 @@ export async function deliverCampaignEmails(db: Db, cfg: CampaignDeliveryConfig,
         imageUrl: row.image_url, cta: row.cta_label && row.cta_url ? { label: row.cta_label, url: row.cta_url } : null,
         firstName: row.first_name, senderAddress: row.sender_address, contact: row.contact, unsubscribeUrl: link,
         visit: row.visit_item ?? null,
+        // Run 50: the Brand's logo and colours; its address and contact are already in the footer.
+        look: { ...appearanceOf(row), websiteUrl: null, supportEmail: null, supportPhone: null, addressLine: null },
       });
       try {
         const messageId = await cfg.sender.send({

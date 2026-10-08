@@ -21,6 +21,8 @@ import { FixedWindowLimiter } from "./rate-limit.js";
 import { WebhookSignatureError, type PaymentGateway } from "../payments/gateway.js";
 import { PaymentsService } from "../payments/service.js";
 import * as paymentsDb from "../db/payments.js";
+import * as appearanceDb from "../db/appearance.js";
+import { assertReadableColours } from "../domain/appearance.js";
 import * as credentialsDb from "../db/credentials.js";
 import { CredentialsService } from "../scanner/service.js";
 import { toCsv } from "../ops/csv.js";
@@ -321,7 +323,11 @@ export function createApp(deps: AppDeps) {
 
   // ── Public (buyer-facing) ────────────────────────────────────────────────
   app.get(`${PUBLIC}/events`, publicGate, async (c) => {
-    return c.json({ events: await catalog.listPublicEvents(deps.db, c.get("scope")) });
+    const scope = c.get("scope");
+    const [events, look] = await Promise.all([catalog.listPublicEvents(deps.db, scope), appearanceDb.getAppearance(deps.db, scope)]);
+    // Run 50: the Brand's look, for the shop's list of events.
+    const { brandName, updatedAt: _u, ...appearance } = look;
+    return c.json({ events, brand: { name: brandName, ...appearance } });
   });
 
   app.get(`${PUBLIC}/events/:eventId`, publicGate, async (c) => {
@@ -893,6 +899,24 @@ export function createApp(deps: AppDeps) {
       return saved;
     });
     return c.json({ settings: { checkoutReturnOrigins: origins } });
+  });
+
+  // ── Run 50: the Brand's look on the tickets page, the shop and the e-mails ──
+  app.get(`${ADMIN}/appearance`, ...admin, can("ticketing.catalog.read"), async (c) =>
+    c.json({ appearance: await appearanceDb.getAppearance(deps.db, c.get("scope")) }),
+  );
+
+  app.put(`${ADMIN}/appearance`, ...admin, can("ticketing.catalog.write"), async (c) => {
+    const body = api.BrandAppearance.parse(await readJson(c));
+    assertReadableColours(body.accentColor, body.onAccentColor);
+    const appearance = await withTransaction(deps.db, async (tx) => {
+      const saved = await appearanceDb.setAppearance(tx, c.get("scope"), body);
+      await catalog.writeAudit(tx, c.get("scope"), actor(c), "brand.appearance_updated", { type: "brand_settings", id: null }, {
+        logo: Boolean(saved.logoUrl), accentColor: saved.accentColor, website: Boolean(saved.websiteUrl),
+      });
+      return saved;
+    });
+    return c.json({ appearance });
   });
 
   app.get(`${ADMIN}/orders/:orderId/refunds`, ...admin, can("ticketing.orders.read"), async (c) => {

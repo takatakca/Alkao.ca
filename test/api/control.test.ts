@@ -111,7 +111,7 @@ describe("control contract application", () => {
     expect((await call(app, "GET", `${adm(clientId, brandId)}/venues`, { token })).status).toBe(403);
 
     await sendControl(app, controlRequest("entitlement.updated", { clientId, brandId, status: "active", version: 1 }));
-    expect((await call(app, "GET", `${pub(clientId, brandId)}/events`)).body).toEqual({ events: [] });
+    expect((await call(app, "GET", `${pub(clientId, brandId)}/events`)).body.events).toEqual([]);
     expect((await call(app, "GET", `${adm(clientId, brandId)}/venues`, { token })).status).toBe(200);
 
     await sendControl(app, controlRequest("entitlement.updated", { clientId, brandId, status: "suspended", version: 2 }));

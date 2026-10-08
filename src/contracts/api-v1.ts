@@ -46,6 +46,38 @@ export const UpdateVenue = CreateVenue.partial().refine((o) => Object.keys(o).le
 
 const admissionMinutes = z.number().int().min(0).max(1440);
 
+/** Run 50: an https address shown to buyers (a logo, a website, an event's photo); never http, quotes or brackets. */
+const displayUrl = z
+  .string()
+  .trim()
+  .max(500)
+  .regex(/^https:\/\/[a-zA-Z0-9.-]+(:[0-9]{1,5})?(\/[^\s"'<>\\]*)?$/, "an https:// address");
+const hexColor = z
+  .string()
+  .trim()
+  .regex(/^#[0-9a-fA-F]{6}$/, "a colour like #0f766e")
+  .transform((c) => c.toLowerCase());
+
+/**
+ * Run 50: how a Brand looks to its buyers (tickets page, shop, e-mails). Every field is
+ * optional (null: ALKAO's neutral look). The accent colour and the text colour on it come
+ * together and must be readable (WCAG AA, 4.5:1).
+ */
+export const BrandAppearance = z
+  .object({
+    logoUrl: displayUrl.nullable().default(null),
+    accentColor: hexColor.nullable().default(null),
+    onAccentColor: hexColor.nullable().default(null),
+    websiteUrl: displayUrl.nullable().default(null),
+    supportEmail: z.string().trim().toLowerCase().max(254).email().nullable().default(null),
+    supportPhone: z.string().trim().min(1).max(40).regex(/^[0-9 +().-]+$/, "digits, spaces, + ( ) . -").nullable().default(null),
+    addressLine: z.string().trim().min(1).max(200).regex(/^[^<>]*$/).nullable().default(null),
+  })
+  .refine((a) => (a.accentColor === null) === (a.onAccentColor === null), {
+    message: "accentColor and onAccentColor come together",
+    path: ["onAccentColor"],
+  });
+
 export const CreateEvent = z
   .object({
     venueId: id,
@@ -58,6 +90,8 @@ export const CreateEvent = z
     admissionOpensBeforeMinutes: admissionMinutes.optional(),
     /** Gates close this many minutes after each session ends, or starts if it has no end (default 120). */
     admissionClosesAfterMinutes: admissionMinutes.optional(),
+    /** Run 50: the event's photo (https), on the tickets page, the shop and the tickets e-mail. */
+    imageUrl: displayUrl.nullish(),
   })
   .refine((e) => !e.salesOpenAt || !e.salesCloseAt || Date.parse(e.salesOpenAt) < Date.parse(e.salesCloseAt), {
     message: "salesOpenAt must be before salesCloseAt",
@@ -71,6 +105,7 @@ export const UpdateEvent = z
     salesCloseAt: timestamp.nullable(),
     admissionOpensBeforeMinutes: admissionMinutes,
     admissionClosesAfterMinutes: admissionMinutes,
+    imageUrl: displayUrl.nullable(),
   })
   .partial()
   .refine((o) => Object.keys(o).length > 0, "empty update");

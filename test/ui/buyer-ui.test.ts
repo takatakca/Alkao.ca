@@ -176,6 +176,57 @@ describe("buyer tickets page", () => {
     expect(await page.getByText("Votre billet ouvert peut changer de date autant de fois que nécessaire", { exact: false }).isVisible()).toBe(true);
   });
 
+  it("wears the Brand's look and shows one large code at a time at the gate (Run 50)", async () => {
+    const h = seed.havana;
+    await db.pool.query(
+      `INSERT INTO public.ticketing_brand_settings (client_id, brand_id, logo_url, accent_color, on_accent_color, website_url, support_phone)
+       VALUES ($1, $2, 'https://cdn.example.com/logo.svg', '#0f766e', '#ffffff', 'https://www.example.com/', '+1 514 555-0100')
+       ON CONFLICT (client_id, brand_id) DO UPDATE SET logo_url = EXCLUDED.logo_url, accent_color = EXCLUDED.accent_color,
+         on_accent_color = EXCLUDED.on_accent_color, website_url = EXCLUDED.website_url, support_phone = EXCLUDED.support_phone`,
+      [h.clientId, h.brandId],
+    );
+    await db.pool.query(`UPDATE public.ticketing_events SET image_url = 'https://cdn.example.com/photo.svg' WHERE id = $1`, [h.eventId]);
+    const o = await buy(h, { GENERAL: 2 });
+    const context = await browser.newContext({ locale: "fr-CA" });
+    // The Brand's images, served locally: no request leaves the test.
+    await context.route("https://cdn.example.com/**", (r) =>
+      r.fulfill({ contentType: "image/svg+xml", body: `<svg xmlns="http://www.w3.org/2000/svg" width="160" height="40"><rect width="160" height="40" fill="#fff"/></svg>` }));
+    const page = await context.newPage();
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    await page.goto(linkFor(h, o));
+    await page.getByRole("img", { name: "Havana Resort — Événements" }).waitFor();
+    const bg = (selector: string) => page.locator(selector).first().evaluate((e) => (globalThis as any).getComputedStyle(e).backgroundColor as string);
+    expect(await bg(".top")).toBe("rgb(15, 118, 110)");
+    expect(await bg(".ticket-band")).toBe("rgb(15, 118, 110)");
+    expect(await page.locator("img.photo").getAttribute("src")).toBe("https://cdn.example.com/photo.svg");
+    expect(await page.getByRole("link", { name: "+1 514 555-0100" }).getAttribute("href")).toBe("tel:+15145550100");
+    expect(await page.getByRole("link", { name: "www.example.com" }).getAttribute("href")).toBe("https://www.example.com/");
+    expect(await page.getByText("Billet 2 sur 2").count()).toBe(1);
+
+    await page.getByRole("button", { name: "Plein écran pour l'entrée" }).first().click();
+    const gate = page.getByRole("dialog", { name: "Billet 1 sur 2" });
+    await gate.waitFor();
+    expect(await gate.getByRole("img", { name: /^Code QR du billet / }).count()).toBe(1);
+    expect(await gate.getByRole("button", { name: "Billet précédent" }).isDisabled()).toBe(true);
+    await page.keyboard.press("ArrowRight");
+    await page.getByRole("dialog", { name: "Billet 2 sur 2" }).waitFor();
+    expect(await page.getByRole("button", { name: "Billet suivant" }).isDisabled()).toBe(true);
+    await page.keyboard.press("Escape");
+    await page.getByRole("dialog").waitFor({ state: "detached" });
+  });
+
+  it("keeps the Brand's name when its logo cannot be shown (Run 50)", async () => {
+    const h = seed.havana;
+    const o = await buy(h, { GENERAL: 1 });
+    const context = await browser.newContext({ locale: "fr-CA" });
+    await context.route("https://cdn.example.com/**", (r) => r.fulfill({ status: 404, body: "" }));
+    const page = await context.newPage();
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    await page.goto(linkFor(h, o));
+    await page.locator(".top .brand", { hasText: "Havana Resort — Événements" }).waitFor();
+    await page.locator("img.photo").waitFor({ state: "hidden" });
+  });
+
   it("ran without script errors", () => {
     expect(pageErrors).toEqual([]);
   });

@@ -28,6 +28,7 @@ const STATUS_BY_CODE: Record<string, ContentfulStatusCode> = {
   // Run 49
   add_on_sold_out: 409,
   stock_only_for_add_ons: 422,
+  appearance_low_contrast: 422,
   session_not_available: 409,
   session_not_on_sale: 409,
   capacity_below_committed: 409,
@@ -93,7 +94,7 @@ const STATUS_BY_CODE: Record<string, ContentfulStatusCode> = {
 };
 
 /** Domain error details safe to return to callers (never constraint or column names). */
-const DETAILS_ALLOWED = new Set(["refund_provider_error", "refund_exceeds_paid", "too_many_sessions", "promo_code_invalid", "audience_changed"]);
+const DETAILS_ALLOWED = new Set(["refund_provider_error", "refund_exceeds_paid", "too_many_sessions", "promo_code_invalid", "audience_changed", "appearance_low_contrast"]);
 
 /** Map any thrown error to a stable JSON error. Unknown errors never leak details. */
 export function errorResponse(c: Context, error: unknown) {

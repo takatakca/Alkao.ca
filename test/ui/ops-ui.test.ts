@@ -711,6 +711,41 @@ describe("ALKAO Operations app", () => {
     expect(rows).toEqual([{ channel: "sms", subject: "Texto chalets", body: "Bonjour {prénom}, -20 % ce week-end !" }]);
   });
 
+  it("sets the Brand's look with a live preview, refusing hard-to-read colours (Run 50)", async () => {
+    const page = await signedIn(seed.users.havanaOwner);
+    await page.context().route("https://cdn.example.com/**", (r) =>
+      r.fulfill({ contentType: "image/svg+xml", body: `<svg xmlns="http://www.w3.org/2000/svg" width="160" height="40"><rect width="160" height="40" fill="#fff"/></svg>` }));
+    await page.goto(`${origin}/ops#${brandPath()}/appearance`);
+    await page.getByRole("heading", { name: "Apparence" }).waitFor();
+    await page.getByLabel(/Adresse de l'image du logo/).fill("https://cdn.example.com/logo.svg");
+    await page.getByRole("region", { name: "Aperçu" }).getByRole("img", { name: "Havana Resort — Événements" }).waitFor();
+    await page.getByLabel("Utiliser la couleur de la marque").check();
+    await page.getByLabel("Couleur principale (bandeau, boutons)").fill("#ffd54f");
+    // A yellow takes black text by itself.
+    await page.getByText("Lisible", { exact: true }).waitFor();
+    await page.getByLabel("Texte sur cette couleur").fill("#ffffff");
+    await page.getByText("Trop peu lisible").waitFor();
+    expect(await page.getByRole("button", { name: "Enregistrer" }).isDisabled()).toBe(true);
+    await page.getByRole("button", { name: "Texte blanc ou noir, au plus lisible" }).click();
+    await page.getByText("Lisible", { exact: true }).waitFor();
+    expect(await page.locator(".look-band").evaluate((e) => (globalThis as any).getComputedStyle(e).backgroundColor)).toBe("rgb(255, 213, 79)");
+    await page.getByLabel("Téléphone").fill("+1 514 555-0100");
+    await page.getByRole("button", { name: "Enregistrer" }).click();
+    await page.getByRole("status").getByText("Enregistré.", { exact: false }).waitFor();
+    const { rows } = await db.pool.query(
+      `SELECT logo_url, accent_color, on_accent_color, support_phone FROM public.ticketing_brand_settings WHERE client_id = $1 AND brand_id = $2`,
+      [seed.havana.clientId, seed.havana.brandId],
+    );
+    expect(rows).toEqual([{ logo_url: "https://cdn.example.com/logo.svg", accent_color: "#ffd54f", on_accent_color: "#000000", support_phone: "+1 514 555-0100" }]);
+
+    // The event's photo, from the event page.
+    await page.goto(`${origin}/ops#${brandPath()}/event/${seed.havana.eventId}`);
+    page.once("dialog", (d) => void d.accept("https://cdn.example.com/photo.svg"));
+    await page.getByRole("button", { name: "Ajouter une photo" }).click();
+    await page.getByRole("button", { name: "Changer la photo" }).waitFor();
+    expect(await page.locator("img.event-photo").getAttribute("src")).toBe("https://cdn.example.com/photo.svg");
+  });
+
   it("hides money from gate staff", async () => {
     const page = await signedIn(seed.users.havanaStaff);
     await page.goto(`${origin}/ops#${brandPath()}/dashboard`);

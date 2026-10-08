@@ -17,26 +17,70 @@ const plural = (n: number, one: string, many: string) => (n > 1 ? many : one);
 
 const FOOTER = { fr: "Billetterie ALKAO", en: "ALKAO Ticketing" };
 
-/** The common frame: Brand, title, then rows of trusted HTML (callers escape their values). */
-function layout(l: Language, brandName: string, title: string, rows: string[]): string {
+/** Run 50: the Brand's look in its e-mails (each part optional: ALKAO's neutral look otherwise). */
+export interface EmailLook {
+  logoUrl: string | null;
+  accentColor: string | null;
+  onAccentColor: string | null;
+  websiteUrl: string | null;
+  supportEmail: string | null;
+  supportPhone: string | null;
+  addressLine: string | null;
+  /** The event's photo, under the title (tickets, reminder). */
+  imageUrl?: string | null;
+}
+// Stored values are already checked by the database; e-mails check again before using them.
+const colour = (c: string | null | undefined, fallback: string) => (c && /^#[0-9a-f]{6}$/i.test(c) ? c : fallback);
+const httpsOnly = (u: string | null | undefined) => (u && /^https:\/\/[^\s"'<>\\]+$/.test(u) ? u : null);
+
+/** The Brand's website, phone and address, for the bottom of an e-mail. */
+function contactLines(look: EmailLook | null | undefined): string[] {
+  if (!look) return [];
+  return [httpsOnly(look.websiteUrl)?.replace(/^https:\/\//, "").replace(/\/$/, ""), look.supportEmail, look.supportPhone, look.addressLine]
+    .filter((x): x is string => Boolean(x));
+}
+const footerText = (l: Language, brandName: string, look?: EmailLook | null) =>
+  [[brandName, ...contactLines(look)].join(" · "), FOOTER[l]].join("\n");
+
+/**
+ * The common frame: the Brand's band (its colour, its logo or name, as on the tickets page and
+ * the shop), the event's photo, the title, then rows of trusted HTML (callers escape their values).
+ */
+function layout(l: Language, brandName: string, title: string, rows: string[], look?: EmailLook | null): string {
+  const logo = httpsOnly(look?.logoUrl);
+  const photo = httpsOnly(look?.imageUrl);
+  const band = colour(look?.accentColor, "#1c1917");
+  const ink = colour(look?.onAccentColor, "#ffffff");
+  const head = logo
+    ? `<img src="${esc(logo)}" alt="${esc(brandName)}" height="40" style="display:block;height:40px;width:auto;max-width:240px;border:0;color:${ink}">`
+    : `<span style="font-size:16px;font-weight:bold;color:${ink}">${esc(brandName)}</span>`;
+  const contact = contactLines(look);
   return `<!doctype html><html lang="${l}"><body style="margin:0;background:#f5f5f4;font-family:Arial,Helvetica,sans-serif;color:#1c1917">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:24px 12px">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:12px;padding:28px">
-<tr><td style="font-size:13px;color:#57534e;padding-bottom:12px">${esc(brandName)}</td></tr>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:12px;overflow:hidden">
+<tr><td bgcolor="${band}" style="background:${band};padding:16px 28px">${head}</td></tr>
+<tr><td style="padding:24px 28px 28px">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+${photo ? `<tr><td style="padding-bottom:16px"><img src="${esc(photo)}" alt="" width="504" style="display:block;width:100%;max-width:504px;height:auto;border-radius:10px"></td></tr>` : ""}
 <tr><td style="font-size:22px;font-weight:bold;padding-bottom:16px">${esc(title)}</td></tr>
 ${rows.join("\n")}
 </table>
+</td></tr>
+</table>
+${contact.length ? `<p style="font-size:12px;color:#57534e;margin:12px 0 4px">${contact.map(esc).join(" · ")}</p>` : ""}
 <p style="font-size:12px;color:#78716c">${FOOTER[l]}</p>
 </td></tr></table></body></html>`;
 }
-const button = (href: string, label: string) =>
-  `<tr><td align="center" style="padding:24px 0"><a href="${esc(href)}" style="display:inline-block;background:#1c1917;color:#ffffff;text-decoration:none;font-weight:bold;padding:14px 24px;border-radius:8px">${esc(label)}</a></td></tr>`;
+const button = (href: string, label: string, look?: EmailLook | null) =>
+  `<tr><td align="center" style="padding:24px 0"><a href="${esc(href)}" style="display:inline-block;background:${colour(look?.accentColor, "#1c1917")};color:${colour(look?.onAccentColor, "#ffffff")};text-decoration:none;font-weight:bold;padding:14px 24px;border-radius:8px">${esc(label)}</a></td></tr>`;
 const paragraph = (html: string) => `<tr><td style="font-size:15px;line-height:1.5;padding-bottom:16px">${html}</td></tr>`;
 const box = (html: string) => `<tr><td style="font-size:15px;line-height:1.6;padding:12px 16px;background:#fafaf9;border-radius:8px">${html}</td></tr>`;
 const note = (html: string, top = false) => `<tr><td style="font-size:13px;line-height:1.5;color:#57534e${top ? ";padding-top:16px" : ""}">${html}</td></tr>`;
 
 // ── Tickets ──────────────────────────────────────────────────────────────────
 export interface TicketsEmailData {
+  /** Run 50: the Brand's logo, colours, contact (and the event's photo). */
+  look?: EmailLook | null;
   kind: "order_tickets" | "exchange_tickets";
   language?: Language;
   brandName: string;
@@ -90,13 +134,13 @@ export function ticketsEmail(d: TicketsEmailData): Content {
   const hello = t.hello(d.buyerName);
   const intro = t.intro(changed, d.reference);
   const subject = `${t.title(changed)} — ${d.eventTitle} (${d.reference})`;
-  const text = [hello, "", intro, "", d.eventTitle, when, where, count, "", `${t.linkLine}${d.link}`, "", t.advice, "", `${d.brandName} · ${FOOTER[l]}`].join("\n");
+  const text = [hello, "", intro, "", d.eventTitle, when, where, count, "", `${t.linkLine}${d.link}`, "", t.advice, "", footerText(l, d.brandName, d.look)].join("\n");
   const html = layout(l, d.brandName, t.title(changed), [
     paragraph(`${esc(hello)}<br>${esc(intro)}`),
     box(`<strong>${esc(d.eventTitle)}</strong><br>${esc(when)}<br>${esc(where)}<br>${esc(count)} · ${t.order} ${esc(d.reference)}`),
-    button(d.link, t.show),
+    button(d.link, t.show, d.look),
     note(esc(t.advice)),
-  ]);
+  ], d.look);
   return { fromName: d.brandName, subject, text, html };
 }
 
@@ -125,18 +169,20 @@ export function reminderEmail(d: ReminderEmailData): Content {
   const count = t.count(d.validTickets);
   const hello = t.hello(d.buyerName);
   const intro = r.intro(d.reference);
-  const text = [hello, "", intro, "", d.eventTitle, when, where, count, "", `${t.linkLine}${d.link}`, "", t.advice, "", `${d.brandName} · ${FOOTER[l]}`].join("\n");
+  const text = [hello, "", intro, "", d.eventTitle, when, where, count, "", `${t.linkLine}${d.link}`, "", t.advice, "", footerText(l, d.brandName, d.look)].join("\n");
   const html = layout(l, d.brandName, r.title, [
     paragraph(`${esc(hello)}<br>${esc(intro)}`),
     box(`<strong>${esc(d.eventTitle)}</strong><br>${esc(when)}<br>${esc(where)}<br>${esc(count)} · ${t.order} ${esc(d.reference)}`),
-    button(d.link, t.show),
+    button(d.link, t.show, d.look),
     note(esc(t.advice)),
-  ]);
+  ], d.look);
   return { fromName: d.brandName, subject: r.subject(d.eventTitle, when), text, html };
 }
 
 // ── Session cancelled ───────────────────────────────────────────────────────
 export interface SessionCancelledEmailData {
+  /** Run 50: the Brand's logo, colours, contact (and the event's photo). */
+  look?: EmailLook | null;
   language?: Language;
   brandName: string;
   buyerName: string | null;
@@ -181,17 +227,19 @@ export function sessionCancelledEmail(d: SessionCancelledEmailData): Content {
   const what = t.what(d.brandName, fullDate(l, d.startsAt, d.timezone), d.eventTitle, where);
   const money = d.refundedCents > 0 ? t.refunded(cad(d.refundedCents, l)) : t.free;
   const subject = `${t.title} — ${d.eventTitle} (${d.reference})`;
-  const text = [hello, "", what, "", money, "", t.sorry, "", `${d.brandName} · ${FOOTER[l]}`].join("\n");
+  const text = [hello, "", what, "", money, "", t.sorry, "", footerText(l, d.brandName, d.look)].join("\n");
   const html = layout(l, d.brandName, t.title, [
     paragraph(`${esc(hello)}<br>${esc(what)}`),
     box(`${esc(money)}<br><span style="color:#57534e">${t.order} ${esc(d.reference)}</span>`),
     note(esc(t.sorry), true),
-  ]);
+  ], d.look);
   return { fromName: d.brandName, subject, text, html };
 }
 
 // ── Refund ───────────────────────────────────────────────────────────────────
 export interface RefundEmailData {
+  /** Run 50: the Brand's logo, colours, contact (and the event's photo). */
+  look?: EmailLook | null;
   language?: Language;
   brandName: string;
   buyerName: string | null;
@@ -242,17 +290,19 @@ export function refundEmail(d: RefundEmailData): Content {
   const tickets = d.voidedTickets > 0 ? t.voided(d.voidedTickets) : "";
   const still = d.validTickets > 0 && d.link ? t.still(d.validTickets, d.link) : "";
   const subject = `${t.title(amount)} — ${d.eventTitle} (${d.reference})`;
-  const text = [hello, "", what, t.delay, ...(tickets ? ["", tickets] : []), ...(still ? ["", still] : []), "", `${d.brandName} · ${FOOTER[l]}`].join("\n");
+  const text = [hello, "", what, t.delay, ...(tickets ? ["", tickets] : []), ...(still ? ["", still] : []), "", footerText(l, d.brandName, d.look)].join("\n");
   const html = layout(l, d.brandName, t.title(amount), [
     paragraph(`${esc(hello)}<br>${esc(what)}`),
     `<tr><td style="font-size:14px;line-height:1.6;padding:12px 16px;background:#fafaf9;border-radius:8px">${esc(t.delay)}${tickets ? `<br>${esc(tickets)}` : ""}<br><span style="color:#57534e">${t.order} ${esc(d.reference)}</span></td></tr>`,
-    ...(still ? [button(d.link!, t.show)] : []),
-  ]);
+    ...(still ? [button(d.link!, t.show, d.look)] : []),
+  ], d.look);
   return { fromName: d.brandName, subject, text, html };
 }
 
 // ── Campaigns (Run 42) ──────────────────────────────────────────────────────
 export interface CampaignEmailData {
+  /** Run 50: the Brand's logo, colours, contact (and the event's photo). */
+  look?: EmailLook | null;
   language: Language;
   brandName: string;
   subject: string;
@@ -309,14 +359,16 @@ export function campaignEmail(d: CampaignEmailData): Content {
     ...(d.preheader ? [`<tr><td style="display:none;max-height:0;overflow:hidden;font-size:1px;color:#ffffff">${esc(d.preheader)}</td></tr>`] : []),
     ...(d.imageUrl ? [`<tr><td style="padding-bottom:16px"><img src="${esc(d.imageUrl)}" alt="" width="504" style="display:block;width:100%;max-width:504px;height:auto;border-radius:8px"></td></tr>`] : []),
     ...paragraphs.map((p) => paragraph(esc(p).replace(/\n/g, "<br>"))),
-    ...(d.cta ? [button(d.cta.url, d.cta.label)] : []),
+    ...(d.cta ? [button(d.cta.url, d.cta.label, d.look)] : []),
     note(`${esc(t.why(d.brandName))}<br>${esc(footer)}<br>${t.contact}${esc(d.contact)}<br><a href="${esc(d.unsubscribeUrl)}" style="color:#57534e">${t.stop}</a>`, true),
   ];
-  return { fromName: d.brandName, subject: fill(d.subject), text, html: layout(l, d.brandName, heading, rows) };
+  return { fromName: d.brandName, subject: fill(d.subject), text, html: layout(l, d.brandName, heading, rows, d.look) };
 }
 
 // ── Newsletter sign-up confirmation (Run 44) ────────────────────────────────
 export interface NewsletterConfirmEmailData {
+  /** Run 50: the Brand's logo, colours, contact (and the event's photo). */
+  look?: EmailLook | null;
   language: Language;
   brandName: string;
   firstName: string | null;
@@ -354,9 +406,9 @@ export function newsletterConfirmEmail(d: NewsletterConfirmEmailData): Content {
   const text = [hello, "", intro, "", `${t.button} : ${d.link}`, "", t.ignore, "", footer].join("\n");
   const html = layout(d.language, d.brandName, t.title, [
     paragraph(`${esc(hello)}<br>${esc(intro)}`),
-    button(d.link, t.button),
+    button(d.link, t.button, d.look),
     note(esc(t.ignore)),
     note(esc(footer), true),
-  ]);
+  ], d.look);
   return { fromName: d.brandName, subject: t.subject(d.brandName), text, html };
 }

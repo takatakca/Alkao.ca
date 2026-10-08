@@ -1,7 +1,7 @@
 // ALKAO — the buyer's tickets page (Run 06). The link carries the order and its personal
 // token after "#", so it never reaches a server log. The page holds no data of its own: it
 // reads the order through the public, gated ALKAO API with that token.
-import { html, render, useEffect, useState } from "/billets/vendor/htm-preact.js";
+import { html, render, useEffect, useRef, useState } from "/billets/vendor/htm-preact.js";
 import qrcode from "/billets/vendor/qrcode.mjs";
 import { localeOf, pickLanguage, switchLanguage } from "/billets/i18n.js";
 import { calendarFile } from "/billets/calendar.js";
@@ -47,6 +47,14 @@ const T = {
     addToCalendar: "Ajouter à mon calendrier",
     nextSale: "Nouvelle vente à la porte",
     calendarText: (ref, brand) => `${brand} · Commande ${ref}. Vos billets sont dans votre courriel de confirmation.`,
+    ticketOf: (i, n) => `Billet ${i} sur ${n}`,
+    fullscreen: "Plein écran pour l'entrée",
+    gateTip: "Montez la luminosité de l'écran au maximum.",
+    previous: "Billet précédent",
+    next: "Billet suivant",
+    close: "Fermer",
+    contact: "Une question ?",
+    valid: "Valide",
   },
   en: {
     errors: {
@@ -86,6 +94,14 @@ const T = {
     addToCalendar: "Add to my calendar",
     nextSale: "Next door sale",
     calendarText: (ref, brand) => `${brand} · Order ${ref}. Your tickets are in your confirmation email.`,
+    ticketOf: (i, n) => `Ticket ${i} of ${n}`,
+    fullscreen: "Full screen for the entrance",
+    gateTip: "Turn your screen brightness all the way up.",
+    previous: "Previous ticket",
+    next: "Next ticket",
+    close: "Close",
+    contact: "Questions?",
+    valid: "Valid",
   },
 }[LANG];
 
@@ -120,16 +136,110 @@ function whenFr(iso, timeZone) {
   return new Intl.DateTimeFormat(localeOf(LANG), { dateStyle: "full", timeStyle: "short", timeZone: timeZone || "America/Toronto" }).format(new Date(iso));
 }
 
-function Ticket({ t, name }) {
+function Ticket({ t, name, index, count, onFullscreen }) {
   const valid = t.status === "valid";
-  return html`<div class="card ticket">
-    <div class="type">${name}</div>
-    ${valid && t.credential
-      ? html`<img class="qr" src=${qrDataUrl(t.credential)} alt=${T.qrAlt(t.id.slice(0, 8))} />`
-      : valid ? html`<p class="muted">${T.qrSoon}</p>`
-      : html`<p><span class="badge bad">${T.void[t.voidReason] ?? T.voidDefault}</span></p>`}
+  return html`<article class="ticket ${valid ? "" : "void"}">
+    <div class="ticket-band">
+      <span class="type">${name}</span>
+      <span class="ticket-count">${T.ticketOf(index + 1, count)}</span>
+    </div>
+    <div class="ticket-body">
+      ${valid && t.credential
+        ? html`<img class="qr" src=${qrDataUrl(t.credential)} alt=${T.qrAlt(t.id.slice(0, 8))} />`
+        : valid ? html`<p class="muted">${T.qrSoon}</p>`
+        : html`<p><span class="badge bad">${T.void[t.voidReason] ?? T.voidDefault}</span></p>`}
+      <code>${t.id.slice(0, 8).toUpperCase()}</code>
+      ${valid && t.credential && html`<button class="ghost noprint" onClick=${onFullscreen}>${T.fullscreen}</button>`}
+    </div>
+  </article>`;
+}
+
+/**
+ * Run 50: at the gate, one ticket at a time, as large as the screen allows, the screen kept
+ * awake while it is shown. Arrows or swipe for the next ticket, Escape to close.
+ */
+function GateMode({ tickets, names, start, onClose }) {
+  const [i, setI] = useState(start);
+  const t = tickets[i];
+  const closeButton = useRef(null);
+  const x0 = useRef(null);
+  useEffect(() => {
+    // Each call is optional: older phones have no wake lock, iPhones no page full screen.
+    const quietly = (fn) => { try { Promise.resolve(fn()).catch(() => {}); } catch {} };
+    let lock = null;
+    const keepAwake = () => quietly(() => navigator.wakeLock?.request("screen").then((l) => { lock = l; }));
+    // The screen lock ends when the page is hidden; take it again when the buyer comes back.
+    const onVisible = () => { if (document.visibilityState === "visible") keepAwake(); };
+    keepAwake();
+    quietly(() => document.documentElement.requestFullscreen?.());
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const opener = document.activeElement;
+    closeButton.current?.focus();
+    const onKey = (e) => {
+      if (e.key === "Escape") onClose();
+      if (e.key === "ArrowRight") setI((x) => Math.min(x + 1, tickets.length - 1));
+      if (e.key === "ArrowLeft") setI((x) => Math.max(x - 1, 0));
+    };
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("visibilitychange", onVisible);
+      document.body.style.overflow = overflow;
+      quietly(() => lock?.release());
+      if (document.fullscreenElement) quietly(() => document.exitFullscreen?.());
+      opener?.focus?.();
+    };
+  }, []);
+  return html`<div class="gate" role="dialog" aria-modal="true" aria-label=${T.ticketOf(i + 1, tickets.length)}
+      onTouchStart=${(e) => { x0.current = e.touches[0].clientX; }}
+      onTouchEnd=${(e) => {
+        if (x0.current === null) return;
+        const dx = e.changedTouches[0].clientX - x0.current;
+        if (dx < -50) setI(Math.min(i + 1, tickets.length - 1));
+        if (dx > 50) setI(Math.max(i - 1, 0));
+        x0.current = null;
+      }}>
+    <p class="gate-count">${T.ticketOf(i + 1, tickets.length)} · ${names.get(t.ticketTypeId) ?? T.ticket}</p>
+    <img class="gate-qr" src=${qrDataUrl(t.credential)} alt=${T.qrAlt(t.id.slice(0, 8))} />
     <code>${t.id.slice(0, 8).toUpperCase()}</code>
+    <p class="gate-tip">${T.gateTip}</p>
+    <div class="gate-actions">
+      <button class="ghost" disabled=${i === 0} onClick=${() => setI(i - 1)}>${T.previous}</button>
+      <button ref=${closeButton} onClick=${onClose}>${T.close}</button>
+      <button class="ghost" disabled=${i === tickets.length - 1} onClick=${() => setI(i + 1)}>${T.next}</button>
+    </div>
   </div>`;
+}
+
+/** Run 50: the Brand's colour, when it has one (checked again here: #rrggbb only). */
+function applyLook(brand) {
+  const hex = /^#[0-9a-f]{6}$/i;
+  const root = document.documentElement.style;
+  if (hex.test(brand?.accentColor ?? "") && hex.test(brand?.onAccentColor ?? "")) {
+    root.setProperty("--accent", brand.accentColor);
+    root.setProperty("--on-accent", brand.onAccentColor);
+  }
+}
+const https = (u) => (typeof u === "string" && /^https:\/\/[^\s"'<>\\]+$/.test(u) ? u : null);
+
+/** The logo, or the Brand's name when the image cannot be shown. */
+function Logo({ src, name }) {
+  const [failed, setFailed] = useState(false);
+  return failed ? html`<p class="brand">${name}</p>` : html`<img class="logo" src=${src} alt=${name} onError=${() => setFailed(true)} />`;
+}
+
+function Contact({ brand }) {
+  const site = https(brand.websiteUrl);
+  const items = [
+    site && html`<a href=${site} rel="noopener">${site.replace(/^https:\/\//, "").replace(/\/$/, "")}</a>`,
+    brand.supportEmail && html`<a href=${`mailto:${brand.supportEmail}`}>${brand.supportEmail}</a>`,
+    brand.supportPhone && html`<a href=${`tel:${brand.supportPhone.replace(/[^0-9+]/g, "")}`}>${brand.supportPhone}</a>`,
+    brand.addressLine && html`<span>${brand.addressLine}</span>`,
+  ].filter(Boolean);
+  if (!items.length) return null;
+  return html`<section class="contact noprint"><h2>${T.contact}</h2><p>${items.map((x, k) => html`${k ? " · " : ""}${x}`)}</p></section>`;
 }
 
 function ChangeSession({ order, token }) {
@@ -191,31 +301,49 @@ function App() {
     load();
     return () => clearTimeout(timer);
   }, []);
+  const [gate, setGate] = useState(null);
   if (state.loading) return html`<main><p class="boot">${T.loading}</p></main>`;
   if (state.error) return html`<main>${switcher}<h1>${T.myTickets}</h1><div class="alert bad" role="alert">${state.error}</div></main>`;
   const o = state.order;
+  applyLook(o.brand);
   const names = new Map(o.lines.map((l) => [l.ticketTypeId, l.nameSnapshot]));
   const valid = o.tickets.filter((t) => t.status === "valid");
+  const scannable = valid.filter((t) => t.credential);
   const tz = o.event.venue.timezone;
-  return html`<main>
-    ${switcher}
-    <p class="brand">${o.brand.name}</p>
+  const logo = https(o.brand.logoUrl);
+  const photo = https(o.event.imageUrl);
+  return html`<header class="top">
+    <div class="top-row">
+      ${logo ? html`<${Logo} src=${logo} name=${o.brand.name} />` : html`<p class="brand">${o.brand.name}</p>`}
+      ${switcher}
+    </div>
+  </header>
+  <main>
+    ${photo && html`<img class="photo" src=${photo} alt="" onError=${(e) => { e.currentTarget.hidden = true; }} />`}
     <h1>${o.event.title}</h1>
     <div class="card event">
-      <p><strong>${whenFr(o.event.startsAt, tz)}</strong></p>
+      <p class="when">${whenFr(o.event.startsAt, tz)}</p>
       <p>${o.event.venue.name}${o.event.venue.city ? `, ${o.event.venue.city}` : ""}</p>
       <p class="muted">${T.order} ${o.reference}${o.buyerName ? ` · ${o.buyerName}` : ""}</p>
-      ${valid.length > 0 && !o.exchanged && html`<p class="noprint"><button onClick=${() => addToCalendar(o)}>${T.addToCalendar}</button></p>`}
+      ${valid.length > 0 && !o.exchanged && html`<p class="noprint"><button class="ghost" onClick=${() => addToCalendar(o)}>${T.addToCalendar}</button></p>`}
     </div>
     ${o.status === "pending_payment" && html`<div class="alert">${T.pending}</div>`}
     ${o.exchanged && html`<div class="alert">${T.replaced}</div>`}
     ${o.exchangeOfOrderId && html`<div class="alert ok">${T.exchanged}</div>`}
-    ${valid.length > 0 && html`<p class="muted">${T.present(valid.length)}</p>`}
-    ${o.tickets.map((t) => html`<${Ticket} t=${t} name=${names.get(t.ticketTypeId) ?? T.ticket} />`)}
+    ${valid.length > 0 && html`<p class="present">${T.present(valid.length)}</p>`}
+    <div class="tickets">
+      ${o.tickets.map((t, k) => html`<${Ticket} t=${t} name=${names.get(t.ticketTypeId) ?? T.ticket} index=${k} count=${o.tickets.length}
+        onFullscreen=${() => setGate(Math.max(0, scannable.findIndex((x) => x.id === t.id)))} />`)}
+    </div>
     ${o.canChangeSession && valid.length > 0 && html`<${ChangeSession} order=${o} token=${link.k} />`}
     ${link.door && html`<p class="noprint"><a class="button" href=${`/acheter/${link.c}/${link.b}/${o.event.id}?porte=1`}>${T.nextSale}</a></p>`}
+    <${Contact} brand=${o.brand} />
     <footer>${T.footer}</footer>
-  </main>`;
+  </main>
+  ${gate !== null && scannable.length > 0 && html`<${GateMode} tickets=${scannable} names=${names} start=${gate} onClose=${() => setGate(null)} />`}`;
 }
 
-render(html`<${App} />`, document.getElementById("app"));
+// The page's static "Chargement…" goes: the app renders a band, the page and the gate side by side.
+const root = document.getElementById("app");
+root.replaceChildren();
+render(html`<${App} />`, root);
