@@ -22,7 +22,8 @@ const HEADERS = (type: string) => ({
     "default-src 'none'",
     "script-src 'self'",
     "style-src 'self'",
-    "img-src 'self' data:",
+    // Run 50: the Brand's logo and the event's photo are https addresses it sets in /ops.
+    "img-src 'self' data: https:",
     "connect-src 'self'",
     "frame-ancestors 'none'",
     "base-uri 'none'",

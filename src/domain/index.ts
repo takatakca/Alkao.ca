@@ -8,3 +8,4 @@ export * from "./lifecycle.js";
 export * from "./entitlement.js";
 export * from "./permissions.js";
 export * from "./ids.js";
+export * from "./appearance.js";

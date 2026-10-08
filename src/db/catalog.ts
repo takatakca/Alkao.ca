@@ -4,6 +4,7 @@ import { isTaxRegion, type TaxRegion } from "../domain/tax.js";
 import type { TenantScope } from "./commerce.js";
 import { mapDbErrors } from "./errors.js";
 import type { Db, Tx } from "./pool.js";
+import { APPEARANCE_COLUMNS, appearanceJoin, appearanceOf } from "./appearance.js";
 
 /**
  * Catalog reads and writes. Every statement is scoped by client_id AND brand_id; ids from
@@ -20,7 +21,7 @@ export function toApi<T extends Row>(row: T): Row {
 
 const VENUE_COLUMNS = "id, name, address_line1, city, region, postal_code, country, timezone, tax_region, created_at, updated_at";
 const EVENT_COLUMNS =
-  "id, venue_id, slug, title, description, status, sales_open_at, sales_close_at, admission_opens_before_minutes, admission_closes_after_minutes, created_at, updated_at";
+  "id, venue_id, slug, title, description, status, sales_open_at, sales_close_at, admission_opens_before_minutes, admission_closes_after_minutes, image_url, created_at, updated_at";
 const SESSION_COLUMNS = "id, event_id, starts_at, ends_at, capacity, reserved_count, sold_count, status, created_at, updated_at";
 const TYPE_COLUMNS =
   "id, event_id, code, name, description, kind, price_cents, min_quantity, max_quantity, max_adults_in_order, counts_as_adult, add_on_scope, grants_session_change, open_date, active, sort_order, created_at, updated_at, stock_per_session";
@@ -89,17 +90,17 @@ export const getEvent = (q: Queryable, s: TenantScope, eventId: string) =>
 
 export function createEvent(q: Queryable, s: TenantScope, e: {
   venueId: string; slug: string; title: string; description?: string | null; salesOpenAt?: string | null; salesCloseAt?: string | null;
-  admissionOpensBeforeMinutes?: number | undefined; admissionClosesAfterMinutes?: number | undefined;
+  admissionOpensBeforeMinutes?: number | undefined; admissionClosesAfterMinutes?: number | undefined; imageUrl?: string | null | undefined;
 }) {
   return mapDbErrors(() =>
     one(
       q,
       `INSERT INTO public.ticketing_events
          (client_id, brand_id, venue_id, slug, title, description, sales_open_at, sales_close_at,
-          admission_opens_before_minutes, admission_closes_after_minutes)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, coalesce($9, 60), coalesce($10, 120)) RETURNING ${EVENT_COLUMNS}`,
+          admission_opens_before_minutes, admission_closes_after_minutes, image_url)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, coalesce($9, 60), coalesce($10, 120), $11) RETURNING ${EVENT_COLUMNS}`,
       [s.clientId, s.brandId, e.venueId, e.slug, e.title, e.description ?? null, e.salesOpenAt ?? null, e.salesCloseAt ?? null,
-        e.admissionOpensBeforeMinutes ?? null, e.admissionClosesAfterMinutes ?? null],
+        e.admissionOpensBeforeMinutes ?? null, e.admissionClosesAfterMinutes ?? null, e.imageUrl ?? null],
       "event_not_found",
     ),
   );
@@ -109,6 +110,7 @@ export function updateEvent(q: Queryable, s: TenantScope, eventId: string, field
   const set = updateSet(fields, {
     title: "title", description: "description", status: "status", salesOpenAt: "sales_open_at", salesCloseAt: "sales_close_at",
     admissionOpensBeforeMinutes: "admission_opens_before_minutes", admissionClosesAfterMinutes: "admission_closes_after_minutes",
+    imageUrl: "image_url",
   }, 4);
   return mapDbErrors(() =>
     one(q, `UPDATE public.ticketing_events SET ${set.sql} WHERE id = $1 AND client_id = $2 AND brand_id = $3 RETURNING ${EVENT_COLUMNS}`,
@@ -259,24 +261,25 @@ export async function loadPublicEvent(q: Queryable, s: TenantScope, eventId: str
   return { id: r.id, status: r.status, salesOpenAt: r.sales_open_at, salesCloseAt: r.sales_close_at, taxRegion: r.tax_region };
 }
 
-/** Brand and venue shown on the hosted shop (Run 08). */
+/** Brand (Run 50: with its look) and venue shown on the hosted shop (Run 08). */
 export async function loadPublicEventPlace(q: Queryable, s: TenantScope, eventId: string) {
-  const { rows } = await q.query<{ brand_name: string; venue_name: string; city: string | null; timezone: string }>(
-    `SELECT br.name AS brand_name, v.name AS venue_name, v.city, v.timezone
+  const { rows } = await q.query(
+    `SELECT br.name AS brand_name, v.name AS venue_name, v.city, v.timezone, ${APPEARANCE_COLUMNS}
      FROM public.ticketing_events e
      JOIN public.ticketing_brands br ON br.id = e.brand_id AND br.client_id = e.client_id
      JOIN public.ticketing_venues v ON v.id = e.venue_id AND v.client_id = e.client_id AND v.brand_id = e.brand_id
+     ${appearanceJoin("e")}
      WHERE e.id = $1 AND e.client_id = $2 AND e.brand_id = $3`,
     [eventId, s.clientId, s.brandId],
   );
   const r = rows[0];
-  return r ? { brand: { name: r.brand_name }, venue: { name: r.venue_name, city: r.city, timezone: r.timezone } } : {};
+  return r ? { brand: { name: r.brand_name, ...appearanceOf(r) }, venue: { name: r.venue_name, city: r.city, timezone: r.timezone } } : {};
 }
 
 export const listPublicEvents = (q: Queryable, s: TenantScope) =>
   many(
     q,
-    `SELECT e.id, e.slug, e.title, e.description, e.sales_open_at, e.sales_close_at,
+    `SELECT e.id, e.slug, e.title, e.description, e.sales_open_at, e.sales_close_at, e.image_url,
             v.name AS venue_name, v.city AS venue_city, v.timezone AS venue_timezone
      FROM public.ticketing_events e
      JOIN public.ticketing_venues v ON v.id = e.venue_id AND v.client_id = e.client_id AND v.brand_id = e.brand_id

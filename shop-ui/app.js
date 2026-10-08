@@ -188,6 +188,30 @@ const route = (() => {
   return null;
 })();
 const base = route && `/v1/public/clients/${route.c}/brands/${route.b}`;
+
+// Run 50: the Brand's colour, logo and the event's photo (checked again here before use).
+const https = (u) => (typeof u === "string" && /^https:\/\/[^\s"'<>\\]+$/.test(u) ? u : null);
+function applyLook(brand) {
+  const hex = /^#[0-9a-f]{6}$/i;
+  if (hex.test(brand?.accentColor ?? "") && hex.test(brand?.onAccentColor ?? "")) {
+    document.documentElement.style.setProperty("--accent", brand.accentColor);
+    document.documentElement.style.setProperty("--accent-ink", brand.onAccentColor);
+  }
+}
+/** The logo, or the Brand's name when the image cannot be shown. */
+function Logo({ src, name }) {
+  const [failed, setFailed] = useState(false);
+  return failed ? name : html`<img class="logo" src=${src} alt=${name} onError=${() => setFailed(true)} />`;
+}
+const hideBroken = (e) => { e.currentTarget.hidden = true; };
+/** The Brand's band: its colour, its logo (or name), the language switch. */
+const Top = ({ brand, extra }) => {
+  const logo = https(brand?.logoUrl);
+  return html`<header class="top"><div class="top-row">
+    <p class="brand">${logo ? html`<${Logo} src=${logo} name=${brand.name} />` : brand?.name ?? ""}${extra ?? ""}</p>
+    ${switcher}
+  </div></header>`;
+};
 const STORE = (holdId) => `alkao.checkout.${holdId}`;
 const SCOPE_TEXT = (t) => (t.addOnScope === "per_order" ? T.perOrder : t.addOnScope === "up_to_admissions" ? T.upToAdmissions : T.perAdmission);
 
@@ -298,6 +322,7 @@ function EventShop({ config }) {
   if (error && !data) return html`<main><div class="alert bad" role="alert">${errText(error)}</div></main>`;
   if (!data) return html`<main><p class="boot">${T.loading}</p></main>`;
   const ev = data.event;
+  applyLook(ev.brand);
   const tz = ev.venue?.timezone;
   const admissions = data.ticketTypes.filter((t) => t.kind === "admission");
   const addOns = data.ticketTypes.filter((t) => t.kind === "add_on");
@@ -349,8 +374,8 @@ function EventShop({ config }) {
   if (notice) {
     const resume = async () => { setBusy(true); try { await checkout({ id: notice.holdId, token: notice.holdToken }, notice.buyer); } catch (e) { setError(e); setNotice(null); setBusy(false); } };
     const drop = async () => { setBusy(true); await release({ id: notice.holdId, token: notice.holdToken }); sessionStorage.removeItem(STORE(notice.holdId)); setNotice(null); setBusy(false); load(); };
-    return html`<main>
-      <p class="brand">${ev.brand?.name ?? ""}</p><h1>${ev.title}</h1>
+    return html`<${Top} brand=${ev.brand} /><main>
+      <h1>${ev.title}</h1>
       <div class="alert" role="status">${T.notFinished}</div>
       ${error && html`<div class="alert bad" role="alert">${errText(error)}</div>`}
       <div class="actions"><button disabled=${busy} onClick=${resume}>${T.resume}</button>
@@ -358,9 +383,9 @@ function EventShop({ config }) {
     </main>`;
   }
 
-  return html`<main>
-    ${switcher}
-    <p class="brand">${ev.brand?.name ?? ""}${DOOR ? html` · <span class="badge">${T.doorSale}</span>` : ""}</p>
+  return html`<${Top} brand=${ev.brand} extra=${DOOR ? html` <span class="badge">${T.doorSale}</span>` : ""} />
+  <main>
+    ${https(ev.imageUrl) && html`<img class="photo" src=${https(ev.imageUrl)} alt="" onError=${hideBroken} />`}
     <h1>${ev.title}</h1>
     ${ev.venue && html`<p class="muted">${ev.venue.name}${ev.venue.city ? `, ${ev.venue.city}` : ""}</p>`}
     ${ev.description && html`<p>${ev.description}</p>`}
@@ -449,12 +474,13 @@ function FindTickets() {
 // ── Brand: published events ─────────────────────────────────────────────────
 function EventList() {
   const [state, setState] = useState(null);
-  useEffect(() => { call(`/events`).then((d) => setState({ events: d.events }), (e) => setState({ error: e })); }, []);
+  useEffect(() => { call(`/events`).then((d) => { applyLook(d.brand); setState({ events: d.events, brand: d.brand }); }, (e) => setState({ error: e })); }, []);
   if (!state) return html`<main><p class="boot">${T.loading}</p></main>`;
   if (state.error) return html`<main><div class="alert bad" role="alert">${errText(state.error)}</div></main>`;
-  return html`<main>${switcher}<h1>${T.shop}</h1>
+  return html`<${Top} brand=${state.brand} /><main><h1>${T.shop}</h1>
     ${state.events.length === 0 ? html`<p class="muted">${T.noEvents}</p>`
-      : html`<ul class="events card">${state.events.map((e) => html`<li><a href=${`/acheter/${route.c}/${route.b}/${e.id}`}>${e.title}</a></li>`)}</ul>`}
+      : html`<ul class="events card">${state.events.map((e) => html`<li><a href=${`/acheter/${route.c}/${route.b}/${e.id}`}>
+          ${https(e.imageUrl) && html`<img class="thumb" src=${https(e.imageUrl)} alt="" onError=${hideBroken} />`}<span>${e.title}</span></a></li>`)}</ul>`}
     <${FindTickets} />
     <footer>${T.footer}</footer></main>`;
 }
@@ -480,4 +506,7 @@ function App() {
   return html`${testMode}${page}`;
 }
 
-render(html`<${App} />`, document.getElementById("app"));
+// The page's static "Chargement…" goes: pages render a band and a main side by side.
+const root = document.getElementById("app");
+root.replaceChildren();
+render(html`<${App} />`, root);

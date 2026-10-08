@@ -127,6 +127,28 @@ describe.each(["light", "dark"] as const)("accessibility (%s)", (scheme) => {
     await tickets.reload(); // only the fragment changed
     await tickets.getByRole("link", { name: "Nouvelle vente à la porte" }).waitFor();
     problems.push(...report("tickets after a door sale", await audit(tickets)));
+
+    // Run 50: in a Brand's colour, and the full-screen view for the gate.
+    await db.pool.query(
+      `INSERT INTO public.ticketing_brand_settings (client_id, brand_id, accent_color, on_accent_color, support_phone)
+       VALUES ($1, $2, '#0f766e', '#ffffff', '+1 514 555-0100')
+       ON CONFLICT (client_id, brand_id) DO UPDATE SET accent_color = EXCLUDED.accent_color, on_accent_color = EXCLUDED.on_accent_color, support_phone = EXCLUDED.support_phone`,
+      [h.clientId, h.brandId],
+    );
+    try {
+      await tickets.goto(url);
+      await tickets.reload();
+      await tickets.getByRole("link", { name: "+1 514 555-0100" }).waitFor();
+      problems.push(...report("tickets in the Brand's colour", await audit(tickets)));
+      await tickets.getByRole("button", { name: "Plein écran pour l'entrée" }).first().click();
+      await tickets.getByRole("dialog").waitFor();
+      problems.push(...report("gate view", await audit(tickets)));
+      await shop.goto(`${origin}/acheter/${h.clientId}/${h.brandId}/${h.eventId}`);
+      await shop.getByRole("heading", { level: 1 }).waitFor();
+      problems.push(...report("shop in the Brand's colour", await audit(shop)));
+    } finally {
+      await db.pool.query(`UPDATE public.ticketing_brand_settings SET accent_color = NULL, on_accent_color = NULL, support_phone = NULL WHERE client_id = $1 AND brand_id = $2`, [h.clientId, h.brandId]);
+    }
     expect(problems).toEqual([]);
   }, 60_000);
 
@@ -155,6 +177,8 @@ describe.each(["light", "dark"] as const)("accessibility (%s)", (scheme) => {
     await visit(`${prefix}/scanner`, () => page.getByRole("heading", { name: "Scanner" }).waitFor(), "scanner");
     await visit(`${prefix}/payments`, () => page.getByRole("heading", { name: "Paiements (Stripe)" }).waitFor(), "payments");
     await visit(`${prefix}/journal`, () => page.getByRole("cell", { name: "Commande payée" }).first().waitFor(), "journal");
+    // Run 50: the Brand's look, with its preview.
+    await visit(`${prefix}/appearance`, () => page.getByRole("region", { name: "Aperçu" }).waitFor(), "appearance");
     // Run 41: the customer file, with one customer in every frequency colour.
     const customerId = await seedCustomers(h.clientId, h.brandId);
     await visit(`${prefix}/customers`, () => page.getByRole("heading", { name: "Par fréquence" }).waitFor(), "customers");

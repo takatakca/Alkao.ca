@@ -156,6 +156,7 @@ const ERRORS_FR = {
   flex_not_purchased: "Cette commande n'a pas l'option de changement de séance.", already_exchanged: "Le changement de séance a déjà été utilisé.",
   ticket_already_used: "Un billet est déjà entré : changement impossible.", session_not_available: "Séance non disponible.",
   payments_not_configured: "Paiements non configurés sur ce déploiement.", credentials_not_configured: "Codes QR non configurés sur ce déploiement.",
+  appearance_low_contrast: "Ces deux couleurs ne sont pas assez lisibles ensemble (contraste minimum 4,5 : 1).",
   invalid_request: "Données invalides.", conflict: "Existe déjà.", invalid_reference: "Référence invalide.",
   order_has_no_valid_ticket: "Cette commande n'a plus de billet valide.", email_resend_limit: "Trop de renvois pour cette commande.",
   use_session_cancellation: "Des billets sont vendus : utilisez « Annuler la séance », qui rembourse les acheteurs.",
@@ -576,6 +577,14 @@ function EventDetail({ api, base, eventId }) {
     } else body = { active: !t.active };
     await api(`${base}/ticket-types/${t.id}`, { method: "PATCH", body }); reloadTypes();
   });
+  // Run 50: the event's photo, at the top of the tickets page, the shop and the tickets e-mail.
+  const setPhoto = act(async () => {
+    const v = prompt("Adresse de la photo de l'événement (https://…, format paysage 16:9 de préférence).\nLaissez vide pour retirer la photo.", event.imageUrl ?? "");
+    if (v === null) return;
+    const url = v.trim();
+    if (url && !httpsUrl(url)) throw new Error("L'adresse de la photo doit commencer par https://.");
+    await api(`${base}/events/${eventId}`, { method: "PATCH", body: { imageUrl: url || null } }); reloadEvent();
+  });
   // Run 28: next week's evening, next year's edition: a draft copy with the same ticket types.
   const duplicate = act(async () => {
     const title = prompt("Titre du nouvel événement", `${event.title} (copie)`);
@@ -591,10 +600,12 @@ function EventDetail({ api, base, eventId }) {
   return html`
     <h1>${event.title} <${Badge} status=${event.status} /></h1>
     ${error && html`<${Failure} error=${error} />`}
+    ${event.imageUrl && html`<img class="event-photo" src=${event.imageUrl} alt="" />`}
     <div class="row card">
       ${event.status !== "published" && html`<button onClick=${setEventStatus("published")}>Publier</button>`}
       ${event.status === "published" && html`<button class="secondary" onClick=${setEventStatus("draft")}>Retirer de la vente publique</button>`}
       <button class="secondary" onClick=${duplicate}>Dupliquer l'événement</button>
+      <button class="secondary" onClick=${setPhoto}>${event.imageUrl ? "Changer la photo" : "Ajouter une photo"}</button>
       <span class="muted">Portes : ${event.admissionOpensBeforeMinutes} min avant · ${event.admissionClosesAfterMinutes} min après</span>
     </div>
 
@@ -803,6 +814,7 @@ const ACTION_FR = {
   "payment.unexpected_completion": "Paiement terminé après expiration", "payment.dispute_opened": "Litige Stripe ouvert",
   "payment.dispute_updated": "Litige Stripe mis à jour", "payment.dispute_closed": "Litige Stripe clos", "payment.outside_refund": "Remboursement fait dans Stripe",
   "payments.account_created": "Compte Stripe créé", "payments.settings_updated": "Réglages de paiement modifiés",
+  "brand.appearance_updated": "Apparence de la marque modifiée",
   "buyer.exported": "Données de l'acheteur exportées", "buyer.anonymized": "Acheteur anonymisé",
   "credentials.key_rotated": "Clé des codes QR remplacée", "credentials.reissued": "Code QR réémis", "scan.manual_admission": "Entrée sans code QR",
   "reports.daily_exported": "Rapport par jour exporté", "reports.attendees_exported": "Liste des participants exportée", "reports.orders_exported": "Commandes exportées",
@@ -1426,12 +1438,116 @@ function CampaignEditor({ api, base, prefix, campaignId }) {
     </form>`}`;
 }
 
+// ── Run 50: the Brand's look on the tickets page, the shop and the buyer e-mails ──
+// The same WCAG contrast as the API (src/domain/appearance.ts), to warn before saving.
+const MIN_CONTRAST = 4.5;
+const HEX = /^#[0-9a-f]{6}$/;
+const lum = (hex) => {
+  const n = parseInt(hex.slice(1), 16);
+  const ch = (v) => { const c = v / 255; return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
+  return 0.2126 * ch((n >> 16) & 255) + 0.7152 * ch((n >> 8) & 255) + 0.0722 * ch(n & 255);
+};
+const contrast = (a, b) => { const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x); return (hi + 0.05) / (lo + 0.05); };
+/** White or black, whichever reads better on the colour. */
+const inkFor = (hex) => (contrast(hex, "#ffffff") >= contrast(hex, "#000000") ? "#ffffff" : "#000000");
+const httpsUrl = (u) => /^https:\/\/[^\s"'<>\\]+$/.test(u ?? "");
+const EMPTY_LOOK = { logoUrl: "", accentColor: "", onAccentColor: "", websiteUrl: "", supportEmail: "", supportPhone: "", addressLine: "" };
+
+function Appearance({ api, base, role }) {
+  const [state, reload] = useLoad(() => api(`${base}/appearance`), [base]);
+  const [f, setF] = useState(null);
+  const [msg, setMsg] = useState(null);
+  const [error, setError] = useState(null);
+  const [logoBroken, setLogoBroken] = useState(false);
+  const canEdit = ["owner", "admin", "manager", "editor"].includes(role);
+  if (state.loading && !state.data) return html`<h1>Apparence</h1><${Loading} />`;
+  if (state.error) return html`<h1>Apparence</h1><${Failure} error=${state.error} />`;
+  const saved = state.data.appearance;
+  const brandName = saved.brandName ?? "Votre marque";
+  const look = f ?? Object.fromEntries(Object.keys(EMPTY_LOOK).map((k) => [k, saved[k] ?? ""]));
+  const set = (patch) => { setMsg(null); setF({ ...look, ...patch }); };
+  const coloured = HEX.test(look.accentColor);
+  const ratio = coloured && HEX.test(look.onAccentColor) ? contrast(look.accentColor, look.onAccentColor) : null;
+  const readable = ratio === null || ratio >= MIN_CONTRAST;
+  const accent = coloured ? look.accentColor : "#1c1917";
+  const onAccent = coloured && HEX.test(look.onAccentColor) ? look.onAccentColor : "#ffffff";
+  const logo = httpsUrl(look.logoUrl) && !logoBroken ? look.logoUrl : null;
+  const save = async (e) => {
+    e.preventDefault(); setError(null); setMsg(null);
+    const v = (s) => (String(s ?? "").trim() === "" ? null : String(s).trim());
+    try {
+      await api(`${base}/appearance`, { method: "PUT", body: {
+        logoUrl: v(look.logoUrl), accentColor: coloured ? look.accentColor : null, onAccentColor: coloured ? onAccent : null,
+        websiteUrl: v(look.websiteUrl), supportEmail: v(look.supportEmail), supportPhone: v(look.supportPhone), addressLine: v(look.addressLine),
+      } });
+      await reload(); setF(null); setMsg("Enregistré. Les pages de billets, la billetterie et les prochains courriels utilisent cette apparence.");
+    } catch (err) { setError(err); }
+  };
+  const field = (key, label, attrs = {}) => html`<label>${label}<input ...${attrs} disabled=${!canEdit} value=${look[key]}
+    onInput=${(e) => { if (key === "logoUrl") setLogoBroken(false); set({ [key]: e.target.value }); }} /></label>`;
+
+  return html`<h1>Apparence</h1>
+    <p class="muted">Le logo, la couleur et les coordonnées de ${brandName} sur la page des billets, la billetterie en ligne et chaque courriel aux acheteurs (billets, rappels, remboursements). Sans réglage, ALKAO garde un style neutre.</p>
+    <div class="look-grid">
+      <form class="card" aria-label="Apparence de la marque" onSubmit=${save}>
+        <h3>Logo</h3>
+        ${field("logoUrl", "Adresse de l'image du logo (https://…, PNG ou SVG à fond transparent)", { type: "url", maxlength: 500, placeholder: "https://…/logo.png" })}
+        <p class="muted">Le logo s'affiche sur la couleur principale, comme dans l'aperçu : prenez la version qui s'y lit bien (souvent la version blanche).</p>
+        ${look.logoUrl && !httpsUrl(look.logoUrl) && html`<p class="alert warn">L'adresse doit commencer par https://.</p>`}
+        ${logoBroken && html`<p class="alert warn">Cette image ne s'affiche pas. Vérifiez l'adresse.</p>`}
+
+        <h3>Couleur</h3>
+        <label class="check"><input type="checkbox" disabled=${!canEdit} checked=${coloured}
+          onChange=${(e) => set(e.target.checked ? { accentColor: "#0f766e", onAccentColor: inkFor("#0f766e") } : { accentColor: "", onAccentColor: "" })} />
+          Utiliser la couleur de la marque</label>
+        ${coloured && html`<div class="fields">
+          <label>Couleur principale (bandeau, boutons)<span class="swatch-row"><input type="color" disabled=${!canEdit} value=${look.accentColor}
+            onInput=${(e) => set({ accentColor: e.target.value, onAccentColor: inkFor(e.target.value) })} /><code>${look.accentColor}</code></span></label>
+          <label>Texte sur cette couleur<span class="swatch-row"><input type="color" disabled=${!canEdit} value=${onAccent}
+            onInput=${(e) => set({ onAccentColor: e.target.value })} /><code>${onAccent}</code></span></label>
+          <button type="button" class="secondary" disabled=${!canEdit} onClick=${() => set({ onAccentColor: inkFor(look.accentColor) })}>Texte blanc ou noir, au plus lisible</button>
+        </div>
+        ${ratio !== null && html`<p>${readable
+          ? html`<span class="badge ok">Lisible</span> <span class="muted">Contraste ${ratio.toFixed(1).replace(".", ",")} : 1 (minimum ${String(MIN_CONTRAST).replace(".", ",")}).</span>`
+          : html`<span class="badge bad">Trop peu lisible</span> <span class="muted">Contraste ${ratio.toFixed(1).replace(".", ",")} : 1 ; il faut au moins ${String(MIN_CONTRAST).replace(".", ",")}. Choisissez un texte plus clair ou plus foncé.</span>`}</p>`}`}
+
+        <h3>Coordonnées</h3>
+        <p class="muted">Affichées au bas de la page des billets et des courriels, pour que l'acheteur sache qui joindre.</p>
+        <div class="stack">
+          ${field("websiteUrl", "Site web (https://…)", { type: "url", maxlength: 500, placeholder: "https://" })}
+          ${field("supportEmail", "Courriel pour les acheteurs", { type: "email", maxlength: 254 })}
+          ${field("supportPhone", "Téléphone", { type: "tel", maxlength: 40 })}
+          ${field("addressLine", "Adresse", { maxlength: 200 })}
+        </div>
+        ${canEdit && html`<div class="row"><button type="submit" disabled=${!readable}>Enregistrer</button>
+          ${f && html`<button type="button" class="secondary" onClick=${() => { setF(null); setMsg(null); }}>Annuler les changements</button>`}</div>`}
+        ${msg && html`<p class="muted" role="status">${msg}</p>`}${error && html`<${Failure} error=${error} />`}
+      </form>
+
+      <section class="card look-preview" aria-label="Aperçu" style=${{ "--look-accent": accent, "--look-ink": onAccent }}>
+        <h3>Aperçu</h3>
+        <div class="look-phone">
+          <div class="look-band">${logo ? html`<img src=${logo} alt=${brandName} onError=${() => setLogoBroken(true)} />` : html`<strong>${brandName}</strong>`}<span>EN</span></div>
+          <div class="look-body">
+            <p class="look-title">Votre événement</p>
+            <div class="look-ticket"><div class="look-ticket-band"><strong>Admission générale</strong><span>Billet 1 sur 2</span></div>
+              <div class="look-qr" aria-hidden="true"></div></div>
+            <span class="look-button">Plein écran pour l'entrée</span>
+            ${(look.websiteUrl || look.supportEmail || look.supportPhone || look.addressLine) && html`<p class="look-contact">
+              ${[String(look.websiteUrl).replace(/^https:\/\//, "").replace(/\/$/, ""), look.supportEmail, look.supportPhone, look.addressLine].filter((x) => String(x).trim()).join(" · ")}</p>`}
+          </div>
+        </div>
+        ${saved.updatedAt && html`<p class="muted">Dernière modification : ${when(saved.updatedAt)}</p>`}
+      </section>
+    </div>`;
+}
+
 function Brand() {
   return html`<div class="brand"><span class="mark" aria-hidden="true">A</span>
     <span><span class="name">ALKAO</span><span class="sub">Billetterie · TAKATAK</span></span></div>`;
 }
 
-const TABS = [["dashboard", "Tableau de bord"], ["events", "Événements"], ["venues", "Lieux"], ["orders", "Commandes"], ["scanner", "Scanner"], ["payments", "Paiements"]];
+const TABS = [["dashboard", "Tableau de bord"], ["events", "Événements"], ["venues", "Lieux"], ["orders", "Commandes"], ["scanner", "Scanner"], ["payments", "Paiements"], ["appearance", "Apparence"]];
 // Run 30: the journal needs audit.read (owner, admin).
 const JOURNAL_ROLES = ["owner", "admin"];
 
@@ -1463,6 +1579,7 @@ function Shell({ api, route, email, me, testMode, onLogout }) {
     : page === "journal" ? html`<${Journal} api=${api} base=${base} prefix=${prefix} me=${me} />`
     : page === "scanner" ? html`<${Scanner} api=${api} base=${base} />`
     : page === "payments" ? html`<${Payments} api=${api} base=${base} />`
+    : page === "appearance" ? html`<${Appearance} api=${api} base=${base} role=${status.data?.role} />`
     : page === "customers" ? html`<${Customers} api=${api} base=${base} prefix=${prefix} role=${status.data?.role} />`
     : page === "customer" ? html`<${CustomerDetail} api=${api} base=${base} customerId=${route.id} role=${status.data?.role} />`
     : page === "campaigns" ? html`<${Campaigns} api=${api} base=${base} prefix=${prefix} />`

@@ -158,3 +158,25 @@ dl.facts dd { margin: 0; overflow-wrap: anywhere; }
 .stack textarea { resize: vertical; min-height: 10rem; line-height: 1.5; }
 form.card fieldset { border: 1px solid var(--line); border-radius: 8px; padding: .5rem .75rem; margin: 0 0 .75rem; }
 form.card fieldset legend { font-size: 12px; font-weight: 500; color: var(--muted); padding: 0 .25rem; }
+/* Run 50: the Brand's appearance, with a phone-sized preview of the tickets page. */
+.look-grid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 1rem; align-items: start; }
+@media (max-width: 900px) { .look-grid { grid-template-columns: minmax(0, 1fr); } }
+.look-grid h3 { margin: 1rem 0 .5rem; }
+.look-grid h3:first-child { margin-top: 0; }
+.look-grid .stack input { width: 100%; }
+.swatch-row { display: flex; align-items: center; gap: .5rem; }
+.swatch-row input[type="color"] { width: 3rem; height: 2.4rem; padding: .15rem; cursor: pointer; }
+.look-preview { position: sticky; top: 1rem; }
+.look-phone { max-width: 320px; margin: 0 auto; border: 1px solid var(--line); border-radius: 22px; overflow: hidden; background: #f5f5f4; color: #1c1917; }
+.look-band { display: flex; align-items: center; justify-content: space-between; gap: .5rem; min-height: 52px; padding: .5rem .9rem; background: var(--look-accent); color: var(--look-ink); }
+.look-band img { display: block; max-height: 34px; max-width: 65%; }
+.look-band span { font-size: 12px; opacity: .9; text-decoration: underline; }
+.look-body { padding: .9rem; display: grid; gap: .7rem; }
+.look-title { margin: 0; font-weight: 800; font-size: 1.1rem; }
+.look-ticket { background: #fff; border: 1px solid #e7e5e4; border-radius: 14px; overflow: hidden; }
+.look-ticket-band { display: flex; justify-content: space-between; gap: .5rem; padding: .5rem .75rem; font-size: 13px; background: var(--look-accent); color: var(--look-ink); }
+.look-qr { width: 110px; height: 110px; margin: .75rem auto; border-radius: 6px;
+  background: repeating-conic-gradient(#111 0 25%, #fff 0 50%) 0 0 / 22px 22px; }
+.look-button { display: block; text-align: center; padding: .6rem; border-radius: 10px; font-weight: 600; font-size: 14px; background: var(--look-accent); color: var(--look-ink); }
+.look-contact { margin: 0; font-size: 12px; color: #57534e; text-align: center; overflow-wrap: anywhere; }
+.event-photo { display: block; width: 100%; max-width: 560px; aspect-ratio: 16 / 9; object-fit: cover; border-radius: var(--radius); margin: 0 0 1rem; background: var(--soft); }

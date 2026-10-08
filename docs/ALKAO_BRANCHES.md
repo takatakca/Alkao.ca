@@ -11,6 +11,7 @@ propre à une entreprise**.
 |---|---|
 | L'entreprise elle-même | Un **Client** TAKATAK, avec ses droits (entitlement) |
 | Une marque ou un site de vente | Une **Brand** du Client |
+| Son logo, sa couleur, ses coordonnées, la photo de chaque événement | `/ops` → Apparence, et la page de l'événement (la billetterie, les billets et les courriels les prennent) |
 | Ses événements, séances, billets, ajouts, prix, stocks, codes promo | `/ops` de la Brand |
 | Son site autorisé à revenir de Stripe | `/ops` → Paiements → « Sites autorisés après le paiement » |
 | Ses paiements | Son compte Stripe Connect, branché depuis `/ops` |
@@ -25,7 +26,7 @@ Le site de vente d'une entreprise (sa vitrine) est un autre dépôt : il part de
 |---|---|
 | `main` | Le moteur stable. Protégé : une PR et le contrôle `qa` vert sont obligatoires. Chaque commit construit la version MochaHost. |
 | Travail | Une branche par sujet, une PR vers `main`, tests verts avant toute fusion. |
-| Versions | Étiquettes `vMAJEUR.MINEUR.CORRECTIF` sur `main` (`v1.0.0` : le moteur tel qu'il sert Havana à l'automne 2026). Une instance séparée d'ALKAO se déploie depuis une étiquette, jamais depuis une branche de travail. |
+| Versions | Une branche par version majeure : `release/1.x` part du moteur tel qu'il sert Havana à l'automne 2026. Elle ne reçoit que des corrections, apportées par PR depuis `main`. Une instance séparée d'ALKAO se déploie depuis une branche `release/…`, jamais depuis une branche de travail. |
 | Contrats | L'API (`docs/ALKAO_API_V1.md`) et le contrat de contrôle (`docs/ALKAO_CONTROL_CONTRACT_V1.md`) ne cassent jamais dans une même version majeure. Un ajout est un nouveau champ optionnel. |
 
 ## Ce qu'il ne faut jamais faire

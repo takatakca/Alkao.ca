@@ -7,6 +7,7 @@
   :root { --bg: #0f0f0e; --panel: #1c1b1a; --ink: #f0efed; --muted: #a8a29e; --line: #2e2c2a; --accent: #f0efed; --accent-ink: #0f0f0e; --ok-bg: #0f2c1c; --bad-bg: #3a1513; --warn-bg: #3a2c0c; --ok: #6fdc9b; --bad: #ff8b7e; --warn: #f3c969; }
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 body { margin: 0; }
 main { max-width: 640px; margin: 0 auto; padding: 1rem 16px 4rem; }
 .boot { padding: 2rem 16px; color: var(--muted); }
@@ -51,3 +52,13 @@ button.link { background: none; color: var(--muted); padding: .25rem 0; text-dec
 .testmode p { margin: 0; padding: .55rem 1rem; text-align: center; font-weight: 600; background: var(--warn-bg, #fff4dc); color: var(--warn, #8a5a00); }
 /* Run 35: door-sale mode. */
 .badge { display: inline-block; padding: .1rem .55rem; border-radius: 999px; font-size: .8rem; font-weight: 600; background: var(--warn-bg); color: var(--warn); }
+/* Run 50: the Brand's logo, the event's photo (list and page). */
+.top { background: var(--accent); color: var(--accent-ink); }
+.top-row { max-width: 640px; margin: 0 auto; padding: .7rem 16px; display: flex; align-items: center; justify-content: space-between; gap: 1rem; min-height: 60px; }
+.top .brand { margin: 0; color: inherit; font-weight: 800; font-size: 1.05rem; display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+.top .logo { display: block; max-height: 40px; max-width: 60vw; width: auto; height: auto; }
+.top button.link { color: inherit; opacity: .9; }
+.photo { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: var(--radius); margin: .5rem 0 .75rem; background: var(--line); }
+.events li a { display: flex; align-items: center; gap: .75rem; }
+.events .thumb { width: 72px; height: 48px; object-fit: cover; border-radius: 8px; flex: none; }
+.card.find { margin-top: 2rem; }

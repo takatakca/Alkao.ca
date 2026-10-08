@@ -47,7 +47,8 @@ export function mountOpsUi(app: Hono<any>, cfg: OpsUiConfig): void {
       "default-src 'none'",
       "script-src 'self'",
       "style-src 'self'",
-      "img-src 'self' data:",
+      // Run 50: the Brand's logo and event photos (https) in the Appearance preview.
+      "img-src 'self' data: https:",
       `connect-src ${connect}`,
       "media-src 'self' blob:",
       `frame-ancestors ${cfg.frameAncestors.length ? cfg.frameAncestors.join(" ") : "'none'"}`,

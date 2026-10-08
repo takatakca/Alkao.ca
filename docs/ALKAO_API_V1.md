@@ -23,8 +23,8 @@ while Ticketing is off, and that a refused hold request writes nothing.
 
 | Method | Path | Body | Result |
 |---|---|---|---|
-| GET | `/events` | — | Published events of the Brand |
-| GET | `/events/:eventId` | — | Event, active ticket types and their rules, on-sale future sessions with `available` |
+| GET | `/events` | — | Published events of the Brand, each with `imageUrl`, and the Brand's look `brand` (Run 50) |
+| GET | `/events/:eventId` | — | Event, active ticket types and their rules, on-sale future sessions with `available`; `imageUrl` and the Brand's look in `brand` (Run 50) |
 | POST | `/events/:eventId/quote` | `{ items: [{ ticketTypeId, quantity }] }` | Server-priced quote (lines, GST/QST, total) or `422 cart_invalid` listing every violation |
 | POST | `/holds` | `{ sessionId, items }` | `201 { hold: { id, token, expiresAt, sessionId, quote } }`. The token is shown once and only its hash is stored. Errors: `409 sold_out`, `409 session_not_available`, `422 cart_invalid`, `429 rate_limited` |
 | GET | `/holds/:holdId` | header `X-Alkao-Hold-Token` | Hold status (`active`/`expired`/`released`/`converted`) and items |
@@ -993,6 +993,44 @@ visitors. The same address asking again within 10 minutes gets no second e-mail.
 at checkout.
 
 The table `ticketing_newsletter_signups` is server-only: RLS on, no grant, no policy.
+
+### A Brand's look: logo, colour, contact and event photo (Run 50)
+
+Every business sells in its own look, with no code: the tickets page, the hosted shop and every
+buyer e-mail (tickets, reminder, refund, session change, cancellation, campaigns, newsletter)
+take the Brand's logo and colour. Without settings they keep ALKAO's neutral look.
+
+| Method | Path | Who | Result |
+|---|---|---|---|
+| GET | `/v1/admin/…/appearance` | `catalog.read` | `{ appearance: { logoUrl, accentColor, onAccentColor, websiteUrl, supportEmail, supportPhone, addressLine, updatedAt, brandName } }`, all `null` until set |
+| PUT | `/v1/admin/…/appearance` | `catalog.write` | The same fields (omitted = `null`). Journal: `brand.appearance_updated` |
+| PATCH | `/v1/admin/…/events/:eventId` | `catalog.write` | `imageUrl`: the event's photo (`null` removes it); also accepted on `POST /events` |
+
+**Rules, checked by the API and again by the database:**
+
+- `logoUrl`, `websiteUrl` and `imageUrl` are `https://` addresses of at most 500 characters,
+  without spaces, quotes or `<>`.
+- `accentColor` and `onAccentColor` are `#rrggbb` (stored in lower case) and come together.
+  Together they must reach a contrast of 4.5 to 1 (WCAG AA): otherwise
+  `422 appearance_low_contrast` with `details: { ratio, minimum }`.
+- `supportEmail` is an e-mail address; `supportPhone` digits, spaces and `+ ( ) . -`;
+  `addressLine` at most 200 characters, without `<>`.
+
+**Where it shows:**
+
+- The public event (`GET /events/:eventId`) has `imageUrl` and `brand: { name, …appearance }`;
+  `GET /events` has each event's `imageUrl` and the Brand's `brand`.
+- The buyer's order (`GET /orders/:orderId`) has `brand: { name, …appearance }` and
+  `event.imageUrl`.
+- E-mails: the logo (or the name) on the colour band, the event's photo on the tickets and
+  reminder e-mails, buttons in the colour, the website, e-mail, phone and address at the
+  bottom. Campaigns and the newsletter use the logo and colour; their footer already carries
+  the sender's address (Run 42).
+- The pages and e-mails check every value again before using it; an image that does not load
+  falls back to the Brand's name, or disappears.
+
+Logos and photos are hosted by the Brand (its website, a CDN). The pages allow `https:` images
+(`img-src 'self' data: https:`); nothing else is loaded from outside.
 
 ### Role → permission
 
