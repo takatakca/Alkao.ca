@@ -13,6 +13,8 @@ const FILES: Record<string, { path: string; type: string }> = {
   "styles.css": { path: join(UI_DIR, "styles.css"), type: "text/css; charset=utf-8" },
   "i18n.js": { path: join(UI_DIR, "i18n.js"), type: JS },
   "calendar.js": { path: join(UI_DIR, "calendar.js"), type: JS },
+  // Run 51: the page opens without a network (static files only).
+  "sw.js": { path: join(UI_DIR, "sw.js"), type: JS },
   "vendor/htm-preact.js": { path: join(dirname(require.resolve("htm")), "..", "preact", "standalone.mjs"), type: JS },
   "vendor/qrcode.mjs": { path: join(dirname(require.resolve("qrcode-generator")), "qrcode.mjs"), type: JS },
 };
@@ -50,6 +52,8 @@ export function mountBuyerUi(app: Hono<any>): void {
   };
   app.get("/billets", (c) => c.body(read(join(UI_DIR, "index.html")), 200, HEADERS("text/html; charset=utf-8")));
   for (const [name, file] of Object.entries(FILES)) {
-    app.get(`/billets/${name}`, (c) => c.body(read(file.path), 200, HEADERS(file.type)));
+    // The service worker serves "/billets" itself, one level above its own folder.
+    const extra: Record<string, string> = name === "sw.js" ? { "service-worker-allowed": "/billets" } : {};
+    app.get(`/billets/${name}`, (c) => c.body(read(file.path), 200, { ...HEADERS(file.type), ...extra }));
   }
 }

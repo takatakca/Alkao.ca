@@ -89,3 +89,6 @@ a.button { display: inline-block; padding: .65rem 1rem; border-radius: 10px; bac
   .card, .ticket { break-inside: avoid; }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+/* Run 51: the tickets are kept on this device. */
+.kept { margin: -.4rem 0 .9rem; color: var(--ok); font-size: .9rem; }
+.kept::before { content: "✓ "; font-weight: 700; }

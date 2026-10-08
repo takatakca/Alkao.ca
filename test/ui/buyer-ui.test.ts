@@ -227,6 +227,51 @@ describe("buyer tickets page", () => {
     await page.locator("img.photo").waitFor({ state: "hidden" });
   });
 
+  it("opens the tickets without a network once they were seen on this device (Run 51)", async () => {
+    const sw = await fetch(`${origin}/billets/sw.js`);
+    expect(sw.headers.get("service-worker-allowed")).toBe("/billets");
+    expect(sw.headers.get("content-type")).toContain("javascript");
+
+    const f = seed.festi;
+    const o = await buy(f, { GENERAL: 2 });
+    // Its own server, stopped halfway: the phone then has no network at all.
+    const own = await new Promise<ServerType>((resolve) => {
+      const s = serve({ fetch: app.fetch, port: 0, hostname: "127.0.0.1" }, () => resolve(s));
+    });
+    const ownOrigin = `http://127.0.0.1:${(own.address() as AddressInfo).port}`;
+    const at = (k: string) => `${ownOrigin}/billets#${new URLSearchParams({ c: f.clientId, b: f.brandId, o: o.orderId, k })}`;
+    const context = await browser.newContext({ locale: "fr-CA" });
+    const page = await context.newPage();
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    await page.goto(at(o.token));
+    await page.getByText("Billets enregistrés sur cet appareil", { exact: false }).waitFor();
+    await page.waitForFunction(() => Boolean((globalThis as any).navigator.serviceWorker.controller));
+
+    await new Promise((r) => { own.close(r); (own as unknown as { closeAllConnections?: () => void }).closeAllConnections?.(); });
+    await page.reload();
+    await page.getByText("Hors ligne : voici vos billets", { exact: false }).waitFor();
+    expect(await page.getByRole("img", { name: /^Code QR du billet / }).count()).toBe(2);
+    await page.getByRole("button", { name: "Plein écran pour l'entrée" }).first().click();
+    await page.getByRole("dialog", { name: "Billet 1 sur 2" }).waitFor();
+
+    // Another link to the same order shows nothing kept on this device.
+    const other = await context.newPage();
+    other.on("pageerror", (e) => pageErrors.push(e.message));
+    await other.goto(at("x".repeat(43)));
+    await other.getByRole("alert").getByText("Pas de réseau", { exact: false }).waitFor();
+    expect(await other.getByRole("img", { name: /^Code QR du billet / }).count()).toBe(0);
+    await context.close();
+  });
+
+  it("keeps nothing on a door-sale device (Run 51)", async () => {
+    const f = seed.festi;
+    const o = await buy(f, { GENERAL: 1 });
+    const page = await open(`${linkFor(f, o)}&porte=1`);
+    await page.getByRole("img", { name: /^Code QR du billet / }).waitFor();
+    expect(await page.getByText("Billets enregistrés sur cet appareil", { exact: false }).count()).toBe(0);
+    expect(await page.evaluate(() => Object.keys((globalThis as any).localStorage).filter((k) => k.startsWith("alkao.billets.")))).toEqual([]);
+  });
+
   it("ran without script errors", () => {
     expect(pageErrors).toEqual([]);
   });
