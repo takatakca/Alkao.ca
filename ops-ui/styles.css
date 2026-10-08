@@ -1,19 +1,20 @@
-/* Run 40: the TAKATAK dashboard's look. A dark 260 px sidebar (#1f2125), a #f4f5f7 page,
-   white cards with slate borders, indigo primary buttons and TAKATAK's orange brand tile.
-   Inside the TAKATAK dashboard (embedded), its own sidebar is enough: tabs sit in a white bar. */
+/* Run 40 layout (a 260 px sidebar, white cards; inside the TAKATAK dashboard, tabs in a white
+   bar) in the GROUPE TAKATAK brand (BRAND.md): deep navy sidebar, brand blue buttons on light,
+   electric-blue mark. Green, red and amber are for status only. */
 :root {
-  --bg: #f4f5f7; --panel: #fff; --ink: #1d1d1f; --muted: #475569; --line: #e2e8f0; --soft: #f8fafc;
-  --brand: #4f46e5; --brand-hover: #4338ca; --brand-ink: #fff;
-  --side: #1f2125; --side-ink: #fff; --side-muted: rgba(255, 255, 255, .7); --side-faint: rgba(255, 255, 255, .55); --side-hover: rgba(255, 255, 255, .1);
-  --tile-from: #fb923c; --tile-to: #ea580c;
+  --bg: #f4f6fa; --panel: #fff; --ink: #0b1b3d; --muted: #475569; --line: #e2e8f0; --soft: #f5f8fc;
+  --brand: #1565d8; --brand-hover: #0f4fb0; --brand-ink: #fff;
+  --side: #060d1f; --side-ink: #f5f8fc; --side-muted: #b8c4d3; --side-faint: rgba(184, 196, 211, .75); --side-hover: rgba(31, 139, 255, .14);
+  --tile-from: #29c3ff; --tile-to: #1f8bff;
   --ok: #047857; --ok-bg: #ecfdf5; --bad: #be123c; --bad-bg: #fff1f2; --warn: #92400e; --warn-bg: #fffbeb;
-  --radius: 12px; --shadow: 0 1px 3px rgba(15, 23, 42, .06);
+  --radius: 12px; --shadow: 0 1px 3px rgba(6, 13, 31, .08);
   font-family: Geist, Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: var(--ink); background: var(--bg);
 }
 @media (prefers-color-scheme: dark) {
-  /* Run 17: foregrounds stay at WCAG AA contrast on dark backgrounds. */
-  :root { --bg: #121316; --panel: #1f2125; --ink: #e8eaed; --muted: #9aa1a9; --line: #30343a; --soft: #26292e;
-    --brand: #a5b4fc; --brand-hover: #c7d2fe; --brand-ink: #111827; --side: #18191c;
+  /* Run 17: foregrounds stay at WCAG AA contrast on dark backgrounds. Navy ground, midnight
+     panels, silver secondary text, cyan for actions (BRAND.md). */
+  :root { --bg: #060d1f; --panel: #0b1b3d; --ink: #f5f8fc; --muted: #b8c4d3; --line: #1d3263; --soft: #112552;
+    --brand: #29c3ff; --brand-hover: #7dd8ff; --brand-ink: #060d1f; --side: #040915;
     --ok: #6ee7b7; --ok-bg: #0f2c22; --bad: #fda4af; --bad-bg: #3b1219; --warn: #fcd34d; --warn-bg: #3a2c0c; }
 }
 * { box-sizing: border-box; }

@@ -5,14 +5,17 @@ Client that leaves the full GROUPE TAKATAK package. Step 2 embeds the same app i
 TAKATAK V1 dashboard (menu "ALKAO — Billetterie"), with no second login. See
 [Embedding in the TAKATAK dashboard](#embedding-in-the-takatak-dashboard).
 
-## Look (Run 40)
+## Look (Run 40, in the GROUPE TAKATAK brand)
 
-`/ops` follows the TAKATAK dashboard's look, so staff see one product:
+`/ops` follows the TAKATAK dashboard's layout and the GROUPE TAKATAK brand (`BRAND.md`), so
+staff see one product:
 
-- **Standalone:** a dark 260 px sidebar (`#1f2125`) with the orange brand tile and the
-  "Billetterie" links, a light grey page (`#f4f5f7`), white cards with slate borders and
-  indigo primary buttons. On a phone, the sidebar becomes a dark top bar with scrolling
-  links.
+- **Standalone:** a deep navy 260 px sidebar (`#060D1F`) with the electric-blue brand tile
+  and the "Billetterie" links, a light page (`#F4F6FA`), white cards with slate borders and
+  brand blue primary buttons (`#1565D8`, white text). On a phone, the sidebar becomes a navy
+  top bar with scrolling links.
+- **Dark mode:** navy ground, midnight panels (`#0B1B3D`), silver secondary text, cyan
+  actions (`#29C3FF`). Green, red and amber are for status only.
 - **Inside the TAKATAK dashboard,** which already has its own sidebar, the links sit in the
   white top bar instead.
 - **Light and dark** both keep WCAG AA contrast (axe audit in `test/a11y`). Roles show in
