@@ -6,6 +6,8 @@ import { deliverSignupConfirmations } from "./newsletter.js";
 import { queueReminders } from "./reminders.js";
 import { refundEmail, reminderEmail, sessionCancelledEmail, ticketsEmail } from "./templates.js";
 import { APPEARANCE_COLUMNS, appearanceJoin, appearanceOf, type LookRow } from "../db/appearance.js";
+import { CredentialsService } from "../scanner/service.js";
+import { emailCodes } from "./codes.js";
 
 export interface DeliveryConfig {
   sender: EmailSender;
@@ -66,6 +68,7 @@ export async function deliverTicketEmails(db: Db, cfg: DeliveryConfig, now = new
   const result: DeliveryResult = { sent: 0, skipped: 0, retried: 0, failed: 0 };
   const maxAgeMs = (cfg.maxAgeHours ?? 72) * 3600_000;
   const maxAttempts = cfg.maxAttempts ?? 8;
+  const credentials = new CredentialsService({ db, masterSecret: cfg.credentialMasterSecret || null, now: () => now });
   for (let i = 0; i < limit; i++) {
     const outcome = await withTransaction(db, async (tx) => {
       const { rows } = await tx.query<DueRow>(
@@ -147,15 +150,20 @@ export async function deliverTicketEmails(db: Db, cfg: DeliveryConfig, now = new
         }));
       }
       if (!["paid", "partially_refunded"].includes(row.order_status) || row.valid_tickets === 0) return skip("no_valid_ticket");
+      // Run 52: the tickets' QR codes inside the e-mail, readable at the gate without a network.
+      const inline = await emailCodes(tx, credentials, { clientId: row.client_id, brandId: row.brand_id }, row.order_id);
       if (row.kind === "reminder") {
         // Run 23: too late once the session has started, pointless if it was cancelled.
         if (row.session_status === "cancelled") return skip("session_cancelled");
         if (row.starts_at.getTime() <= now.getTime()) return skip("session_started");
-        return send(reminderEmail({
-          language: row.language, brandName: row.brand_name, look, buyerName: row.full_name, reference: row.reference, eventTitle: row.event_title,
-          startsAt: row.starts_at, venueName: row.venue_name, city: row.city, timezone: row.timezone, validTickets: row.valid_tickets,
-          link: await personalLink(),
-        }));
+        return send({
+          ...reminderEmail({
+            language: row.language, brandName: row.brand_name, look, buyerName: row.full_name, reference: row.reference, eventTitle: row.event_title,
+            startsAt: row.starts_at, venueName: row.venue_name, city: row.city, timezone: row.timezone, validTickets: row.valid_tickets,
+            link: await personalLink(), codes: inline?.codes,
+          }),
+          attachments: inline?.attachments,
+        });
       }
       const link = await personalLink();
       const content = ticketsEmail({
@@ -172,8 +180,9 @@ export async function deliverTicketEmails(db: Db, cfg: DeliveryConfig, now = new
         timezone: row.timezone,
         validTickets: row.valid_tickets,
         link,
+        codes: inline?.codes,
       });
-      return send(content);
+      return send({ ...content, attachments: inline?.attachments });
     });
     if (!outcome) break;
     result[outcome]++;

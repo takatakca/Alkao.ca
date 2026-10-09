@@ -994,6 +994,19 @@ at checkout.
 
 The table `ticketing_newsletter_signups` is server-only: RLS on, no grant, no policy.
 
+### QR codes inside the e-mails (Run 52)
+
+The tickets e-mail, the new-tickets e-mail after a session change, and the reminder the day
+before carry each valid ticket's QR code as an inline image (`cid:`), with its ticket type and
+short code. A buyer who never opened the tickets page can show the e-mail at the gate, and
+e-mail apps keep messages readable offline.
+
+- Same codes as the tickets page (the ticket's active credential); a voided ticket is left out.
+- Up to 10 tickets; above that, the e-mail keeps the link only, so it stays small.
+- No code when credentials are not configured.
+- The scanner still decides: a ticket refunded or reissued after the e-mail is refused.
+- Resend receives them as attachments with a `content_id` (GIF, about 3 KB each).
+
 ### Tickets without a network (Run 51)
 
 A campground's signal is often weak at the gate. Once the buyer has opened their tickets page

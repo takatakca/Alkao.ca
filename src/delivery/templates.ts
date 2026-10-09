@@ -1,3 +1,4 @@
+import type { EmailCode } from "./codes.js";
 import type { EmailMessage } from "./email.js";
 
 /**
@@ -93,6 +94,8 @@ export interface TicketsEmailData {
   timezone: string;
   validTickets: number;
   link: string;
+  /** Run 52: the QR codes shown in the e-mail itself (inline images), when there are few enough. */
+  codes?: EmailCode[] | null;
 }
 
 const TICKETS = {
@@ -108,6 +111,10 @@ const TICKETS = {
     linkLine: "Vos billets et codes QR : ",
     show: "Afficher mes billets",
     advice: "Présentez le code QR de chaque billet à l'entrée. Ce lien est personnel : ne le partagez pas.",
+    codesTitle: "Vos codes QR",
+    codesNote: "Montrez-les à l'entrée, même sans réseau. Si votre commande change, la page de vos billets reste la référence.",
+    codesText: "Vos codes QR sont aussi dans ce courriel (version avec images).",
+    qrAlt: (code: string) => `Code QR du billet ${code}`,
   },
   en: {
     title: (changed: boolean) => (changed ? "Your new tickets" : "Your tickets"),
@@ -121,8 +128,28 @@ const TICKETS = {
     linkLine: "Your tickets and QR codes: ",
     show: "Show my tickets",
     advice: "Show each ticket's QR code at the entrance. This link is personal: do not share it.",
+    codesTitle: "Your QR codes",
+    codesNote: "Show them at the entrance, even without a network. If your order changes, your tickets page is always up to date.",
+    codesText: "Your QR codes are also in this e-mail (version with images).",
+    qrAlt: (code: string) => `QR code of ticket ${code}`,
   },
 };
+
+/** Run 52: each ticket's QR code as an inline image, dark on white whatever the e-mail app's theme. */
+function codeRows(t: { codesTitle: string; codesNote: string; qrAlt: (code: string) => string }, codes: EmailCode[] | null | undefined): string[] {
+  if (!codes?.length) return [];
+  const cards = codes
+    .map((c) => `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto 16px"><tr><td align="center" width="248" bgcolor="#ffffff" style="width:248px;background:#ffffff;border:1px solid #e7e5e4;border-radius:10px;padding:12px 16px">
+<img src="cid:${esc(c.cid)}" width="200" height="200" alt="${esc(t.qrAlt(c.code))}" style="display:block;width:200px;height:200px;border:0">
+<div style="font-size:14px;font-weight:bold;padding-top:8px;color:#1c1917">${esc(c.label)}</div>
+<div style="font-family:monospace;font-size:13px;letter-spacing:1px;color:#57534e">${esc(c.code)}</div></td></tr></table>`)
+    .join("\n");
+  return [
+    `<tr><td style="font-size:17px;font-weight:bold;padding-top:8px">${esc(t.codesTitle)}</td></tr>`,
+    note(esc(t.codesNote)),
+    `<tr><td align="center" style="padding-top:16px">${cards}</td></tr>`,
+  ];
+}
 
 export function ticketsEmail(d: TicketsEmailData): Content {
   const l = d.language ?? "fr";
@@ -134,12 +161,14 @@ export function ticketsEmail(d: TicketsEmailData): Content {
   const hello = t.hello(d.buyerName);
   const intro = t.intro(changed, d.reference);
   const subject = `${t.title(changed)} — ${d.eventTitle} (${d.reference})`;
-  const text = [hello, "", intro, "", d.eventTitle, when, where, count, "", `${t.linkLine}${d.link}`, "", t.advice, "", footerText(l, d.brandName, d.look)].join("\n");
+  const codes = d.codes?.length ? ["", t.codesText] : [];
+  const text = [hello, "", intro, "", d.eventTitle, when, where, count, "", `${t.linkLine}${d.link}`, ...codes, "", t.advice, "", footerText(l, d.brandName, d.look)].join("\n");
   const html = layout(l, d.brandName, t.title(changed), [
     paragraph(`${esc(hello)}<br>${esc(intro)}`),
     box(`<strong>${esc(d.eventTitle)}</strong><br>${esc(when)}<br>${esc(where)}<br>${esc(count)} · ${t.order} ${esc(d.reference)}`),
     button(d.link, t.show, d.look),
-    note(esc(t.advice)),
+    ...codeRows(t, d.codes),
+    note(esc(t.advice), Boolean(d.codes?.length)),
   ], d.look);
   return { fromName: d.brandName, subject, text, html };
 }
@@ -169,12 +198,14 @@ export function reminderEmail(d: ReminderEmailData): Content {
   const count = t.count(d.validTickets);
   const hello = t.hello(d.buyerName);
   const intro = r.intro(d.reference);
-  const text = [hello, "", intro, "", d.eventTitle, when, where, count, "", `${t.linkLine}${d.link}`, "", t.advice, "", footerText(l, d.brandName, d.look)].join("\n");
+  const codes = d.codes?.length ? ["", t.codesText] : [];
+  const text = [hello, "", intro, "", d.eventTitle, when, where, count, "", `${t.linkLine}${d.link}`, ...codes, "", t.advice, "", footerText(l, d.brandName, d.look)].join("\n");
   const html = layout(l, d.brandName, r.title, [
     paragraph(`${esc(hello)}<br>${esc(intro)}`),
     box(`<strong>${esc(d.eventTitle)}</strong><br>${esc(when)}<br>${esc(where)}<br>${esc(count)} · ${t.order} ${esc(d.reference)}`),
     button(d.link, t.show, d.look),
-    note(esc(t.advice)),
+    ...codeRows(t, d.codes),
+    note(esc(t.advice), Boolean(d.codes?.length)),
   ], d.look);
   return { fromName: d.brandName, subject: r.subject(d.eventTitle, when), text, html };
 }

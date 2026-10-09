@@ -10,6 +10,16 @@ export interface EmailMessage {
   idempotencyKey: string;
   /** Run 42: extra headers (List-Unsubscribe on campaigns). */
   headers?: Record<string, string>;
+  /** Run 52: inline images (the tickets' QR codes), shown in the HTML as cid:<contentId>. */
+  attachments?: EmailAttachment[];
+}
+
+export interface EmailAttachment {
+  filename: string;
+  /** Base64. */
+  content: string;
+  contentType: string;
+  contentId: string;
 }
 
 export class EmailSendError extends Error {
@@ -48,6 +58,9 @@ export class ResendEmailSender implements EmailSender {
         body: JSON.stringify({
           from: `${displayName(m.fromName)} <${this.fromAddress}>`, to: [m.to], subject: m.subject.replace(/[\r\n]+/g, " ").slice(0, 300), text: m.text, html: m.html,
           ...(m.headers ? { headers: m.headers } : {}),
+          ...(m.attachments?.length
+            ? { attachments: m.attachments.map((a) => ({ filename: a.filename, content: a.content, content_type: a.contentType, content_id: a.contentId })) }
+            : {}),
         }),
         signal: AbortSignal.timeout(15_000),
       });
