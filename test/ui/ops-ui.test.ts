@@ -4,7 +4,7 @@ import type { AddressInfo } from "node:net";
 import { serve, type ServerType } from "@hono/node-server";
 import { chromium, type Browser, type Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { adm, call, pub, testApp, tokenFor, type TestApp } from "../helpers/app.js";
+import { adm, call, pub, stopServer, testApp, tokenFor, type TestApp } from "../helpers/app.js";
 import { createTestDatabase, type TestDatabase } from "../helpers/db.js";
 import { line, report } from "../helpers/reservations.js";
 import { seedAfterSale, seedPaidOrder, seedTwoTenants, TEST_CREDENTIAL_SECRET, type SeedResult } from "../helpers/seed.js";
@@ -37,7 +37,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await browser?.close();
-  await new Promise((r) => server?.close(r));
+  await stopServer(server);
   await db?.drop();
 });
 
@@ -717,7 +717,11 @@ describe("ALKAO Operations app", () => {
       r.fulfill({ contentType: "image/svg+xml", body: `<svg xmlns="http://www.w3.org/2000/svg" width="160" height="40"><rect width="160" height="40" fill="#fff"/></svg>` }));
     await page.goto(`${origin}/ops#${brandPath()}/appearance`);
     await page.getByRole("heading", { name: "Apparence" }).waitFor();
+    // An SVG logo would be missing from many e-mail apps: the page says so.
     await page.getByLabel(/Adresse de l'image du logo/).fill("https://cdn.example.com/logo.svg");
+    await page.getByText("n'affichent pas les images SVG", { exact: false }).waitFor();
+    await page.getByLabel(/Adresse de l'image du logo/).fill("https://cdn.example.com/logo.png");
+    await page.getByText("n'affichent pas les images SVG", { exact: false }).waitFor({ state: "detached" });
     await page.getByRole("region", { name: "Aperçu" }).getByRole("img", { name: "Havana Resort — Événements" }).waitFor();
     await page.getByLabel("Utiliser la couleur de la marque").check();
     await page.getByLabel("Couleur principale (bandeau, boutons)").fill("#ffd54f");
@@ -736,7 +740,7 @@ describe("ALKAO Operations app", () => {
       `SELECT logo_url, accent_color, on_accent_color, support_phone FROM public.ticketing_brand_settings WHERE client_id = $1 AND brand_id = $2`,
       [seed.havana.clientId, seed.havana.brandId],
     );
-    expect(rows).toEqual([{ logo_url: "https://cdn.example.com/logo.svg", accent_color: "#ffd54f", on_accent_color: "#000000", support_phone: "+1 514 555-0100" }]);
+    expect(rows).toEqual([{ logo_url: "https://cdn.example.com/logo.png", accent_color: "#ffd54f", on_accent_color: "#000000", support_phone: "+1 514 555-0100" }]);
 
     // The event's photo, from the event page.
     await page.goto(`${origin}/ops#${brandPath()}/event/${seed.havana.eventId}`);
@@ -797,8 +801,8 @@ describe("ALKAO Operations embedded in the TAKATAK dashboard", () => {
   }, 60_000);
 
   afterAll(async () => {
-    await new Promise((r) => embedServer?.close(r));
-    await new Promise((r) => parent?.close(r));
+    await stopServer(embedServer);
+    await stopServer(parent);
   });
 
   it("allows only the configured parent to frame it", async () => {

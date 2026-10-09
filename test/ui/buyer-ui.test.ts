@@ -5,7 +5,7 @@ import { serve, type ServerType } from "@hono/node-server";
 import { chromium, type Browser, type Page } from "playwright-core";
 import qrcode from "qrcode-generator";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { call, pub, testApp, type TestApp } from "../helpers/app.js";
+import { call, pub, stopServer, testApp, type TestApp } from "../helpers/app.js";
 import { createTestDatabase, type TestDatabase } from "../helpers/db.js";
 import { completedSession, FakeGateway, signedStripeEvent } from "../helpers/fake-gateway.js";
 import { seedTwoTenants, TEST_CREDENTIAL_SECRET, type SeedResult, type TenantFixture } from "../helpers/seed.js";
@@ -34,7 +34,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await browser?.close();
-  await new Promise((r) => server?.close(r));
+  await stopServer(server);
   await db?.drop();
 });
 
@@ -247,7 +247,7 @@ describe("buyer tickets page", () => {
     await page.getByText("Billets enregistrés sur cet appareil", { exact: false }).waitFor();
     await page.waitForFunction(() => Boolean((globalThis as any).navigator.serviceWorker.controller));
 
-    await new Promise((r) => { own.close(r); (own as unknown as { closeAllConnections?: () => void }).closeAllConnections?.(); });
+    await stopServer(own);
     await page.reload();
     await page.getByText("Hors ligne : voici vos billets", { exact: false }).waitFor();
     expect(await page.getByRole("img", { name: /^Code QR du billet / }).count()).toBe(2);
