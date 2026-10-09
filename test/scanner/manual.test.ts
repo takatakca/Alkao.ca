@@ -135,19 +135,20 @@ describe("letting a ticket in without its QR code", () => {
 });
 
 describe("options at the gate (Run 55)", () => {
-  const flex = () => seed.havana.types.find((x) => x.code === "FLEX_WEATHER")!.name;
+  const flexType = () => seed.havana.types.find((x) => x.code === "FLEX_WEATHER")!;
+  const flex = () => flexType().name;
 
   it("lists the order's options with the first admission, then says they were handed over", async () => {
     const t = seed.havana;
     const order = await tonight(t, "repas@example.com");
     const first = (await admit(t, order.sessionId, order.ticketIds[0]!)).body.scan;
-    expect(first.options).toEqual({ items: [{ name: flex(), quantity: 4 }], already: false });
+    expect(first.options).toEqual({ items: [{ ticketTypeId: flexType().id, name: flex(), quantity: 4 }], already: false });
     const second = (await admit(t, order.sessionId, order.ticketIds[1]!)).body.scan;
-    expect(second.options).toEqual({ items: [{ name: flex(), quantity: 4 }], already: true });
+    expect(second.options).toEqual({ items: [{ ticketTypeId: flexType().id, name: flex(), quantity: 4 }], already: true });
     // A refused scan hands nothing over.
     expect((await admit(t, order.sessionId, order.ticketIds[0]!)).body.scan).not.toHaveProperty("options");
     // Gate staff see them when they find the order by its reference.
-    expect((await lookup(t, order.sessionId, order.reference)).body.order.options).toEqual([{ name: flex(), quantity: 4 }]);
+    expect((await lookup(t, order.sessionId, order.reference)).body.order.options).toEqual([{ ticketTypeId: flexType().id, name: flex(), quantity: 4 }]);
   });
 
   it("keeps them with the tickets after a session change", async () => {
@@ -156,10 +157,10 @@ describe("options at the gate (Run 55)", () => {
     const target = await tonight(t, "autre@example.com");
     const moved = await exchangeOrder(db.pool, t, order.orderId, target.sessionId, { type: "user", id: seed.users.havanaOwner });
     const scan = (await admit(t, target.sessionId, moved.ticketIds[0]!)).body.scan;
-    expect(scan).toMatchObject({ result: "admitted", options: { items: [{ name: flex(), quantity: 4 }], already: false } });
+    expect(scan).toMatchObject({ result: "admitted", options: { items: [{ ticketTypeId: flexType().id, name: flex(), quantity: 4 }], already: false } });
     expect((await admit(t, target.sessionId, moved.ticketIds[1]!)).body.scan.options.already).toBe(true);
     // The original reference and the new one both show them.
-    expect((await lookup(t, target.sessionId, order.reference)).body.order.options).toEqual([{ name: flex(), quantity: 4 }]);
-    expect((await lookup(t, target.sessionId, moved.reference)).body.order.options).toEqual([{ name: flex(), quantity: 4 }]);
+    expect((await lookup(t, target.sessionId, order.reference)).body.order.options).toEqual([{ ticketTypeId: flexType().id, name: flex(), quantity: 4 }]);
+    expect((await lookup(t, target.sessionId, moved.reference)).body.order.options).toEqual([{ ticketTypeId: flexType().id, name: flex(), quantity: 4 }]);
   });
 });

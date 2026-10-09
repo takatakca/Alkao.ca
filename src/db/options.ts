@@ -4,6 +4,8 @@ import type { Db, Tx } from "./pool.js";
 type Queryable = Db | Tx;
 
 export interface OrderOption {
+  /** Run 56: so the tickets page can check each session's stock before a change. */
+  ticketTypeId: string;
   name: string;
   quantity: number;
 }
@@ -15,15 +17,15 @@ export interface OrderOption {
  * original it points to.
  */
 export async function orderOptions(q: Queryable, s: TenantScope, orderId: string): Promise<OrderOption[]> {
-  const { rows } = await q.query<{ name: string; quantity: number }>(
-    `SELECT l.name_snapshot AS name, l.quantity
+  const { rows } = await q.query<{ ticket_type_id: string; name: string; quantity: number }>(
+    `SELECT l.ticket_type_id, l.name_snapshot AS name, l.quantity
      FROM public.ticketing_orders o
      JOIN public.ticketing_order_lines l ON l.order_id IN (o.id, o.exchange_of_order_id) AND l.client_id = o.client_id AND l.brand_id = o.brand_id
      WHERE o.id = $1 AND o.client_id = $2 AND o.brand_id = $3 AND l.kind = 'add_on' AND l.quantity > 0
      ORDER BY l.created_at, l.id`,
     [orderId, s.clientId, s.brandId],
   );
-  return rows.map((r) => ({ name: r.name, quantity: Number(r.quantity) }));
+  return rows.map((r) => ({ ticketTypeId: r.ticket_type_id, name: r.name, quantity: Number(r.quantity) }));
 }
 
 /**

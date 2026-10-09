@@ -35,6 +35,7 @@ const T = {
     seeSessions: "Voir les autres séances",
     noSessions: "Aucune autre séance n'a assez de places pour le moment.",
     choose: "Choisir",
+    optionsFull: "Options complètes",
     incomplete: "Lien incomplet. Ouvrez le lien reçu par courriel.",
     loading: "Chargement de vos billets…",
     myTickets: "Mes billets",
@@ -88,6 +89,7 @@ const T = {
     seeSessions: "See other sessions",
     noSessions: "No other session has enough seats right now.",
     choose: "Choose",
+    optionsFull: "Options sold out",
     incomplete: "Incomplete link. Open the link from your email.",
     loading: "Loading your tickets…",
     myTickets: "My tickets",
@@ -297,6 +299,8 @@ function ChangeSession({ order, token }) {
   const [sessions, setSessions] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  // Run 56: the order's options with a stock per session must fit in the new session too.
+  const optionsFit = (s) => (order.options ?? []).every((o) => s.addOnsAvailable?.[o.ticketTypeId] === undefined || s.addOnsAvailable[o.ticketTypeId] >= o.quantity);
   const load = async () => {
     setError(null);
     try {
@@ -320,7 +324,7 @@ function ChangeSession({ order, token }) {
     ${sessions === null ? html`<button onClick=${load}>${T.seeSessions}</button>`
       : sessions.length === 0 ? html`<p>${T.noSessions}</p>`
       : html`<ul class="sessions">${sessions.map((s) => html`<li><span>${whenFr(s.startsAt, order.event.venue.timezone)}</span>
-          <button disabled=${busy} onClick=${() => move(s)}>${T.choose}</button></li>`)}</ul>`}
+          ${optionsFit(s) ? html`<button disabled=${busy} onClick=${() => move(s)}>${T.choose}</button>` : html`<span class="muted">${T.optionsFull}</span>`}</li>`)}</ul>`}
   </div>`;
 }
 

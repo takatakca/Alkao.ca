@@ -220,7 +220,9 @@ session, that is, per evening.
 - **Session change (Run 56):** the order's add-ons move with the tickets, from the session
   they leave to the session they join, checked against the new session's stock. A change to a
   session where they are sold out is refused (`409 add_on_sold_out`) and nothing moves: the
-  buyer picks another date, or staff raise the stock.
+  buyer picks another date, or staff raise the stock. The tickets page checks first: a
+  session where the order's options do not fit (`sessions[].addOnsAvailable` against
+  `order.options`) shows « Options complètes » instead of « Choisir ».
 - **Not moved:** a partial refund keeps the add-ons sold.
 - **Setting or changing the stock** of an add-on already on sale recounts what is held and sold.
 - **Errors:** a stock on an admission is refused (`422 stock_only_for_add_ons`).
@@ -1004,8 +1006,8 @@ A session change makes a new order that holds the admissions only, pointing to t
 order. The options are now read from the order and the original it points to, so they follow
 the tickets:
 
-- `GET …/public/orders/:orderId` returns `order.options`: `[{ name, quantity }]` (empty when
-  none). The tickets page lists these under « Vos options ».
+- `GET …/public/orders/:orderId` returns `order.options`: `[{ ticketTypeId, name, quantity }]`
+  (empty when none). The tickets page lists these under « Vos options ».
 - The tickets, new-tickets and reminder e-mails list the same options.
 - **Scan and manual admission** (`POST …/scanner/scans`, `POST …/scanner/admit`): an
   `admitted` result carries `options: { items: [{ name, quantity }], already }` when the

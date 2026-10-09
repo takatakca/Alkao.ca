@@ -124,7 +124,7 @@ describe("QR codes inside the e-mails", () => {
     // The new order holds the admissions only; the options are read from the original.
     const page = await call(app, "GET", `${pub(t.clientId, t.brandId)}/orders/${ex.body.exchange.orderId}`, { headers: { "x-alkao-order-token": ex.body.exchange.token } });
     expect(page.body.order.lines.some((l: { kind: string }) => l.kind === "add_on")).toBe(false);
-    expect(page.body.order.options).toEqual([{ name: flex.name, quantity: 4 }]);
+    expect(page.body.order.options).toEqual([{ ticketTypeId: flex.id, name: flex.name, quantity: 4 }]);
     const [m] = await deliver();
     expect(m!.subject).toMatch(/^Vos nouveaux billets/);
     expect(m!.html).toContain(`Options : ${flex.name} × 4`);
