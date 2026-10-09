@@ -294,6 +294,32 @@ describe("buyer tickets page", () => {
     expect(await kept.getByRole("listitem").filter({ hasText: flex.name }).textContent()).toContain("× 2");
   });
 
+  it("offers no session where the order's options are sold out (Run 56)", async () => {
+    const f = seed.festi;
+    const flex = typeId(f, "FLEX_WEATHER");
+    await db.pool.query(`UPDATE public.ticketing_ticket_types SET stock_per_session = 3 WHERE id = $1`, [flex]);
+    try {
+      const o = await buy(f, { GENERAL: 2, FLEX_WEATHER: 2 });
+      const roomy = await session(f);
+      const full = await session(f);
+      const other = await call(app, "POST", `${pub(f.clientId, f.brandId)}/holds`, {
+        body: { sessionId: full, items: [{ ticketTypeId: typeId(f, "GENERAL"), quantity: 2 }, { ticketTypeId: flex, quantity: 2 }] },
+      });
+      expect(other.status).toBe(201); // only 1 of 3 left there
+      const page = await open(linkFor(f, o));
+      await page.getByRole("button", { name: "Voir les autres séances" }).click();
+      const items = page.locator("ul.sessions li");
+      await items.first().waitFor();
+      expect(await items.filter({ hasText: "Options complètes" }).count()).toBe(1);
+      expect(await items.filter({ hasText: "Options complètes" }).getByRole("button").count()).toBe(0);
+      const pub0 = await call(app, "GET", `${pub(f.clientId, f.brandId)}/events/${f.eventId}`);
+      const left = (id: string) => pub0.body.sessions.find((x: { id: string }) => x.id === id).addOnsAvailable[flex];
+      expect([left(roomy), left(full)]).toEqual([3, 1]);
+    } finally {
+      await db.pool.query(`UPDATE public.ticketing_ticket_types SET stock_per_session = NULL WHERE id = $1`, [flex]);
+    }
+  });
+
   it("ran without script errors", () => {
     expect(pageErrors).toEqual([]);
   });

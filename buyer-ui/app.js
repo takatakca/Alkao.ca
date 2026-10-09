@@ -17,6 +17,7 @@ const T = {
       ticket_already_used: "Un billet de cette commande est déjà entré : changement impossible.",
       session_not_available: "Cette séance n'est plus disponible.",
       sold_out: "Plus assez de places dans cette séance.",
+      add_on_sold_out: "Vos options (repas, activités…) sont complètes pour cette séance. Choisissez une autre date.",
       flex_not_purchased: "Cette commande ne comprend pas l'option de changement de séance.",
       offline: "Pas de réseau. Ouvrez cette page une fois avec du réseau : vos billets resteront ensuite sur cet appareil.",
     },
@@ -34,6 +35,7 @@ const T = {
     seeSessions: "Voir les autres séances",
     noSessions: "Aucune autre séance n'a assez de places pour le moment.",
     choose: "Choisir",
+    optionsFull: "Options complètes",
     incomplete: "Lien incomplet. Ouvrez le lien reçu par courriel.",
     loading: "Chargement de vos billets…",
     myTickets: "Mes billets",
@@ -69,6 +71,7 @@ const T = {
       ticket_already_used: "A ticket of this order has already entered: no change is possible.",
       session_not_available: "This session is no longer available.",
       sold_out: "Not enough seats left in this session.",
+      add_on_sold_out: "Your options (meals, activities…) are sold out for this session. Pick another date.",
       flex_not_purchased: "This order does not include the session change option.",
       offline: "No network. Open this page once with a network: your tickets will then stay on this device.",
     },
@@ -86,6 +89,7 @@ const T = {
     seeSessions: "See other sessions",
     noSessions: "No other session has enough seats right now.",
     choose: "Choose",
+    optionsFull: "Options sold out",
     incomplete: "Incomplete link. Open the link from your email.",
     loading: "Loading your tickets…",
     myTickets: "My tickets",
@@ -295,6 +299,8 @@ function ChangeSession({ order, token }) {
   const [sessions, setSessions] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  // Run 56: the order's options with a stock per session must fit in the new session too.
+  const optionsFit = (s) => (order.options ?? []).every((o) => s.addOnsAvailable?.[o.ticketTypeId] === undefined || s.addOnsAvailable[o.ticketTypeId] >= o.quantity);
   const load = async () => {
     setError(null);
     try {
@@ -318,7 +324,7 @@ function ChangeSession({ order, token }) {
     ${sessions === null ? html`<button onClick=${load}>${T.seeSessions}</button>`
       : sessions.length === 0 ? html`<p>${T.noSessions}</p>`
       : html`<ul class="sessions">${sessions.map((s) => html`<li><span>${whenFr(s.startsAt, order.event.venue.timezone)}</span>
-          <button disabled=${busy} onClick=${() => move(s)}>${T.choose}</button></li>`)}</ul>`}
+          ${optionsFit(s) ? html`<button disabled=${busy} onClick=${() => move(s)}>${T.choose}</button>` : html`<span class="muted">${T.optionsFull}</span>`}</li>`)}</ul>`}
   </div>`;
 }
 

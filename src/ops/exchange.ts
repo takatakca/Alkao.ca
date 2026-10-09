@@ -135,6 +135,8 @@ export async function exchangeOrder(
         `UPDATE public.ticketing_tickets SET status = 'void', void_reason = 'reissued', voided_at = now() WHERE id = ANY($1::uuid[])`,
         [tickets.map((t) => t.id)],
       );
+      // Run 56: the options' stock per session follows the tickets (refused if sold out there).
+      await tx.query(`SELECT alkao_private.ticketing_exchange_add_on_stock($1, $2)`, [order.id, original.session_id]);
 
       const orderToken = randomBytes(32).toString("base64url");
       await tx.query(
