@@ -282,6 +282,16 @@ describe("buyer tickets page", () => {
     expect(await options.getByRole("listitem").filter({ hasText: flex.name }).textContent()).toContain("× 2");
     // Admissions stay as tickets, not options.
     expect(await options.getByRole("listitem").count()).toBe(1);
+
+    // Run 55: after a session change, the new tickets page still lists them.
+    const ex = await call(app, "POST", `${pub(f.clientId, f.brandId)}/orders/${o.orderId}/exchange`, {
+      headers: { "x-alkao-order-token": o.token }, body: { sessionId: await session(f) },
+    });
+    expect(ex.status).toBe(201);
+    const moved = await open(linkFor(f, { orderId: ex.body.exchange.orderId, token: ex.body.exchange.token }));
+    const kept = moved.getByRole("region", { name: "Vos options" });
+    await kept.waitFor();
+    expect(await kept.getByRole("listitem").filter({ hasText: flex.name }).textContent()).toContain("× 2");
   });
 
   it("ran without script errors", () => {

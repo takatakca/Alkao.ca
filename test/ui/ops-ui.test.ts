@@ -260,9 +260,16 @@ describe("ALKAO Operations app", () => {
     const found = page.getByLabel("Commande trouvée");
     await found.getByText(o[0]!.reference).waitFor();
     expect(await found.textContent()).not.toContain("sans-qr@example.com");
+    // Run 55: the options bought with the order, to hand over at the gate.
+    const flex = t.types.find((x) => x.code === "FLEX_WEATHER")!.name;
+    await found.getByText(`Options : ${flex} × 4`).waitFor();
     await found.getByRole("button", { name: "Faire entrer" }).first().click();
     await page.getByRole("status").getByText("ENTRÉE ACCEPTÉE").waitFor();
+    await page.getByRole("status").getByText("Options à remettre").waitFor();
+    await page.getByRole("status").getByText(`${flex} × 4`).waitFor();
     await found.getByText("Entré le", { exact: false }).first().waitFor();
+    await found.getByRole("button", { name: "Faire entrer" }).first().click();
+    await page.getByRole("status").getByText("Options déjà remises à une entrée précédente").waitFor();
   });
 
   it("finds an order by its reference or the buyer's email", async () => {

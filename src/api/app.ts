@@ -22,6 +22,7 @@ import { WebhookSignatureError, type PaymentGateway } from "../payments/gateway.
 import { PaymentsService } from "../payments/service.js";
 import * as paymentsDb from "../db/payments.js";
 import * as appearanceDb from "../db/appearance.js";
+import { orderOptions } from "../db/options.js";
 import { assertReadableColours } from "../domain/appearance.js";
 import * as credentialsDb from "../db/credentials.js";
 import { CredentialsService } from "../scanner/service.js";
@@ -825,7 +826,9 @@ export function createApp(deps: AppDeps) {
     const tickets = (order.tickets as { id: string }[]).map((t) => ({ ...t, credential: payloads.get(t.id) ?? null }));
     // Run 06: what the buyer's ticket page shows (brand, event, session, venue, Flex option).
     const context = await delivery.publicOrderContext(deps.db, scope, orderId);
-    return c.json({ order: { ...publicOrder, tickets, ...context } });
+    // Run 55: the options bought, kept across session changes.
+    const options = await orderOptions(deps.db, scope, orderId);
+    return c.json({ order: { ...publicOrder, tickets, ...context, options } });
   });
 
   // ── Run 02: Stripe webhooks ──────────────────────────────────────────────

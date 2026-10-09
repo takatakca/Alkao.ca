@@ -38,6 +38,9 @@ function DisputeNotice({ d }) {
     Répondez depuis votre tableau de bord Stripe. Les heures d'entrée des billets ci-dessous peuvent servir de preuve. ALKAO n'a annulé aucun billet.</div>`;
 }
 
+// Run 55: "Repas × 2 · Gonflables × 2", the options bought with an order.
+const optionsText = (items) => items.map((o) => `${o.name} × ${o.quantity}`).join(" · ");
+
 const SCAN_FR = {
   admitted: ["ok", "ENTRÉE ACCEPTÉE"], already_admitted: ["bad", "DÉJÀ ENTRÉ"], revoked: ["bad", "BILLET ANNULÉ"],
   wrong_session: ["warn", "MAUVAISE SÉANCE"], too_early: ["warn", "TROP TÔT"], too_late: ["warn", "TROP TARD"],
@@ -1002,6 +1005,9 @@ function Scanner({ api, base }) {
       </form>
       ${last && html`<div class="scan-result ${tone}" role="status">${label}
         ${last.ticket && html`<small>${last.ticket.ticketTypeName}</small>`}
+        ${last.options && html`<div class=${`scan-options${last.options.already ? " given" : ""}`}>
+          <strong>${last.options.already ? "Options déjà remises à une entrée précédente" : "Options à remettre"}</strong>
+          <span>${optionsText(last.options.items)}</span></div>`}
         ${last.offline && html`<small>Vérifié sur l'appareil (hors ligne)</small>`}
         ${last.result === "already_admitted" && last.admittedAt && html`<small>Entré le ${when(last.admittedAt)}${last.admittedBy ? ` (${last.admittedBy})` : ""}</small>`}
       </div>`}
@@ -1013,6 +1019,7 @@ function Scanner({ api, base }) {
       ${found && html`<div class="card" aria-label="Commande trouvée">
         <p><strong>${found.reference}</strong>${found.buyerName ? ` · ${found.buyerName}` : ""}</p>
         ${found.otherSessions.length > 0 && html`<div class="alert warn">Billets aussi pour : ${found.otherSessions.map((x) => when(x.startsAt)).join(", ")}</div>`}
+        ${found.options?.length > 0 && html`<p><strong>Options :</strong> ${optionsText(found.options)}</p>`}
         ${found.tickets.length === 0 ? html`<p class="muted">Aucun billet de cette commande pour cette séance.</p>` : html`
         <table><thead><tr><th>Billet</th><th>Statut</th><th></th></tr></thead>
           <tbody>${found.tickets.map((k) => html`<tr><td>${k.ticketTypeName}</td><td><${Badge} status=${k.status} /></td>

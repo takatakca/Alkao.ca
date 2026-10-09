@@ -89,6 +89,7 @@ describe("gate scanning", () => {
     const { tickets: list } = await tickets(t, sid, 1);
     const first = await scan(t, sid, list[0]!.credential!);
     expect(first).toMatchObject({ result: "admitted", ticket: { id: list[0]!.id, ticketTypeCode: "TODDLER" } });
+    expect(first).not.toHaveProperty("options"); // Run 55: nothing to hand over without options
     const second = await scan(t, sid, list[0]!.credential!, staff, "gate-2");
     expect(second).toMatchObject({ result: "already_admitted", admittedBy: "gate-1" });
   });

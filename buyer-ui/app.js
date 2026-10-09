@@ -363,8 +363,10 @@ function App() {
   const o = state.order;
   applyLook(o.brand);
   const names = new Map(o.lines.map((l) => [l.ticketTypeId, l.nameSnapshot]));
-  // Run 54: add-ons have no QR code of their own; the page lists them so the buyer can show them.
-  const addOns = o.exchanged || o.status === "refunded" ? [] : o.lines.filter((l) => l.kind === "add_on" && l.quantity > 0);
+  // Runs 54–55: add-ons have no QR code of their own; the page lists them so the buyer can show
+  // them. The server reads them across session changes (order.options).
+  const addOns = o.exchanged || o.status === "refunded" ? []
+    : (o.options ?? o.lines.filter((l) => l.kind === "add_on" && l.quantity > 0).map((l) => ({ name: l.nameSnapshot, quantity: l.quantity })));
   const valid = o.tickets.filter((t) => t.status === "valid");
   const scannable = valid.filter((t) => t.credential);
   const tz = o.event.venue.timezone;
@@ -387,7 +389,7 @@ function App() {
     </div>
     ${addOns.length > 0 && html`<section class="card options" aria-labelledby="options-title">
       <h2 id="options-title">${T.options}</h2>
-      <ul>${addOns.map((l) => html`<li><span>${l.nameSnapshot}</span><strong>× ${l.quantity}</strong></li>`)}</ul>
+      <ul>${addOns.map((l) => html`<li><span>${l.name}</span><strong>× ${l.quantity}</strong></li>`)}</ul>
       <p class="muted">${T.optionsTip}</p>
     </section>`}
     ${state.offlineSince && html`<div class="alert" role="status">${T.offline(savedOn(state.offlineSince))}</div>`}

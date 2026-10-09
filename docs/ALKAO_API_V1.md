@@ -994,13 +994,33 @@ at checkout.
 
 The table `ticketing_newsletter_signups` is server-only: RLS on, no grant, no policy.
 
+### Options kept across session changes, shown at the gate (Run 55)
+
+A session change makes a new order that holds the admissions only, pointing to the original
+order. The options are now read from the order and the original it points to, so they follow
+the tickets:
+
+- `GET …/public/orders/:orderId` returns `order.options`: `[{ name, quantity }]` (empty when
+  none). The tickets page lists these under « Vos options ».
+- The tickets, new-tickets and reminder e-mails list the same options.
+- **Scan and manual admission** (`POST …/scanner/scans`, `POST …/scanner/admit`): an
+  `admitted` result carries `options: { items: [{ name, quantity }], already }` when the
+  order has options. `already` is true when another ticket of the same purchase (the order
+  or the original it points to) was let in first, so the options were handed over then. The
+  scanner shows « Options à remettre » or « Options déjà remises à une entrée précédente ».
+  Every other result and an order without options carry no `options`.
+- **Lookup by reference** (`GET …/sessions/:sessionId/lookup`) returns `order.options`, with
+  the original reference or the new one.
+- Offline scans (on the device, Run 03 manifest) show no options. The device does not hold
+  the orders.
+
 ### Options on the tickets page and in the e-mails (Run 54)
 
 Add-ons (a meal, an activity, a session-change option) have no QR code of their own. The
 tickets page lists them under « Vos options » (name × quantity, from the order's lines), and
 the tickets, new-tickets and reminder e-mails add « Options : Repas × 2 · Gonflables × 2 » to
 the event box. Nothing is listed for an order that was replaced by a session change (its
-new order lists them) or fully refunded.
+new order lists them, Run 55) or fully refunded.
 
 ### Shared shop links (Run 53)
 
