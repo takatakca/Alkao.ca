@@ -32,7 +32,7 @@ export function saveOffline(sessionId, store) {
   if (store) localStorage.setItem(KEY(sessionId), JSON.stringify(store)); else localStorage.removeItem(KEY(sessionId));
 }
 export function newOfflineStore(manifest, now = Date.now()) {
-  return { manifest, downloadedAt: now, localAdmitted: [], queue: [], conflicts: 0, synced: 0 };
+  return { manifest, downloadedAt: now, localAdmitted: [], localEntered: [], queue: [], conflicts: 0, synced: 0 };
 }
 
 const keyCache = new Map();
@@ -70,7 +70,13 @@ export async function offlineScan(store, raw, now = Date.now()) {
   if (now > Date.parse(closesAt)) return { result: "too_late", ticket };
   store.localAdmitted.push(qrId);
   store.queue[store.queue.length - 1].admittedOffline = true;
-  return { result: "admitted", ticket };
+  // Run 58: the order's options to hand over, once per order (also on this device).
+  const bought = credential.purchase && store.manifest.purchases?.find((p) => p.ref === credential.purchase);
+  if (!bought) return { result: "admitted", ticket };
+  store.localEntered ??= [];
+  const already = bought.entered || store.localEntered.includes(bought.ref);
+  if (!already) store.localEntered.push(bought.ref);
+  return { result: "admitted", ticket, options: { items: bought.items, already } };
 }
 
 /**

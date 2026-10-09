@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { exchangeOrder } from "../../src/ops/exchange.js";
-import { adm, call, testApp, tokenFor, type TestApp } from "../helpers/app.js";
+import { adm, call, pub, testApp, tokenFor, type TestApp } from "../helpers/app.js";
 import { createTestDatabase, type TestDatabase } from "../helpers/db.js";
 import { seedPaidOrder, seedTwoTenants, TEST_CREDENTIAL_SECRET, withMeal, type SeedResult, type TenantFixture } from "../helpers/seed.js";
 
@@ -177,6 +177,33 @@ describe("options at the gate (Runs 55, 57)", () => {
     expect((await lookup(t, target.sessionId, order.reference)).body.order.options).toEqual([meal]);
     expect((await lookup(t, target.sessionId, moved.reference)).body.order.options).toEqual([meal]);
     expect(await options(target.sessionId)).toEqual([{ ticketTypeId: meal.ticketTypeId, name: meal.name, sold: 4, handedOver: 3 }]);
+  });
+
+  it("go into the offline gate's manifest, shown once per order on the device (Run 58)", async () => {
+    const order = await tonight(t, "hors-ligne@example.com", "10 minutes", cart);
+    const flexOnly = await tonight(t, "flex-seul@example.com", "10 minutes", { GENERAL: 1, FLEX_WEATHER: 1 });
+    const manifest = async (sessionId: string) =>
+      (await call(app, "GET", `${adm(t.clientId, t.brandId)}/sessions/${sessionId}/scanner-manifest`, { token: staffToken })).body.manifest;
+    const m = await manifest(order.sessionId);
+    expect(m.purchases).toEqual([{ ref: "p1", items: [{ name: meal.name, quantity: 3 }], entered: false }]);
+    expect(m.credentials).toHaveLength(order.ticketIds.length);
+    expect(m.credentials.every((c: { purchase?: string }) => c.purchase === "p1")).toBe(true);
+    expect(JSON.stringify(m)).not.toMatch(/@example\.com|buyer|price|Flex/i);
+    expect((await manifest(flexOnly.sessionId)).purchases).toEqual([]);
+    expect((await manifest(flexOnly.sessionId)).credentials[0]).not.toHaveProperty("purchase");
+
+    // On the device, with only the manifest: the first ticket hands the meals over, the next says so.
+    const { newOfflineStore, offlineScan } = await import("../../ops-ui/offline.js" as string);
+    const page = await call(app, "GET", `${pub(t.clientId, t.brandId)}/orders/${order.orderId}`, { headers: { "x-alkao-order-token": `secret-${order.orderId}` } });
+    const codes = (page.body.order.tickets as { credential: string }[]).map((k) => k.credential);
+    const store = newOfflineStore(m);
+    expect(await offlineScan(store, codes[0])).toMatchObject({ result: "admitted", options: { items: [{ name: meal.name, quantity: 3 }], already: false } });
+    expect(await offlineScan(store, codes[1])).toMatchObject({ result: "admitted", options: { already: true } });
+    expect(await offlineScan(store, codes[1])).toEqual(expect.objectContaining({ result: "already_admitted" }));
+
+    // Once a ticket entered online, a fresh manifest says the meals were handed over.
+    await admit(t, order.sessionId, order.ticketIds[2]!);
+    expect((await manifest(order.sessionId)).purchases[0].entered).toBe(true);
   });
 
   it("leaves Flex Météo out at the gate, and is for gate roles of this Client only", async () => {

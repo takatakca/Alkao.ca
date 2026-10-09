@@ -909,7 +909,7 @@ function Scanner({ api, base }) {
     const store = loadOffline(sessionId); if (!store) return;
     const send = async (scans) => (await api(`${base}/scanner/scans/batch`, { method: "POST", body: { sessionId, deviceId, scans } })).scans;
     const done = await syncOffline(store, send);
-    if (done) { try { store.manifest = (await api(`${base}/sessions/${sessionId}/scanner-manifest`)).manifest; store.downloadedAt = Date.now(); store.localAdmitted = []; } catch {} }
+    if (done) { try { store.manifest = (await api(`${base}/sessions/${sessionId}/scanner-manifest`)).manifest; store.downloadedAt = Date.now(); store.localAdmitted = []; store.localEntered = []; } catch {} }
     persist(store);
   };
   const leaveOffline = async () => {
