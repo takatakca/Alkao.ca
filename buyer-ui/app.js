@@ -58,6 +58,8 @@ const T = {
     valid: "Valide",
     offline: (d) => `Hors ligne : voici vos billets tels qu'enregistrés sur cet appareil le ${d}. Présentez-les normalement à l'entrée.`,
     kept: "Billets enregistrés sur cet appareil : ils s'afficheront même sans réseau.",
+    options: "Vos options",
+    optionsTip: "Montrez cette page pour les recevoir sur place.",
   },
   en: {
     errors: {
@@ -108,6 +110,8 @@ const T = {
     valid: "Valid",
     offline: (d) => `Offline: here are your tickets as saved on this device on ${d}. Show them at the entrance as usual.`,
     kept: "Tickets saved on this device: they will show even without a network.",
+    options: "Your options",
+    optionsTip: "Show this page to receive them on site.",
   },
 }[LANG];
 
@@ -359,6 +363,8 @@ function App() {
   const o = state.order;
   applyLook(o.brand);
   const names = new Map(o.lines.map((l) => [l.ticketTypeId, l.nameSnapshot]));
+  // Run 54: add-ons have no QR code of their own; the page lists them so the buyer can show them.
+  const addOns = o.exchanged || o.status === "refunded" ? [] : o.lines.filter((l) => l.kind === "add_on" && l.quantity > 0);
   const valid = o.tickets.filter((t) => t.status === "valid");
   const scannable = valid.filter((t) => t.credential);
   const tz = o.event.venue.timezone;
@@ -379,6 +385,11 @@ function App() {
       <p class="muted">${T.order} ${o.reference}${o.buyerName ? ` · ${o.buyerName}` : ""}</p>
       ${valid.length > 0 && !o.exchanged && html`<p class="noprint"><button class="ghost" onClick=${() => addToCalendar(o)}>${T.addToCalendar}</button></p>`}
     </div>
+    ${addOns.length > 0 && html`<section class="card options" aria-labelledby="options-title">
+      <h2 id="options-title">${T.options}</h2>
+      <ul>${addOns.map((l) => html`<li><span>${l.nameSnapshot}</span><strong>× ${l.quantity}</strong></li>`)}</ul>
+      <p class="muted">${T.optionsTip}</p>
+    </section>`}
     ${state.offlineSince && html`<div class="alert" role="status">${T.offline(savedOn(state.offlineSince))}</div>`}
     ${o.status === "pending_payment" && html`<div class="alert">${T.pending}</div>`}
     ${o.exchanged && html`<div class="alert">${T.replaced}</div>`}

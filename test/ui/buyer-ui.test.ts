@@ -272,6 +272,18 @@ describe("buyer tickets page", () => {
     expect(await page.evaluate(() => Object.keys((globalThis as any).localStorage).filter((k) => k.startsWith("alkao.billets.")))).toEqual([]);
   });
 
+  it("lists the options bought, which have no QR code of their own (Run 54)", async () => {
+    const f = seed.festi;
+    const o = await buy(f, { GENERAL: 1, CHILD: 1, FLEX_WEATHER: 2 });
+    const page = await open(linkFor(f, o));
+    const options = page.getByRole("region", { name: "Vos options" });
+    await options.waitFor();
+    const flex = f.types.find((x) => x.code === "FLEX_WEATHER")!;
+    expect(await options.getByRole("listitem").filter({ hasText: flex.name }).textContent()).toContain("× 2");
+    // Admissions stay as tickets, not options.
+    expect(await options.getByRole("listitem").count()).toBe(1);
+  });
+
   it("ran without script errors", () => {
     expect(pageErrors).toEqual([]);
   });

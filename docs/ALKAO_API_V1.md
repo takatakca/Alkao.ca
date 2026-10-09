@@ -994,6 +994,14 @@ at checkout.
 
 The table `ticketing_newsletter_signups` is server-only: RLS on, no grant, no policy.
 
+### Options on the tickets page and in the e-mails (Run 54)
+
+Add-ons (a meal, an activity, a session-change option) have no QR code of their own. The
+tickets page lists them under « Vos options » (name × quantity, from the order's lines), and
+the tickets, new-tickets and reminder e-mails add « Options : Repas × 2 · Gonflables × 2 » to
+the event box. Nothing is listed for an order that was replaced by a session change (its
+new order lists them) or fully refunded.
+
 ### Shared shop links (Run 53)
 
 A link to the hosted shop shared on Facebook, Instagram, Messenger or by text shows the event,
