@@ -107,6 +107,10 @@ a.link, button.link { background: none; border: 0; color: var(--brand); padding:
 .scan-result.bad { background: var(--bad-bg); color: var(--bad); }
 .scan-result.warn { background: var(--warn-bg); color: var(--warn); }
 .scan-result small { display: block; font-size: 1rem; font-weight: 500; margin-top: .4rem; }
+/* Run 55: the order's options (meals, activities) to hand over at the gate, once per order. */
+.scan-options { margin-top: .9rem; padding: .75rem 1rem; border-radius: 10px; background: var(--panel); color: var(--ink); font-size: 1.1rem; font-weight: 600; text-align: left; }
+.scan-options strong { display: block; margin-bottom: .2rem; font-size: .8rem; text-transform: uppercase; letter-spacing: .06em; color: var(--brand); }
+.scan-options.given strong { color: var(--muted); }
 video.camera { width: 100%; max-width: 420px; border-radius: 12px; background: #000; }
 input.scan { font-size: 1.1rem; width: 100%; }
 .big { font-size: 1.6rem; font-variant-numeric: tabular-nums; }

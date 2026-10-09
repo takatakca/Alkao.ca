@@ -6,6 +6,7 @@ import { withTransaction, type Db, type Tx } from "../db/pool.js";
 import { derivePrivateKey, publicKeyB64, signMessage, verifyMessage } from "../credentials/keys.js";
 import { buildPayload, parsePayload, signedPart, uuidToB64 } from "../credentials/payload.js";
 import { DomainError } from "../domain/errors.js";
+import { optionsAtAdmission, orderOptions, type OrderOption } from "../db/options.js";
 
 export const MANIFEST_FORMAT = "alkao.scanner.v1";
 export const MANIFEST_TTL_SECONDS = 10 * 60;
@@ -31,6 +32,8 @@ export interface ScanOutcome {
   admittedAt?: Date;
   admittedBy?: string | null;
   ticketSession?: { id: string };
+  /** Run 55: on admission, the order's options to hand over (already = another ticket of the order entered first). */
+  options?: { items: OrderOption[]; already: boolean };
 }
 
 export interface ScanInput {
@@ -197,12 +200,12 @@ export class CredentialsService {
         await log("unknown_credential");
         return { result: "unknown_credential" };
       }
-      return this.decide(tx, session, credential, at, log);
+      return this.decide(tx, scope, session, credential, at, log);
     });
   }
 
   /** The gate's rules, once the credential is known: one admission, this session, door hours. */
-  private async decide(tx: Tx, session: creds.GateSession, credential: creds.CredentialRow, at: Date, log: ScanLog): Promise<ScanOutcome> {
+  private async decide(tx: Tx, scope: TenantScope, session: creds.GateSession, credential: creds.CredentialRow, at: Date, log: ScanLog): Promise<ScanOutcome> {
     const ticket = { id: credential.ticketId, ticketTypeCode: credential.ticketTypeCode, ticketTypeName: credential.ticketTypeName };
     const base = { credentialId: credential.id, ticket };
     const decide = async (result: ScanResult, extra: Partial<ScanOutcome> = {}): Promise<ScanOutcome> => {
@@ -222,7 +225,9 @@ export class CredentialsService {
     try {
       await log("admitted", credential.id, credential.ticketId);
       await tx.query("RELEASE SAVEPOINT admit");
-      return { result: "admitted", ...base, admittedAt: at };
+      // Run 55: the order's options (meals, activities) to hand over, once per order.
+      const options = await optionsAtAdmission(tx, scope, credential.ticketId);
+      return { result: "admitted", ...base, admittedAt: at, ...(options ? { options } : {}) };
     } catch (error) {
       await tx.query("ROLLBACK TO SAVEPOINT admit");
       if ((error as { constraint?: string }).constraint !== "ticketing_scans_one_admission") throw error;
@@ -266,6 +271,8 @@ export class CredentialsService {
       ...(withBuyer ? { buyerName: order.buyer_name } : {}),
       tickets: here.map((r) => ({ id: r.id, ticketTypeName: r.name, status: r.status, admittedAt: r.admitted_at })),
       otherSessions: elsewhere.sort((a, b) => a.getTime() - b.getTime()).map((startsAt) => ({ startsAt })),
+      // Run 55: the options bought with the order (also after a session change).
+      options: await orderOptions(this.deps.db, scope, order.id),
     };
   }
 
@@ -285,7 +292,7 @@ export class CredentialsService {
           ...scope, eventId: session.eventId, sessionId: session.id, credentialId, ticketId, result,
           deviceId: input.deviceId, scannedBy, scannedAt: at, offline: false,
         });
-      const outcome = await this.decide(tx, session, credential, at, log);
+      const outcome = await this.decide(tx, scope, session, credential, at, log);
       if (outcome.result === "admitted") {
         await writeAudit(tx, scope, { type: "user", id: scannedBy }, "scan.manual_admission", { type: "ticket", id: input.ticketId }, {
           sessionId: session.id, deviceId: input.deviceId,

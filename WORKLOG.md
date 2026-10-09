@@ -3,7 +3,8 @@
 Newest first, one line per piece of work. Rule: `AGENTS.md` › Work log rule.
 Format: `YYYY-MM-DD | agent | branch → PR | status | what | next step`
 
-- 2026-10-09 | claude (Code, cloud) | claude/amazing-pascal-tppqd4 → PR #62 | PR open | Run 54: options bought listed on the tickets page and in the e-mails | merge when CI is green
+- 2026-10-09 | claude (Code, cloud) | claude/amazing-pascal-tppqd4 → PR | active | Run 55: options kept across session changes, shown at the gate scan | open the PR, merge when CI is green
+- 2026-10-09 | claude (Code, cloud) | claude/amazing-pascal-tppqd4 → PR #62 | done | Run 54: options bought listed on the tickets page and in the e-mails | none
 - 2026-10-09 | claude (Code, cloud) | claude/amazing-pascal-tppqd4 → PR #61 | done | check:golive names a Brand without its look, an SVG logo, events on sale without a photo | none
 - 2026-10-09 | claude (Code, cloud) | claude/amazing-pascal-tppqd4 → PR #60 | done | Run 53: shared shop links show the event (Open Graph) | none
 - 2026-10-09 | claude (Code, cloud) | claude/amazing-pascal-tppqd4 → PR #59 | done | Run 52: QR codes inside the tickets and reminder e-mails | none

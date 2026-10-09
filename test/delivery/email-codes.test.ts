@@ -109,6 +109,28 @@ describe("QR codes inside the e-mails", () => {
     expect(await emailCodes(db.pool, none, { clientId: seed.havana.clientId, brandId: seed.havana.brandId }, seed.havana.orderId)).toBeNull();
   });
 
+  it("follow the tickets to their new session, options included (Run 55)", async () => {
+    const t = seed.havana;
+    const { rows } = await db.pool.query<{ id: string }>(
+      `INSERT INTO public.ticketing_sessions (client_id, brand_id, event_id, starts_at, capacity, status)
+       VALUES ($1, $2, $3, now() + interval '40 days', 50, 'on_sale') RETURNING id`,
+      [t.clientId, t.brandId, t.eventId],
+    );
+    const ex = await call(app, "POST", `${pub(t.clientId, t.brandId)}/orders/${t.orderId}/exchange`, {
+      headers: { "x-alkao-order-token": `secret-${t.orderId}` }, body: { sessionId: rows[0]!.id },
+    });
+    expect(ex.status).toBe(201);
+    const flex = t.types.find((x) => x.code === "FLEX_WEATHER")!;
+    // The new order holds the admissions only; the options are read from the original.
+    const page = await call(app, "GET", `${pub(t.clientId, t.brandId)}/orders/${ex.body.exchange.orderId}`, { headers: { "x-alkao-order-token": ex.body.exchange.token } });
+    expect(page.body.order.lines.some((l: { kind: string }) => l.kind === "add_on")).toBe(false);
+    expect(page.body.order.options).toEqual([{ name: flex.name, quantity: 4 }]);
+    const [m] = await deliver();
+    expect(m!.subject).toMatch(/^Vos nouveaux billets/);
+    expect(m!.html).toContain(`Options : ${flex.name} × 4`);
+    expect(m!.attachments).toHaveLength(ex.body.exchange.tickets);
+  });
+
   it("go to Resend as inline attachments with their content id", async () => {
     let body: Record<string, unknown> = {};
     const fetchImpl = (async (_url: string, init: RequestInit) => {

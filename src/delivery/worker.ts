@@ -8,6 +8,7 @@ import { refundEmail, reminderEmail, sessionCancelledEmail, ticketsEmail } from 
 import { APPEARANCE_COLUMNS, appearanceJoin, appearanceOf, type LookRow } from "../db/appearance.js";
 import { CredentialsService } from "../scanner/service.js";
 import { emailCodes } from "./codes.js";
+import { orderOptions } from "../db/options.js";
 
 export interface DeliveryConfig {
   sender: EmailSender;
@@ -152,12 +153,8 @@ export async function deliverTicketEmails(db: Db, cfg: DeliveryConfig, now = new
       if (!["paid", "partially_refunded"].includes(row.order_status) || row.valid_tickets === 0) return skip("no_valid_ticket");
       // Run 52: the tickets' QR codes inside the e-mail, readable at the gate without a network.
       const inline = await emailCodes(tx, credentials, { clientId: row.client_id, brandId: row.brand_id }, row.order_id);
-      // Run 54: the options bought, which have no QR code of their own.
-      const { rows: addOns } = await tx.query<{ name: string; quantity: number }>(
-        `SELECT name_snapshot AS name, quantity FROM public.ticketing_order_lines
-         WHERE order_id = $1 AND client_id = $2 AND brand_id = $3 AND kind = 'add_on' AND quantity > 0 ORDER BY created_at, id`,
-        [row.order_id, row.client_id, row.brand_id],
-      );
+      // Runs 54–55: the options bought, which have no QR code of their own, kept across session changes.
+      const addOns = await orderOptions(tx, { clientId: row.client_id, brandId: row.brand_id }, row.order_id);
       if (row.kind === "reminder") {
         // Run 23: too late once the session has started, pointless if it was cancelled.
         if (row.session_status === "cancelled") return skip("session_cancelled");
