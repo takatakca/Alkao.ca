@@ -54,6 +54,8 @@ const T = {
     fewLeft: (n) => `Plus que ${n} places`,
     available: "Places disponibles",
     step2: "2. Vos billets",
+    optionsTitle: "Ajoutez des options",
+    optionsHint: "Repas, activités… Choisissez d'abord vos billets.",
     free: "Gratuit",
     perAdmission: " · option, une par entrée",
     upToAdmissions: " · option, une par personne au plus",
@@ -133,6 +135,8 @@ const T = {
     fewLeft: (n) => `Only ${n} seats left`,
     available: "Seats available",
     step2: "2. Your tickets",
+    optionsTitle: "Add options",
+    optionsHint: "Meals, activities… Choose your tickets first.",
     free: "Free",
     perAdmission: " · option, one per admission",
     upToAdmissions: " · option, at most one per person",
@@ -333,6 +337,14 @@ function EventShop({ config }) {
   const set = (id, n) => setQty((q) => ({ ...q, [id]: Math.max(0, n) }));
   // Run 49: what is left of an add-on with a stock, for the chosen session (null: no limit).
   const left = (t) => (t.kind === "add_on" && session?.addOnsAvailable && t.id in session.addOnsAvailable ? session.addOnsAvailable[t.id] : null);
+  // Run 60: one row per ticket type; options (add-ons) in their own card, once tickets are chosen.
+  const typeRow = (t) => html`<div class="type">
+    <div><div class="name">${t.name}</div><div class="muted">${t.priceCents === 0 ? T.free : money(t.priceCents)}${t.kind === "add_on" ? SCOPE_TEXT(t) : ""}${t.openDate ? T.openDate : ""}${t.minQuantity > 1 ? T.minimum(t.minQuantity) : ""}${left(t) !== null ? T.addOnLeft(left(t)) : ""}</div></div>
+    <div class="stepper">
+      <button class="secondary" aria-label=${T.remove(t.name)} disabled=${!(qty[t.id] > 0)} onClick=${() => set(t.id, (qty[t.id] ?? 0) - 1)}>−</button>
+      <output aria-label=${T.quantity(t.name)}>${qty[t.id] ?? 0}</output>
+      <button class="secondary" aria-label=${T.add(t.name)} disabled=${(t.kind === "add_on" && wanted === 0) || (qty[t.id] ?? 0) >= Math.min(t.maxQuantity, left(t) ?? Infinity)} onClick=${() => set(t.id, (qty[t.id] ?? 0) + 1)}>+</button>
+    </div></div>`;
 
   const reserve = async () => {
     setBusy(true); setError(null);
@@ -401,15 +413,12 @@ function EventShop({ config }) {
 
       ${sessionId && html`
         <h2>${T.step2}</h2>
-        <div class="card">
-          ${[...admissions, ...addOns].map((t) => html`<div class="type">
-            <div><div class="name">${t.name}</div><div class="muted">${t.priceCents === 0 ? T.free : money(t.priceCents)}${t.kind === "add_on" ? SCOPE_TEXT(t) : ""}${t.openDate ? T.openDate : ""}${t.minQuantity > 1 ? T.minimum(t.minQuantity) : ""}${left(t) !== null ? T.addOnLeft(left(t)) : ""}</div></div>
-            <div class="stepper">
-              <button class="secondary" aria-label=${T.remove(t.name)} disabled=${!(qty[t.id] > 0)} onClick=${() => set(t.id, (qty[t.id] ?? 0) - 1)}>−</button>
-              <output aria-label=${T.quantity(t.name)}>${qty[t.id] ?? 0}</output>
-              <button class="secondary" aria-label=${T.add(t.name)} disabled=${(qty[t.id] ?? 0) >= Math.min(t.maxQuantity, left(t) ?? Infinity)} onClick=${() => set(t.id, (qty[t.id] ?? 0) + 1)}>+</button>
-            </div></div>`)}
-        </div>
+        <div class="card">${admissions.map(typeRow)}</div>
+        ${addOns.length > 0 && html`<section class="card options" aria-labelledby="options-title">
+          <h3 id="options-title">${T.optionsTitle}</h3>
+          ${wanted === 0 && html`<p class="muted">${T.optionsHint}</p>`}
+          ${addOns.map(typeRow)}
+        </section>`}
         ${violations.length > 0 && html`<div class="alert" role="alert"><ul class="violations">${violations.map((v) => html`<li>${violationText(v, data.ticketTypes)}</li>`)}</ul></div>`}
         <form class="card promo" onSubmit=${applyPromo}>
           <label>${T.promo.label}<input value=${promoInput} autocomplete="off" autocapitalize="characters" onInput=${(e) => setPromoInput(e.target.value)} /></label>

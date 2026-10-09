@@ -253,7 +253,7 @@ A Brand can sell with a plain link, without changing its website:
 | Page | Content |
 |---|---|
 | `/acheter/<clientId>/<brandId>` | The Brand's published events |
-| `/acheter/<clientId>/<brandId>/<eventId>` | Choose a session (live availability), then quantities per ticket type and add-on. The server prices the order, TPS and TVQ included, and explains cart rules in French. Then hold the seats (with a countdown), enter buyer details and pay with Stripe Checkout. Free orders go straight to the tickets |
+| `/acheter/<clientId>/<brandId>/<eventId>` | Choose a session (live availability), then quantities per ticket type, and the add-ons in their own card « Ajoutez des options », which opens once a ticket is chosen (Run 60). The server prices the order, TPS and TVQ included, and explains cart rules in French. Then hold the seats (with a countdown), enter buyer details and pay with Stripe Checkout. Free orders go straight to the tickets |
 | `/acheter/merci/<clientId>/<brandId>/<holdId>` | Stripe's success page. It opens the buyer's `/billets`, which checks again while the payment confirms |
 
 How it works:
