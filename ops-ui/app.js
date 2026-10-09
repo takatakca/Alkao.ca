@@ -158,6 +158,7 @@ const ERRORS_FR = {
   order_not_refundable: "Commande non remboursable.", refund_provider_error: "Stripe a échoué : réessayez le remboursement.",
   flex_not_purchased: "Cette commande n'a pas l'option de changement de séance.", already_exchanged: "Le changement de séance a déjà été utilisé.",
   ticket_already_used: "Un billet est déjà entré : changement impossible.", session_not_available: "Séance non disponible.",
+  add_on_sold_out: "Les options de cette commande sont complètes pour cette séance (stock par séance).",
   payments_not_configured: "Paiements non configurés sur ce déploiement.", credentials_not_configured: "Codes QR non configurés sur ce déploiement.",
   appearance_low_contrast: "Ces deux couleurs ne sont pas assez lisibles ensemble (contraste minimum 4,5 : 1).",
   invalid_request: "Données invalides.", conflict: "Existe déjà.", invalid_reference: "Référence invalide.",

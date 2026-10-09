@@ -152,6 +152,58 @@ describe("add-ons with a stock per session", () => {
   });
 });
 
+describe("add-ons follow a session change (Run 56)", () => {
+  const stockAt = async (session: string, code: string) =>
+    (await db.pool.query(`SELECT reserved_count, sold_count FROM public.ticketing_add_on_stock WHERE session_id = $1 AND ticket_type_id = $2`, [session, typeId(code)])).rows[0]
+    ?? { reserved_count: 0, sold_count: 0 };
+  const evening = async () => {
+    const { rows } = await db.pool.query<{ id: string }>(
+      `INSERT INTO public.ticketing_sessions (client_id, brand_id, event_id, starts_at, capacity, status)
+       VALUES ($1, $2, $3, now() + interval '21 days' + (random() * interval '1 hour'), 50, 'on_sale') RETURNING id`,
+      [t.clientId, t.brandId, t.eventId],
+    );
+    return rows[0]!.id;
+  };
+  const move = (order: { id: string; token: string }, to: string) =>
+    call(app, "POST", `${pub(t.clientId, t.brandId)}/orders/${order.id}/exchange`, { headers: { "x-alkao-order-token": order.token }, body: { sessionId: to } });
+
+  it("move their stock to the new session; a full refund releases them there", async () => {
+    await db.pool.query(`UPDATE public.ticketing_holds SET status = 'released' WHERE status = 'active' AND client_id = $1`, [t.clientId]);
+    const before = await stockAt(sessionId, "MEAL");
+    const order = await pay((await hold({ GENERAL: 2, MEAL: 2, FLEX_WEATHER: 2 })).body.hold);
+    expect((await stockAt(sessionId, "MEAL")).sold_count).toBe(before.sold_count + 2);
+
+    const saturday = await evening();
+    expect((await move(order, saturday)).status).toBe(201);
+    expect(await stockAt(sessionId, "MEAL")).toEqual(before);
+    expect(await stockAt(saturday, "MEAL")).toEqual({ reserved_count: 0, sold_count: 2 });
+    // An add-on without a stock (Flex Météo) moves nothing.
+    expect((await db.pool.query(`SELECT 1 FROM public.ticketing_add_on_stock WHERE ticket_type_id = $1`, [typeId("FLEX_WEATHER")])).rowCount).toBe(0);
+
+    const refund = await call(app, "POST", `${adm(t.clientId, t.brandId)}/orders/${order.id}/refunds`, { token: await owner(), body: {} });
+    expect(refund.body.refund.status, JSON.stringify(refund.body)).toBe("succeeded");
+    expect(await stockAt(saturday, "MEAL")).toEqual({ reserved_count: 0, sold_count: 0 });
+    expect(await stockAt(sessionId, "MEAL")).toEqual(before);
+  });
+
+  it("refuse a change to a session where they are sold out, and move nothing", async () => {
+    const before = await stockAt(sessionId, "MEAL");
+    const order = await pay((await hold({ GENERAL: 2, MEAL: 2, FLEX_WEATHER: 2 })).body.hold);
+    const full = await evening();
+    const other = await call(app, "POST", `${pub(t.clientId, t.brandId)}/holds`, { body: { sessionId: full, items: items({ GENERAL: 2, MEAL: 2 }) } });
+    expect(other.status).toBe(201); // 2 of the 3 meals held by another family
+
+    const refused = await move(order, full);
+    expect(refused.status).toBe(409);
+    expect(refused.body.error.code).toBe("add_on_sold_out");
+    expect(await stockAt(full, "MEAL")).toEqual({ reserved_count: 2, sold_count: 0 });
+    expect((await stockAt(sessionId, "MEAL")).sold_count).toBe(before.sold_count + 2);
+    const mine = await call(app, "GET", `${pub(t.clientId, t.brandId)}/orders/${order.id}`, { headers: { "x-alkao-order-token": order.token } });
+    expect(mine.body.order).toMatchObject({ exchanged: false, canChangeSession: true });
+    expect(mine.body.order.tickets.every((k: { status: string }) => k.status === "valid")).toBe(true);
+  });
+});
+
 describe("where an order came from", () => {
   it("keeps the ad's UTM tags (and nothing else), shows them to staff and in the campaign report", async () => {
     await db.pool.query(`UPDATE public.ticketing_holds SET status = 'released' WHERE session_id = $1 AND status = 'active'`, [sessionId]);
