@@ -127,7 +127,15 @@ describe("hosted ticket shop", () => {
     const page = await shop(f);
     await page.getByRole("button", { name: new RegExp(s.label) }).click();
     const flex = f.types.find((x) => x.code === "FLEX_WEATHER")!;
+    const general = f.types.find((x) => x.code === "GENERAL")!;
+    // Run 60: options sit in their own card and wait for a ticket.
+    const options = page.getByRole("region", { name: "Ajoutez des options" });
+    await options.getByText("Choisissez d'abord vos billets", { exact: false }).waitFor();
+    expect(await plus(page, flex.name).isDisabled()).toBe(true);
+    await plus(page, general.name).click();
     await plus(page, flex.name).click();
+    // Without its admission the option is refused, in French.
+    await page.getByRole("button", { name: `Retirer ${general.name}` }).click();
     await page.getByRole("alert").getByText("s'ajoute à une entrée", { exact: false }).waitFor();
     expect(await page.getByRole("button", { name: "Continuer" }).isDisabled()).toBe(true);
   });
