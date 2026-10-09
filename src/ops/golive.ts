@@ -259,6 +259,33 @@ export async function checkDatabase(q: Db | Tx, now = new Date()): Promise<Check
     for (const c of codes) {
       out.push(warn(area.setup, `Le code de bienvenue ${c.code} (${c.brand}) n'existe dans aucun événement : il sera refusé à la caisse`, "/ops → Événements → l'événement → Codes promo : créez ce code."));
     }
+    // Runs 50–53: each selling Brand in its own look, and a photo for the events on sale (the
+    // tickets page, the shop, the e-mails and the shared links use them).
+    const { rows: looks } = await q.query<{ brand: string; plain: boolean; svg: boolean; no_photo: string[] }>(
+      `SELECT b.name AS brand,
+              (bs.logo_url IS NULL AND bs.accent_color IS NULL) AS plain,
+              coalesce(bs.logo_url ~* '\\.svg([?#]|$)', false) AS svg,
+              ARRAY(SELECT ev.title FROM public.ticketing_events ev
+                    WHERE ev.client_id = b.client_id AND ev.brand_id = b.id AND ev.status = 'published' AND ev.image_url IS NULL
+                      AND EXISTS (SELECT 1 FROM public.ticketing_sessions se
+                                  WHERE se.event_id = ev.id AND se.client_id = ev.client_id AND se.brand_id = ev.brand_id
+                                    AND se.status = 'on_sale' AND se.starts_at > $1)
+                    ORDER BY ev.title) AS no_photo
+       FROM public.ticketing_brands b
+       JOIN public.ticketing_entitlements e ON e.client_id = b.client_id AND e.brand_id = b.id AND e.status = 'active'
+       LEFT JOIN public.ticketing_brand_settings bs ON bs.client_id = b.client_id AND bs.brand_id = b.id
+       WHERE b.status = 'active'
+       ORDER BY b.name`,
+      [now],
+    );
+    for (const lk of looks) {
+      if (lk.plain) out.push(warn(area.setup, `${lk.brand} vend sans son logo ni sa couleur : billets, boutique et courriels gardent le style neutre`, "/ops → Apparence : le logo (PNG), la couleur et les coordonnées."));
+      if (lk.svg) out.push(warn(area.setup, `Le logo de ${lk.brand} est un SVG : il manquera dans plusieurs logiciels de courriel`, "/ops → Apparence : mettez l'adresse d'un PNG à fond transparent."));
+      if (lk.no_photo.length) {
+        const names = lk.no_photo.slice(0, 3).join(", ") + (lk.no_photo.length > 3 ? ` (+${lk.no_photo.length - 3})` : "");
+        out.push(warn(area.setup, `${lk.no_photo.length} événement(s) en vente sans photo (${lk.brand}) : ${names}`, "/ops → Événements → l'événement → « Ajouter une photo » : elle s'affiche sur les billets, la boutique, les courriels et les liens partagés."));
+      }
+    }
   }
 
   const { rows: lag } = await q.query<{ unswept: number; email_due: number | null; cancellations: number; refunds: number }>(

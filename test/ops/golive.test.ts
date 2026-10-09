@@ -134,12 +134,54 @@ describe("go-live check: settings", () => {
 });
 
 describe("go-live check: database", () => {
+  /** Runs 50–53: every selling Brand with its look, every event with its photo. */
+  const dressed = async (tx: Pick<typeof db.pool, "query">) => {
+    for (const t of [seed.havana, seed.festi]) {
+      await tx.query(
+        `INSERT INTO public.ticketing_brand_settings (client_id, brand_id, logo_url, accent_color, on_accent_color) VALUES ($1, $2, 'https://cdn.example.com/logo.png', '#0f766e', '#ffffff')
+         ON CONFLICT (client_id, brand_id) DO UPDATE SET logo_url = EXCLUDED.logo_url, accent_color = EXCLUDED.accent_color, on_accent_color = EXCLUDED.on_accent_color`,
+        [t.clientId, t.brandId],
+      );
+      await tx.query(`UPDATE public.ticketing_events SET image_url = 'https://cdn.example.com/photo.jpg' WHERE client_id = $1`, [t.clientId]);
+    }
+  };
+
   it("passes a migrated, set-up database", async () => {
-    const checks = await checkDatabase(db.pool);
-    expect(of(checks, "fail")).toEqual([]);
-    expect(of(checks, "warn")).toEqual([]);
-    expect(of(checks, "ok")).toContain(`Base de données : Les ${listMigrations().length} migrations sont appliquées`);
-    expect(of(checks, "ok")).toContain("Sécurité des données : RLS active partout, rien pour anon, lecture seule pour le personnel connecté");
+    const tx = await db.pool.connect();
+    try {
+      await tx.query("BEGIN");
+      await dressed(tx);
+      const checks = await checkDatabase(tx);
+      expect(of(checks, "fail")).toEqual([]);
+      expect(of(checks, "warn")).toEqual([]);
+      expect(of(checks, "ok")).toContain(`Base de données : Les ${listMigrations().length} migrations sont appliquées`);
+      expect(of(checks, "ok")).toContain("Sécurité des données : RLS active partout, rien pour anon, lecture seule pour le personnel connecté");
+    } finally {
+      await tx.query("ROLLBACK");
+      tx.release();
+    }
+  });
+
+  it("names a selling Brand without its look, an SVG logo and events on sale without a photo (Runs 50–53)", async () => {
+    const tx = await db.pool.connect();
+    try {
+      await tx.query("BEGIN");
+      await dressed(tx);
+      const h = seed.havana;
+      await tx.query(`UPDATE public.ticketing_brand_settings SET logo_url = NULL, accent_color = NULL, on_accent_color = NULL WHERE client_id = $1`, [h.clientId]);
+      await tx.query(`UPDATE public.ticketing_brand_settings SET logo_url = 'https://cdn.example.com/logo.SVG?v=2' WHERE client_id = $1`, [seed.festi.clientId]);
+      await tx.query(`UPDATE public.ticketing_events SET image_url = NULL, title = 'Nuit des lanternes' WHERE id = $1`, [h.eventId]);
+      const { rows } = await tx.query<{ n: number }>(
+        `SELECT count(*)::int AS n FROM public.ticketing_sessions WHERE event_id = $1 AND status = 'on_sale' AND starts_at > now()`, [h.eventId]);
+      expect(rows[0]!.n).toBeGreaterThan(0);
+      const warns = of(await checkDatabase(tx), "warn");
+      expect(warns).toContain("Clients et billetterie : Havana Resort — Événements vend sans son logo ni sa couleur : billets, boutique et courriels gardent le style neutre");
+      expect(warns).toContain("Clients et billetterie : Le logo de FESTI-ICE est un SVG : il manquera dans plusieurs logiciels de courriel");
+      expect(warns).toContain("Clients et billetterie : 1 événement(s) en vente sans photo (Havana Resort — Événements) : Nuit des lanternes");
+    } finally {
+      await tx.query("ROLLBACK");
+      tx.release();
+    }
   });
 
   it("finds a hole in RLS or grants, a missing migration and code older than the database", async () => {
@@ -172,6 +214,7 @@ describe("go-live check: database", () => {
     const tx = await db.pool.connect();
     try {
       await tx.query("BEGIN");
+      await dressed(tx);
       const f = seed.festi;
       await tx.query(
         `INSERT INTO public.ticketing_holds (client_id, brand_id, event_id, session_id, quantity, expires_at, created_at)
