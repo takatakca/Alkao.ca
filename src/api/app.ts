@@ -1290,7 +1290,29 @@ export function createApp(deps: AppDeps) {
   mountBuyerUi(app);
   mountUnsubscribe(app, { db: deps.db, masterSecret: deps.credentialMasterSecret ?? null, now });
   mountNewsletterPage(app, { db: deps.db, masterSecret: deps.credentialMasterSecret ?? null, now });
-  mountShopUi(app, { publicUrl: deps.publicUrl ?? null, paymentsMode: deps.paymentsMode ?? null });
+  mountShopUi(app, {
+    publicUrl: deps.publicUrl ?? null,
+    paymentsMode: deps.paymentsMode ?? null,
+    // Run 53: a shared link's preview, under the same gate as the public API.
+    preview: async (clientId, brandId, eventId) => {
+      if (!(await decide(clientId, brandId)).active) return null;
+      const scope = { clientId, brandId };
+      if (!eventId) {
+        const look = await appearanceDb.getAppearance(deps.db, scope);
+        return { title: null, description: null, imageUrl: look.logoUrl, brandName: look.brandName, place: null };
+      }
+      if (!(await catalog.loadPublicEvent(deps.db, scope, eventId))) return null;
+      const [details, place] = await Promise.all([catalog.getEvent(deps.db, scope, eventId), catalog.loadPublicEventPlace(deps.db, scope, eventId)]);
+      const venue = place.venue ? [place.venue.name, place.venue.city].filter(Boolean).join(", ") : null;
+      return {
+        title: details.title as string,
+        description: (details.description as string | null) ?? null,
+        imageUrl: (details.imageUrl as string | null) ?? place.brand?.logoUrl ?? null,
+        brandName: place.brand?.name ?? null,
+        place: venue,
+      };
+    },
+  });
 
   return app;
 }
