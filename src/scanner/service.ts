@@ -271,8 +271,8 @@ export class CredentialsService {
       ...(withBuyer ? { buyerName: order.buyer_name } : {}),
       tickets: here.map((r) => ({ id: r.id, ticketTypeName: r.name, status: r.status, admittedAt: r.admitted_at })),
       otherSessions: elsewhere.sort((a, b) => a.getTime() - b.getTime()).map((startsAt) => ({ startsAt })),
-      // Run 55: the options bought with the order (also after a session change).
-      options: await orderOptions(this.deps.db, scope, order.id),
+      // Runs 55, 57: the options to hand over with the order (also after a session change).
+      options: await orderOptions(this.deps.db, scope, order.id, { handOver: true }),
     };
   }
 

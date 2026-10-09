@@ -884,6 +884,7 @@ function Scanner({ api, base }) {
   const [camera, setCamera] = useState(false);
   const [offline, setOffline] = useState(null);
   const [attendance, setAttendance] = useState(null);
+  const [prep, setPrep] = useState(null);
   const [reference, setReference] = useState("");
   const [found, setFound] = useState(null);
   const [sound, setSound] = useState(soundWanted);
@@ -924,9 +925,14 @@ function Scanner({ api, base }) {
   }, [Boolean(offline), sessionId]);
 
   // Run 14: live gate counter, refreshed every 10 s and after each scan (online only).
-  const refreshAttendance = () => { if (sessionId && !loadOffline(sessionId)) api(`${base}/sessions/${sessionId}/attendance`).then((r) => setAttendance(r.attendance), () => {}); };
+  // Run 57: with it, the session's options to prepare and how many were handed over.
+  const refreshAttendance = () => {
+    if (!sessionId || loadOffline(sessionId)) return;
+    api(`${base}/sessions/${sessionId}/attendance`).then((r) => setAttendance(r.attendance), () => {});
+    api(`${base}/sessions/${sessionId}/options`).then((r) => setPrep(r.options), () => {});
+  };
   useEffect(() => {
-    setAttendance(null);
+    setAttendance(null); setPrep(null);
     if (!sessionId) return;
     refreshAttendance();
     const t = setInterval(refreshAttendance, 10_000);
@@ -985,6 +991,9 @@ function Scanner({ api, base }) {
     </div>
     ${attendance && html`<div class="card row" role="status" aria-label="Entrées">
       <strong class="big">${attendance.admitted} / ${attendance.valid}</strong><span class="muted">entrés · ${Math.max(attendance.valid - attendance.admitted, 0)} attendus · capacité ${attendance.capacity}</span></div>`}
+    ${prep?.length > 0 && html`<div class="card" aria-label="Options de la séance">
+      <h2>Options de la séance</h2>
+      <ul class="prep">${prep.map((o) => html`<li><span>${o.name}</span><span><strong>${o.handedOver} / ${o.sold}</strong> <span class="muted">remis</span></span></li>`)}</ul></div>`}
     ${sessionId && html`<div class="card row" aria-label="Mode hors ligne">
       ${offline ? html`<span class="badge warn">Hors ligne</span>
           <span class="muted">Liste du ${when(new Date(offline.downloadedAt).toISOString())} · ${offline.manifest.credentials.length} billets</span>

@@ -1000,6 +1000,26 @@ at checkout.
 
 The table `ticketing_newsletter_signups` is server-only: RLS on, no grant, no policy.
 
+### Options to prepare for a session (Run 57)
+
+| Method | Path | Who | Result |
+|---|---|---|---|
+| GET | `/v1/admin/…/sessions/:sessionId/options` | `ticketing.scan` (gate roles) | `200 { options: [{ ticketTypeId, name, sold, handedOver }] }` |
+
+What the kitchen and the activity staff prepare for an evening, and how much the gate has
+already handed over:
+
+- `sold`: the options of the orders whose valid tickets are for this session. After a session
+  change they count for the new session, with the original order's options.
+- `handedOver`: the part of `sold` whose order already had a ticket let in.
+- A fully refunded order or a voided ticket is not counted. A partial refund keeps its options,
+  as for the stock (Run 49).
+- **Only what staff hand over.** A session-change right (Flex Météo) is a promise, not an item:
+  it is left out here, from the scan's `options` and from the lookup by reference. The buyer
+  still sees it under « Vos options » and in the e-mails.
+- The /ops scanner shows « Options de la séance » under the gate counter (« 12 / 30 remis »),
+  refreshed with it.
+
 ### Options kept across session changes, shown at the gate (Run 55)
 
 A session change makes a new order that holds the admissions only, pointing to the original

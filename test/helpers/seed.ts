@@ -122,20 +122,17 @@ export async function seedTenant(db: Db, clientName: string, brandName: string, 
   }).then(async (base) => ({ ...base, ...(await seedPaidOrder(db, base)) }));
 }
 
-/** GENERAL ×2 + CHILD ×2 + FLEX ×4, held, ordered and paid. */
+/** GENERAL ×2 + CHILD ×2 + FLEX ×4 (or the cart given, by code), held, ordered and paid. */
 export async function seedPaidOrder(
   db: Db,
   t: Pick<TenantFixture, "clientId" | "brandId" | "eventId" | "sessionId" | "types">,
   email = `buyer-${randomUUID().slice(0, 8)}@example.com`,
+  cart: Record<string, number> = { GENERAL: 2, CHILD: 2, FLEX_WEATHER: 4 },
 ) {
   const id = (code: string) => t.types.find((x) => x.code === code)!.id;
   const result = buildQuote(
     t.types,
-    [
-      { ticketTypeId: id("GENERAL"), quantity: 2 },
-      { ticketTypeId: id("CHILD"), quantity: 2 },
-      { ticketTypeId: id("FLEX_WEATHER"), quantity: 4 },
-    ],
+    Object.entries(cart).map(([code, quantity]) => ({ ticketTypeId: id(code), quantity })),
     "CA-QC",
   );
   if (!result.ok) throw new Error("seed quote invalid");
@@ -170,6 +167,25 @@ export async function seedPaidOrder(
     );
     return { holdId: hold.id, orderId: order.id, buyerId: order.buyerId, ticketIds };
   });
+}
+
+/**
+ * Run 57: a meal on the tenant's event, up to one per person, for tests about the options
+ * handed over at the gate. Returns the fixture with the meal among its types.
+ */
+export async function withMeal<T extends Pick<TenantFixture, "clientId" | "brandId" | "eventId" | "types">>(db: Db, t: T): Promise<T> {
+  if (t.types.some((x) => x.code === "MEAL")) return t;
+  const meal: Omit<TicketTypeRule, "id"> = {
+    code: "MEAL", name: "Repas cantine", kind: "add_on", priceCents: 1500, minQuantity: 0, maxQuantity: 20,
+    maxAdultsInOrder: null, countsAsAdult: false, addOnScope: "up_to_admissions", active: true,
+  };
+  const { rows } = await db.query<{ id: string }>(
+    `INSERT INTO public.ticketing_ticket_types
+       (client_id, brand_id, event_id, code, name, kind, price_cents, min_quantity, max_quantity, counts_as_adult, add_on_scope, sort_order)
+     VALUES ($1, $2, $3, $4, $5, 'add_on', $6, 0, $7, false, $8, 50) RETURNING id`,
+    [t.clientId, t.brandId, t.eventId, meal.code, meal.name, meal.priceCents, meal.maxQuantity, meal.addOnScope],
+  );
+  return { ...t, types: [...t.types, { ...meal, id: rows[0]!.id }] };
 }
 
 /**

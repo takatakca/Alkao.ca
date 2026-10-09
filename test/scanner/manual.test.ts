@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { exchangeOrder } from "../../src/ops/exchange.js";
 import { adm, call, testApp, tokenFor, type TestApp } from "../helpers/app.js";
 import { createTestDatabase, type TestDatabase } from "../helpers/db.js";
-import { seedPaidOrder, seedTwoTenants, TEST_CREDENTIAL_SECRET, type SeedResult, type TenantFixture } from "../helpers/seed.js";
+import { seedPaidOrder, seedTwoTenants, TEST_CREDENTIAL_SECRET, withMeal, type SeedResult, type TenantFixture } from "../helpers/seed.js";
 
 /**
  * Run 22: at the gate without a QR code. Staff find the order by its reference and let a
@@ -23,13 +23,13 @@ afterAll(async () => {
 });
 
 /** A session whose doors are open now, and a paid order for it. */
-async function tonight(t: TenantFixture, email: string, startsIn = "10 minutes") {
+async function tonight(t: TenantFixture, email: string, startsIn = "10 minutes", cart?: Record<string, number>) {
   const { rows } = await db.pool.query<{ id: string }>(
     `INSERT INTO public.ticketing_sessions (client_id, brand_id, event_id, starts_at, capacity, status)
      VALUES ($1, $2, $3, now() + $4::interval, 50, 'on_sale') RETURNING id`,
     [t.clientId, t.brandId, t.eventId, startsIn],
   );
-  const order = await seedPaidOrder(db.pool, { ...t, sessionId: rows[0]!.id }, email);
+  const order = await seedPaidOrder(db.pool, { ...t, sessionId: rows[0]!.id }, email, cart);
   await db.pool.query(`UPDATE public.ticketing_buyers SET full_name = 'Luc Gagnon' WHERE id = $1`, [order.buyerId]);
   const { rows: o } = await db.pool.query<{ reference: string }>(`SELECT reference FROM public.ticketing_orders WHERE id = $1`, [order.orderId]);
   return { ...order, sessionId: rows[0]!.id, reference: o[0]!.reference };
@@ -134,33 +134,60 @@ describe("letting a ticket in without its QR code", () => {
   });
 });
 
-describe("options at the gate (Run 55)", () => {
-  const flexType = () => seed.havana.types.find((x) => x.code === "FLEX_WEATHER")!;
-  const flex = () => flexType().name;
+describe("options at the gate (Runs 55, 57)", () => {
+  // A family's meals, plus Flex Météo: a session-change right, nothing to hand over.
+  const cart = { GENERAL: 2, CHILD: 2, MEAL: 3, FLEX_WEATHER: 4 };
+  let t: TenantFixture;
+  let meal: { ticketTypeId: string; name: string; quantity: number };
+  beforeAll(async () => {
+    t = await withMeal(db.pool, seed.havana);
+    const m = t.types.find((x) => x.code === "MEAL")!;
+    meal = { ticketTypeId: m.id, name: m.name, quantity: 3 };
+  });
+  const options = (sessionId: string) =>
+    call(app, "GET", `${adm(t.clientId, t.brandId)}/sessions/${sessionId}/options`, { token: staffToken }).then((r) => r.body.options);
+  let staffToken = "";
+  beforeAll(async () => { staffToken = await tokenFor(seed.users.havanaStaff); });
 
-  it("lists the order's options with the first admission, then says they were handed over", async () => {
-    const t = seed.havana;
-    const order = await tonight(t, "repas@example.com");
+  it("lists the meals with the first admission, then says they were handed over", async () => {
+    const order = await tonight(t, "repas@example.com", "10 minutes", cart);
+    expect(await options(order.sessionId)).toEqual([{ ticketTypeId: meal.ticketTypeId, name: meal.name, sold: 3, handedOver: 0 }]);
     const first = (await admit(t, order.sessionId, order.ticketIds[0]!)).body.scan;
-    expect(first.options).toEqual({ items: [{ ticketTypeId: flexType().id, name: flex(), quantity: 4 }], already: false });
+    expect(first.options).toEqual({ items: [meal], already: false });
     const second = (await admit(t, order.sessionId, order.ticketIds[1]!)).body.scan;
-    expect(second.options).toEqual({ items: [{ ticketTypeId: flexType().id, name: flex(), quantity: 4 }], already: true });
+    expect(second.options).toEqual({ items: [meal], already: true });
     // A refused scan hands nothing over.
     expect((await admit(t, order.sessionId, order.ticketIds[0]!)).body.scan).not.toHaveProperty("options");
     // Gate staff see them when they find the order by its reference.
-    expect((await lookup(t, order.sessionId, order.reference)).body.order.options).toEqual([{ ticketTypeId: flexType().id, name: flex(), quantity: 4 }]);
+    expect((await lookup(t, order.sessionId, order.reference)).body.order.options).toEqual([meal]);
+    // Run 57: the session's count, once the family is in.
+    expect(await options(order.sessionId)).toEqual([{ ticketTypeId: meal.ticketTypeId, name: meal.name, sold: 3, handedOver: 3 }]);
   });
 
-  it("keeps them with the tickets after a session change", async () => {
-    const t = seed.havana;
-    const order = await tonight(t, "deplace@example.com", "2 days");
-    const target = await tonight(t, "autre@example.com");
+  it("keeps them with the tickets after a session change, and counts them for the new session", async () => {
+    const order = await tonight(t, "deplace@example.com", "2 days", cart);
+    const target = await tonight(t, "autre@example.com", "10 minutes", { GENERAL: 1, MEAL: 1 });
     const moved = await exchangeOrder(db.pool, t, order.orderId, target.sessionId, { type: "user", id: seed.users.havanaOwner });
+    expect(await options(order.sessionId)).toEqual([]);
+    expect(await options(target.sessionId)).toEqual([{ ticketTypeId: meal.ticketTypeId, name: meal.name, sold: 4, handedOver: 0 }]);
     const scan = (await admit(t, target.sessionId, moved.ticketIds[0]!)).body.scan;
-    expect(scan).toMatchObject({ result: "admitted", options: { items: [{ ticketTypeId: flexType().id, name: flex(), quantity: 4 }], already: false } });
+    expect(scan).toMatchObject({ result: "admitted", options: { items: [meal], already: false } });
     expect((await admit(t, target.sessionId, moved.ticketIds[1]!)).body.scan.options.already).toBe(true);
     // The original reference and the new one both show them.
-    expect((await lookup(t, target.sessionId, order.reference)).body.order.options).toEqual([{ ticketTypeId: flexType().id, name: flex(), quantity: 4 }]);
-    expect((await lookup(t, target.sessionId, moved.reference)).body.order.options).toEqual([{ ticketTypeId: flexType().id, name: flex(), quantity: 4 }]);
+    expect((await lookup(t, target.sessionId, order.reference)).body.order.options).toEqual([meal]);
+    expect((await lookup(t, target.sessionId, moved.reference)).body.order.options).toEqual([meal]);
+    expect(await options(target.sessionId)).toEqual([{ ticketTypeId: meal.ticketTypeId, name: meal.name, sold: 4, handedOver: 3 }]);
+  });
+
+  it("leaves Flex Météo out at the gate, and is for gate roles of this Client only", async () => {
+    const order = await tonight(t, "flex@example.com", "10 minutes", { GENERAL: 1, FLEX_WEATHER: 1 });
+    expect((await admit(t, order.sessionId, order.ticketIds[0]!)).body.scan).not.toHaveProperty("options");
+    expect((await lookup(t, order.sessionId, order.reference)).body.order.options).toEqual([]);
+    expect(await options(order.sessionId)).toEqual([]);
+    const f = seed.festi;
+    const res = await call(app, "GET", `${adm(f.clientId, f.brandId)}/sessions/${order.sessionId}/options`, { token: await tokenFor(seed.users.festiOwner) });
+    expect(res.status).toBe(404);
+    const viewer = await call(app, "GET", `${adm(t.clientId, t.brandId)}/sessions/${order.sessionId}/options`, { token: await tokenFor(seed.users.both) });
+    expect(viewer.status).toBe(403);
   });
 });

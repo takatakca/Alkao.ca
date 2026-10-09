@@ -111,6 +111,10 @@ a.link, button.link { background: none; border: 0; color: var(--brand); padding:
 .scan-options { margin-top: .9rem; padding: .75rem 1rem; border-radius: 10px; background: var(--panel); color: var(--ink); font-size: 1.1rem; font-weight: 600; text-align: left; }
 .scan-options strong { display: block; margin-bottom: .2rem; font-size: .8rem; text-transform: uppercase; letter-spacing: .06em; color: var(--brand); }
 .scan-options.given strong { color: var(--muted); }
+/* Run 57: the session's options to prepare (sold) and already handed over at the gate. */
+ul.prep { list-style: none; margin: 0; padding: 0; }
+ul.prep li { display: flex; justify-content: space-between; gap: 1rem; padding: .45rem 0; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+ul.prep li:last-child { border-bottom: 0; }
 video.camera { width: 100%; max-width: 420px; border-radius: 12px; background: #000; }
 input.scan { font-size: 1.1rem; width: 100%; }
 .big { font-size: 1.6rem; font-variant-numeric: tabular-nums; }

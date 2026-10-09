@@ -22,7 +22,7 @@ import { WebhookSignatureError, type PaymentGateway } from "../payments/gateway.
 import { PaymentsService } from "../payments/service.js";
 import * as paymentsDb from "../db/payments.js";
 import * as appearanceDb from "../db/appearance.js";
-import { orderOptions } from "../db/options.js";
+import { orderOptions, sessionOptions } from "../db/options.js";
 import { assertReadableColours } from "../domain/appearance.js";
 import * as credentialsDb from "../db/credentials.js";
 import { CredentialsService } from "../scanner/service.js";
@@ -1002,6 +1002,14 @@ export function createApp(deps: AppDeps) {
       [sessionId, scope.clientId, scope.brandId],
     );
     return c.json({ attendance: rows[0] });
+  });
+
+  // Run 57: the session's options to prepare and how many were handed over at the gate.
+  app.get(`${ADMIN}/sessions/:sessionId/options`, ...admin, can("ticketing.scan"), async (c) => {
+    const sessionId = param(c, "sessionId");
+    const scope = c.get("scope");
+    if (!sessionId || !(await inScope("ticketing_sessions", sessionId, scope))) return fail(c, 404, "session_not_found");
+    return c.json({ options: await sessionOptions(deps.db, scope, sessionId) });
   });
 
   app.get(`${ADMIN}/sessions/:sessionId/scans`, ...admin, can("ticketing.scan"), async (c) => {
