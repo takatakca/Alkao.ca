@@ -3,7 +3,7 @@
 Newest first, one line per piece of work. Rule: `AGENTS.md` › Work log rule.
 Format: `YYYY-MM-DD | agent | branch → PR | status | what | next step`
 
-- 2026-10-09 | claude (Code, cloud) | claude/amazing-pascal-tppqd4 → PR (this branch) | PR open | check:golive names a Brand without its look, an SVG logo, events on sale without a photo | merge when CI is green
+- 2026-10-09 | claude (Code, cloud) | claude/amazing-pascal-tppqd4 → PR #61 | PR open | check:golive names a Brand without its look, an SVG logo, events on sale without a photo | merge when CI is green
 - 2026-10-09 | claude (Code, cloud) | claude/amazing-pascal-tppqd4 → PR #60 | done | Run 53: shared shop links show the event (Open Graph) | none
 - 2026-10-09 | claude (Code, cloud) | claude/amazing-pascal-tppqd4 → PR #59 | done | Run 52: QR codes inside the tickets and reminder e-mails | none
 - 2026-10-09 | claude (Code, cloud) | claude/amazing-pascal-tppqd4 → PR #58 | done | /ops Apparence: logo hint says PNG, warns on SVG (e-mail apps); test servers stop at once | none
