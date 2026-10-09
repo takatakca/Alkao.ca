@@ -994,6 +994,20 @@ at checkout.
 
 The table `ticketing_newsletter_signups` is server-only: RLS on, no grant, no policy.
 
+### Shared shop links (Run 53)
+
+A link to the hosted shop shared on Facebook, Instagram, Messenger or by text shows the event,
+not a blank card. The server fills the page's head for `/acheter/:clientId/:brandId/:eventId`:
+`<title>` (event — Brand), `description` (the event's description, or its place), and the
+Open Graph tags `og:title`, `og:description`, `og:image` (the event's photo, else the Brand's
+logo, https only), `og:url` (with `ALKAO_PUBLIC_URL`), `og:site_name` and `twitter:card`.
+`/acheter/:clientId/:brandId` names the Brand.
+
+- Same gate as the public API: only a published event of a Brand whose Ticketing is active.
+- A draft, an unknown event, another Brand's event or a closed Ticketing keeps the plain page
+  (« Billetterie »), which reveals nothing.
+- Every value is escaped; an error in the lookup serves the plain page.
+
 ### QR codes inside the e-mails (Run 52)
 
 The tickets e-mail, the new-tickets e-mail after a session change, and the reminder the day
