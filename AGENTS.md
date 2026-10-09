@@ -14,3 +14,7 @@ Line format: `YYYY-MM-DD | agent | branch → PR | status | what | next step`
 ## Brand rule
 
 Everything visual or written for TAKATAK follows `BRAND.md` (logo, colours, tagline, services). Electric blue on deep navy; never the old gold "TK" logo; green is for status only.
+
+## Domains
+
+Who holds each domain is in `docs/DOMAINS.md`. `festi-ice.ca` is at **IONOS**: DNS changes for it start there, not in MochaHost.
