@@ -7,7 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { listMigrations } from "../../src/db/migrate.js";
 import { checkDatabase, checkEnvironment, checkLive, type Check } from "../../src/ops/golive.js";
 import { ipKind } from "../../src/api/client-ip.js";
-import { call, testApp, type TestApp } from "../helpers/app.js";
+import { call, stopServer, testApp, type TestApp } from "../helpers/app.js";
 import { createTestDatabase, type TestDatabase } from "../helpers/db.js";
 import { FakeGateway } from "../helpers/fake-gateway.js";
 import { seedTwoTenants, TEST_CREDENTIAL_SECRET, type SeedResult } from "../helpers/seed.js";
@@ -57,7 +57,7 @@ beforeAll(async () => {
 }, 60_000);
 
 afterAll(async () => {
-  await new Promise((r) => server?.close(r));
+  await stopServer(server);
   await db?.drop();
 });
 

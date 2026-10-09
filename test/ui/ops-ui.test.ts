@@ -4,7 +4,7 @@ import type { AddressInfo } from "node:net";
 import { serve, type ServerType } from "@hono/node-server";
 import { chromium, type Browser, type Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { adm, call, pub, testApp, tokenFor, type TestApp } from "../helpers/app.js";
+import { adm, call, pub, stopServer, testApp, tokenFor, type TestApp } from "../helpers/app.js";
 import { createTestDatabase, type TestDatabase } from "../helpers/db.js";
 import { line, report } from "../helpers/reservations.js";
 import { seedAfterSale, seedPaidOrder, seedTwoTenants, TEST_CREDENTIAL_SECRET, type SeedResult } from "../helpers/seed.js";
@@ -37,7 +37,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await browser?.close();
-  await new Promise((r) => server?.close(r));
+  await stopServer(server);
   await db?.drop();
 });
 
@@ -801,8 +801,8 @@ describe("ALKAO Operations embedded in the TAKATAK dashboard", () => {
   }, 60_000);
 
   afterAll(async () => {
-    await new Promise((r) => embedServer?.close(r));
-    await new Promise((r) => parent?.close(r));
+    await stopServer(embedServer);
+    await stopServer(parent);
   });
 
   it("allows only the configured parent to frame it", async () => {

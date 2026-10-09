@@ -3,7 +3,7 @@ import type { AddressInfo } from "node:net";
 import { serve, type ServerType } from "@hono/node-server";
 import { chromium, type Browser } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { testApp, tokenFor, type TestApp } from "../helpers/app.js";
+import { stopServer, testApp, tokenFor, type TestApp } from "../helpers/app.js";
 import { createTestDatabase, type TestDatabase } from "../helpers/db.js";
 import { seedTwoTenants, type SeedResult } from "../helpers/seed.js";
 
@@ -35,7 +35,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await browser?.close();
-  for (const s of servers) await new Promise((r) => s.close(r));
+  for (const s of servers) await stopServer(s);
   await db?.drop();
 });
 

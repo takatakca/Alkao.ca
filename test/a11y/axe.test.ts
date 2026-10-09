@@ -5,7 +5,7 @@ import { randomUUID } from "node:crypto";
 import { serve, type ServerType } from "@hono/node-server";
 import { chromium, type Browser, type Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { call, pub, testApp, tokenFor, type TestApp } from "../helpers/app.js";
+import { call, pub, stopServer, testApp, tokenFor, type TestApp } from "../helpers/app.js";
 import { createTestDatabase, type TestDatabase } from "../helpers/db.js";
 import { FakeGateway } from "../helpers/fake-gateway.js";
 import { seedAfterSale, seedTwoTenants, TEST_CREDENTIAL_SECRET, type SeedResult } from "../helpers/seed.js";
@@ -40,7 +40,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await browser?.close();
-  await new Promise((r) => server?.close(r));
+  await stopServer(server);
   await db?.drop();
 });
 

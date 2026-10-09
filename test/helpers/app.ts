@@ -24,6 +24,19 @@ export function testApp(db: Db, overrides: Partial<AppDeps> = {}) {
 
 export type TestApp = ReturnType<typeof testApp>;
 
+/**
+ * Stops a test server at once. close() alone waits for every open connection, and Chromium
+ * opens sockets ahead of time that never send a request: Node keeps those until its 60 s
+ * header timeout, longer than a test hook may take.
+ */
+export function stopServer(server: { close(done: () => void): unknown; closeAllConnections?(): void } | undefined): Promise<void> {
+  return new Promise((resolve) => {
+    if (!server) return resolve();
+    server.close(() => resolve());
+    server.closeAllConnections?.();
+  });
+}
+
 export async function tokenFor(userId: string, opts: { secret?: string; role?: string; expiresIn?: string } = {}) {
   return new SignJWT({ role: opts.role ?? "authenticated" })
     .setProtectedHeader({ alg: "HS256" })

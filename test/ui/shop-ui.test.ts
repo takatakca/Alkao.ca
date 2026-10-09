@@ -4,7 +4,7 @@ import { serve, type ServerType } from "@hono/node-server";
 import { chromium, type Browser, type Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { CreateCheckoutInput } from "../../src/payments/gateway.js";
-import { call, testApp, type TestApp } from "../helpers/app.js";
+import { call, stopServer, testApp, type TestApp } from "../helpers/app.js";
 import { createTestDatabase, type TestDatabase } from "../helpers/db.js";
 import { completedSession, FakeGateway, signedStripeEvent } from "../helpers/fake-gateway.js";
 import { seedPaidOrder, seedTwoTenants, TEST_CREDENTIAL_SECRET, type SeedResult, type TenantFixture } from "../helpers/seed.js";
@@ -36,7 +36,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await browser?.close();
-  await new Promise((r) => server?.close(r));
+  await stopServer(server);
   await db?.drop();
 });
 
