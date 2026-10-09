@@ -3,7 +3,8 @@
 Newest first, one line per piece of work. Rule: `AGENTS.md` › Work log rule.
 Format: `YYYY-MM-DD | agent | branch → PR | status | what | next step`
 
-- 2026-10-09 | claude (Code, cloud) | claude/amazing-pascal-tppqd4 → PR #66 | PR open | Run 58: options to hand over in the offline scanner manifest | merge when CI is green
+- 2026-10-09 | claude (Code, cloud) | claude/amazing-pascal-tppqd4 → PR #67 | PR open | Run 59: tickets grouped by type, Flex shown as a right; docs/DOMAINS.md (festi-ice.ca at IONOS) | merge when CI is green
+- 2026-10-09 | claude (Code, cloud) | claude/amazing-pascal-tppqd4 → PR #66 | done | Run 58: options to hand over in the offline scanner manifest | none
 - 2026-10-09 | claude (Code, cloud) | claude/amazing-pascal-tppqd4 → PR #65 | done | Run 57: per-session options to prepare at the gate; Flex Météo not listed as an item to hand over | none
 - 2026-10-09 | claude (Code, cloud) | claude/amazing-pascal-tppqd4 → PR #64 | done | Run 56: add-on stock per session follows a session change (refused if sold out there) | none
 - 2026-10-09 | claude (Code, cloud) | claude/amazing-pascal-tppqd4 → PR #63 | done | Run 55: options kept across session changes, shown at the gate scan | none

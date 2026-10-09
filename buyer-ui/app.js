@@ -62,6 +62,7 @@ const T = {
     kept: "Billets enregistrés sur cet appareil : ils s'afficheront même sans réseau.",
     options: "Vos options",
     optionsTip: "Montrez cette page pour les recevoir sur place.",
+    optionRight: "Droit de changer de séance, rien à recevoir sur place",
   },
   en: {
     errors: {
@@ -116,6 +117,7 @@ const T = {
     kept: "Tickets saved on this device: they will show even without a network.",
     options: "Your options",
     optionsTip: "Show this page to receive them on site.",
+    optionRight: "Right to change session, nothing to pick up on site",
   },
 }[LANG];
 
@@ -395,8 +397,8 @@ function App() {
     </div>
     ${addOns.length > 0 && html`<section class="card options" aria-labelledby="options-title">
       <h2 id="options-title">${T.options}</h2>
-      <ul>${addOns.map((l) => html`<li><span>${l.name}</span><strong>× ${l.quantity}</strong></li>`)}</ul>
-      <p class="muted">${T.optionsTip}</p>
+      <ul>${addOns.map((l) => html`<li><span>${l.name}${l.sessionChange && html`<small class="muted">${T.optionRight}</small>`}</span><strong>× ${l.quantity}</strong></li>`)}</ul>
+      ${addOns.some((l) => !l.sessionChange) && html`<p class="muted">${T.optionsTip}</p>`}
     </section>`}
     ${state.offlineSince && html`<div class="alert" role="status">${T.offline(savedOn(state.offlineSince))}</div>`}
     ${o.status === "pending_payment" && html`<div class="alert">${T.pending}</div>`}

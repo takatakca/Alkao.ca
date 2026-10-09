@@ -58,6 +58,8 @@ describe("QR codes inside the e-mails", () => {
     const tickets = await pageCredentials(t.orderId);
     expect(tickets.length).toBeGreaterThan(0);
     expect(m!.attachments).toHaveLength(tickets.length);
+    // Run 59: in the tickets page's order, grouped by ticket type.
+    expect(m!.attachments!.map((a) => a.filename)).toEqual(tickets.map((x) => `billet-${x.id.slice(0, 8).toUpperCase()}.gif`));
     for (const ticket of tickets) {
       const code = ticket.id.slice(0, 8).toUpperCase();
       const a = m!.attachments!.find((x) => x.filename === `billet-${code}.gif`)!;
@@ -124,7 +126,7 @@ describe("QR codes inside the e-mails", () => {
     // The new order holds the admissions only; the options are read from the original.
     const page = await call(app, "GET", `${pub(t.clientId, t.brandId)}/orders/${ex.body.exchange.orderId}`, { headers: { "x-alkao-order-token": ex.body.exchange.token } });
     expect(page.body.order.lines.some((l: { kind: string }) => l.kind === "add_on")).toBe(false);
-    expect(page.body.order.options).toEqual([{ ticketTypeId: flex.id, name: flex.name, quantity: 4 }]);
+    expect(page.body.order.options).toEqual([{ ticketTypeId: flex.id, name: flex.name, quantity: 4, sessionChange: true }]);
     const [m] = await deliver();
     expect(m!.subject).toMatch(/^Vos nouveaux billets/);
     expect(m!.html).toContain(`Options : ${flex.name} × 4`);
