@@ -152,6 +152,12 @@ export async function deliverTicketEmails(db: Db, cfg: DeliveryConfig, now = new
       if (!["paid", "partially_refunded"].includes(row.order_status) || row.valid_tickets === 0) return skip("no_valid_ticket");
       // Run 52: the tickets' QR codes inside the e-mail, readable at the gate without a network.
       const inline = await emailCodes(tx, credentials, { clientId: row.client_id, brandId: row.brand_id }, row.order_id);
+      // Run 54: the options bought, which have no QR code of their own.
+      const { rows: addOns } = await tx.query<{ name: string; quantity: number }>(
+        `SELECT name_snapshot AS name, quantity FROM public.ticketing_order_lines
+         WHERE order_id = $1 AND client_id = $2 AND brand_id = $3 AND kind = 'add_on' AND quantity > 0 ORDER BY created_at, id`,
+        [row.order_id, row.client_id, row.brand_id],
+      );
       if (row.kind === "reminder") {
         // Run 23: too late once the session has started, pointless if it was cancelled.
         if (row.session_status === "cancelled") return skip("session_cancelled");
@@ -160,7 +166,7 @@ export async function deliverTicketEmails(db: Db, cfg: DeliveryConfig, now = new
           ...reminderEmail({
             language: row.language, brandName: row.brand_name, look, buyerName: row.full_name, reference: row.reference, eventTitle: row.event_title,
             startsAt: row.starts_at, venueName: row.venue_name, city: row.city, timezone: row.timezone, validTickets: row.valid_tickets,
-            link: await personalLink(), codes: inline?.codes,
+            link: await personalLink(), codes: inline?.codes, addOns,
           }),
           attachments: inline?.attachments,
         });
@@ -181,6 +187,7 @@ export async function deliverTicketEmails(db: Db, cfg: DeliveryConfig, now = new
         validTickets: row.valid_tickets,
         link,
         codes: inline?.codes,
+        addOns,
       });
       return send({ ...content, attachments: inline?.attachments });
     });

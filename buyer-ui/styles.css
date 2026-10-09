@@ -92,3 +92,9 @@ a.button { display: inline-block; padding: .65rem 1rem; border-radius: 10px; bac
 /* Run 51: the tickets are kept on this device. */
 .kept { margin: -.4rem 0 .9rem; color: var(--ok); font-size: .9rem; }
 .kept::before { content: "✓ "; font-weight: 700; }
+/* Run 54: the options bought with the tickets (meals, activities…), which have no QR code. */
+.options h2 { margin: 0 0 .5rem; font-size: 1.05rem; }
+.options ul { list-style: none; margin: 0 0 .5rem; padding: 0; }
+.options li { display: flex; justify-content: space-between; gap: .75rem; padding: .45rem 0; border-bottom: 1px solid var(--line); }
+.options li:last-child { border-bottom: 0; }
+.options p { margin: 0; font-size: .9rem; }

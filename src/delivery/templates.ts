@@ -96,6 +96,8 @@ export interface TicketsEmailData {
   link: string;
   /** Run 52: the QR codes shown in the e-mail itself (inline images), when there are few enough. */
   codes?: EmailCode[] | null;
+  /** Run 54: the options bought with the tickets (meals, activities…), which have no QR code. */
+  addOns?: { name: string; quantity: number }[] | null;
 }
 
 const TICKETS = {
@@ -115,6 +117,7 @@ const TICKETS = {
     codesNote: "Montrez-les à l'entrée, même sans réseau. Si votre commande change, la page de vos billets reste la référence.",
     codesText: "Vos codes QR sont aussi dans ce courriel (version avec images).",
     qrAlt: (code: string) => `Code QR du billet ${code}`,
+    options: "Options",
   },
   en: {
     title: (changed: boolean) => (changed ? "Your new tickets" : "Your tickets"),
@@ -132,6 +135,7 @@ const TICKETS = {
     codesNote: "Show them at the entrance, even without a network. If your order changes, your tickets page is always up to date.",
     codesText: "Your QR codes are also in this e-mail (version with images).",
     qrAlt: (code: string) => `QR code of ticket ${code}`,
+    options: "Options",
   },
 };
 
@@ -151,6 +155,10 @@ function codeRows(t: { codesTitle: string; codesNote: string; qrAlt: (code: stri
   ];
 }
 
+/** Run 54: "Options : Repas × 2 · Gonflables × 2", or nothing. */
+const optionsLine = (label: string, addOns: TicketsEmailData["addOns"]) =>
+  addOns?.length ? `${label} : ${addOns.map((a) => `${a.name} × ${a.quantity}`).join(" · ")}` : null;
+
 export function ticketsEmail(d: TicketsEmailData): Content {
   const l = d.language ?? "fr";
   const t = TICKETS[l];
@@ -162,10 +170,11 @@ export function ticketsEmail(d: TicketsEmailData): Content {
   const intro = t.intro(changed, d.reference);
   const subject = `${t.title(changed)} — ${d.eventTitle} (${d.reference})`;
   const codes = d.codes?.length ? ["", t.codesText] : [];
-  const text = [hello, "", intro, "", d.eventTitle, when, where, count, "", `${t.linkLine}${d.link}`, ...codes, "", t.advice, "", footerText(l, d.brandName, d.look)].join("\n");
+  const options = optionsLine(t.options, d.addOns);
+  const text = [hello, "", intro, "", d.eventTitle, when, where, count, ...(options ? [options] : []), "", `${t.linkLine}${d.link}`, ...codes, "", t.advice, "", footerText(l, d.brandName, d.look)].join("\n");
   const html = layout(l, d.brandName, t.title(changed), [
     paragraph(`${esc(hello)}<br>${esc(intro)}`),
-    box(`<strong>${esc(d.eventTitle)}</strong><br>${esc(when)}<br>${esc(where)}<br>${esc(count)} · ${t.order} ${esc(d.reference)}`),
+    box(`<strong>${esc(d.eventTitle)}</strong><br>${esc(when)}<br>${esc(where)}<br>${esc(count)} · ${t.order} ${esc(d.reference)}${options ? `<br>${esc(options)}` : ""}`),
     button(d.link, t.show, d.look),
     ...codeRows(t, d.codes),
     note(esc(t.advice), Boolean(d.codes?.length)),
@@ -199,10 +208,11 @@ export function reminderEmail(d: ReminderEmailData): Content {
   const hello = t.hello(d.buyerName);
   const intro = r.intro(d.reference);
   const codes = d.codes?.length ? ["", t.codesText] : [];
-  const text = [hello, "", intro, "", d.eventTitle, when, where, count, "", `${t.linkLine}${d.link}`, ...codes, "", t.advice, "", footerText(l, d.brandName, d.look)].join("\n");
+  const options = optionsLine(t.options, d.addOns);
+  const text = [hello, "", intro, "", d.eventTitle, when, where, count, ...(options ? [options] : []), "", `${t.linkLine}${d.link}`, ...codes, "", t.advice, "", footerText(l, d.brandName, d.look)].join("\n");
   const html = layout(l, d.brandName, r.title, [
     paragraph(`${esc(hello)}<br>${esc(intro)}`),
-    box(`<strong>${esc(d.eventTitle)}</strong><br>${esc(when)}<br>${esc(where)}<br>${esc(count)} · ${t.order} ${esc(d.reference)}`),
+    box(`<strong>${esc(d.eventTitle)}</strong><br>${esc(when)}<br>${esc(where)}<br>${esc(count)} · ${t.order} ${esc(d.reference)}${options ? `<br>${esc(options)}` : ""}`),
     button(d.link, t.show, d.look),
     ...codeRows(t, d.codes),
     note(esc(t.advice), Boolean(d.codes?.length)),

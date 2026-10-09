@@ -69,6 +69,10 @@ describe("QR codes inside the e-mails", () => {
     }
     expect(m!.html).toContain("Vos codes QR");
     expect(m!.text).toContain("Vos codes QR sont aussi dans ce courriel");
+    // Run 54: the options bought, which have no QR code of their own.
+    const flex = t.types.find((x) => x.code === "FLEX_WEATHER")!;
+    expect(m!.html).toContain(`Options : ${flex.name} × 4`);
+    expect(m!.text).toContain(`Options : ${flex.name} × 4`);
   });
 
   it("are in the reminder the day before too", async () => {
