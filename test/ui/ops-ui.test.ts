@@ -7,7 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { adm, call, pub, stopServer, testApp, tokenFor, type TestApp } from "../helpers/app.js";
 import { createTestDatabase, type TestDatabase } from "../helpers/db.js";
 import { line, report } from "../helpers/reservations.js";
-import { seedAfterSale, seedPaidOrder, seedTwoTenants, TEST_CREDENTIAL_SECRET, type SeedResult } from "../helpers/seed.js";
+import { seedAfterSale, seedPaidOrder, withMeal, seedTwoTenants, TEST_CREDENTIAL_SECRET, type SeedResult } from "../helpers/seed.js";
 
 /**
  * End-to-end: the real server, a real Chromium, the Operations app driven like a staff member.
@@ -247,7 +247,8 @@ describe("ALKAO Operations app", () => {
       [t.clientId, t.brandId, t.eventId],
     );
     const sessionId = rows[0]!.id;
-    const order = await seedPaidOrder(db.pool, { ...t, sessionId }, "sans-qr@example.com");
+    const fed = await withMeal(db.pool, t);
+    const order = await seedPaidOrder(db.pool, { ...fed, sessionId }, "sans-qr@example.com", { GENERAL: 2, CHILD: 2, MEAL: 4, FLEX_WEATHER: 4 });
     const { rows: o } = await db.pool.query<{ reference: string }>(`SELECT reference FROM public.ticketing_orders WHERE id = $1`, [order.orderId]);
 
     const page = await signedIn(seed.users.havanaStaff);
@@ -260,13 +261,19 @@ describe("ALKAO Operations app", () => {
     const found = page.getByLabel("Commande trouvée");
     await found.getByText(o[0]!.reference).waitFor();
     expect(await found.textContent()).not.toContain("sans-qr@example.com");
-    // Run 55: the options bought with the order, to hand over at the gate.
-    const flex = t.types.find((x) => x.code === "FLEX_WEATHER")!.name;
-    await found.getByText(`Options : ${flex} × 4`).waitFor();
+    // Runs 55, 57: the meals bought with the order, to hand over at the gate (Flex Météo is a
+    // session-change right, not an item), and the session's count.
+    const meal = fed.types.find((x) => x.code === "MEAL")!.name;
+    await found.getByText(`Options : ${meal} × 4`).waitFor();
+    expect(await found.textContent()).not.toContain("Flex");
+    const prep = page.getByLabel("Options de la séance");
+    await prep.getByText(meal).waitFor();
+    expect(await prep.textContent()).toContain("0 / 4");
     await found.getByRole("button", { name: "Faire entrer" }).first().click();
     await page.getByRole("status").getByText("ENTRÉE ACCEPTÉE").waitFor();
     await page.getByRole("status").getByText("Options à remettre").waitFor();
-    await page.getByRole("status").getByText(`${flex} × 4`).waitFor();
+    await page.getByRole("status").getByText(`${meal} × 4`).waitFor();
+    await prep.getByText("4 / 4").waitFor();
     await found.getByText("Entré le", { exact: false }).first().waitFor();
     await found.getByRole("button", { name: "Faire entrer" }).first().click();
     await page.getByRole("status").getByText("Options déjà remises à une entrée précédente").waitFor();
