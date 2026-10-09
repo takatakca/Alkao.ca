@@ -3,7 +3,7 @@
 Newest first, one line per piece of work. Rule: `AGENTS.md` › Work log rule.
 Format: `YYYY-MM-DD | agent | branch → PR | status | what | next step`
 
-- 2026-10-09 | claude (Code, cloud) | claude/amazing-pascal-tppqd4 → PR (this branch) | PR open | Run 52: QR codes inside the tickets and reminder e-mails | merge when CI is green
+- 2026-10-09 | claude (Code, cloud) | claude/amazing-pascal-tppqd4 → PR #59 | PR open | Run 52: QR codes inside the tickets and reminder e-mails | merge when CI is green
 - 2026-10-09 | claude (Code, cloud) | claude/amazing-pascal-tppqd4 → PR #58 | done | /ops Apparence: logo hint says PNG, warns on SVG (e-mail apps); test servers stop at once | none
 - 2026-10-08 | claude (Code, cloud) | claude/amazing-pascal-tppqd4 → PR #56 | done | /ops in the GROUPE TAKATAK brand (BRAND.md): navy, brand blue, electric-blue tile; colours only | none
 - 2026-10-08 | claude (Code, cloud) | claude/amazing-pascal-tppqd4 → PR #55 | done | Run 51: tickets open without a network at the gate (service worker + copy kept on the phone) | none
