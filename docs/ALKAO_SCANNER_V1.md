@@ -45,11 +45,19 @@ Permission `ticketing.scan` (owner, admin, manager, staff). The manifest is vali
   "session": { "id": "…", "eventId": "…", "startsAt": "…", "endsAt": null,
                "admission": { "opensAt": "…", "closesAt": "…" } },
   "keys": [{ "kid": "k…", "algorithm": "Ed25519", "publicKey": "<32 bytes base64url>", "status": "active" }],
-  "credentials": [{ "id": "<uuid>", "qrId": "<as in the QR>", "ticketTypeCode": "CHILD", "ticketTypeName": "Enfant — 2 à 12 ans" }],
+  "credentials": [{ "id": "<uuid>", "qrId": "<as in the QR>", "ticketTypeCode": "CHILD", "ticketTypeName": "Enfant — 2 à 12 ans", "purchase": "p1" }],
   "admitted": [{ "id": "…", "qrId": "…" }],
-  "revoked": [{ "id": "…", "qrId": "…" }]
+  "revoked": [{ "id": "…", "qrId": "…" }],
+  "purchases": [{ "ref": "p1", "items": [{ "name": "Repas cantine", "quantity": 3 }], "entered": false }]
 }
 ```
+
+**Options (Run 58).** `purchases` lists, for each order with valid tickets for the session,
+the options staff hand over (meals, activities; never a session-change right such as Flex
+Météo), and `entered` when a ticket of the order was already let in. A credential whose order
+has such options names it in `purchase`. `ref` is a short reference local to this manifest,
+not the order id. The fields are additive: a reader of `alkao.scanner.v1` that ignores them
+works as before.
 
 The admission window is set per event: `admissionOpensBeforeMinutes` (default 60) before the
 session starts, until `admissionClosesAfterMinutes` (default 120) after it ends, or after it
@@ -77,7 +85,8 @@ once online, or with **Synchroniser maintenant**. After a sync the device downlo
 manifest. The server stays the authority. When a ticket admitted offline turns out to have
 entered at another gate, it is counted and shown as a conflict ("aussi entré à une autre
 porte"); the gate log keeps a single admission. The manifest holds no buyer data, only
-credential ids and ticket type names.
+credential ids, ticket type names and the options' names and quantities. Offline, the first
+ticket of an order let in shows « Options à remettre », the next ones « déjà remises » (Run 58).
 
 ## Scans
 

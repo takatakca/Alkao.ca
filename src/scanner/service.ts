@@ -6,7 +6,7 @@ import { withTransaction, type Db, type Tx } from "../db/pool.js";
 import { derivePrivateKey, publicKeyB64, signMessage, verifyMessage } from "../credentials/keys.js";
 import { buildPayload, parsePayload, signedPart, uuidToB64 } from "../credentials/payload.js";
 import { DomainError } from "../domain/errors.js";
-import { optionsAtAdmission, orderOptions, type OrderOption } from "../db/options.js";
+import { optionsAtAdmission, orderOptions, sessionPurchases, type OrderOption } from "../db/options.js";
 
 export const MANIFEST_FORMAT = "alkao.scanner.v1";
 export const MANIFEST_TTL_SECONDS = 10 * 60;
@@ -131,12 +131,17 @@ export class CredentialsService {
     await this.ensureActiveKey(scope.clientId);
     const session = await creds.getGateSession(this.deps.db, scope, sessionId);
     if (!session) throw new DomainError("session_not_found");
-    const [keys, credentials] = await Promise.all([
+    const [keys, credentials, bought] = await Promise.all([
       creds.verifyingKeys(this.deps.db, scope.clientId),
       creds.sessionCredentials(this.deps.db, scope, sessionId),
+      sessionPurchases(this.deps.db, scope, sessionId),
     ]);
     const now = this.deps.now();
     const entry = (c: { id: string }) => ({ id: c.id, qrId: uuidToB64(c.id) });
+    // Run 58: the options to hand over, by purchase (a short reference local to this manifest),
+    // so an offline gate shows them once per order too.
+    const refs = new Map([...bought.keys()].map((orderId, i) => [orderId, `p${i + 1}`]));
+    const purchase = (orderId: string) => (refs.has(orderId) ? { purchase: refs.get(orderId)! } : {});
     return {
       format: MANIFEST_FORMAT,
       generatedAt: now,
@@ -151,9 +156,10 @@ export class CredentialsService {
       keys: keys.map((k) => ({ kid: k.kid, algorithm: "Ed25519", publicKey: k.publicKey, status: k.status })),
       credentials: credentials
         .filter((c) => c.status === "active" && !c.admitted)
-        .map((c) => ({ ...entry(c), ticketTypeCode: c.code, ticketTypeName: c.name })),
+        .map((c) => ({ ...entry(c), ticketTypeCode: c.code, ticketTypeName: c.name, ...purchase(c.order_id) })),
       admitted: credentials.filter((c) => c.admitted).map(entry),
       revoked: credentials.filter((c) => c.status === "revoked" && !c.admitted).map(entry),
+      purchases: [...bought].map(([orderId, p]) => ({ ref: refs.get(orderId)!, items: p.items, entered: p.entered })),
     };
   }
 

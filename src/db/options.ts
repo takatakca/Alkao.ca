@@ -97,3 +97,39 @@ export async function sessionOptions(q: Queryable, s: TenantScope, sessionId: st
   );
   return rows.map((r) => ({ ticketTypeId: r.ticket_type_id, name: r.name, sold: r.sold, handedOver: r.handed_over }));
 }
+
+/**
+ * Run 58: for the offline gate, the options to hand over of each order with valid tickets for
+ * the session, and whether the order already had a ticket let in. By order id; orders without
+ * options are left out. Names and quantities only, nothing about the buyer.
+ */
+export async function sessionPurchases(q: Queryable, s: TenantScope, sessionId: string): Promise<Map<string, { items: { name: string; quantity: number }[]; entered: boolean }>> {
+  const { rows } = await q.query<{ order_id: string; name: string; quantity: number; entered: boolean }>(
+    `WITH here AS (
+       SELECT DISTINCT k.order_id FROM public.ticketing_tickets k
+       WHERE k.session_id = $1 AND k.client_id = $2 AND k.brand_id = $3 AND k.status = 'valid'
+     ), purchases AS (
+       SELECT o.id, o.exchange_of_order_id, EXISTS (
+         SELECT 1 FROM public.ticketing_tickets x
+         JOIN public.ticketing_scans sc ON sc.ticket_id = x.id AND sc.result = 'admitted' AND sc.client_id = x.client_id AND sc.brand_id = x.brand_id
+         WHERE x.order_id = o.id AND x.client_id = o.client_id AND x.brand_id = o.brand_id
+       ) AS entered
+       FROM here h JOIN public.ticketing_orders o ON o.id = h.order_id AND o.client_id = $2 AND o.brand_id = $3
+     )
+     SELECT p.id AS order_id, l.name_snapshot AS name, l.quantity, p.entered
+     FROM purchases p
+     JOIN public.ticketing_order_lines l ON l.order_id IN (p.id, p.exchange_of_order_id) AND l.client_id = $2 AND l.brand_id = $3
+       AND l.kind = 'add_on' AND l.quantity > 0
+     JOIN public.ticketing_ticket_types t ON t.id = l.ticket_type_id AND t.client_id = l.client_id AND t.brand_id = l.brand_id
+     WHERE NOT t.grants_session_change
+     ORDER BY p.id, l.created_at, l.id`,
+    [sessionId, s.clientId, s.brandId],
+  );
+  const out = new Map<string, { items: { name: string; quantity: number }[]; entered: boolean }>();
+  for (const r of rows) {
+    const p = out.get(r.order_id) ?? { items: [], entered: r.entered };
+    p.items.push({ name: r.name, quantity: Number(r.quantity) });
+    out.set(r.order_id, p);
+  }
+  return out;
+}

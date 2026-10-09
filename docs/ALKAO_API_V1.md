@@ -1037,8 +1037,8 @@ the tickets:
   Every other result and an order without options carry no `options`.
 - **Lookup by reference** (`GET …/sessions/:sessionId/lookup`) returns `order.options`, with
   the original reference or the new one.
-- Offline scans (on the device, Run 03 manifest) show no options. The device does not hold
-  the orders.
+- Offline scans show them too, from the scanner manifest (Run 58,
+  [ALKAO_SCANNER_V1.md](ALKAO_SCANNER_V1.md)).
 
 ### Options on the tickets page and in the e-mails (Run 54)
 
