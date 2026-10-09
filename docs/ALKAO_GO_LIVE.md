@@ -96,7 +96,11 @@ How it behaves:
 2. A Client owner opens `/ops`, then **Paiements**, then connects Stripe, and lists the
    Brand's website origins allowed after payment.
 3. Staff create the venue, event, sessions and ticket types, then put sessions on sale and
-   publish.
+   publish. In **Apparence**, they set the Brand's logo (a PNG on a transparent background),
+   its colour and its contact details, and give each event a photo (« Ajouter une photo »).
+   The tickets page, the shop, the e-mails and the shared links use them (Runs 50–53);
+   `check:golive` names a selling Brand without its look, an SVG logo, and events on sale
+   without a photo.
 4. Share the shop link `https://…/acheter/<clientId>/<brandId>`, or the Brand's own site can
    call the public API.
 5. Run `npm run check:golive -- --url https://… --client … --brand …` until nothing is
