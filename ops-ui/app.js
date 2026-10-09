@@ -1491,9 +1491,10 @@ function Appearance({ api, base, role }) {
     <div class="look-grid">
       <form class="card" aria-label="Apparence de la marque" onSubmit=${save}>
         <h3>Logo</h3>
-        ${field("logoUrl", "Adresse de l'image du logo (https://…, PNG ou SVG à fond transparent)", { type: "url", maxlength: 500, placeholder: "https://…/logo.png" })}
+        ${field("logoUrl", "Adresse de l'image du logo (https://…, PNG à fond transparent)", { type: "url", maxlength: 500, placeholder: "https://…/logo.png" })}
         <p class="muted">Le logo s'affiche sur la couleur principale, comme dans l'aperçu : prenez la version qui s'y lit bien (souvent la version blanche).</p>
         ${look.logoUrl && !httpsUrl(look.logoUrl) && html`<p class="alert warn">L'adresse doit commencer par https://.</p>`}
+        ${/\.svg(?:[?#]|$)/i.test(look.logoUrl) && html`<p class="alert warn">Plusieurs logiciels de courriel n'affichent pas les images SVG : le logo manquerait dans les courriels aux acheteurs. Utilisez plutôt un PNG.</p>`}
         ${logoBroken && html`<p class="alert warn">Cette image ne s'affiche pas. Vérifiez l'adresse.</p>`}
 
         <h3>Couleur</h3>
