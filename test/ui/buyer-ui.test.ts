@@ -282,6 +282,13 @@ describe("buyer tickets page", () => {
     expect(await options.getByRole("listitem").filter({ hasText: flex.name }).textContent()).toContain("× 2");
     // Admissions stay as tickets, not options.
     expect(await options.getByRole("listitem").count()).toBe(1);
+    // Run 59: Flex Météo is a right, nothing to pick up: no "show this page" tip for it alone.
+    expect(await options.textContent()).toContain("Droit de changer de séance");
+    expect(await options.textContent()).not.toContain("Montrez cette page");
+    // Run 59: tickets grouped by type, in the catalog's order (adults before children).
+    const bands = await page.locator(".ticket-band").allTextContents();
+    expect(bands[0]).toContain(f.types.find((x) => x.code === "GENERAL")!.name);
+    expect(bands[1]).toContain(f.types.find((x) => x.code === "CHILD")!.name);
 
     // Run 55: after a session change, the new tickets page still lists them.
     const ex = await call(app, "POST", `${pub(f.clientId, f.brandId)}/orders/${o.orderId}/exchange`, {

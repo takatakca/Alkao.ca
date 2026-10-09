@@ -1027,7 +1027,11 @@ order. The options are now read from the order and the original it points to, so
 the tickets:
 
 - `GET …/public/orders/:orderId` returns `order.options`: `[{ ticketTypeId, name, quantity }]`
-  (empty when none). The tickets page lists these under « Vos options ».
+  (empty when none), with `sessionChange: true` on a session-change right such as Flex Météo
+  (Run 59). The tickets page lists these under « Vos options »; a right shows « Droit de
+  changer de séance, rien à recevoir sur place », and « Montrez cette page pour les recevoir »
+  only appears when something is to be picked up. Tickets come grouped by ticket type, in the
+  catalog's order, on the page and in the e-mails.
 - The tickets, new-tickets and reminder e-mails list the same options.
 - **Scan and manual admission** (`POST …/scanner/scans`, `POST …/scanner/admit`): an
   `admitted` result carries `options: { items: [{ name, quantity }], already }` when the

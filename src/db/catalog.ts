@@ -394,8 +394,12 @@ export async function getOrder(q: Queryable, s: TenantScope, orderId: string): P
              FROM public.ticketing_order_lines WHERE order_id = $1 AND client_id = $2 AND brand_id = $3 ORDER BY created_at, id`, params),
     many(q, `SELECT code, rate_ppm, taxable_cents, amount_cents
              FROM public.ticketing_order_taxes WHERE order_id = $1 AND client_id = $2 AND brand_id = $3 ORDER BY code`, params),
-    many(q, `SELECT id, ticket_type_id, status, void_reason, voided_at
-             FROM public.ticketing_tickets WHERE order_id = $1 AND client_id = $2 AND brand_id = $3 ORDER BY created_at, id`, params),
+    // Run 59: grouped by ticket type, in the catalog's order (an order's tickets share one
+    // creation time, so the id alone mixed adults and children).
+    many(q, `SELECT k.id, k.ticket_type_id, k.status, k.void_reason, k.voided_at
+             FROM public.ticketing_tickets k
+             LEFT JOIN public.ticketing_ticket_types tt ON tt.id = k.ticket_type_id AND tt.client_id = k.client_id AND tt.brand_id = k.brand_id
+             WHERE k.order_id = $1 AND k.client_id = $2 AND k.brand_id = $3 ORDER BY tt.sort_order NULLS LAST, k.created_at, k.id`, params),
   ]);
   return { ...order, lines, taxes, tickets };
 }

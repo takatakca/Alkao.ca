@@ -8,6 +8,8 @@ export interface OrderOption {
   ticketTypeId: string;
   name: string;
   quantity: number;
+  /** Run 59: a session-change right (Flex Météo), nothing to receive on site. Absent otherwise. */
+  sessionChange?: true;
 }
 
 /**
@@ -20,8 +22,8 @@ export interface OrderOption {
  * right (Flex Météo), which is a promise, not an item.
  */
 export async function orderOptions(q: Queryable, s: TenantScope, orderId: string, { handOver = false } = {}): Promise<OrderOption[]> {
-  const { rows } = await q.query<{ ticket_type_id: string; name: string; quantity: number }>(
-    `SELECT l.ticket_type_id, l.name_snapshot AS name, l.quantity
+  const { rows } = await q.query<{ ticket_type_id: string; name: string; quantity: number; session_change: boolean }>(
+    `SELECT l.ticket_type_id, l.name_snapshot AS name, l.quantity, t.grants_session_change AS session_change
      FROM public.ticketing_orders o
      JOIN public.ticketing_order_lines l ON l.order_id IN (o.id, o.exchange_of_order_id) AND l.client_id = o.client_id AND l.brand_id = o.brand_id
      JOIN public.ticketing_ticket_types t ON t.id = l.ticket_type_id AND t.client_id = l.client_id AND t.brand_id = l.brand_id
@@ -30,7 +32,7 @@ export async function orderOptions(q: Queryable, s: TenantScope, orderId: string
      ORDER BY l.created_at, l.id`,
     [orderId, s.clientId, s.brandId, handOver],
   );
-  return rows.map((r) => ({ ticketTypeId: r.ticket_type_id, name: r.name, quantity: Number(r.quantity) }));
+  return rows.map((r) => ({ ticketTypeId: r.ticket_type_id, name: r.name, quantity: Number(r.quantity), ...(r.session_change ? { sessionChange: true as const } : {}) }));
 }
 
 /**

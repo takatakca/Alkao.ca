@@ -137,6 +137,7 @@ TAKATAK membership (set `SUPABASE_URL` and `SUPABASE_ANON_KEY`). See
 | Run 56 | A session change moves the options' stock per session (meals, activities) to the new evening, refused with a clear message if they are sold out there; a full refund releases them from the evening they are on |
 | Run 57 | The scanner shows each session's options to prepare and how many were handed over (« Options de la séance »); a session-change right (Flex Météo) is no longer listed as something to hand over |
 | Run 58 | The offline scanner list carries each order's options, so a gate without network still shows « Options à remettre » once per order |
+| Run 59 | Tickets grouped by type in the catalog's order (page and e-mail); a session-change right (Flex Météo) shows as a right, without « show this page to receive it » |
 | Go-live: look | `check:golive` warns when a selling Brand has neither logo nor colour, when its logo is an SVG (missing in many e-mail apps), and when events on sale have no photo |
 | TAKATAK brand | `/ops` in the GROUPE TAKATAK brand (`BRAND.md`): deep navy sidebar, electric-blue tile, brand blue buttons; dark mode in navy and midnight with cyan actions; green, red and amber for status only; WCAG AA in both |
 | Engine for every project | `docs/ALKAO_BRANCHES.md`: a new business is a Client and a Brand (data), never code; `main` protected, a stable branch per major version (`release/1.x`); buyer and staff screens name no business (the "Flex Météo" wording becomes "changer de séance") |
