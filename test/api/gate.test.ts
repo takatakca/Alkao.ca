@@ -25,6 +25,7 @@ afterAll(async () => {
 // The Stripe webhook is authenticated by Stripe's signature and must still settle (or
 // refund) checkouts opened while Ticketing was active.
 const UNGATED = new Set([
+  // Run 61: public ALKAO landing page. It exposes no mutation and re-checks the normal\n  // Client/Brand/entitlement gate before including any event. With Ticketing disabled it is empty.\n  "GET /",
   "GET /health",
   "GET /health/ready",
   // Run 39: the kind of the caller's address only (public, private or unknown).
