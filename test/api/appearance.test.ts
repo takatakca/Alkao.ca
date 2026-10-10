@@ -62,7 +62,7 @@ describe("Brand appearance in /ops", () => {
     expect(res.status).toBe(200);
     expect(res.body.appearance).toMatchObject({
       logoUrl: null, accentColor: null, onAccentColor: null, websiteUrl: null, supportEmail: null, supportPhone: null, addressLine: null,
-      updatedAt: null, brandName: "Havana Resort — Événements",
+      updatedAt: null, brandName: "Havana Resort — Événements", showOnAlkao: false,
     });
   });
 

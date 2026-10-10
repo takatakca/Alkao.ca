@@ -29,6 +29,8 @@ export const EnvSchema = z.object({
   ALKAO_OPS_FRAME_ANCESTORS: z.string().optional(),
   /** Public HTTPS URL of this deployment: hosted shop return URLs and ticket links (Run 06/08). */
   ALKAO_PUBLIC_URL: z.url({ protocol: /^https$/ }).optional(),
+  /** White-label deployments may redirect only the root homepage to another HTTPS URL. */
+  ALKAO_HOME_URL: z.url({ protocol: /^https$/ }).optional(),
   /** Reverse proxies in front of ALKAO (load balancer = 1, CDN + load balancer = 2, none = 0). */
   ALKAO_TRUSTED_PROXY_HOPS: z.coerce.number().int().min(0).max(5).default(1),
   ALKAO_HOLD_TTL_SECONDS: z.coerce.number().int().min(60).max(1800).default(600),
@@ -59,6 +61,7 @@ export interface Config {
   credentialMasterSecret: string | null;
   opsUi: { supabaseUrl: string | null; supabaseAnonKey: string | null; frameAncestors: string[] };
   publicUrl: string | null;
+  homeUrl: string | null;
   trustedProxyHops: number;
   metricsToken: string | null;
   /** Run 46: null until the account, its token and a sender are all set. */
@@ -120,6 +123,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       frameAncestors: frameAncestorOrigins(e.ALKAO_OPS_FRAME_ANCESTORS, e.NODE_ENV),
     },
     publicUrl: e.ALKAO_PUBLIC_URL ?? null,
+    homeUrl: e.ALKAO_HOME_URL ?? null,
     trustedProxyHops: e.ALKAO_TRUSTED_PROXY_HOPS,
     metricsToken: e.ALKAO_METRICS_TOKEN ?? null,
     twilio: e.TWILIO_ACCOUNT_SID && e.TWILIO_AUTH_TOKEN && (e.TWILIO_MESSAGING_SERVICE_SID || e.TWILIO_FROM_NUMBER)

@@ -21,6 +21,8 @@ describe("configuration hardening", () => {
     expect(() => loadConfig({ ...base, ALKAO_CREDENTIAL_MASTER_SECRET: "short" })).toThrow();
     expect(() => loadConfig({ ...base, ALKAO_CONTROL_KEYS: "kid:short" })).toThrow();
     expect(() => loadConfig({ ...base, ALKAO_PUBLIC_URL: "http://billets.example.ca" })).toThrow();
+    expect(loadConfig({ ...base, ALKAO_HOME_URL: "https://www.example.ca/billets" }).homeUrl).toBe("https://www.example.ca/billets");
+    expect(() => loadConfig({ ...base, ALKAO_HOME_URL: "http://www.example.ca/billets" })).toThrow();
   });
 
   it("knows Stripe test keys from live keys (Run 32)", () => {

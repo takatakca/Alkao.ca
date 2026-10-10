@@ -50,6 +50,7 @@ import { exchangeOrder } from "../ops/exchange.js";
 import { mountOpsUi, type OpsUiConfig } from "./ops-ui.js";
 import { mountBuyerUi } from "./buyer-ui.js";
 import { mountShopUi } from "./shop-ui.js";
+import { mountHome, type HomeBrand } from "./home.js";
 import { clientIp, ipKind } from "./client-ip.js";
 import * as delivery from "../delivery/db.js";
 import { orderEmailToken } from "../delivery/links.js";
@@ -76,6 +77,8 @@ export interface AppDeps {
   opsUi?: OpsUiConfig;
   /** Public HTTPS URL of this ALKAO deployment (hosted shop, ticket links). */
   publicUrl?: string | null;
+  /** Optional white-label homepage redirect. Operational APIs remain on this deployment. */
+  homeUrl?: string | null;
   /** Reverse proxies in front of ALKAO whose X-Forwarded-For entry is trusted (default 1). */
   trustedProxyHops?: number;
   /** Log one line per request (route pattern, status, duration). */
@@ -327,7 +330,7 @@ export function createApp(deps: AppDeps) {
     const scope = c.get("scope");
     const [events, look] = await Promise.all([catalog.listPublicEvents(deps.db, scope), appearanceDb.getAppearance(deps.db, scope)]);
     // Run 50: the Brand's look, for the shop's list of events.
-    const { brandName, updatedAt: _u, ...appearance } = look;
+    const { brandName, updatedAt: _u, showOnAlkao: _directory, ...appearance } = look;
     return c.json({ events, brand: { name: brandName, ...appearance } });
   });
 
@@ -915,7 +918,7 @@ export function createApp(deps: AppDeps) {
     const appearance = await withTransaction(deps.db, async (tx) => {
       const saved = await appearanceDb.setAppearance(tx, c.get("scope"), body);
       await catalog.writeAudit(tx, c.get("scope"), actor(c), "brand.appearance_updated", { type: "brand_settings", id: null }, {
-        logo: Boolean(saved.logoUrl), accentColor: saved.accentColor, website: Boolean(saved.websiteUrl),
+        logo: Boolean(saved.logoUrl), accentColor: saved.accentColor, website: Boolean(saved.websiteUrl), showOnAlkao: saved.showOnAlkao,
       });
       return saved;
     });
@@ -1297,6 +1300,61 @@ export function createApp(deps: AppDeps) {
     return c.json({ userId, memberships });
   });
 
+  mountHome(app, {
+    publicUrl: deps.publicUrl ?? null,
+    homeUrl: deps.homeUrl ?? null,
+    load: async (): Promise<HomeBrand[]> => {
+      if (!deps.operationalApiEnabled) return [];
+      const at = now();
+      const { rows: opted } = await deps.db.query<{ client_id: string; brand_id: string; name: string }>(
+        `SELECT bs.client_id, bs.brand_id, b.name
+         FROM public.ticketing_brand_settings bs
+         JOIN public.ticketing_brands b ON b.id = bs.brand_id AND b.client_id = bs.client_id
+         WHERE bs.show_on_alkao = true
+         ORDER BY b.name, b.id`,
+      );
+      const brands: HomeBrand[] = [];
+      for (const b of opted) {
+        if (!(await decide(b.client_id, b.brand_id)).active) continue;
+        const scope = { clientId: b.client_id, brandId: b.brand_id };
+        const [look, listed] = await Promise.all([
+          appearanceDb.getAppearance(deps.db, scope),
+          catalog.listPublicEvents(deps.db, scope),
+        ]);
+        const events: HomeBrand["events"] = [];
+        for (const event of listed) {
+          const eventId = String(event.id);
+          const state = await catalog.loadPublicEvent(deps.db, scope, eventId);
+          if (!state) continue;
+          if (state.salesOpenAt && at < new Date(state.salesOpenAt)) continue;
+          if (state.salesCloseAt && at >= new Date(state.salesCloseAt)) continue;
+          const sessions = await catalog.listPublicSessions(deps.db, scope, eventId, at);
+          const first = sessions.find((session) => Number(session.available) > 0);
+          if (!first) continue;
+          events.push({
+            id: eventId,
+            title: String(event.title),
+            description: event.description == null ? null : String(event.description),
+            imageUrl: event.imageUrl == null ? null : String(event.imageUrl),
+            venueName: event.venueName == null ? null : String(event.venueName),
+            venueCity: event.venueCity == null ? null : String(event.venueCity),
+            startsAt: first.startsAt as Date | string,
+            shopPath: `/acheter/${b.client_id}/${b.brand_id}/${eventId}`,
+          });
+        }
+        if (events.length) {
+          brands.push({
+            clientId: b.client_id,
+            brandId: b.brand_id,
+            name: b.name ?? look.brandName ?? "ALKAO",
+            logoUrl: look.logoUrl,
+            events,
+          });
+        }
+      }
+      return brands;
+    },
+  });
   mountOpsUi(app, { ...(deps.opsUi ?? { supabaseUrl: null, supabaseAnonKey: null, frameAncestors: [] }), paymentsMode: deps.paymentsMode ?? null });
   mountBuyerUi(app);
   mountUnsubscribe(app, { db: deps.db, masterSecret: deps.credentialMasterSecret ?? null, now });

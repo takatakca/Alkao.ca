@@ -47,11 +47,11 @@ export function appearanceOf(r: LookRow): BrandAppearance {
 }
 
 /** The look as /ops edits it, with the Brand's name for the preview. */
-export type StoredAppearance = BrandAppearance & { updatedAt: Date | null; brandName: string | null };
+export type StoredAppearance = BrandAppearance & { updatedAt: Date | null; brandName: string | null; showOnAlkao: boolean };
 
 export async function getAppearance(q: Queryable, s: TenantScope): Promise<StoredAppearance> {
   const { rows } = await q.query(
-    `SELECT ${APPEARANCE_COLUMNS}, bs.appearance_updated_at, br.name AS brand_name
+    `SELECT ${APPEARANCE_COLUMNS}, bs.appearance_updated_at, coalesce(bs.show_on_alkao, false) AS show_on_alkao, br.name AS brand_name
      FROM public.ticketing_brands br
      LEFT JOIN public.ticketing_brand_settings bs ON bs.client_id = br.client_id AND bs.brand_id = br.id
      WHERE br.id = $2 AND br.client_id = $1`,
@@ -59,20 +59,20 @@ export async function getAppearance(q: Queryable, s: TenantScope): Promise<Store
   );
   const r = rows[0];
   return r
-    ? { ...appearanceOf(r), updatedAt: r.appearance_updated_at ?? null, brandName: r.brand_name ?? null }
-    : { ...NO_APPEARANCE, updatedAt: null, brandName: null };
+    ? { ...appearanceOf(r), updatedAt: r.appearance_updated_at ?? null, brandName: r.brand_name ?? null, showOnAlkao: Boolean(r.show_on_alkao) }
+    : { ...NO_APPEARANCE, updatedAt: null, brandName: null, showOnAlkao: false };
 }
 
-export async function setAppearance(q: Queryable, s: TenantScope, a: BrandAppearance): Promise<StoredAppearance> {
+export async function setAppearance(q: Queryable, s: TenantScope, a: BrandAppearance & { showOnAlkao: boolean }): Promise<StoredAppearance> {
   await q.query(
     `INSERT INTO public.ticketing_brand_settings
-       (client_id, brand_id, logo_url, accent_color, on_accent_color, website_url, support_email, support_phone, address_line, appearance_updated_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now())
+       (client_id, brand_id, logo_url, accent_color, on_accent_color, website_url, support_email, support_phone, address_line, show_on_alkao, appearance_updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now())
      ON CONFLICT (client_id, brand_id) DO UPDATE SET
        logo_url = EXCLUDED.logo_url, accent_color = EXCLUDED.accent_color, on_accent_color = EXCLUDED.on_accent_color,
        website_url = EXCLUDED.website_url, support_email = EXCLUDED.support_email, support_phone = EXCLUDED.support_phone,
-       address_line = EXCLUDED.address_line, appearance_updated_at = now()`,
-    [s.clientId, s.brandId, a.logoUrl, a.accentColor, a.onAccentColor, a.websiteUrl, a.supportEmail, a.supportPhone, a.addressLine],
+       address_line = EXCLUDED.address_line, show_on_alkao = EXCLUDED.show_on_alkao, appearance_updated_at = now()`,
+    [s.clientId, s.brandId, a.logoUrl, a.accentColor, a.onAccentColor, a.websiteUrl, a.supportEmail, a.supportPhone, a.addressLine, a.showOnAlkao],
   );
   return getAppearance(q, s);
 }

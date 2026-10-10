@@ -98,7 +98,7 @@ How it behaves:
 3. Staff create the venue, event, sessions and ticket types, then put sessions on sale and
    publish. In **Apparence**, they set the Brand's logo (a PNG on a transparent background),
    its colour and its contact details, and give each event a photo (« Ajouter une photo »).
-   The tickets page, the shop, the e-mails and the shared links use them (Runs 50–53);
+   The tickets page, the shop, the e-mails and the shared links use them (Runs 50–53). If the Brand wants its currently sellable events listed on the independent **alkao.ca** homepage, it explicitly enables **Afficher mes événements sur ALKAO**; this is OFF by default (Run 61);
    `check:golive` names a selling Brand without its look, an SVG logo, and events on sale
    without a photo.
 4. Share the shop link `https://…/acheter/<clientId>/<brandId>`, or the Brand's own site can
