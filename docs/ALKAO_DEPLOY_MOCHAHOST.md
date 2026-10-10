@@ -88,7 +88,9 @@ permissions to `600`, and never put it in the release or in a chat.
 NODE_ENV=production
 ALKAO_OPERATIONAL_API_ENABLED=false
 DATABASE_URL=postgresql://…?sslmode=verify-full&sslrootcert=/home/<user>/apps/alkao/supabase-ca.crt
-ALKAO_PUBLIC_URL=https://billets.takatak.ca
+ALKAO_PUBLIC_URL=https://alkao.ca
+# Leave empty on the independent ALKAO platform. A white-label install may set an HTTPS homepage.
+ALKAO_HOME_URL=
 ALKAO_TRUSTED_PROXY_HOPS=1
 
 # Staff sign-in: TAKATAK's Supabase project (public values)
@@ -132,7 +134,8 @@ In cPanel, open **Setup Node.js App**, then **Create application**:
 - Do **not** click "Run NPM Install": the release already has its `node_modules`.
 - Start the application once, then open `https://<subdomain>/health`. It should answer
   `{"ok":true,"service":"alkao",…}`.
-- Now apply the migrations (step 3.5). `/health/ready` then answers `{"ok":true,"database":"up"}`.
+- **Before serving the new ALKAO homepage code, apply the release migrations (step 3.5).** Run 61 reads `ticketing_brand_settings.show_on_alkao`; starting that release against an older schema would fail the `/` query.
+- `/health/ready` then answers `{"ok":true,"database":"up"}`. Open `/`: it must render the ALKAO platform home (or the configured HTTPS `ALKAO_HOME_URL` on a white-label installation).
 
 ## 6. Background jobs (cron)
 
@@ -194,7 +197,7 @@ cd /home/<user>/apps/alkao/releases/alkao-<id> && <node> --env-file=.env --impor
 ## A new release
 
 1. Upload and extract it into `releases/`, then copy `.env` into it.
-2. Run the migrations from the new folder (step 3.5).
+2. Run the migrations from the new folder (step 3.5) **before** pointing Passenger at that release.
 3. Point **Application root** at the new folder, then stop and start the application **once**.
    Update the folder in the cron line.
 4. Run the check (step 8).
