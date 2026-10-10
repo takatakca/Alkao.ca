@@ -3,7 +3,7 @@
 Newest first, one line per piece of work. Rule: `AGENTS.md` › Work log rule.
 Format: `YYYY-MM-DD | agent | branch → PR | status | what | next step`
 
-- 2026-10-10 | ChatGPT (GitHub) | work/alkao-platform-home → PR pending | active | Issue #69: independent ALKAO homepage, Brand opt-in, FR/EN SEO, white-label home redirect | implement, QA, open PR
+- 2026-10-10 | ChatGPT (GitHub) | work/alkao-platform-home → PR #70 | code complete / CI verification | Run 61: independent ALKAO homepage, default-off Brand opt-in, FR/EN SEO, TAKATAK registration CTA, white-label home redirect, deployment-safe migration order | require green qa, then merge; production cutover remains separately gated
 
 - 2026-10-09 | claude (Code, cloud) | claude/amazing-pascal-tppqd4 → PR #68 | PR open | Run 60: shop options in their own card, once a ticket is chosen | merge when CI is green
 - 2026-10-09 | claude (Code, cloud) | claude/amazing-pascal-tppqd4 → PR #67 | done | Run 59: tickets grouped by type, Flex shown as a right; docs/DOMAINS.md (festi-ice.ca at IONOS) | none
