@@ -20,6 +20,7 @@ const app = createApp({
   credentialMasterSecret: config.credentialMasterSecret,
   opsUi: config.opsUi,
   publicUrl: config.publicUrl,
+  homeUrl: config.homeUrl,
   trustedProxyHops: config.trustedProxyHops,
   metricsToken: config.metricsToken,
   twilioAuthToken: config.twilio?.authToken ?? null,
