@@ -17,7 +17,7 @@ async function setOptIn(clientId: string, brandId: string, token: string, showOn
     body: JSON.stringify({ showOnAlkao }),
   });
   expect(response.status).toBe(200);
-  return response.json();
+  return (await response.json()) as { appearance: { showOnAlkao: boolean } };
 }
 
 beforeAll(async () => {
