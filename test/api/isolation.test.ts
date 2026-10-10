@@ -49,7 +49,7 @@ async function festiSnapshot() {
     erasures: await q(`SELECT buyer_id FROM public.ticketing_buyer_erasures WHERE client_id = $1`),
     disputes: await q(`SELECT id, status, updated_at FROM public.ticketing_payment_disputes WHERE client_id = $1 ORDER BY id`),
     chargeRefunds: await q(`SELECT order_id, refunded_cents FROM public.ticketing_charge_refund_totals WHERE client_id = $1`),
-    settings: await q(`SELECT checkout_return_origins, reminder_emails, marketing_sender_address, marketing_contact, newsletter_reward_code, newsletter_reward_text FROM public.ticketing_brand_settings WHERE client_id = $1`),
+    settings: await q(`SELECT checkout_return_origins, reminder_emails, marketing_sender_address, marketing_contact, newsletter_reward_code, newsletter_reward_text, show_on_alkao FROM public.ticketing_brand_settings WHERE client_id = $1`),
     // Run 41
     customers: await q(`SELECT id, email, email_opt_out_at, anonymized_at, updated_at FROM public.ticketing_customers WHERE client_id = $1 ORDER BY id`),
     bookings: await q(`SELECT id, customer_id, cancelled_on, updated_at FROM public.ticketing_customer_bookings WHERE client_id = $1 ORDER BY id`),
