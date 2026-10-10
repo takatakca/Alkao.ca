@@ -96,6 +96,18 @@ describe.each(["light", "dark"] as const)("accessibility (%s)", (scheme) => {
   it("buyer pages: shop, checkout form, tickets", async () => {
     const h = seed.havana;
     const problems: string[] = [];
+    await db.pool.query(
+      `INSERT INTO public.ticketing_brand_settings (client_id, brand_id, show_on_alkao)
+       VALUES ($1, $2, true)
+       ON CONFLICT (client_id, brand_id) DO UPDATE SET show_on_alkao = true`,
+      [h.clientId, h.brandId],
+    );
+    const home = await pageFor(scheme);
+    await home.goto(`${origin}/`);
+    await home.getByRole("heading", { level: 1 }).waitFor();
+    problems.push(...report("ALKAO platform homepage", await audit(home)));
+    await db.pool.query(`UPDATE public.ticketing_brand_settings SET show_on_alkao = false WHERE client_id = $1 AND brand_id = $2`, [h.clientId, h.brandId]);
+
     const shop = await pageFor(scheme);
     await shop.goto(`${origin}/acheter/${h.clientId}/${h.brandId}`);
     await shop.getByRole("heading", { level: 1 }).waitFor();
