@@ -748,13 +748,16 @@ describe("ALKAO Operations app", () => {
     await page.getByText("Lisible", { exact: true }).waitFor();
     expect(await page.locator(".look-band").evaluate((e) => (globalThis as any).getComputedStyle(e).backgroundColor)).toBe("rgb(255, 213, 79)");
     await page.getByLabel("Téléphone").fill("+1 514 555-0100");
+    const directory = page.getByLabel("Afficher mes événements sur ALKAO");
+    expect(await directory.isChecked()).toBe(false);
+    await directory.check();
     await page.getByRole("button", { name: "Enregistrer" }).click();
     await page.getByRole("status").getByText("Enregistré.", { exact: false }).waitFor();
     const { rows } = await db.pool.query(
-      `SELECT logo_url, accent_color, on_accent_color, support_phone FROM public.ticketing_brand_settings WHERE client_id = $1 AND brand_id = $2`,
+      `SELECT logo_url, accent_color, on_accent_color, support_phone, show_on_alkao FROM public.ticketing_brand_settings WHERE client_id = $1 AND brand_id = $2`,
       [seed.havana.clientId, seed.havana.brandId],
     );
-    expect(rows).toEqual([{ logo_url: "https://cdn.example.com/logo.png", accent_color: "#ffd54f", on_accent_color: "#000000", support_phone: "+1 514 555-0100" }]);
+    expect(rows).toEqual([{ logo_url: "https://cdn.example.com/logo.png", accent_color: "#ffd54f", on_accent_color: "#000000", support_phone: "+1 514 555-0100", show_on_alkao: true }]);
 
     // The event's photo, from the event page.
     await page.goto(`${origin}/ops#${brandPath()}/event/${seed.havana.eventId}`);
