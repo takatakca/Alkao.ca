@@ -169,7 +169,7 @@ function render(cfg: HomeConfig, brands: HomeBrand[], lang: "fr" | "en") {
       ${cards ? `<div class="grid">${cards}</div>` : `<p class="lead">${esc(t.empty)}</p>`}
     </section>
     <section class="organizer"><div class="wrap row"><div><h2>${esc(t.organizer)}</h2><p class="lead">${esc(t.organizerText)}</p></div>
-      <div class="actions"><a class="button" href="https://takatak.ca">${esc(t.signup)}</a><a class="button secondary" href="/ops">${esc(t.signin)}</a></div>
+      <div class="actions"><a class="button" href="https://takatak.ca/register">${esc(t.signup)}</a><a class="button secondary" href="/ops">${esc(t.signin)}</a></div>
     </div></section>
   </main>
   <footer class="wrap">ALKAO · GROUPE TAKATAK · Digital Solutions. Real Results.</footer>
