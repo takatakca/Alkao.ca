@@ -1468,7 +1468,7 @@ const contrast = (a, b) => { const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y 
 /** White or black, whichever reads better on the colour. */
 const inkFor = (hex) => (contrast(hex, "#ffffff") >= contrast(hex, "#000000") ? "#ffffff" : "#000000");
 const httpsUrl = (u) => /^https:\/\/[^\s"'<>\\]+$/.test(u ?? "");
-const EMPTY_LOOK = { logoUrl: "", accentColor: "", onAccentColor: "", websiteUrl: "", supportEmail: "", supportPhone: "", addressLine: "" };
+const EMPTY_LOOK = { logoUrl: "", accentColor: "", onAccentColor: "", websiteUrl: "", supportEmail: "", supportPhone: "", addressLine: "", showOnAlkao: false };
 
 function Appearance({ api, base, role }) {
   const [state, reload] = useLoad(() => api(`${base}/appearance`), [base]);
@@ -1496,8 +1496,9 @@ function Appearance({ api, base, role }) {
       await api(`${base}/appearance`, { method: "PUT", body: {
         logoUrl: v(look.logoUrl), accentColor: coloured ? look.accentColor : null, onAccentColor: coloured ? onAccent : null,
         websiteUrl: v(look.websiteUrl), supportEmail: v(look.supportEmail), supportPhone: v(look.supportPhone), addressLine: v(look.addressLine),
+        showOnAlkao: Boolean(look.showOnAlkao),
       } });
-      await reload(); setF(null); setMsg("Enregistré. Les pages de billets, la billetterie et les prochains courriels utilisent cette apparence.");
+      await reload(); setF(null); setMsg("Enregistré. L’apparence et la visibilité sur ALKAO sont à jour.");
     } catch (err) { setError(err); }
   };
   const field = (key, label, attrs = {}) => html`<label>${label}<input ...${attrs} disabled=${!canEdit} value=${look[key]}
@@ -1537,6 +1538,12 @@ function Appearance({ api, base, role }) {
           ${field("supportPhone", "Téléphone", { type: "tel", maxlength: 40 })}
           ${field("addressLine", "Adresse", { maxlength: 200 })}
         </div>
+        <h3>ALKAO</h3>
+        <label class="check"><input type="checkbox" disabled=${!canEdit} checked=${Boolean(look.showOnAlkao)}
+          onChange=${(e) => set({ showOnAlkao: e.target.checked })} />
+          Afficher mes événements sur ALKAO</label>
+        <p class="muted">Désactivé par défaut. Quand cette option est activée, seuls vos événements publiés, actuellement en vente et avec des places disponibles peuvent apparaître sur la page publique d’ALKAO.</p>
+
         ${canEdit && html`<div class="row"><button type="submit" disabled=${!readable}>Enregistrer</button>
           ${f && html`<button type="button" class="secondary" onClick=${() => { setF(null); setMsg(null); }}>Annuler les changements</button>`}</div>`}
         ${msg && html`<p class="muted" role="status">${msg}</p>`}${error && html`<${Failure} error=${error} />`}
