@@ -72,6 +72,8 @@ export const BrandAppearance = z
     supportEmail: z.string().trim().toLowerCase().max(254).email().nullable().default(null),
     supportPhone: z.string().trim().min(1).max(40).regex(/^[0-9 +().-]+$/, "digits, spaces, + ( ) . -").nullable().default(null),
     addressLine: z.string().trim().min(1).max(200).regex(/^[^<>]*$/).nullable().default(null),
+    /** Explicit, default-off consent to list this Brand's sellable events on the ALKAO homepage. */
+    showOnAlkao: z.boolean().default(false),
   })
   .refine((a) => (a.accentColor === null) === (a.onAccentColor === null), {
     message: "accentColor and onAccentColor come together",
