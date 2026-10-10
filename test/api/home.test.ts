@@ -64,6 +64,14 @@ describe("ALKAO public platform homepage", () => {
     expect(enHtml).toContain("Events on sale");
   });
 
+  it("stays empty when the deployment-wide Ticketing switch is disabled", async () => {
+    await setOptIn(seed.havana.clientId, seed.havana.brandId, havanaOwner, true);
+    const disabled = testApp(db.pool, { publicUrl: "https://alkao.test", operationalApiEnabled: false });
+    const html = await (await disabled.request("/")).text();
+    expect(html).not.toContain(baselineEvent.title);
+    expect(html).toContain("Aucun organisateur");
+  });
+
   it("shows only an explicitly opted-in Brand and links to its existing hosted shop", async () => {
     const saved = await setOptIn(seed.havana.clientId, seed.havana.brandId, havanaOwner, true);
     expect(saved.appearance.showOnAlkao).toBe(true);
