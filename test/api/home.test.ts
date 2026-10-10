@@ -7,6 +7,7 @@ let db: TestDatabase;
 let seed: SeedResult;
 let app: TestApp;
 let havanaOwner: string;
+let baselineEvent: { title: string; description: string | null };
 
 const appearance = (clientId: string, brandId: string) => `${adm(clientId, brandId)}/appearance`;
 
@@ -25,11 +26,17 @@ beforeAll(async () => {
   seed = await seedTwoTenants(db.pool);
   app = testApp(db.pool, { publicUrl: "https://alkao.test" });
   havanaOwner = await tokenFor(seed.users.havanaOwner);
+  const { rows } = await db.pool.query<{ title: string; description: string | null }>(
+    "SELECT title, description FROM public.ticketing_events WHERE id = $1",
+    [seed.havana.eventId],
+  );
+  baselineEvent = rows[0]!;
 });
 
 beforeEach(async () => {
   await db.pool.query("UPDATE public.ticketing_brand_settings SET show_on_alkao = false");
   await db.pool.query("UPDATE public.ticketing_events SET status = 'published', sales_open_at = NULL, sales_close_at = NULL");
+  await db.pool.query("UPDATE public.ticketing_events SET title = $2, description = $3 WHERE id = $1", [seed.havana.eventId, baselineEvent.title, baselineEvent.description]);
   await db.pool.query("UPDATE public.ticketing_sessions SET status = 'on_sale', starts_at = now() + interval '30 days'");
 });
 
@@ -100,9 +107,9 @@ describe("ALKAO public platform homepage", () => {
 
   it("stops publishing immediately when the Brand opts out", async () => {
     await setOptIn(seed.havana.clientId, seed.havana.brandId, havanaOwner, true);
-    expect(await (await app.request("/")).text()).toContain("Havana Resort — Événements 2026-2027");
+    expect(await (await app.request("/")).text()).toContain(baselineEvent.title);
     await setOptIn(seed.havana.clientId, seed.havana.brandId, havanaOwner, false);
-    expect(await (await app.request("/")).text()).not.toContain("Havana Resort — Événements 2026-2027");
+    expect(await (await app.request("/")).text()).not.toContain(baselineEvent.title);
   });
 
   it("allows a white-label deployment to redirect only / to a validated home URL", async () => {
