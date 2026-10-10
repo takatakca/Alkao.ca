@@ -1103,9 +1103,11 @@ take the Brand's logo and colour. Without settings they keep ALKAO's neutral loo
 
 | Method | Path | Who | Result |
 |---|---|---|---|
-| GET | `/v1/admin/…/appearance` | `catalog.read` | `{ appearance: { logoUrl, accentColor, onAccentColor, websiteUrl, supportEmail, supportPhone, addressLine, updatedAt, brandName } }`, all `null` until set |
-| PUT | `/v1/admin/…/appearance` | `catalog.write` | The same fields (omitted = `null`). Journal: `brand.appearance_updated` |
+| GET | `/v1/admin/…/appearance` | `catalog.read` | `{ appearance: { logoUrl, accentColor, onAccentColor, websiteUrl, supportEmail, supportPhone, addressLine, showOnAlkao, updatedAt, brandName } }`; `showOnAlkao` defaults to `false` |
+| PUT | `/v1/admin/…/appearance` | `catalog.write` | The same fields; `showOnAlkao` is explicit consent to list sellable events on the ALKAO platform homepage. Journal: `brand.appearance_updated` |
 | PATCH | `/v1/admin/…/events/:eventId` | `catalog.write` | `imageUrl`: the event's photo (`null` removes it); also accepted on `POST /events` |
+
+**ALKAO platform directory.** `/` is an independent, server-rendered ALKAO homepage (FR-CA; `?lang=en` for English). A Brand is considered only after `showOnAlkao=true`; the server then re-checks the normal deployment/Client/Brand/entitlement gate and exposes only published events whose sales window is open and that still have a future on-sale session with capacity. Opt-out removes the Brand immediately. `ALKAO_HOME_URL`, when configured, redirects only `/` to the validated HTTPS white-label homepage; operational/API routes remain local.
 
 **Rules, checked by the API and again by the database:**
 
