@@ -1,0 +1,18 @@
+{
+  "name": "ALKAO — Billetterie",
+  "short_name": "ALKAO",
+  "description": "Concerts, festivals, sports et sorties au Québec : trouvez l’événement, payez en toute sécurité, entrez avec votre code QR.",
+  "lang": "fr-CA",
+  "dir": "ltr",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#060D1F",
+  "theme_color": "#060D1F",
+  "categories": ["entertainment", "lifestyle", "events"],
+  "icons": [
+    { "src": "img/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "img/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

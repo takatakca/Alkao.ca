@@ -2,6 +2,18 @@
 
 This file records the current cross-agent handoff. Do not erase prior repository history; the detailed chronological log remains in `WORKLOG.md`.
 
+## 2026-10-13 — Run 66: home extras from the benchmark
+
+- Filters on `/`: `prix` (free, under25, 25to50, over50; before taxes), `tri=prix`,
+  `organisateur=<brandId>`; unknown values are dropped (`parseQuery` in `src/api/home-view.ts`).
+- JSON-LD: one `Event` per date (the next ten), `offers` from `fromCents`; the venue's street
+  comes from `listPublicEvents` (`venueAddress`), session ends from `listPublicSessions`.
+- `home-ui/home.js`: .ics per date (same rules as `buyer-ui/calendar.js`), map search link,
+  « Vus récemment » in `localStorage` `alkao.recent` (cleared by its button), install prompt.
+- `home-ui/manifest.webmanifest` + `img/icon-192.png`, `img/icon-512.png`; CSP `manifest-src 'self'`.
+- Next on the home: « Suivre cet organisateur » through the newsletter route (Run 44), agenda
+  view, accessibility page. Then the benchmark's back-end gaps.
+
 ## 2026-10-13 — Run 65: OPC compliance and competitor benchmark
 
 - `docs/ALKAO_COMPETITIVE_FEATURES.md` (French): ALKAO compared with Ticketmaster/Admission,

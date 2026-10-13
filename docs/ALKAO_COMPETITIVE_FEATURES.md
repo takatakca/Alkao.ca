@@ -115,6 +115,8 @@ Hors liste : l'argent comptant à la porte est écarté exprès (décision 3, `d
 
 ## Faisable tout de suite sur la page d'accueil
 
+**Fait au Run 66 :** les points 1 à 6 (sans les recherches récentes : la recherche Ctrl+K montre déjà les favoris et les vus récemment) et le 10 pour l'accueil.
+
 Front seulement, avec les données que l'accueil reçoit déjà (`HomeEvent` : titre, description, photo, salle, ville, fuseau, séances, `fromCents`, lien boutique, Brand et logo). La PR #76 a déjà la recherche, les tuiles, les cartes « À partir de X $ + taxes », l'aperçu, le partage, les favoris, Ctrl+K, l'assistant FAQ et l'avis de langue.
 
 1. **JSON-LD plus riche** : ajouter `offers` (prix à partir de, `CAD`, `InStock`, lien d'achat) et une entrée par séance. Les moteurs de recherche montrent mieux les événements.

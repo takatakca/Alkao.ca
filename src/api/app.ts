@@ -1350,9 +1350,12 @@ export function createApp(deps: AppDeps) {
             imageUrl: event.imageUrl == null ? null : String(event.imageUrl),
             venueName: event.venueName == null ? null : String(event.venueName),
             venueCity: event.venueCity == null ? null : String(event.venueCity),
+            venueAddress: event.venueAddress == null ? null : String(event.venueAddress),
             startsAt: first.startsAt as Date | string,
             // Run 64: every date with seats left, the venue's time zone and the lowest price.
             sessions: open.slice(0, 60).map((session) => session.startsAt as Date | string),
+            // Run 66: when each of those dates ends, if the organizer set it (for the calendar).
+            ends: open.slice(0, 60).map((session) => (session.endsAt ?? null) as Date | string | null),
             timezone: event.venueTimezone == null ? null : String(event.venueTimezone),
             ...(floors.has(eventId) ? { fromCents: floors.get(eventId)! } : {}),
             shopPath: `/acheter/${b.client_id}/${b.brand_id}/${eventId}`,

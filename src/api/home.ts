@@ -24,6 +24,9 @@ const TYPES: Record<string, string> = {
   svg: "image/svg+xml",
   webp: "image/webp",
   woff2: "font/woff2",
+  // Run 66: the app icons and the manifest that makes the home installable.
+  png: "image/png",
+  webmanifest: "application/manifest+json",
 };
 
 interface Asset { body: Buffer; type: string; version: string }
@@ -52,6 +55,7 @@ const PAGE_HEADERS = {
     "img-src 'self' https: data:",
     "font-src 'self'",
     "connect-src 'self'",
+    "manifest-src 'self'",
     "frame-ancestors 'none'",
     "base-uri 'none'",
     "form-action 'self'",
