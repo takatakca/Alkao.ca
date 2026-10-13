@@ -288,6 +288,22 @@ export const listPublicEvents = (q: Queryable, s: TenantScope) =>
     [s.clientId, s.brandId],
   );
 
+/**
+ * Run 64: for each event of the Brand with an active admission, the lowest paid admission
+ * price before taxes, or null when every active admission is free. What the platform home
+ * shows as "From …" (ALKAO adds no fee: the buyer pays the price plus taxes).
+ */
+export async function admissionPriceFloors(q: Queryable, s: TenantScope): Promise<Map<string, number | null>> {
+  const { rows } = await q.query<{ event_id: string; min_paid: number | null }>(
+    `SELECT event_id, min(price_cents) FILTER (WHERE price_cents > 0) AS min_paid
+     FROM public.ticketing_ticket_types
+     WHERE client_id = $1 AND brand_id = $2 AND kind = 'admission' AND active
+     GROUP BY event_id`,
+    [s.clientId, s.brandId],
+  );
+  return new Map(rows.map((r) => [r.event_id, r.min_paid === null ? null : Number(r.min_paid)]));
+}
+
 /** Sessions open for sale (future, on sale), with remaining availability only. */
 export const listPublicSessions = (q: Queryable, s: TenantScope, eventId: string, now: Date) =>
   many(

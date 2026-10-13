@@ -105,6 +105,9 @@ describe.each(["light", "dark"] as const)("accessibility (%s)", (scheme) => {
     const home = await pageFor(scheme);
     await home.goto(`${origin}/`);
     await home.getByRole("heading", { level: 1 }).waitFor();
+    // Run 64: sections fade in as they scroll into view; audit them as people see them, shown.
+    await home.evaluate(() => (globalThis as any).document.querySelectorAll(".reveal").forEach((el: any) => el.classList.add("is-visible")));
+    await home.waitForTimeout(1100);
     problems.push(...report("ALKAO platform homepage", await audit(home)));
     await db.pool.query(`UPDATE public.ticketing_brand_settings SET show_on_alkao = false WHERE client_id = $1 AND brand_id = $2`, [h.clientId, h.brandId]);
 
