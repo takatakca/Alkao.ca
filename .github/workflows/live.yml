@@ -1,0 +1,25 @@
+name: Live
+
+# Run 63: every 3 hours, ALKAO's public addresses answer: the service, its database and the
+# home page (scripts/live-watch.ts). GET only, no secret, nothing written anywhere. A failed
+# run is GitHub's e-mail to the owner. Add an address here once it serves ALKAO.
+on:
+  schedule:
+    - cron: "23 */3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  watch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --omit=dev --no-audit --no-fund
+      - run: node --import tsx scripts/live-watch.ts --expect-build "$GITHUB_SHA" https://alkao.ca

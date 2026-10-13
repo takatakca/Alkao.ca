@@ -37,4 +37,5 @@ jobs:
       - run: npx playwright-core install --with-deps chromium
       - run: npm run typecheck
       - run: npm run check:migrations
+      - run: npm run check:secrets
       - run: npm test

@@ -19,6 +19,9 @@ check ✔, clean stop in 0.1 s. **Not deployed on the Coolify server by this PR.
 | `billets.promohavana.ca` | ALKAO on MochaHost (Passenger). `/health` and `/health/ready` OK, but older code than `main`: `/` answers a JSON 404 instead of the Run 61 home |
 | `festi-ice.ca`, `billets.takatak.ca` | No answer |
 
+- **Run 63:** the **Live** workflow (GitHub Actions) re-checks `alkao.ca` every 3 hours
+  (`scripts/live-watch.ts`, GET only). On 2026-10-13, `check:golive --url https://alkao.ca`
+  showed everything ✔ except Stripe (not configured on the server) and `/metrics` (no token).
 - **Promo Havana does not sell through ALKAO yet.** Its `ALKAO_URL` points at
   `billets.takatak.ca`, which has no DNS, and its `ALKAO_CLIENT_ID` and `ALKAO_BRAND_ID` are not
   set. Its ticket button therefore falls back to Weezevent.
