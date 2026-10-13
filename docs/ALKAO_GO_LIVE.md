@@ -29,12 +29,13 @@ with `1` when anything is blocking, so it can also run in a deployment pipeline.
 ## 1. Infrastructure
 
 On MochaHost (cPanel), next to TAKATAK, follow
-[ALKAO_DEPLOY_MOCHAHOST.md](ALKAO_DEPLOY_MOCHAHOST.md) (Run 39). It covers the release,
+[ALKAO_DEPLOY_MOCHAHOST.md](ALKAO_DEPLOY_MOCHAHOST.md) (Run 39). On Coolify (Docker), follow
+[ALKAO_DEPLOY_COOLIFY.md](ALKAO_DEPLOY_COOLIFY.md) (Run 62). It covers the release,
 `.env`, the Supabase database, the cron job instead of the workers, and the Stripe webhook.
 
 | Item | Value |
 |---|---|
-| Database | A database **dedicated to ALKAO**. Never use the TAKATAK or FESTI-ICE database. Two ways: a dedicated Supabase project, migrated with `supabase db push`; or plain PostgreSQL 15+: run `supabase/tests/supabase_shim.sql` once (it creates the Supabase roles and `auth.uid()`), then `npm run db:migrate`. The migrations install the `pg_trgm` extension (bundled with PostgreSQL and available on Supabase) for the staff order search |
+| Database | A database **dedicated to ALKAO**. Never use the TAKATAK or FESTI-ICE database. Two ways: a dedicated Supabase project, migrated with `supabase db push`; or plain PostgreSQL 15+: `npm run db:migrate`, which first creates the Supabase roles and `auth.uid()` (`supabase/bootstrap/plain_postgres.sql`, Run 62; never the test shim). The migrations install the `pg_trgm` extension (bundled with PostgreSQL and available on Supabase) for the staff order search |
 | Auth | The **same Supabase project** as TAKATAK, so staff use their TAKATAK accounts. Set `SUPABASE_JWKS_URL` (or `SUPABASE_JWT_SECRET`), `SUPABASE_URL` and `SUPABASE_ANON_KEY` |
 | Processes | `npm start` (API, `/ops`, `/billets`, `/acheter`), `npm run worker:sweeper`, `npm run worker:email`, `npm run worker:cancellations`. On a host without long-running processes, one cron job every minute instead: `npm run cron` (Run 39) |
 | Public URL | HTTPS, e.g. `https://billets.example.ca`. Set it as `ALKAO_PUBLIC_URL` for both the server and the email worker |
@@ -46,6 +47,8 @@ On MochaHost (cPanel), next to TAKATAK, follow
 - A `HEALTHCHECK` calls `/health/ready`.
 - The default command is the API. A worker uses the same image with
   `node --import tsx scripts/<worker>.ts`.
+- On a host that keeps one container running (Coolify), the same container can also migrate
+  on start and run the background jobs: [ALKAO_DEPLOY_COOLIFY.md](ALKAO_DEPLOY_COOLIFY.md) (Run 62).
 - `docker compose up` starts a local stack: PostgreSQL, migrations, the API and the sweeper.
   `--profile workers` adds the email and cancellation workers.
 

@@ -194,7 +194,7 @@ export async function checkDatabase(q: Db | Tx, now = new Date()): Promise<Check
     `SELECT ARRAY(SELECT r FROM unnest(ARRAY['anon', 'authenticated', 'service_role']) r WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = r)) AS roles,
             EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm') AS trgm`,
   );
-  if (env[0]!.roles.length) out.push(fail(area.db, `Rôles Supabase manquants : ${env[0]!.roles.join(", ")}`, "Sur PostgreSQL seul : psql -f supabase/tests/supabase_shim.sql, une fois."));
+  if (env[0]!.roles.length) out.push(fail(area.db, `Rôles Supabase manquants : ${env[0]!.roles.join(", ")}`, "Sur PostgreSQL seul : npm run db:migrate les crée (supabase/bootstrap/plain_postgres.sql). Jamais le shim de test."));
   if (!env[0]!.trgm) out.push(fail(area.db, "Extension pg_trgm absente : la recherche de commandes ne marche pas", "Elle est créée par les migrations ; vérifiez qu'elles sont toutes passées."));
   if (env[0]!.roles.length) return out;
 
@@ -368,7 +368,7 @@ export async function checkLive(
     out.push(fail(area.site, `/health répond ${health.status} : ce n'est pas ALKAO`));
     return out;
   }
-  out.push(ok(area.site, `ALKAO répond (API ${String(h.api)}, contrat ${String(h.control)})`));
+  out.push(ok(area.site, `ALKAO répond (API ${String(h.api)}, contrat ${String(h.control)}${typeof h.build === "string" ? `, version ${h.build}` : ""})`));
   const ready = await get("/health/ready");
   out.push(ready.status === 200 ? ok(area.site, "Base de données joignable (/health/ready)") : fail(area.site, `/health/ready répond ${ready.status} : la base ne répond pas`, "Vérifiez DATABASE_URL du serveur."));
   if (url.protocol === "https:") {

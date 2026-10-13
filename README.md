@@ -34,8 +34,9 @@ versioned control contract.
 | `contracts/` | Published JSON Schema of `alkao.control.v1` (generated; drift-tested) |
 | `supabase/migrations` | Schema. Every `ticketing_*` table enables RLS in the migration that creates it |
 | `supabase/tests/supabase_shim.sql` | Local test stand-in for Supabase roles, `auth.uid()` and default grants |
+| `supabase/bootstrap/plain_postgres.sql` | Production: the Supabase roles and `auth.uid()` on plain PostgreSQL, no default grants; run by `npm run db:migrate`, does nothing on Supabase |
 | `test/` | Domain, RLS, invariant and migration-rule tests |
-| `docs/` | Capability status, [API v1](docs/ALKAO_API_V1.md), [control contract v1](docs/ALKAO_CONTROL_CONTRACT_V1.md), [credentials and gates](docs/ALKAO_SCANNER_V1.md), [go-live](docs/ALKAO_GO_LIVE.md), [runbook](docs/ALKAO_RUNBOOK.md) |
+| `docs/` | Capability status, [API v1](docs/ALKAO_API_V1.md), [control contract v1](docs/ALKAO_CONTROL_CONTRACT_V1.md), [credentials and gates](docs/ALKAO_SCANNER_V1.md), [go-live](docs/ALKAO_GO_LIVE.md), [MochaHost](docs/ALKAO_DEPLOY_MOCHAHOST.md) and [Coolify](docs/ALKAO_DEPLOY_COOLIFY.md) hosting, [runbook](docs/ALKAO_RUNBOOK.md) |
 
 ## Run the checks
 
@@ -140,6 +141,7 @@ TAKATAK membership (set `SUPABASE_URL` and `SUPABASE_ANON_KEY`). See
 | Run 59 | Tickets grouped by type in the catalog's order (page and e-mail); a session-change right (Flex Météo) shows as a right, without « show this page to receive it » |
 | Run 60 | The hosted shop shows the options (meals, activities, Flex Météo) in their own card « Ajoutez des options », available once a ticket is chosen |
 | Run 61 | **ALKAO platform home**: independent FR-CA/EN SSR homepage at `/`; only Brands that explicitly opt in from `/ops → Apparence` and have an active entitlement plus a published, currently sellable event with capacity appear; existing `/acheter` shop links, Event JSON-LD, canonical/hreflang; `ALKAO_HOME_URL` provides an HTTPS-only white-label root redirect. Opt-in defaults OFF. |
+| Run 62 | **Coolify (Docker)** ([guide](docs/ALKAO_DEPLOY_COOLIFY.md)): one container migrates on start (`ALKAO_MIGRATE_ON_START`, containers take turns), serves, and runs the background jobs every minute (`ALKAO_RUN_WORKERS`); stops at once on `docker stop`; `/health` shows the release's commit (`build`); plain PostgreSQL gets the Supabase roles from a production bootstrap with no default grants, never the test shim |
 | Secrets guard | `npm run check:secrets` (in `npm run qa`, so in CI): no key-shaped value and no filled-in secret in `.env.example` can be merged; it names the file and line, never the value |
 | Go-live: look | `check:golive` warns when a selling Brand has neither logo nor colour, when its logo is an SVG (missing in many e-mail apps), and when events on sale have no photo |
 | TAKATAK brand | `/ops` in the GROUPE TAKATAK brand (`BRAND.md`): deep navy sidebar, electric-blue tile, brand blue buttons; dark mode in navy and midnight with cyan actions; green, red and amber for status only; WCAG AA in both |

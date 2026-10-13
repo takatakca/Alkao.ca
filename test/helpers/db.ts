@@ -26,8 +26,11 @@ export interface TestDatabase {
   drop(): Promise<void>;
 }
 
-/** Create a throwaway database with the Supabase shim and every ALKAO migration applied. */
-export async function createTestDatabase(): Promise<TestDatabase> {
+/**
+ * Create a throwaway database with the Supabase shim and every ALKAO migration applied.
+ * `empty` (Run 62): nothing applied, like a new production PostgreSQL.
+ */
+export async function createTestDatabase({ empty = false } = {}): Promise<TestDatabase> {
   assertLocalDatabaseUrl(ADMIN_URL);
   const name = `alkao_test_${randomUUID().replaceAll("-", "").slice(0, 20)}`;
   const admin = new pg.Client({ connectionString: ADMIN_URL });
@@ -43,8 +46,10 @@ export async function createTestDatabase(): Promise<TestDatabase> {
   const setup = new pg.Client({ connectionString: url.toString() });
   await setup.connect();
   try {
-    await setup.query(SHIM);
-    await applyMigrations(setup);
+    if (!empty) {
+      await setup.query(SHIM);
+      await applyMigrations(setup);
+    }
   } finally {
     await setup.end();
   }

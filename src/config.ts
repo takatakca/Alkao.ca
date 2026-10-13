@@ -1,5 +1,11 @@
 import { z } from "zod";
 
+/** Run 62: a release id worth showing (a commit, a tag), or null: anything else is left out. */
+export const buildId = (raw: string | undefined | null): string | null => {
+  const v = raw?.trim();
+  return v && /^[A-Za-z0-9._-]{1,64}$/.test(v) ? v : null;
+};
+
 const boolFlag = z
   .enum(["true", "false", "1", "0", ""])
   .optional()
@@ -44,6 +50,8 @@ export const EnvSchema = z.object({
   TWILIO_FROM_NUMBER: z.string().regex(/^\+[1-9][0-9]{7,14}$/).optional(),
   /** Run 48: signing secret of the Resend webhook (bounces, spam complaints). */
   RESEND_WEBHOOK_SECRET: z.string().regex(/^whsec_[A-Za-z0-9+/=]{16,}$/).optional(),
+  /** Run 62: the release's commit, shown by /health (the Docker image sets it from SOURCE_COMMIT). */
+  ALKAO_BUILD_ID: z.string().optional().transform((v) => buildId(v)),
   PORT: z.coerce.number().int().min(1).max(65535).default(8787),
   NODE_ENV: z.string().optional(),
 });
@@ -68,6 +76,7 @@ export interface Config {
   twilio: { accountSid: string; authToken: string; sender: { messagingServiceSid: string } | { from: string } } | null;
   /** Run 48: null until the Resend webhook is set up. */
   resendWebhookSecret: string | null;
+  buildId: string | null;
   port: number;
 }
 
@@ -133,6 +142,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
         }
       : null,
     resendWebhookSecret: e.RESEND_WEBHOOK_SECRET ?? null,
+    buildId: e.ALKAO_BUILD_ID,
     port: e.PORT,
   };
 }
