@@ -3,7 +3,8 @@
 Newest first, one line per piece of work. Rule: `AGENTS.md` › Work log rule.
 Format: `YYYY-MM-DD | agent | branch → PR | status | what | next step`
 
-- 2026-10-13 | claude (Code, cloud) | claude/amazing-pascal-tppqd4 → PR #76 | PR open | Run 64: alkao.ca premium home (hero carousel and search, categories, event rails, quick view, assistant, FR/EN, organizer band) | merge when CI is green; organizers opt in from /ops → Apparence
+- 2026-10-13 | claude (Code, cloud) | claude/amazing-pascal-tppqd4 | active | Run 65: OPC — exchange and refund policy shown before payment, e-mail to buyers when a session's time or place changes; competitor benchmark (docs/ALKAO_COMPETITIVE_FEATURES.md) | open the PR
+- 2026-10-13 | claude (Code, cloud) | claude/amazing-pascal-tppqd4 → PR #76 | done | Run 64: alkao.ca premium home (hero carousel and search, categories, event rails, quick view, assistant, FR/EN, organizer band) | organizers opt in from /ops → Apparence
 - 2026-10-13 | claude (Code, cloud) | claude/amazing-pascal-tppqd4 → PR #74 | done | Run 63: live watch of alkao.ca every 3 hours (GitHub workflow, GET only), secret guard as its own CI step | add billets.promohavana.ca to live.yml once it serves the current ALKAO
 - 2026-10-13 | claude (Code, cloud) | claude/amazing-pascal-tppqd4 → PR #73 | done | Run 62: ALKAO deployable on Coolify (container entry: migrations on start, background jobs; production roles bootstrap instead of the test shim; /health build) | owner: Coolify settings (docs/ALKAO_DEPLOY_COOLIFY.md), see handoff
 - 2026-10-13 | claude (Code, cloud) | claude/amazing-pascal-tppqd4 → PR #72 | done | Secret guard in CI (check:secrets) after real keys were committed to .env.example (c75f797, public history) | owner rotates the leaked keys

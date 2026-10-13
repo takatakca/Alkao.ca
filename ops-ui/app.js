@@ -1468,7 +1468,7 @@ const contrast = (a, b) => { const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y 
 /** White or black, whichever reads better on the colour. */
 const inkFor = (hex) => (contrast(hex, "#ffffff") >= contrast(hex, "#000000") ? "#ffffff" : "#000000");
 const httpsUrl = (u) => /^https:\/\/[^\s"'<>\\]+$/.test(u ?? "");
-const EMPTY_LOOK = { logoUrl: "", accentColor: "", onAccentColor: "", websiteUrl: "", supportEmail: "", supportPhone: "", addressLine: "", showOnAlkao: false };
+const EMPTY_LOOK = { logoUrl: "", accentColor: "", onAccentColor: "", websiteUrl: "", supportEmail: "", supportPhone: "", addressLine: "", refundPolicy: "", showOnAlkao: false };
 
 function Appearance({ api, base, role }) {
   const [state, reload] = useLoad(() => api(`${base}/appearance`), [base]);
@@ -1496,7 +1496,7 @@ function Appearance({ api, base, role }) {
       await api(`${base}/appearance`, { method: "PUT", body: {
         logoUrl: v(look.logoUrl), accentColor: coloured ? look.accentColor : null, onAccentColor: coloured ? onAccent : null,
         websiteUrl: v(look.websiteUrl), supportEmail: v(look.supportEmail), supportPhone: v(look.supportPhone), addressLine: v(look.addressLine),
-        showOnAlkao: Boolean(look.showOnAlkao),
+        refundPolicy: v(look.refundPolicy), showOnAlkao: Boolean(look.showOnAlkao),
       } });
       await reload(); setF(null); setMsg("Enregistré. L’apparence et la visibilité sur ALKAO sont à jour.");
     } catch (err) { setError(err); }
@@ -1538,6 +1538,12 @@ function Appearance({ api, base, role }) {
           ${field("supportPhone", "Téléphone", { type: "tel", maxlength: 40 })}
           ${field("addressLine", "Adresse", { maxlength: 200 })}
         </div>
+        <h3>Politique d'échange et de remboursement</h3>
+        <p class="muted">Obligatoire au Québec (OPC) : l'acheteur la voit avant de payer, puis sur la page de ses billets et dans son courriel. Texte simple, 2 000 caractères au plus.</p>
+        <label>Votre politique<textarea rows="5" maxlength="2000" disabled=${!canEdit} value=${look.refundPolicy}
+          placeholder="Exemple : Billets non remboursables, sauf annulation de l'événement. Changement de date possible jusqu'à 48 h avant, selon les places."
+          onInput=${(e) => set({ refundPolicy: e.target.value })}></textarea></label>
+        ${!String(look.refundPolicy ?? "").trim() && html`<p class="alert warn">Sans politique, la billetterie affiche seulement « selon la politique de l'organisateur » et vos coordonnées.</p>`}
         <h3>ALKAO</h3>
         <label class="check"><input type="checkbox" disabled=${!canEdit} checked=${Boolean(look.showOnAlkao)}
           onChange=${(e) => set({ showOnAlkao: e.target.checked })} />

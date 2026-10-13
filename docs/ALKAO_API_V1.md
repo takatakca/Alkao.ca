@@ -60,11 +60,11 @@ How a payment works:
 |---|---|---|
 | GET | `/status` | any member |
 | GET / POST | `/venues` | `catalog.read` / `catalog.write` |
-| PATCH | `/venues/:venueId` | `catalog.write` |
+| PATCH | `/venues/:venueId` | `catalog.write`; answers `{ venue, buyersNotified }`: a new name, address or city e-mails every order with valid tickets for an upcoming session there (Run 65, OPC) |
 | GET / POST | `/events` | `catalog.read` / `catalog.write` (always created as `draft`) |
 | GET / PATCH | `/events/:eventId` | `catalog.read` / `catalog.write` |
 | GET / POST | `/events/:eventId/sessions` | `inventory.read` / `catalog.write` (always created as `draft`) |
-| PATCH | `/sessions/:sessionId` | `catalog.write`; `409 capacity_below_committed` if capacity drops below what is held + sold |
+| PATCH | `/sessions/:sessionId` | `catalog.write`; `409 capacity_below_committed` if capacity drops below what is held + sold; answers `{ session, buyersNotified }`: a new end time e-mails the session's buyers (Run 65, OPC) |
 | GET / POST | `/events/:eventId/ticket-types` | `catalog.read` / `catalog.write`; `openDate: true` makes an admission type a "billet ouvert" (Run 37, admission types only, off by default) |
 | PATCH | `/ticket-types/:ticketTypeId` | `catalog.write` |
 | GET | `/orders?limit&before` | `orders.read` |
@@ -1103,7 +1103,7 @@ take the Brand's logo and colour. Without settings they keep ALKAO's neutral loo
 
 | Method | Path | Who | Result |
 |---|---|---|---|
-| GET | `/v1/admin/…/appearance` | `catalog.read` | `{ appearance: { logoUrl, accentColor, onAccentColor, websiteUrl, supportEmail, supportPhone, addressLine, showOnAlkao, updatedAt, brandName } }`; `showOnAlkao` defaults to `false` |
+| GET | `/v1/admin/…/appearance` | `catalog.read` | `{ appearance: { logoUrl, accentColor, onAccentColor, websiteUrl, supportEmail, supportPhone, addressLine, refundPolicy, showOnAlkao, updatedAt, brandName } }`; `showOnAlkao` defaults to `false` |
 | PUT | `/v1/admin/…/appearance` | `catalog.write` | The same fields; `showOnAlkao` is explicit consent to list sellable events on the ALKAO platform homepage. Journal: `brand.appearance_updated` |
 | PATCH | `/v1/admin/…/events/:eventId` | `catalog.write` | `imageUrl`: the event's photo (`null` removes it); also accepted on `POST /events` |
 
@@ -1118,6 +1118,7 @@ take the Brand's logo and colour. Without settings they keep ALKAO's neutral loo
   `422 appearance_low_contrast` with `details: { ratio, minimum }`.
 - `supportEmail` is an e-mail address; `supportPhone` digits, spaces and `+ ( ) . -`;
   `addressLine` at most 200 characters, without `<>`.
+- Run 65: `refundPolicy`, the exchange and refund policy, plain text up to 2,000 characters without `<>` (line breaks kept). The shop shows it before payment, the tickets page and the tickets e-mail repeat it; without it the shop says the organizer's policy applies and gives its contact (the OPC wants the policy told before the sale).
 
 **Where it shows:**
 

@@ -25,7 +25,7 @@ export async function queueReminders(db: Db, now = new Date()): Promise<number> 
        AND coalesce(bs.reminder_emails, true)
        AND EXISTS (SELECT 1 FROM public.ticketing_tickets k WHERE k.order_id = o.id AND k.status = 'valid')
        AND NOT EXISTS (SELECT 1 FROM public.ticketing_buyer_erasures e WHERE e.buyer_id = o.buyer_id)
-     ON CONFLICT (order_id, kind, refund_id) DO NOTHING`,
+     ON CONFLICT (order_id, kind, refund_id, change_id) DO NOTHING`,
     [now],
   );
   return r.rowCount ?? 0;

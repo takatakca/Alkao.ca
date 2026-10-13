@@ -134,12 +134,14 @@ describe("go-live check: settings", () => {
 });
 
 describe("go-live check: database", () => {
-  /** Runs 50–53: every selling Brand with its look, every event with its photo. */
+  /** Runs 50–53: every selling Brand with its look, every event with its photo; Run 65: its refund policy. */
   const dressed = async (tx: Pick<typeof db.pool, "query">) => {
     for (const t of [seed.havana, seed.festi]) {
       await tx.query(
-        `INSERT INTO public.ticketing_brand_settings (client_id, brand_id, logo_url, accent_color, on_accent_color) VALUES ($1, $2, 'https://cdn.example.com/logo.png', '#0f766e', '#ffffff')
-         ON CONFLICT (client_id, brand_id) DO UPDATE SET logo_url = EXCLUDED.logo_url, accent_color = EXCLUDED.accent_color, on_accent_color = EXCLUDED.on_accent_color`,
+        `INSERT INTO public.ticketing_brand_settings (client_id, brand_id, logo_url, accent_color, on_accent_color, refund_policy)
+         VALUES ($1, $2, 'https://cdn.example.com/logo.png', '#0f766e', '#ffffff', 'Billets non remboursables, sauf annulation.')
+         ON CONFLICT (client_id, brand_id) DO UPDATE SET logo_url = EXCLUDED.logo_url, accent_color = EXCLUDED.accent_color,
+           on_accent_color = EXCLUDED.on_accent_color, refund_policy = EXCLUDED.refund_policy`,
         [t.clientId, t.brandId],
       );
       await tx.query(`UPDATE public.ticketing_events SET image_url = 'https://cdn.example.com/photo.jpg' WHERE client_id = $1`, [t.clientId]);
@@ -178,6 +180,9 @@ describe("go-live check: database", () => {
       expect(warns).toContain("Clients et billetterie : Havana Resort — Événements vend sans son logo ni sa couleur : billets, boutique et courriels gardent le style neutre");
       expect(warns).toContain("Clients et billetterie : Le logo de FESTI-ICE est un SVG : il manquera dans plusieurs logiciels de courriel");
       expect(warns).toContain("Clients et billetterie : 1 événement(s) en vente sans photo (Havana Resort — Événements) : Nuit des lanternes");
+      // Run 65: a Brand selling without an exchange and refund policy.
+      await tx.query(`UPDATE public.ticketing_brand_settings SET refund_policy = NULL WHERE client_id = $1`, [seed.festi.clientId]);
+      expect(of(await checkDatabase(tx), "warn")).toContain("Clients et billetterie : FESTI-ICE n'a pas de politique d'échange et de remboursement : l'OPC demande de la montrer avant la vente");
     } finally {
       await tx.query("ROLLBACK");
       tx.release();

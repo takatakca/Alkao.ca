@@ -261,9 +261,10 @@ export async function checkDatabase(q: Db | Tx, now = new Date()): Promise<Check
     }
     // Runs 50–53: each selling Brand in its own look, and a photo for the events on sale (the
     // tickets page, the shop, the e-mails and the shared links use them).
-    const { rows: looks } = await q.query<{ brand: string; plain: boolean; svg: boolean; no_photo: string[] }>(
+    const { rows: looks } = await q.query<{ brand: string; plain: boolean; svg: boolean; no_policy: boolean; no_photo: string[] }>(
       `SELECT b.name AS brand,
               (bs.logo_url IS NULL AND bs.accent_color IS NULL) AS plain,
+              bs.refund_policy IS NULL AS no_policy,
               coalesce(bs.logo_url ~* '\\.svg([?#]|$)', false) AS svg,
               ARRAY(SELECT ev.title FROM public.ticketing_events ev
                     WHERE ev.client_id = b.client_id AND ev.brand_id = b.id AND ev.status = 'published' AND ev.image_url IS NULL
@@ -281,6 +282,8 @@ export async function checkDatabase(q: Db | Tx, now = new Date()): Promise<Check
     for (const lk of looks) {
       if (lk.plain) out.push(warn(area.setup, `${lk.brand} vend sans son logo ni sa couleur : billets, boutique et courriels gardent le style neutre`, "/ops → Apparence : le logo (PNG), la couleur et les coordonnées."));
       if (lk.svg) out.push(warn(area.setup, `Le logo de ${lk.brand} est un SVG : il manquera dans plusieurs logiciels de courriel`, "/ops → Apparence : mettez l'adresse d'un PNG à fond transparent."));
+      // Run 65: the OPC wants the exchange and refund policy told to buyers before they buy.
+      if (lk.no_policy) out.push(warn(area.setup, `${lk.brand} n'a pas de politique d'échange et de remboursement : l'OPC demande de la montrer avant la vente`, "/ops → Apparence → « Politique d'échange et de remboursement »."));
       if (lk.no_photo.length) {
         const names = lk.no_photo.slice(0, 3).join(", ") + (lk.no_photo.length > 3 ? ` (+${lk.no_photo.length - 3})` : "");
         out.push(warn(area.setup, `${lk.no_photo.length} événement(s) en vente sans photo (${lk.brand}) : ${names}`, "/ops → Événements → l'événement → « Ajouter une photo » : elle s'affiche sur les billets, la boutique, les courriels et les liens partagés."));

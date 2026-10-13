@@ -99,3 +99,7 @@ a.button { display: inline-block; padding: .65rem 1rem; border-radius: 10px; bac
 .options li:last-child { border-bottom: 0; }
 .options li small { display: block; font-size: .8rem; margin-top: .1rem; }
 .options p { margin: 0; font-size: .9rem; }
+
+/* Run 65: the exchange and refund policy keeps its line breaks. */
+.contact .policy { white-space: pre-line; }
+.contact h3 { font-size: 1rem; margin: 1rem 0 .25rem; }
