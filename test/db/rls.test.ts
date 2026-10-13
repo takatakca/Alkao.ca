@@ -60,6 +60,8 @@ const EXPECTED: Record<string, Visibility> = {
   // Run 44: newsletter sign-ups, server only.
   ticketing_newsletter_signups: "none",
   ticketing_add_on_stock: "none",
+  // Run 65: changes of time or place told to buyers, server only.
+  ticketing_session_changes: "none",
 };
 
 const clientColumn = (table: string) => (table === "ticketing_clients" ? "id" : "client_id");

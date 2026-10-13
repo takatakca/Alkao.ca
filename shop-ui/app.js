@@ -78,6 +78,8 @@ const T = {
     pay: (m) => `Payer ${m}`,
     change: "Modifier ma sélection",
     stripe: "Paiement sécurisé par Stripe, directement à l'organisateur.",
+    policyTitle: "Politique d'échange et de remboursement",
+    policyNone: (brand) => `Les échanges et remboursements suivent la politique de ${brand || "l'organisateur"}. Pour la connaître avant de payer, écrivez-lui :`,
     footer: "Billetterie ALKAO",
     shop: "Billetterie",
     noEvents: "Aucun événement en vente pour le moment.",
@@ -159,6 +161,8 @@ const T = {
     pay: (m) => `Pay ${m}`,
     change: "Change my selection",
     stripe: "Secure payment by Stripe, directly to the organizer.",
+    policyTitle: "Exchange and refund policy",
+    policyNone: (brand) => `Exchanges and refunds follow ${brand || "the organizer"}'s policy. To read it before paying, write to them:`,
     footer: "ALKAO Ticketing",
     shop: "Tickets",
     noEvents: "No event on sale right now.",
@@ -448,6 +452,7 @@ function EventShop({ config }) {
         <label>${T.email}<input type="email" required autocomplete="email" value=${buyer.email} onInput=${(e) => setBuyer({ ...buyer, email: e.target.value })} /></label>
         <label>${T.name}<input required autocomplete="name" value=${buyer.fullName} onInput=${(e) => setBuyer({ ...buyer, fullName: e.target.value })} /></label>
         <label>${T.phone}<input type="tel" autocomplete="tel" value=${buyer.phone} onInput=${(e) => setBuyer({ ...buyer, phone: e.target.value })} /></label>
+        <${Policy} brand=${ev.brand} />
         <div class="actions">
           <button type="submit" disabled=${busy}>${hold.quote.totalCents === 0 ? T.getFree : T.pay(money(hold.quote.totalCents))}</button>
           <button type="button" class="secondary" disabled=${busy} onClick=${async () => { await release(hold); setHold(null); load(); }}>${T.change}</button>
@@ -457,6 +462,16 @@ function EventShop({ config }) {
     ${!hold && !DOOR && html`<${FindTickets} />`}
     <footer>${T.footer}</footer>
   </main>`;
+}
+
+// ── Run 65: the organizer's exchange and refund policy, before payment (OPC) ──
+function Policy({ brand }) {
+  const text = String(brand?.refundPolicy ?? "").trim();
+  const contact = [brand?.supportEmail, brand?.supportPhone].filter(Boolean).join(" · ");
+  return html`<section class="policy" aria-labelledby="policy-title">
+    <h3 id="policy-title">${T.policyTitle}</h3>
+    ${text ? html`<p>${text}</p>` : html`<p>${T.policyNone(brand?.name ?? "")}${contact ? html` <strong>${contact}</strong>` : ""}</p>`}
+  </section>`;
 }
 
 // ── Run 27: lost the email? The tickets are sent again to the same address ──

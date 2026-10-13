@@ -55,6 +55,7 @@ import { clientIp, ipKind } from "./client-ip.js";
 import * as delivery from "../delivery/db.js";
 import { orderEmailToken } from "../delivery/links.js";
 import * as cancellation from "../ops/cancellation.js";
+import * as changeNotice from "../ops/change-notice.js";
 
 export const API_VERSION = "alkao.api.v1";
 
@@ -510,12 +511,15 @@ export function createApp(deps: AppDeps) {
     const venueId = param(c, "venueId");
     if (!venueId) return fail(c, 404, "venue_not_found");
     const body = api.UpdateVenue.parse(await readJson(c));
-    const venue = await withTransaction(deps.db, async (tx) => {
+    const { venue, buyersNotified } = await withTransaction(deps.db, async (tx) => {
+      // Run 65: a new name or address is a change of place for every sold session there (OPC).
+      const before = await changeNotice.soldSessions(tx, c.get("scope"), { venueId }, now());
       const v = await catalog.updateVenue(tx, c.get("scope"), venueId, body);
-      await catalog.writeAudit(tx, c.get("scope"), actor(c), "venue.updated", { type: "venue", id: venueId }, { fields: Object.keys(body) });
-      return v;
+      const notified = await changeNotice.noticeChanges(tx, c.get("scope"), before, await changeNotice.soldSessions(tx, c.get("scope"), { venueId }, now()));
+      await catalog.writeAudit(tx, c.get("scope"), actor(c), "venue.updated", { type: "venue", id: venueId }, { fields: Object.keys(body), buyersNotified: notified });
+      return { venue: v, buyersNotified: notified };
     });
-    return c.json({ venue });
+    return c.json({ venue, buyersNotified });
   });
 
   app.get(`${ADMIN}/events`, ...admin, can("ticketing.catalog.read"), async (c) =>
@@ -619,7 +623,7 @@ export function createApp(deps: AppDeps) {
     const sessionId = param(c, "sessionId");
     if (!sessionId) return fail(c, 404, "session_not_found");
     const body = api.UpdateSession.parse(await readJson(c));
-    const session = await withTransaction(deps.db, async (tx) => {
+    const updated = await withTransaction(deps.db, async (tx) => {
       if (body.status === "cancelled") {
         // Run 10: a session with buyers is cancelled through POST …/cancel, which refunds them.
         const { rows } = await tx.query<{ n: number }>(
@@ -628,11 +632,14 @@ export function createApp(deps: AppDeps) {
         );
         if ((rows[0]?.n ?? 0) > 0) throw new DomainError("use_session_cancellation");
       }
+      // Run 65: a new end time is a change of schedule for its buyers (OPC).
+      const before = await changeNotice.soldSessions(tx, c.get("scope"), { sessionId }, now());
       const s = await catalog.updateSession(tx, c.get("scope"), sessionId, body);
-      await catalog.writeAudit(tx, c.get("scope"), actor(c), "session.updated", { type: "session", id: sessionId }, body);
-      return s;
+      const notified = await changeNotice.noticeChanges(tx, c.get("scope"), before, await changeNotice.soldSessions(tx, c.get("scope"), { sessionId }, now()));
+      await catalog.writeAudit(tx, c.get("scope"), actor(c), "session.updated", { type: "session", id: sessionId }, { ...body, ...(notified ? { buyersNotified: notified } : {}) });
+      return { session: s, buyersNotified: notified };
     });
-    return c.json({ session });
+    return c.json(updated);
   });
 
   app.get(`${ADMIN}/events/:eventId/ticket-types`, ...admin, can("ticketing.catalog.read"), async (c) => {

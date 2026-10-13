@@ -29,6 +29,8 @@ export interface EmailLook {
   addressLine: string | null;
   /** The event's photo, under the title (tickets, reminder). */
   imageUrl?: string | null;
+  /** Run 65: the Brand's exchange and refund policy (plain text), repeated in the tickets e-mail. */
+  refundPolicy?: string | null;
 }
 // Stored values are already checked by the database; e-mails check again before using them.
 const colour = (c: string | null | undefined, fallback: string) => (c && /^#[0-9a-f]{6}$/i.test(c) ? c : fallback);
@@ -77,6 +79,18 @@ const button = (href: string, label: string, look?: EmailLook | null) =>
 const paragraph = (html: string) => `<tr><td style="font-size:15px;line-height:1.5;padding-bottom:16px">${html}</td></tr>`;
 const box = (html: string) => `<tr><td style="font-size:15px;line-height:1.6;padding:12px 16px;background:#fafaf9;border-radius:8px">${html}</td></tr>`;
 const note = (html: string, top = false) => `<tr><td style="font-size:13px;line-height:1.5;color:#57534e${top ? ";padding-top:16px" : ""}">${html}</td></tr>`;
+
+// Run 65: the exchange and refund policy, as the Brand wrote it (OPC: told before and after the sale).
+const POLICY = { fr: "Politique d'échange et de remboursement", en: "Exchange and refund policy" };
+const policyOf = (look?: EmailLook | null) => look?.refundPolicy?.trim() || null;
+const policyRows = (l: Language, look?: EmailLook | null) => {
+  const policy = policyOf(look);
+  return policy ? [note(`<strong>${esc(POLICY[l])}</strong><br>${esc(policy).replace(/\r?\n/g, "<br>")}`, true)] : [];
+};
+const policyText = (l: Language, look?: EmailLook | null) => {
+  const policy = policyOf(look);
+  return policy ? ["", `${POLICY[l]} :`, policy] : [];
+};
 
 // ── Tickets ──────────────────────────────────────────────────────────────────
 export interface TicketsEmailData {
@@ -171,13 +185,14 @@ export function ticketsEmail(d: TicketsEmailData): Content {
   const subject = `${t.title(changed)} — ${d.eventTitle} (${d.reference})`;
   const codes = d.codes?.length ? ["", t.codesText] : [];
   const options = optionsLine(t.options, d.addOns);
-  const text = [hello, "", intro, "", d.eventTitle, when, where, count, ...(options ? [options] : []), "", `${t.linkLine}${d.link}`, ...codes, "", t.advice, "", footerText(l, d.brandName, d.look)].join("\n");
+  const text = [hello, "", intro, "", d.eventTitle, when, where, count, ...(options ? [options] : []), "", `${t.linkLine}${d.link}`, ...codes, "", t.advice, ...policyText(l, d.look), "", footerText(l, d.brandName, d.look)].join("\n");
   const html = layout(l, d.brandName, t.title(changed), [
     paragraph(`${esc(hello)}<br>${esc(intro)}`),
     box(`<strong>${esc(d.eventTitle)}</strong><br>${esc(when)}<br>${esc(where)}<br>${esc(count)} · ${t.order} ${esc(d.reference)}${options ? `<br>${esc(options)}` : ""}`),
     button(d.link, t.show, d.look),
     ...codeRows(t, d.codes),
     note(esc(t.advice), Boolean(d.codes?.length)),
+    ...policyRows(l, d.look),
   ], d.look);
   return { fromName: d.brandName, subject, text, html };
 }
@@ -209,7 +224,7 @@ export function reminderEmail(d: ReminderEmailData): Content {
   const intro = r.intro(d.reference);
   const codes = d.codes?.length ? ["", t.codesText] : [];
   const options = optionsLine(t.options, d.addOns);
-  const text = [hello, "", intro, "", d.eventTitle, when, where, count, ...(options ? [options] : []), "", `${t.linkLine}${d.link}`, ...codes, "", t.advice, "", footerText(l, d.brandName, d.look)].join("\n");
+  const text = [hello, "", intro, "", d.eventTitle, when, where, count, ...(options ? [options] : []), "", `${t.linkLine}${d.link}`, ...codes, "", t.advice, ...policyText(l, d.look), "", footerText(l, d.brandName, d.look)].join("\n");
   const html = layout(l, d.brandName, r.title, [
     paragraph(`${esc(hello)}<br>${esc(intro)}`),
     box(`<strong>${esc(d.eventTitle)}</strong><br>${esc(when)}<br>${esc(where)}<br>${esc(count)} · ${t.order} ${esc(d.reference)}${options ? `<br>${esc(options)}` : ""}`),
@@ -273,6 +288,76 @@ export function sessionCancelledEmail(d: SessionCancelledEmailData): Content {
     paragraph(`${esc(hello)}<br>${esc(what)}`),
     box(`${esc(money)}<br><span style="color:#57534e">${t.order} ${esc(d.reference)}</span>`),
     note(esc(t.sorry), true),
+  ], d.look);
+  return { fromName: d.brandName, subject, text, html };
+}
+
+// ── A change of time or place (Run 65, OPC) ─────────────────────────────────
+export interface SessionChangedEmailData {
+  look?: EmailLook | null;
+  language?: Language;
+  brandName: string;
+  buyerName: string | null;
+  reference: string;
+  eventTitle: string;
+  timezone: string;
+  before: { startsAt: Date; endsAt: Date | null; place: string };
+  after: { startsAt: Date; endsAt: Date | null; place: string };
+  validTickets: number;
+  link: string;
+}
+
+const CHANGED = {
+  fr: {
+    title: "Changement à votre événement",
+    hello: (name: string | null) => (name ? `Bonjour ${name},` : "Bonjour,"),
+    what: (brand: string, event: string, time: boolean, place: boolean) =>
+      `${brand} a changé ${time && place ? "l'horaire et le lieu" : time ? "l'horaire" : "le lieu"} de ${event}.`,
+    still: (n: number) => `Vos ${n} ${plural(n, "billet reste valide", "billets restent valides")} : vous n'avez rien à faire.`,
+    before: "Avant",
+    now: "Maintenant",
+    until: "fin",
+    show: "Afficher mes billets",
+    cannot: (brand: string) => `Vous ne pouvez plus y aller ? Écrivez à ${brand}, à l'aide des coordonnées ci-dessous.`,
+    order: "Commande",
+  },
+  en: {
+    title: "A change to your event",
+    hello: (name: string | null) => (name ? `Hello ${name},` : "Hello,"),
+    what: (brand: string, event: string, time: boolean, place: boolean) =>
+      `${brand} changed the ${time && place ? "time and place" : time ? "time" : "place"} of ${event}.`,
+    still: (n: number) => `Your ${n} ${plural(n, "ticket is", "tickets are")} still valid: there is nothing to do.`,
+    before: "Before",
+    now: "Now",
+    until: "ends",
+    show: "Show my tickets",
+    cannot: (brand: string) => `Can't make it any more? Write to ${brand}, using the contact details below.`,
+    order: "Order",
+  },
+};
+
+export function sessionChangedEmail(d: SessionChangedEmailData): Content {
+  const l = d.language ?? "fr";
+  const t = CHANGED[l];
+  const time = (v: SessionChangedEmailData["before"]) => {
+    const start = fullDate(l, v.startsAt, d.timezone);
+    return v.endsAt ? `${start} (${t.until} ${new Intl.DateTimeFormat(locale(l), { timeStyle: "short", timeZone: d.timezone }).format(v.endsAt)})` : start;
+  };
+  const timeChanged = d.before.startsAt.getTime() !== d.after.startsAt.getTime() || (d.before.endsAt?.getTime() ?? null) !== (d.after.endsAt?.getTime() ?? null);
+  const placeChanged = d.before.place !== d.after.place;
+  const hello = t.hello(d.buyerName);
+  const what = t.what(d.brandName, d.eventTitle, timeChanged, placeChanged);
+  const still = t.still(d.validTickets);
+  const was = `${time(d.before)} · ${d.before.place}`;
+  const is = `${time(d.after)} · ${d.after.place}`;
+  const subject = `${t.title} — ${d.eventTitle} (${d.reference})`;
+  const text = [hello, "", what, still, "", `${t.before} : ${was}`, `${t.now} : ${is}`, "", `${t.show} : ${d.link}`, "", t.cannot(d.brandName), ...policyText(l, d.look), "", `${t.order} ${d.reference}`, "", footerText(l, d.brandName, d.look)].join("\n");
+  const html = layout(l, d.brandName, t.title, [
+    paragraph(`${esc(hello)}<br>${esc(what)}<br>${esc(still)}`),
+    box(`<span style="color:#57534e">${esc(t.before)} : <s>${esc(was)}</s></span><br><strong>${esc(t.now)} : ${esc(is)}</strong><br><span style="color:#57534e">${t.order} ${esc(d.reference)}</span>`),
+    button(d.link, t.show, d.look),
+    note(esc(t.cannot(d.brandName))),
+    ...policyRows(l, d.look),
   ], d.look);
   return { fromName: d.brandName, subject, text, html };
 }

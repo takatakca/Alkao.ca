@@ -116,6 +116,9 @@ describe("hosted ticket shop", () => {
     await page.getByRole("button", { name: "Continuer" }).click();
     await page.getByLabel("Courriel (vos billets y seront envoyés)").fill("bebe@example.com");
     await page.getByLabel("Nom complet").fill("Léa Roy");
+    // Run 65 (OPC): the organizer's exchange and refund policy is there before the purchase.
+    const policy = page.getByRole("region", { name: "Politique d'échange et de remboursement" });
+    await policy.getByText("Les échanges et remboursements suivent la politique de Havana Resort — Événements.", { exact: false }).waitFor();
     await page.getByRole("button", { name: "Obtenir mes billets" }).click();
     await page.waitForURL(/\/billets#/);
     await page.getByRole("img", { name: /^Code QR du billet / }).waitFor();

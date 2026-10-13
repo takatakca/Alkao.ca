@@ -4,7 +4,7 @@ import { orderEmailToken, ticketsUrl } from "./links.js";
 import { deliverCampaignEmails } from "./campaigns.js";
 import { deliverSignupConfirmations } from "./newsletter.js";
 import { queueReminders } from "./reminders.js";
-import { refundEmail, reminderEmail, sessionCancelledEmail, ticketsEmail } from "./templates.js";
+import { refundEmail, reminderEmail, sessionCancelledEmail, sessionChangedEmail, ticketsEmail } from "./templates.js";
 import { APPEARANCE_COLUMNS, appearanceJoin, appearanceOf, type LookRow } from "../db/appearance.js";
 import { CredentialsService } from "../scanner/service.js";
 import { emailCodes } from "./codes.js";
@@ -36,7 +36,7 @@ interface DueRow extends LookRow {
   client_id: string;
   brand_id: string;
   order_id: string;
-  kind: "order_tickets" | "exchange_tickets" | "session_cancelled" | "refund" | "reminder";
+  kind: "order_tickets" | "exchange_tickets" | "session_cancelled" | "refund" | "reminder" | "session_changed";
   attempts: number;
   created_at: Date;
   reference: string;
@@ -58,6 +58,16 @@ interface DueRow extends LookRow {
   refund_reason: string | null;
   refund_voided: number | null;
   event_image_url: string | null;
+  /** Run 65: the change a "session_changed" e-mail is about. */
+  change_session_id: string | null;
+  change_session_status: string | null;
+  old_starts_at: Date | null;
+  new_starts_at: Date | null;
+  old_ends_at: Date | null;
+  new_ends_at: Date | null;
+  old_place: string | null;
+  new_place: string | null;
+  change_tickets: number;
 }
 
 /**
@@ -84,8 +94,15 @@ export async function deliverTicketEmails(db: Db, cfg: DeliveryConfig, now = new
                   ORDER BY i.created_at DESC LIMIT 1), 0)::int AS cancel_refund_cents,
                 r.amount_cents AS refund_amount_cents, r.reason AS refund_reason, cardinality(r.void_ticket_ids) AS refund_voided,
                 EXISTS (SELECT 1 FROM public.ticketing_buyer_erasures be WHERE be.buyer_id = b.id) AS buyer_anonymized,
-                s.status AS session_status
+                s.status AS session_status,
+                ch.session_id AS change_session_id, chs.status AS change_session_status,
+                ch.old_starts_at, ch.new_starts_at, ch.old_ends_at, ch.new_ends_at, ch.old_place, ch.new_place,
+                (SELECT count(*)::int FROM public.ticketing_tickets t
+                  WHERE t.order_id = o.id AND t.session_id = ch.session_id AND t.client_id = o.client_id AND t.brand_id = o.brand_id
+                    AND t.status = 'valid') AS change_tickets
          FROM public.ticketing_email_outbox x
+         LEFT JOIN public.ticketing_session_changes ch ON ch.id = x.change_id AND ch.client_id = x.client_id AND ch.brand_id = x.brand_id
+         LEFT JOIN public.ticketing_sessions chs ON chs.id = ch.session_id AND chs.client_id = ch.client_id AND chs.brand_id = ch.brand_id
          LEFT JOIN public.ticketing_refunds r ON r.id = x.refund_id AND r.client_id = x.client_id AND r.brand_id = x.brand_id
          JOIN public.ticketing_orders o ON o.id = x.order_id AND o.client_id = x.client_id AND o.brand_id = x.brand_id
          JOIN public.ticketing_buyers b ON b.id = o.buyer_id AND b.client_id = o.client_id AND b.brand_id = o.brand_id
@@ -143,6 +160,18 @@ export async function deliverTicketEmails(db: Db, cfg: DeliveryConfig, now = new
         const token = await orderEmailToken(tx, cfg.credentialMasterSecret, scope, row.order_id);
         return ticketsUrl(cfg.publicUrl, { ...scope, orderId: row.order_id, token });
       };
+      if (row.kind === "session_changed") {
+        // Told only while it still matters: tickets still valid for that session, not cancelled, not started.
+        if (row.change_tickets === 0) return skip("no_valid_ticket");
+        if (row.change_session_status === "cancelled") return skip("session_cancelled");
+        if (!row.new_starts_at || row.new_starts_at.getTime() <= now.getTime()) return skip("session_started");
+        return send(sessionChangedEmail({
+          language: row.language, brandName: row.brand_name, look, buyerName: row.full_name, reference: row.reference, eventTitle: row.event_title,
+          timezone: row.timezone, validTickets: row.change_tickets, link: await personalLink(),
+          before: { startsAt: row.old_starts_at!, endsAt: row.old_ends_at, place: row.old_place! },
+          after: { startsAt: row.new_starts_at, endsAt: row.new_ends_at, place: row.new_place! },
+        }));
+      }
       if (row.kind === "refund") {
         return send(refundEmail({
           language: row.language, brandName: row.brand_name, look, buyerName: row.full_name, reference: row.reference, eventTitle: row.event_title,

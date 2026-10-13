@@ -2,6 +2,21 @@
 
 This file records the current cross-agent handoff. Do not erase prior repository history; the detailed chronological log remains in `WORKLOG.md`.
 
+## 2026-10-13 — Run 65: OPC compliance and competitor benchmark
+
+- `docs/ALKAO_COMPETITIVE_FEATURES.md` (French): ALKAO compared with Ticketmaster/Admission,
+  evenko, Le Point de Vente, Showpass, Eventbrite, with sources and a ranked list of gaps.
+  Verified at the source (opc.gouv.qc.ca, « nouvelles obligations », in force 12 Sept 2026): a
+  ticket seller must tell buyers at once of a cancellation or a change of time or place.
+- Done in Run 65: the Brand's exchange and refund policy before payment and after, and an
+  e-mail to buyers when a session's end time or its venue's name/address changes
+  (`src/ops/change-notice.ts`, table `ticketing_session_changes`, e-mail kind `session_changed`).
+- A session's start time cannot be edited in the API (only its end); moving buyers goes
+  through a session change or a cancellation, which already e-mail them.
+- Next gaps, in the benchmark's order: structured event data (category, age, language, doors,
+  accessibility) and venue pages, Apple/Google Wallet, ticket transfer, waitlist, follow an
+  organizer, presale codes, light buyer account.
+
 ## 2026-10-13 — Run 64: premium platform home (alkao.ca)
 
 The home at `/` is now a full ticketing storefront in the GROUPE TAKATAK brand:

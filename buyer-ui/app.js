@@ -57,6 +57,7 @@ const T = {
     next: "Billet suivant",
     close: "Fermer",
     contact: "Une question ?",
+    policyTitle: "Politique d'échange et de remboursement",
     valid: "Valide",
     offline: (d) => `Hors ligne : voici vos billets tels qu'enregistrés sur cet appareil le ${d}. Présentez-les normalement à l'entrée.`,
     kept: "Billets enregistrés sur cet appareil : ils s'afficheront même sans réseau.",
@@ -112,6 +113,7 @@ const T = {
     next: "Next ticket",
     close: "Close",
     contact: "Questions?",
+    policyTitle: "Exchange and refund policy",
     valid: "Valid",
     offline: (d) => `Offline: here are your tickets as saved on this device on ${d}. Show them at the entrance as usual.`,
     kept: "Tickets saved on this device: they will show even without a network.",
@@ -293,8 +295,11 @@ function Contact({ brand }) {
     brand.supportPhone && html`<a href=${`tel:${brand.supportPhone.replace(/[^0-9+]/g, "")}`}>${brand.supportPhone}</a>`,
     brand.addressLine && html`<span>${brand.addressLine}</span>`,
   ].filter(Boolean);
-  if (!items.length) return null;
-  return html`<section class="contact noprint"><h2>${T.contact}</h2><p>${items.map((x, k) => html`${k ? " · " : ""}${x}`)}</p></section>`;
+  // Run 65: the exchange and refund policy, as at the time of purchase (OPC).
+  const policy = String(brand.refundPolicy ?? "").trim();
+  if (!items.length && !policy) return null;
+  return html`<section class="contact noprint"><h2>${T.contact}</h2>${items.length ? html`<p>${items.map((x, k) => html`${k ? " · " : ""}${x}`)}</p>` : null}
+    ${policy ? html`<h3>${T.policyTitle}</h3><p class="policy">${policy}</p>` : null}</section>`;
 }
 
 function ChangeSession({ order, token }) {

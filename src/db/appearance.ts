@@ -16,23 +16,25 @@ export interface BrandAppearance {
   supportEmail: string | null;
   supportPhone: string | null;
   addressLine: string | null;
+  /** Run 65: the Brand's exchange and refund policy, plain text, shown before payment (OPC). */
+  refundPolicy: string | null;
 }
 
 export const NO_APPEARANCE: BrandAppearance = {
-  logoUrl: null, accentColor: null, onAccentColor: null, websiteUrl: null, supportEmail: null, supportPhone: null, addressLine: null,
+  logoUrl: null, accentColor: null, onAccentColor: null, websiteUrl: null, supportEmail: null, supportPhone: null, addressLine: null, refundPolicy: null,
 };
 
 /** The settings' columns, for a query that has `LEFT JOIN public.ticketing_brand_settings bs`. */
 export const APPEARANCE_COLUMNS =
   "bs.logo_url AS look_logo_url, bs.accent_color AS look_accent_color, bs.on_accent_color AS look_on_accent_color, " +
   "bs.website_url AS look_website_url, bs.support_email AS look_support_email, bs.support_phone AS look_support_phone, " +
-  "bs.address_line AS look_address_line";
+  "bs.address_line AS look_address_line, bs.refund_policy AS look_refund_policy";
 
 /** `LEFT JOIN` of a Brand's settings, for the row aliased `alias` (with client_id and brand_id). */
 export const appearanceJoin = (alias: string) =>
   `LEFT JOIN public.ticketing_brand_settings bs ON bs.client_id = ${alias}.client_id AND bs.brand_id = ${alias}.brand_id`;
 
-export type LookRow = Partial<Record<`look_${"logo_url" | "accent_color" | "on_accent_color" | "website_url" | "support_email" | "support_phone" | "address_line"}`, string | null>>;
+export type LookRow = Partial<Record<`look_${"logo_url" | "accent_color" | "on_accent_color" | "website_url" | "support_email" | "support_phone" | "address_line" | "refund_policy"}`, string | null>>;
 
 export function appearanceOf(r: LookRow): BrandAppearance {
   return {
@@ -43,6 +45,7 @@ export function appearanceOf(r: LookRow): BrandAppearance {
     supportEmail: r.look_support_email ?? null,
     supportPhone: r.look_support_phone ?? null,
     addressLine: r.look_address_line ?? null,
+    refundPolicy: r.look_refund_policy ?? null,
   };
 }
 
@@ -66,13 +69,14 @@ export async function getAppearance(q: Queryable, s: TenantScope): Promise<Store
 export async function setAppearance(q: Queryable, s: TenantScope, a: BrandAppearance & { showOnAlkao: boolean }): Promise<StoredAppearance> {
   await q.query(
     `INSERT INTO public.ticketing_brand_settings
-       (client_id, brand_id, logo_url, accent_color, on_accent_color, website_url, support_email, support_phone, address_line, show_on_alkao, appearance_updated_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now())
+       (client_id, brand_id, logo_url, accent_color, on_accent_color, website_url, support_email, support_phone, address_line, show_on_alkao, refund_policy, appearance_updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, now())
      ON CONFLICT (client_id, brand_id) DO UPDATE SET
        logo_url = EXCLUDED.logo_url, accent_color = EXCLUDED.accent_color, on_accent_color = EXCLUDED.on_accent_color,
        website_url = EXCLUDED.website_url, support_email = EXCLUDED.support_email, support_phone = EXCLUDED.support_phone,
-       address_line = EXCLUDED.address_line, show_on_alkao = EXCLUDED.show_on_alkao, appearance_updated_at = now()`,
-    [s.clientId, s.brandId, a.logoUrl, a.accentColor, a.onAccentColor, a.websiteUrl, a.supportEmail, a.supportPhone, a.addressLine, a.showOnAlkao],
+       address_line = EXCLUDED.address_line, show_on_alkao = EXCLUDED.show_on_alkao, refund_policy = EXCLUDED.refund_policy,
+       appearance_updated_at = now()`,
+    [s.clientId, s.brandId, a.logoUrl, a.accentColor, a.onAccentColor, a.websiteUrl, a.supportEmail, a.supportPhone, a.addressLine, a.showOnAlkao, a.refundPolicy],
   );
   return getAppearance(q, s);
 }
