@@ -1305,6 +1305,7 @@ export function createApp(deps: AppDeps) {
   mountHome(app, {
     publicUrl: deps.publicUrl ?? null,
     homeUrl: deps.homeUrl ?? null,
+    now,
     load: async (): Promise<HomeBrand[]> => {
       if (!deps.operationalApiEnabled) return [];
       const at = now();
@@ -1319,9 +1320,10 @@ export function createApp(deps: AppDeps) {
       for (const b of opted) {
         if (!(await decide(b.client_id, b.brand_id)).active) continue;
         const scope = { clientId: b.client_id, brandId: b.brand_id };
-        const [look, listed] = await Promise.all([
+        const [look, listed, floors] = await Promise.all([
           appearanceDb.getAppearance(deps.db, scope),
           catalog.listPublicEvents(deps.db, scope),
+          catalog.admissionPriceFloors(deps.db, scope),
         ]);
         const events: HomeBrand["events"] = [];
         for (const event of listed) {
@@ -1331,7 +1333,8 @@ export function createApp(deps: AppDeps) {
           if (state.salesOpenAt && at < new Date(state.salesOpenAt)) continue;
           if (state.salesCloseAt && at >= new Date(state.salesCloseAt)) continue;
           const sessions = await catalog.listPublicSessions(deps.db, scope, eventId, at);
-          const first = sessions.find((session) => Number(session.available) > 0);
+          const open = sessions.filter((session) => Number(session.available) > 0);
+          const first = open[0];
           if (!first) continue;
           events.push({
             id: eventId,
@@ -1341,6 +1344,10 @@ export function createApp(deps: AppDeps) {
             venueName: event.venueName == null ? null : String(event.venueName),
             venueCity: event.venueCity == null ? null : String(event.venueCity),
             startsAt: first.startsAt as Date | string,
+            // Run 64: every date with seats left, the venue's time zone and the lowest price.
+            sessions: open.slice(0, 60).map((session) => session.startsAt as Date | string),
+            timezone: event.venueTimezone == null ? null : String(event.venueTimezone),
+            ...(floors.has(eventId) ? { fromCents: floors.get(eventId)! } : {}),
             shopPath: `/acheter/${b.client_id}/${b.brand_id}/${eventId}`,
           });
         }

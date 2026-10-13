@@ -57,7 +57,9 @@ const UNGATED = new Set([
 // data, every call goes through the gated API.
 const isOpsAsset = (path: string) =>
   path === "/ops" || path.startsWith("/ops/") || path === "/billets" || path.startsWith("/billets/") ||
-  path.startsWith("/acheter/") || path.startsWith("/shop/") || path === "/widget.js";
+  path.startsWith("/acheter/") || path.startsWith("/shop/") || path === "/widget.js" ||
+  // Run 64: the platform home's style, script, photos and fonts.
+  path.startsWith("/assets/home/");
 
 function routesOf(app: TestApp) {
   const seen = new Set<string>();

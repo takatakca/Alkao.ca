@@ -2,6 +2,23 @@
 
 This file records the current cross-agent handoff. Do not erase prior repository history; the detailed chronological log remains in `WORKLOG.md`.
 
+## 2026-10-13 — Run 64: premium platform home (alkao.ca)
+
+The home at `/` is now a full ticketing storefront in the GROUPE TAKATAK brand:
+- page: `src/api/home-view.ts`, words: `src/api/home-copy.ts` (FR/EN, categories, help topics);
+- files: `home-ui/` (style, script, photos, fonts; credits in `home-ui/CREDITS.md`);
+- data: `src/api/app.ts` (opted-in Brands only, as in Run 61).
+
+Rules kept: real data only (prices are the lowest active paid admission before taxes; ALKAO adds no
+fee), no countdowns or fake scarcity, works without JavaScript, strict CSP (`script-src 'self'`),
+WCAG checks in `test/a11y`. The assistant is rule-based, from `help()` and the events on the page:
+no AI service and nothing sent anywhere. A Claude-backed assistant would need a server route, a key
+in the server settings and a cost decision by the owner.
+
+Next: categories come from words in the event's title and description; a real category field
+in `/ops` would be better. Organizers must turn on « Afficher mes événements sur ALKAO » for events
+to appear.
+
 ## 2026-10-13 — Run 62: ALKAO deployable on Coolify
 
 **Repository:** `takatakca/Alkao.ca`

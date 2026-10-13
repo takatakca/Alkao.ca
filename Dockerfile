@@ -18,6 +18,7 @@ COPY ops-ui ./ops-ui
 COPY buyer-ui ./buyer-ui
 COPY shop-ui ./shop-ui
 COPY widget ./widget
+COPY home-ui ./home-ui
 # Run 62: the release's commit for /health. Coolify passes SOURCE_COMMIT when "Include Source
 # Commit in Build" is on; last, so a new commit does not rebuild the layers above.
 ARG SOURCE_COMMIT=""
