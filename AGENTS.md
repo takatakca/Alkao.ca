@@ -18,3 +18,7 @@ Everything visual or written for TAKATAK follows `BRAND.md` (logo, colours, tagl
 ## Domains
 
 Who holds each domain is in `docs/DOMAINS.md`. `festi-ice.ca` is at **IONOS**: DNS changes for it start there, not in MochaHost.
+
+## Secrets
+
+This repository is **public**. Never commit a real value: not in `.env.example`, a doc, a test or a workflow. `.env.example` keeps every secret line empty; real values live only in the server's `.env` (permissions 600) or in GitHub secrets. `npm run qa` runs `npm run check:secrets`, which fails on key-shaped values and filled-in secrets. If one ever lands in a commit, deleting it is not enough: rotate it at its provider, because the git history keeps it.
