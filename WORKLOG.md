@@ -3,7 +3,7 @@
 Newest first, one line per piece of work. Rule: `AGENTS.md` › Work log rule.
 Format: `YYYY-MM-DD | agent | branch → PR | status | what | next step`
 
-- 2026-10-13 | claude (Code, cloud) | claude/amazing-pascal-tppqd4 | active | Run 63: live watch of alkao.ca every 3 hours (GitHub workflow, GET only), secret guard as its own CI step | open the PR
+- 2026-10-13 | claude (Code, cloud) | claude/amazing-pascal-tppqd4 → PR #74 | PR open | Run 63: live watch of alkao.ca every 3 hours (GitHub workflow, GET only), secret guard as its own CI step | merge when CI is green
 - 2026-10-13 | claude (Code, cloud) | claude/amazing-pascal-tppqd4 → PR #73 | done | Run 62: ALKAO deployable on Coolify (container entry: migrations on start, background jobs; production roles bootstrap instead of the test shim; /health build) | owner: Coolify settings (docs/ALKAO_DEPLOY_COOLIFY.md), see handoff
 - 2026-10-13 | claude (Code, cloud) | claude/amazing-pascal-tppqd4 → PR #72 | done | Secret guard in CI (check:secrets) after real keys were committed to .env.example (c75f797, public history) | owner rotates the leaked keys
 - 2026-10-10 | ChatGPT (GitHub) | work/alkao-platform-home → PR #70 | done (merged 375e653) | Run 61: independent ALKAO homepage, default-off Brand opt-in, FR/EN SEO, TAKATAK registration CTA, white-label home redirect, deployment-safe migration order | require green qa, then merge; production cutover remains separately gated
