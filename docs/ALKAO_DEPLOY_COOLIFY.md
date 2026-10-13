@@ -180,6 +180,17 @@ Applies, for example, to `billets.promohavana.ca`, which runs an older ALKAO on 
    line.
    - If both run for a moment against the same database, the jobs still take turns (same lock).
 
+## Watching
+
+The **Live** workflow (GitHub, **Actions**) checks `https://alkao.ca` every 3 hours, GET only:
+the service, its database and the home page. A failed run is GitHub's e-mail to the owner.
+
+- It also says when the commit in `/health` is not `main`'s: the latest merge is not deployed
+  yet. This needs "Include source commit in build" (step 1).
+- To watch another address, add it at the end of the command in `.github/workflows/live.yml`,
+  once it serves ALKAO.
+- From any computer: `node --import tsx scripts/live-watch.ts https://alkao.ca`.
+
 ## Rollback
 
 1. In the application, open **Rollback**, choose the previous image, and deploy it.
