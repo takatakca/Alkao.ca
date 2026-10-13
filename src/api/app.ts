@@ -89,6 +89,8 @@ export interface AppDeps {
   twilioAuthToken?: string | null;
   /** Run 48: Resend's webhook signing secret (bounces, spam complaints); null until it is set up. */
   resendWebhookSecret?: string | null;
+  /** Run 62: the release answering, shown by /health; null when unknown. */
+  buildId?: string | null;
   now?: () => Date;
 }
 
@@ -260,7 +262,7 @@ export function createApp(deps: AppDeps) {
   };
 
   // ── Health ───────────────────────────────────────────────────────────────
-  app.get("/health", (c) => c.json({ ok: true, service: "alkao", api: API_VERSION, control: CONTROL_CONTRACT_VERSION }));
+  app.get("/health", (c) => c.json({ ok: true, service: "alkao", api: API_VERSION, control: CONTROL_CONTRACT_VERSION, ...(deps.buildId ? { build: deps.buildId } : {}) }));
   // Run 14: readiness for the load balancer — the database answers within 2 s.
   app.get("/health/ready", async (c) => {
     try {

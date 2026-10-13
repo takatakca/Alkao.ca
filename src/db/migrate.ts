@@ -4,6 +4,8 @@ import { fileURLToPath } from "node:url";
 import type pg from "pg";
 
 export const MIGRATIONS_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "supabase", "migrations");
+/** Run 62: the Supabase roles and auth.uid() on plain PostgreSQL; does nothing on Supabase. */
+export const BOOTSTRAP_FILE = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "supabase", "bootstrap", "plain_postgres.sql");
 
 export interface Migration {
   name: string;
@@ -51,4 +53,20 @@ export async function applyMigrations(client: pg.ClientBase, dir = MIGRATIONS_DI
     }
   }
   return applied;
+}
+
+/**
+ * Run 62: bring a deployment's database up to this code, as `npm run db:migrate` and the
+ * container start (ALKAO_MIGRATE_ON_START) do: the plain PostgreSQL bootstrap, then the
+ * pending migrations. A session lock makes containers that start together take turns: the
+ * second finds nothing left to apply.
+ */
+export async function migrateDatabase(client: pg.ClientBase, dir = MIGRATIONS_DIR): Promise<string[]> {
+  await client.query("SELECT pg_advisory_lock(hashtext('alkao_migrate'))");
+  try {
+    await client.query(readFileSync(BOOTSTRAP_FILE, "utf8"));
+    return await applyMigrations(client, dir);
+  } finally {
+    await client.query("SELECT pg_advisory_unlock(hashtext('alkao_migrate'))");
+  }
 }

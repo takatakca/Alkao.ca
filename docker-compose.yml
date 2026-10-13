@@ -19,10 +19,8 @@ services:
       db: { condition: service_healthy }
     environment:
       DATABASE_URL: postgres://postgres:alkao-local-only@db:5432/alkao
-    # Plain PostgreSQL needs the Supabase roles and auth.uid() first (see docs/ALKAO_GO_LIVE.md).
-    command: >
-      sh -c "node -e \"const {Client}=require('pg');const fs=require('fs');const c=new Client({connectionString:process.env.DATABASE_URL});c.connect().then(()=>c.query(fs.readFileSync('supabase/tests/supabase_shim.sql','utf8'))).then(()=>c.end())\"
-             && node --import tsx scripts/migrate.ts"
+    # On plain PostgreSQL it first creates the Supabase roles and auth.uid() (supabase/bootstrap).
+    command: ["node", "--import", "tsx", "scripts/migrate.ts"]
     restart: "no"
 
   api:

@@ -1,11 +1,15 @@
+import { existsSync, readFileSync } from "node:fs";
 import { serve } from "@hono/node-server";
 import { createSupabaseJwtVerifier } from "./api/auth.js";
 import { createApp } from "./api/app.js";
-import { loadConfig } from "./config.js";
+import { buildId, loadConfig } from "./config.js";
 import { createPool } from "./db/pool.js";
 import { StripeGateway } from "./payments/stripe-gateway.js";
 
 const config = loadConfig();
+// Run 62: which release answers /health: the image's commit (Coolify), else a MochaHost release's BUILD_ID file.
+const buildFile = new URL("../BUILD_ID", import.meta.url);
+const release = config.buildId ?? (existsSync(buildFile) ? buildId(readFileSync(buildFile, "utf8")) : null);
 const db = createPool(config.databaseUrl);
 const app = createApp({
   db,
@@ -25,6 +29,7 @@ const app = createApp({
   metricsToken: config.metricsToken,
   twilioAuthToken: config.twilio?.authToken ?? null,
   resendWebhookSecret: config.resendWebhookSecret,
+  buildId: release,
   logRequests: process.env.ALKAO_LOG_REQUESTS !== "false",
 });
 

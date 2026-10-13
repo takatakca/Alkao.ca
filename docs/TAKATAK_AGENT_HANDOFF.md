@@ -2,6 +2,68 @@
 
 This file records the current cross-agent handoff. Do not erase prior repository history; the detailed chronological log remains in `WORKLOG.md`.
 
+## 2026-10-13 — Run 62: ALKAO deployable on Coolify
+
+**Repository:** `takatakca/Alkao.ca`
+**Branch:** `claude/amazing-pascal-tppqd4`
+**Status:** code and guide in this PR. Tested with the real image, on a local Docker with an empty
+PostgreSQL 16: healthy, migrations applied, every database and security line of the go-live
+check ✔, clean stop in 0.1 s. **Not deployed on the Coolify server by this PR.**
+
+### What was live on 2026-10-13 (seen from the internet)
+
+| Address | What answers |
+|---|---|
+| `alkao.ca` | **ALKAO on the Coolify server** (31.220.96.134): the Run 61 home, `/ops`, `/health/ready` with the database up. No Brand shows an event yet. `/health` has no `build` (deployed before Run 62) |
+| `promohavana.ca`, `essai.promohavana.ca` | Promo Havana, on Coolify |
+| `billets.promohavana.ca` | ALKAO on MochaHost (Passenger). `/health` and `/health/ready` OK, but older code than `main`: `/` answers a JSON 404 instead of the Run 61 home |
+| `festi-ice.ca`, `billets.takatak.ca` | No answer |
+
+- **Promo Havana does not sell through ALKAO yet.** Its `ALKAO_URL` points at
+  `billets.takatak.ca`, which has no DNS, and its `ALKAO_CLIENT_ID` and `ALKAO_BRAND_ID` are not
+  set. Its ticket button therefore falls back to Weezevent.
+- **Secrets:** the values committed in `c75f797` (`.env.example`, public history) must be
+  rotated by the owner before any go-live. Never reuse a value from that commit. CI now
+  refuses such a commit (PR #72).
+- **Database:** that commit also showed ALKAO's `DATABASE_URL` aimed at TAKATAK's Supabase
+  project, against the rule that ALKAO has its own database. Moving ALKAO starts with the
+  owner's decision on its dedicated database, and on any real orders to carry over
+  (`docs/ALKAO_DEPLOY_COOLIFY.md`, "Moving an address from MochaHost").
+
+### What Run 62 adds
+
+- `scripts/container.ts`, the image's entry:
+  - with `ALKAO_MIGRATE_ON_START=true`, it migrates before serving (containers take turns);
+  - with `ALKAO_RUN_WORKERS=true`, it runs the background jobs every minute;
+  - it stops at once on `docker stop`;
+  - without these switches, it does what the image did before.
+- `supabase/bootstrap/plain_postgres.sql`: the Supabase roles and `auth.uid()` for a
+  production plain PostgreSQL. It grants nothing by default and does nothing on Supabase.
+  `npm run db:migrate` runs it, so nobody needs the test shim outside tests.
+- `/health` shows `build` (the image's commit, or a MochaHost release's `BUILD_ID`), so anyone
+  can see which version answers.
+- `docs/ALKAO_DEPLOY_COOLIFY.md`.
+
+### Next safe actions, in order (owner)
+
+1. Rotate the keys from `c75f797`.
+2. Confirm that the `alkao.ca` application's database is dedicated to ALKAO, never
+   TAKATAK's or FESTI-ICE's. If it is not, choose one (a new Supabase project, or PostgreSQL
+   in Coolify with backups) before the first real sale.
+3. In that Coolify application, after this PR is deployed:
+   - turn on `ALKAO_MIGRATE_ON_START=true`, `ALKAO_RUN_WORKERS=true` and "Include source
+     commit in build";
+   - set the health check to `/health/ready`;
+   - pass `check:golive` (`docs/ALKAO_DEPLOY_COOLIFY.md`).
+4. Provision Havana (`control:apply`) and connect its Stripe account in `/ops`.
+5. In Promo Havana's Coolify settings:
+   - set `ALKAO_URL=https://alkao.ca`;
+   - set `ALKAO_CLIENT_ID` and `ALKAO_BRAND_ID` to Havana's ids.
+6. `billets.promohavana.ca`: point it at the same application, or retire it. Follow the guide's
+   "Moving an address from MochaHost", orders first. Then stop the MochaHost application and
+   its cron line.
+7. A test purchase. Record STAGING VERIFIED or PRODUCTION VERIFIED only with that evidence.
+
 ## 2026-10-10 — Run 61 / Issue #69
 
 **Repository:** `takatakca/Alkao.ca`  
