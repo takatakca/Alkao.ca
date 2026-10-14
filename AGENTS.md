@@ -11,6 +11,14 @@ Cheap to follow: read only what is listed here.
 
 Line format: `YYYY-MM-DD | agent | branch → PR | status | what | next step`
 
+## Resumption and standard handoff
+
+Before editing, read `docs/AGENT_HANDOFF.md`, `docs/PROJECT_STATUS.md`,
+`docs/TASK_QUEUE.md` and `docs/DEPLOYMENT.md`. Confirm `main` SHA and the last CI.
+The chronological history remains in `WORKLOG.md` and
+`docs/TAKATAK_AGENT_HANDOFF.md`. Do not erase it. GitHub Actions `Verify deployment`
+only checks production: it is not an autonomous code-writing agent or a session restart.
+
 ## Brand rule
 
 Everything visual or written for TAKATAK follows `BRAND.md` (logo, colours, tagline, services). Electric blue on deep navy; never the old gold "TK" logo; green is for status only.

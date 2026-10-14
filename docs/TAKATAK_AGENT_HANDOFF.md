@@ -2,6 +2,21 @@
 
 This file records the current cross-agent handoff. Do not erase prior repository history; the detailed chronological log remains in `WORKLOG.md`.
 
+## 2026-10-14 — Run 74: searchable venue directory and deploy version check
+
+- New `/salles?q=&ville=` search uses only the already-public, tenant-scoped venue
+  list, accent-insensitive words, FR/EN labels, and a strict CSP-compatible form.
+- `scripts/live-watch.ts --require-build --expect-build <sha>` fails for missing/stale
+  SHA. `.github/workflows/verify-deploy.yml` checks the live deployment after successful
+  CI. Ordinary scheduled Live remains availability-only.
+- Code commit `413f2af9388c5052ce485bd0a0e19ee2c3171291`; test-only
+  correction `a790c19395a17c4335ec3c4ec648120dc7a30769`. Check newest CI,
+  as it may still be queued on GitHub.
+- Five standard continuity docs now exist: PROJECT_STATUS, TASK_QUEUE,
+  AGENT_HANDOFF, DEPLOYMENT, DECISIONS (under docs/).
+- The infrastructure problem remains issue #84: no confirmed source build SHA on
+  alkao.ca yet; Coolify production settings require an authorized operator.
+
 ## 2026-10-14 — Run 73: pages Salles
 
 - Public routes `/salles` and `/salles/:clientId/:brandId/:venueId`, with FR/EN, event links, directions and structured place data. Search engines see only venues with already-public, on-sale ALKAO events. No migration and no changes to checkout or payments.

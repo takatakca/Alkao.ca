@@ -37,6 +37,11 @@ remain in [TAKATAK_AGENT_HANDOFF.md](TAKATAK_AGENT_HANDOFF.md).
 - CI-driven `Verify deployment`: observes exact source commit after a successful CI
   (skips superseded runs), retries briefly then **fails** if Coolify did not publish SHA.
 
+No external code-agent orchestrator has been connected or verified. GitHub Actions
+automatically checks source, packages and observes releases; it does **not** relaunch
+this assistant after a chat ends. Do not claim unattended development without
+a separately configured and authorized agent runner.
+
 ## Known blockers and risks
 
 - Issue #84: production Coolify cannot be confirmed deployed from GitHub alone.

@@ -9,6 +9,16 @@ memberships, entitlements, platform billing and the dashboard shell. ALKAO never
 TAKATAK database. It keeps local projections, which TAKATAK updates through a signed,
 versioned control contract.
 
+## Development continuity
+
+- [Project status](docs/PROJECT_STATUS.md), [task queue](docs/TASK_QUEUE.md),
+  [agent handoff](docs/AGENT_HANDOFF.md), [deployment](docs/DEPLOYMENT.md)
+  and [decisions](docs/DECISIONS.md).
+- The detailed prior record remains in [TAKATAK agent handoff](docs/TAKATAK_AGENT_HANDOFF.md)
+  and [WORKLOG.md](WORKLOG.md).
+- Successful CI and a MochaHost package do not establish a Coolify deployment. Check the
+  independent `Verify deployment` workflow and the live service's `/health` build SHA.
+
 ## Stack
 
 - Node 22 and TypeScript (strict)
