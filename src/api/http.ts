@@ -30,6 +30,11 @@ const STATUS_BY_CODE: Record<string, ContentfulStatusCode> = {
   stock_only_for_add_ons: 422,
   appearance_low_contrast: 422,
   session_not_available: 409,
+  // Run 72: the public sale is not open yet (a presale code may open it earlier).
+  sales_not_open: 409,
+  presale_code_invalid: 404,
+  presale_code_exists: 409,
+  presale_code_not_found: 404,
   session_not_on_sale: 409,
   capacity_below_committed: 409,
   hold_not_active: 409,

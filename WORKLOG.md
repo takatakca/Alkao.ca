@@ -3,7 +3,8 @@
 Newest first, one line per piece of work. Rule: `AGENTS.md` › Work log rule.
 Format: `YYYY-MM-DD | agent | branch → PR | status | what | next step`
 
-- 2026-10-14 | claude (Code, cloud) | claude/amazing-pascal-tppqd4 → PR #82 | review | Run 71: waitlist for sold-out sessions (shop form, one e-mail when seats come back, /ops count, purge after 30 days) | merge when green; owner: turn on ALKAO_MIGRATE_ON_START so Runs 69-71 deploy
+- 2026-10-14 | claude (Code, cloud) | claude/amazing-pascal-tppqd4 → PR #83 | review | Run 72: presale codes (buy before the public sale opens) and "La vente ouvre le …" in the shop | merge when green
+- 2026-10-14 | claude (Code, cloud) | claude/amazing-pascal-tppqd4 → PR #82 | done | Run 71: waitlist for sold-out sessions (shop form, one e-mail when seats come back, /ops count, purge after 30 days) | owner: turn on ALKAO_MIGRATE_ON_START so Runs 69-71 deploy
 - 2026-10-14 | claude (Code, cloud) | claude/amazing-pascal-tppqd4 → PR #81 | done | Run 70: /health/ready checks the build's migrations are applied (schema current/behind/unknown); live watch reports it | alkao.ca still on the Run 69 build 25 min later: owner turns on ALKAO_MIGRATE_ON_START
 - 2026-10-14 | claude (Code, cloud) | claude/amazing-pascal-tppqd4 → PR #80 | done | Run 69: structured event data — category, minimum age, doors, language, accessibility notes (set in /ops, shown in the shop, on the home and to search engines) | next: venue pages or Wallet (benchmark)
 - 2026-10-14 | claude (Code, cloud) | claude/amazing-pascal-tppqd4 → PR #79 | done | Run 68: robots.txt and sitemap.xml (home, accessibility, listed shops), in the same PR as Run 67 | next: Run 69

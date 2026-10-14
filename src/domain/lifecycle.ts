@@ -70,14 +70,18 @@ export function availability(session: { capacity: number; reservedCount: number;
   };
 }
 
-/** Whether a session can be sold to the public right now. */
+/**
+ * Whether a session can be sold to the public right now. Run 72: `presaleFrom`, when a buyer
+ * gives a presale code, is when that code opens the sale (before the public opening).
+ */
 export function isSessionSellable(
   event: { status: EventStatus; salesOpenAt: Date | null; salesCloseAt: Date | null },
   session: { status: SessionStatus; startsAt: Date },
   now: Date,
+  presaleFrom: Date | null = null,
 ): boolean {
   if (event.status !== "published" || session.status !== "on_sale") return false;
-  if (event.salesOpenAt && now < event.salesOpenAt) return false;
+  if (event.salesOpenAt && now < event.salesOpenAt && !(presaleFrom && now >= presaleFrom)) return false;
   if (event.salesCloseAt && now >= event.salesCloseAt) return false;
   return now < session.startsAt;
 }

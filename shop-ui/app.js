@@ -16,6 +16,8 @@ const T = {
       event_not_found: "Cet événement n'est pas en vente.",
       sold_out: "Il ne reste plus assez de places pour cette séance.",
       session_not_available: "Cette séance n'est plus en vente.",
+      sales_not_open: "La vente n'est pas encore ouverte.",
+      presale_code_invalid: "Ce code de prévente n'est pas valide.",
       hold_not_active: "Votre réservation a expiré. Recommencez votre sélection.",
       hold_not_found: "Votre réservation a expiré. Recommencez votre sélection.",
       rate_limited: "Trop de tentatives. Patientez une minute.",
@@ -95,6 +97,14 @@ const T = {
     confirming: "Votre paiement est en cours de confirmation. Vos billets vous seront envoyés par courriel dans quelques minutes.",
     badAddress: "Adresse de billetterie incomplète.",
     // Run 71: the waitlist of a sold-out session.
+    // Run 72: before the public sale, and presale codes.
+    salesOpen: (d) => `La vente ouvre le ${d}.`,
+    salesClosed: "La vente en ligne est terminée pour cet événement.",
+    presaleTitle: "Vous avez un code de prévente ?",
+    presaleCode: "Code de prévente",
+    presaleCheck: "Valider le code",
+    presaleOpenNow: "Code de prévente accepté : vous pouvez acheter dès maintenant.",
+    presaleLater: (d) => `Code accepté : la prévente ouvre le ${d}.`,
     waitTitle: "Séance complète ? Inscrivez-vous à la liste d'attente",
     waitLead: "Si des places se libèrent, nous vous écrivons une fois. Elles vont ensuite au premier qui achète.",
     waitSession: "Séance",
@@ -114,6 +124,8 @@ const T = {
       event_not_found: "This event is not on sale.",
       sold_out: "Not enough seats are left for this session.",
       session_not_available: "This session is no longer on sale.",
+      sales_not_open: "Sales are not open yet.",
+      presale_code_invalid: "This presale code is not valid.",
       hold_not_active: "Your reservation expired. Please choose again.",
       hold_not_found: "Your reservation expired. Please choose again.",
       rate_limited: "Too many attempts. Please wait a minute.",
@@ -191,6 +203,13 @@ const T = {
     thanks: "Thank you!",
     confirming: "Your payment is being confirmed. Your tickets will be emailed to you within a few minutes.",
     badAddress: "Incomplete ticketing address.",
+    salesOpen: (d) => `Sales open on ${d}.`,
+    salesClosed: "Online sales are over for this event.",
+    presaleTitle: "Have a presale code?",
+    presaleCode: "Presale code",
+    presaleCheck: "Check the code",
+    presaleOpenNow: "Presale code accepted: you can buy now.",
+    presaleLater: (d) => `Code accepted: the presale opens on ${d}.`,
     waitTitle: "Sold out? Join the waitlist",
     waitLead: "If seats open up, we write to you once. They then go to whoever buys first.",
     waitSession: "Session",
@@ -328,6 +347,8 @@ function EventShop({ config }) {
   const [promoInput, setPromoInput] = useState("");
   const [promo, setPromo] = useState(null);
   const [promoError, setPromoError] = useState(null);
+  // Run 72: a presale code that opens the sale before the public opening ({ code, opensAt }).
+  const [presale, setPresale] = useState(null);
   const seq = useRef(0);
 
   const load = () => call(`/events/${route.eventId}`).then(setData, setError);
@@ -366,6 +387,10 @@ function EventShop({ config }) {
   const today = dayIn(new Date(), tz);
   const sessions = DOOR ? data.sessions.filter((s) => dayIn(new Date(s.startsAt), tz) === today) : data.sessions;
   const session = sessions.find((s) => s.id === sessionId);
+  // Run 72: the sale window; a valid presale code opens it from its own time.
+  const nowMs = Date.now();
+  const closed = !DOOR && ev.salesCloseAt && nowMs >= Date.parse(ev.salesCloseAt);
+  const early = !DOOR && ev.salesOpenAt && nowMs < Date.parse(ev.salesOpenAt) && !(presale && nowMs >= Date.parse(presale.opensAt));
   const set = (id, n) => setQty((q) => ({ ...q, [id]: Math.max(0, n) }));
   // Run 49: what is left of an add-on with a stock, for the chosen session (null: no limit).
   const left = (t) => (t.kind === "add_on" && session?.addOnsAvailable && t.id in session.addOnsAvailable ? session.addOnsAvailable[t.id] : null);
@@ -381,7 +406,7 @@ function EventShop({ config }) {
   const reserve = async () => {
     setBusy(true); setError(null);
     try {
-      const r = await call(`/holds`, { method: "POST", body: { sessionId, items, ...(promo ? { promoCode: promo } : {}) } });
+      const r = await call(`/holds`, { method: "POST", body: { sessionId, items, ...(promo ? { promoCode: promo } : {}), ...(presale ? { presaleCode: presale.code } : {}) } });
       setHold({ ...r.hold, expiresAtMs: Date.parse(r.hold.expiresAt) });
     } catch (e) {
       if (e.code === "promo_code_invalid") { setPromoError(e.details?.reason ?? "unknown"); setPromo(null); }
@@ -436,7 +461,9 @@ function EventShop({ config }) {
     <${Facts} ev=${ev} />
     ${error && html`<div class="alert bad" role="alert">${errText(error)}</div>`}
 
-    ${!hold && html`
+    ${!hold && (closed || early) && html`<${SaleWindow} closed=${closed} opensAt=${ev.salesOpenAt} tz=${tz} eventId=${route.eventId} presale=${presale} onPresale=${setPresale} />`}
+    ${!hold && !closed && !early && presale && html`<div class="alert ok" role="status">${T.presaleOpenNow}</div>`}
+    ${!hold && !closed && !early && html`
       <h2>${T.step1}</h2>
       ${sessions.length === 0 ? html`<p class="muted">${DOOR ? T.noSessionsToday : T.noSessions}</p>` : html`<div class="sessions">
         ${sessions.map((s) => html`<button class="session" aria-pressed=${s.id === sessionId ? "true" : "false"} disabled=${s.available === 0} onClick=${() => setSessionId(s.id)}>
@@ -519,6 +546,32 @@ function Policy({ brand }) {
   return html`<section class="policy" aria-labelledby="policy-title">
     <h3 id="policy-title">${T.policyTitle}</h3>
     ${text ? html`<p>${text}</p>` : html`<p>${T.policyNone(brand?.name ?? "")}${contact ? html` <strong>${contact}</strong>` : ""}</p>`}
+  </section>`;
+}
+
+// ── Run 72: before the public sale: when it opens, and a presale code ──
+function SaleWindow({ closed, opensAt, tz, eventId, presale, onPresale }) {
+  const [code, setCode] = useState("");
+  const [state, setState] = useState(null);
+  const check = async (e) => {
+    e.preventDefault();
+    setState("busy");
+    try {
+      const r = await call(`/events/${eventId}/presale`, { method: "POST", body: { code: code.trim() } });
+      setState(null);
+      onPresale({ code: code.trim(), opensAt: r.presale.opensAt });
+    } catch (err) { setState({ error: err }); }
+  };
+  if (closed) return html`<div class="alert" role="status">${T.salesClosed}</div>`;
+  return html`<section class="card sale-window" aria-labelledby="sale-title">
+    <h2 id="sale-title">${T.salesOpen(whenFr(opensAt, tz))}</h2>
+    ${presale ? html`<div class="alert ok" role="status">${T.presaleLater(whenFr(presale.opensAt, tz))}</div>` : html`
+      <form class="presale" onSubmit=${check}>
+        <h3>${T.presaleTitle}</h3>
+        <label>${T.presaleCode}<input required maxlength="40" autocomplete="off" autocapitalize="characters" value=${code} onInput=${(e) => setCode(e.target.value)} /></label>
+        <div class="actions"><button type="submit" class="secondary" disabled=${state === "busy"}>${T.presaleCheck}</button></div>
+      </form>`}
+    ${state?.error && html`<div class="alert bad" role="alert">${errText(state.error)}</div>`}
   </section>`;
 }
 

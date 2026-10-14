@@ -53,6 +53,7 @@ import { mountShopUi } from "./shop-ui.js";
 import { mountHome, type HomeBrand } from "./home.js";
 import { migrationNames, schemaState } from "../db/migrate.js";
 import * as waitlist from "../delivery/waitlist.js";
+import * as presaleDb from "../db/presale.js";
 import { clientIp, ipKind } from "./client-ip.js";
 import * as delivery from "../delivery/db.js";
 import { orderEmailToken } from "../delivery/links.js";
@@ -124,6 +125,8 @@ export function createApp(deps: AppDeps) {
   // Run 71: the waitlist of a sold-out session, per caller and per address.
   const waitlistByIp = new FixedWindowLimiter(20, 10 * 60_000);
   const waitlistByEmail = new FixedWindowLimiter(5, 60 * 60_000);
+  // Run 72: presale codes are guessed one try at a time at most.
+  const presaleByIp = new FixedWindowLimiter(10, 10 * 60_000);
   const paymentsService = new PaymentsService({
     db: deps.db,
     gateway: deps.paymentGateway ?? null,
@@ -396,6 +399,19 @@ export function createApp(deps: AppDeps) {
     return c.json({ ok: true }, 202);
   });
 
+  // Run 72: a presale code opens the event's sale before its public opening, from its own time.
+  app.post(`${PUBLIC}/events/:eventId/presale`, publicGate, async (c) => {
+    const scope = c.get("scope");
+    const eventId = param(c, "eventId");
+    if (!presaleByIp.take(`${scope.clientId}:${clientIp(c, deps.trustedProxyHops ?? 1)}`, now().getTime())) return fail(c, 429, "rate_limited");
+    const event = eventId ? await catalog.loadPublicEvent(deps.db, scope, eventId) : null;
+    if (!eventId || !event) return fail(c, 404, "event_not_found");
+    const { code } = api.PresaleCheck.parse(await readJson(c));
+    const opensAt = await presaleDb.presaleOpening(deps.db, scope, eventId, code);
+    if (!opensAt) return fail(c, 404, "presale_code_invalid");
+    return c.json({ presale: { opensAt } });
+  });
+
   // Run 71: a sold-out session's waitlist. The address gets one e-mail when seats come back.
   app.post(`${PUBLIC}/sessions/:sessionId/waitlist`, publicGate, async (c) => {
     const scope = c.get("scope");
@@ -434,7 +450,12 @@ export function createApp(deps: AppDeps) {
     const session = await catalog.loadSession(deps.db, scope, body.sessionId);
     const event = session ? await catalog.loadPublicEvent(deps.db, scope, session.eventId) : null;
     if (!session || !event) return fail(c, 404, "session_not_found");
-    if (!isSessionSellable(event, session, now())) return fail(c, 409, "session_not_available");
+    // Run 72: a presale code opens the sale from its own time, before the public opening.
+    const presaleFrom = body.presaleCode ? await presaleDb.presaleOpening(deps.db, scope, session.eventId, body.presaleCode) : null;
+    if (!isSessionSellable(event, session, now(), presaleFrom)) {
+      const early = event.salesOpenAt && now() < new Date(event.salesOpenAt) && session.status === "on_sale" && now() < session.startsAt;
+      return fail(c, 409, early ? "sales_not_open" : "session_not_available");
+    }
 
     const rules = await catalog.loadTicketTypeRules(deps.db, scope, session.eventId);
     const promo = body.promoCode ? await promoDb.usablePromo(deps.db, scope, session.eventId, body.promoCode, now()) : null;
@@ -628,6 +649,29 @@ export function createApp(deps: AppDeps) {
     const body = api.UpdatePromoCode.parse(await readJson(c));
     const promoCode = await withTransaction(deps.db, (tx) => promoDb.updatePromoCode(tx, c.get("scope"), id, body, actor(c)));
     return c.json({ promoCode });
+  });
+
+  // Run 72: presale codes, per event.
+  app.get(`${ADMIN}/events/:eventId/presale-codes`, ...admin, can("ticketing.catalog.read"), async (c) => {
+    const eventId = param(c, "eventId");
+    if (!eventId || !(await inScope("ticketing_events", eventId, c.get("scope")))) return fail(c, 404, "event_not_found");
+    return c.json({ presaleCodes: await presaleDb.listPresaleCodes(deps.db, c.get("scope"), eventId) });
+  });
+
+  app.post(`${ADMIN}/events/:eventId/presale-codes`, ...admin, can("ticketing.catalog.write"), async (c) => {
+    const eventId = param(c, "eventId");
+    if (!eventId) return fail(c, 404, "event_not_found");
+    const body = api.CreatePresaleCode.parse(await readJson(c));
+    const presaleCode = await withTransaction(deps.db, (tx) => presaleDb.createPresaleCode(tx, c.get("scope"), eventId, body, actor(c)));
+    return c.json({ presaleCode }, 201);
+  });
+
+  app.patch(`${ADMIN}/presale-codes/:presaleCodeId`, ...admin, can("ticketing.catalog.write"), async (c) => {
+    const id = param(c, "presaleCodeId");
+    if (!id) return fail(c, 404, "presale_code_not_found");
+    const body = api.UpdatePresaleCode.parse(await readJson(c));
+    const presaleCode = await withTransaction(deps.db, (tx) => presaleDb.updatePresaleCode(tx, c.get("scope"), id, body, actor(c)));
+    return c.json({ presaleCode });
   });
 
   // Run 29: a season of sessions at once (every N minutes, on chosen weekdays, venue time).

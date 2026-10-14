@@ -2,6 +2,13 @@
 
 This file records the current cross-agent handoff. Do not erase prior repository history; the detailed chronological log remains in `WORKLOG.md`.
 
+## 2026-10-14 — Run 72: presale codes
+
+- `ticketing_presale_codes` (server only), `src/db/presale.ts`; `isSessionSellable(…, presaleFrom)`
+  in `src/domain/lifecycle.ts`; routes in `src/api/app.ts`; shop `SaleWindow`; /ops `PresaleCodes`.
+- No use limit on a code (a fan club shares one); the organizer turns it off.
+- Still pending on alkao.ca: `ALKAO_MIGRATE_ON_START` in Coolify, so Runs 69–72 deploy.
+
 ## 2026-10-14 — Runs 70–71: readiness schema check, waitlist
 
 - Run 70: `/health/ready` answers `"schema"`; a build whose migrations are missing is not ready.

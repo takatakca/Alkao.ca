@@ -268,6 +268,12 @@ How it works:
   and `event.venue` (name, city, timezone).
 - **Event list:** `GET /v1/public/…/events` also returns each event's `venueAddress` (the
   venue's street, public like its name and city), since Run 66.
+- **Presale (Run 72):** `POST /v1/public/…/events/:eventId/presale` with `{ code }` answers
+  `{ presale: { opensAt } }` for an active code of the event, or 404 `presale_code_invalid`
+  (10 tries per caller every 10 minutes). `POST …/holds` takes an optional `presaleCode`: before
+  `salesOpenAt`, the hold is allowed once the code's `opensAt` has passed; otherwise it answers
+  409 `sales_not_open`. Admin: `GET`/`POST …/events/:eventId/presale-codes`
+  (`{ code, label?, opensAt }`), `PATCH …/presale-codes/:id` (`{ active }`).
 - **Waitlist (Run 71):** `POST /v1/public/…/sessions/:sessionId/waitlist` with `{ email, language }`
   answers 202 for a full, upcoming session on sale (joining twice changes nothing), 409
   `session_not_full` when seats are there, 404 otherwise. Limited to 20 calls per caller every

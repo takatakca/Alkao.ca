@@ -65,6 +65,32 @@ const plus = (page: Page, name: string) => page.getByRole("button", { name: `Ajo
 const local = (url: string) => url.replace(PUBLIC_URL, origin);
 
 describe("hosted ticket shop", () => {
+  it("Run 72: says when the sale opens, and a presale code opens it earlier", async () => {
+    const f = seed.festi;
+    await db.pool.query(`UPDATE public.ticketing_events SET sales_open_at = now() + interval '3 days' WHERE id = $1`, [f.eventId]);
+    await db.pool.query(
+      `INSERT INTO public.ticketing_presale_codes (client_id, brand_id, event_id, code, opens_at) VALUES ($1, $2, $3, 'FANS', now() - interval '1 hour')`,
+      [f.clientId, f.brandId, f.eventId]);
+    try {
+      const page = await shop(f);
+      const box = page.getByRole("region", { name: /^La vente ouvre le / });
+      await box.waitFor();
+      // Nothing to choose yet.
+      expect(await page.getByRole("heading", { name: "1. Choisissez votre séance" }).count()).toBe(0);
+      await box.getByLabel("Code de prévente").fill("nope");
+      await box.getByRole("button", { name: "Valider le code" }).click();
+      await box.getByText("Ce code de prévente n'est pas valide.").waitFor();
+      await box.getByLabel("Code de prévente").fill("fans");
+      await box.getByRole("button", { name: "Valider le code" }).click();
+      await page.getByText("Code de prévente accepté : vous pouvez acheter dès maintenant.").waitFor();
+      expect(await page.locator(".session").count()).toBeGreaterThan(0);
+      await page.context().close();
+    } finally {
+      await db.pool.query(`DELETE FROM public.ticketing_presale_codes WHERE event_id = $1`, [f.eventId]);
+      await db.pool.query(`UPDATE public.ticketing_events SET sales_open_at = NULL WHERE id = $1`, [f.eventId]);
+    }
+  });
+
   it("Run 71: offers the waitlist for a sold-out session", async () => {
     const f = seed.festi;
     const { rows } = await db.pool.query<{ id: string }>(

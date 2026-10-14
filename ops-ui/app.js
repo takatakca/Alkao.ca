@@ -475,6 +475,35 @@ function SessionBatch({ api, base, eventId, onDone }) {
 }
 
 // Run 36: promo codes for one event (a percentage or an amount off, before taxes).
+// ── Run 72: presale codes: their holders buy before the public sale opens ──
+function PresaleCodes({ api, base, eventId, event }) {
+  const [state, reload] = useLoad(() => api(`${base}/events/${eventId}/presale-codes`), [base, eventId]);
+  const [f, setF] = useState({ code: "", label: "", opensAt: "" });
+  const [error, setError] = useState(null);
+  const act = (fn) => async (e) => { e?.preventDefault?.(); setError(null); try { await fn(); reload(); } catch (err) { setError(err); } };
+  const create = act(async () => {
+    await api(`${base}/events/${eventId}/presale-codes`, { method: "POST", body: {
+      code: f.code.trim().toUpperCase(), label: f.label.trim() || null, opensAt: new Date(f.opensAt).toISOString(),
+    } });
+    setF({ code: "", label: "", opensAt: "" });
+  });
+  const toggle = (p) => act(() => api(`${base}/presale-codes/${p.id}`, { method: "PATCH", body: { active: !p.active } }));
+  const list = state.data?.presaleCodes ?? [];
+  return html`<h2>Prévente</h2>
+    <p class="muted">${event.salesOpenAt ? `Vente publique : ${when(event.salesOpenAt)}. ` : "Aucune date d'ouverture de la vente publique : un code de prévente ne change rien tant qu'elle n'est pas fixée. "}Les détenteurs d'un code achètent plus tôt, aux mêmes prix et dans les mêmes places.</p>
+    ${error && html`<${Failure} error=${error} />`}
+    <form class="inline card" aria-label="Nouveau code de prévente" onSubmit=${create}>
+      <label>Code de prévente<input required pattern="[A-Za-z0-9-]{3,32}" value=${f.code} onInput=${(e) => setF({ ...f, code: e.target.value })} /></label>
+      <label>Pour qui (facultatif)<input maxlength="80" placeholder="Membres, fan club…" value=${f.label} onInput=${(e) => setF({ ...f, label: e.target.value })} /></label>
+      <label>Prévente à partir du<input type="datetime-local" required value=${f.opensAt} onInput=${(e) => setF({ ...f, opensAt: e.target.value })} /></label>
+      <button type="submit">Créer le code</button>
+    </form>
+    ${state.loading ? html`<${Loading} />` : list.length === 0 ? html`<p class="muted">Aucun code de prévente.</p>` : html`<table><thead><tr><th>Code</th><th>Pour qui</th><th>À partir du</th><th>Statut</th><th></th></tr></thead>
+      <tbody>${list.map((p) => html`<tr><td><code>${p.code}</code></td><td>${p.label ?? "—"}</td><td>${when(p.opensAt)}</td>
+        <td><span class="badge ${p.active ? "ok" : "bad"}">${p.active ? "Actif" : "Désactivé"}</span></td>
+        <td><button class="secondary" onClick=${toggle(p)}>${p.active ? "Désactiver" : "Réactiver"}</button></td></tr>`)}</tbody></table>`}`;
+}
+
 function PromoCodes({ api, base, eventId }) {
   const [state, reload] = useLoad(() => api(`${base}/events/${eventId}/promo-codes`), [base, eventId]);
   const [f, setF] = useState({ code: "", kind: "percent", value: "", maxUses: "", endsAt: "" });
@@ -698,6 +727,7 @@ function EventDetail({ api, base, eventId }) {
     </div>`}
 
     <${PromoCodes} api=${api} base=${base} eventId=${eventId} />
+    <${PresaleCodes} api=${api} base=${base} eventId=${eventId} event=${event} />
 
     <h2>Types de billets</h2>
     <form class="inline card" onSubmit=${addType}>
