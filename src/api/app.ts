@@ -57,6 +57,7 @@ import * as presaleDb from "../db/presale.js";
 import { clientIp, ipKind } from "./client-ip.js";
 import * as delivery from "../delivery/db.js";
 import { orderEmailToken } from "../delivery/links.js";
+import { validOrderAccessToken } from "./order-token.js";
 import * as cancellation from "../ops/cancellation.js";
 import * as changeNotice from "../ops/change-notice.js";
 
@@ -895,13 +896,8 @@ export function createApp(deps: AppDeps) {
     const orderId = param(c, "orderId");
     const token = c.req.header("x-alkao-order-token");
     const scope = c.get("scope");
-    if (!orderId || !token || token.length > 100) return fail(c, 404, "order_not_found");
-    const { rowCount } = await deps.db.query(
-      `SELECT 1 FROM public.ticketing_access_tokens
-       WHERE token_hash = $1 AND subject_type = 'order' AND subject_id = $2 AND client_id = $3 AND brand_id = $4`,
-      [sha256(token), orderId, scope.clientId, scope.brandId],
-    );
-    if (!rowCount) return fail(c, 404, "order_not_found");
+    if (!orderId || !(await validOrderAccessToken(deps.db, scope, orderId, token, now())))
+      return fail(c, 404, "order_not_found");
     const order = await catalog.getOrder(deps.db, scope, orderId);
     const { commissionCents: _c, commissionRefundedCents: _cr, buyerPhone: _p, attribution: _a, ...publicOrder } = order;
     // QR payload per valid ticket (null for void tickets, or until credentials are configured).
@@ -1331,13 +1327,8 @@ export function createApp(deps: AppDeps) {
     const orderId = param(c, "orderId");
     const token = c.req.header("x-alkao-order-token");
     const scope = c.get("scope");
-    if (!orderId || !token || token.length > 100) return fail(c, 404, "order_not_found");
-    const { rowCount } = await deps.db.query(
-      `SELECT 1 FROM public.ticketing_access_tokens
-       WHERE token_hash = $1 AND subject_type = 'order' AND subject_id = $2 AND client_id = $3 AND brand_id = $4`,
-      [sha256(token), orderId, scope.clientId, scope.brandId],
-    );
-    if (!rowCount) return fail(c, 404, "order_not_found");
+    if (!orderId || !(await validOrderAccessToken(deps.db, scope, orderId, token, now())))
+      return fail(c, 404, "order_not_found");
     const body = api.ExchangeRequest.parse(await readJson(c));
     const result = await exchangeOrder(deps.db, scope, orderId, body.sessionId, { type: "public", id: null }, now());
     return c.json({ exchange: { orderId: result.exchangeOrderId, reference: result.reference, token: result.orderToken, tickets: result.ticketIds.length } }, 201);
