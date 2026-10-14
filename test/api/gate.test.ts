@@ -33,6 +33,10 @@ const UNGATED = new Set([
   // Run 68: for search engines. The sitemap lists only what the home lists (same gated loader).
   "GET /robots.txt",
   "GET /sitemap.xml",
+  // Run 73: venue discovery is public only for events from opted-in, operational Brands.
+  // Disabled or unentitled tenants produce no venue listing and no venue detail page.
+  "GET /salles",
+  "GET /salles/:clientId/:brandId/:venueId",
   "GET /health",
   "GET /health/ready",
   // Run 39: the kind of the caller's address only (public, private or unknown).
