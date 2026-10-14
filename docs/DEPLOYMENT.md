@@ -7,10 +7,13 @@ Current source: `main`; production target: `https://alkao.ca` via Coolify
 ## Current evidence
 
 - GitHub CI + Package passed for Run 73 `f339d3eb...`.
-- Run 74 source `413f2af9388c5052ce485bd0a0e19ee2c3171291` pushed;
-  inspect its CI run and newer documentation commits before declaring green.
+- Run 74 source initially at `413f2af...`; test correction `a790c193` passed CI.
+  Latest code SHA `92a5c08d04987540108b3a2c7bf4790e6b263274` passed packaging;
+  its CI was queued at the most recent check. Inspect newest documentation SHA too.
 - Earlier GitHub Live check returned healthy responses, but the public `/health`
   did not publish `build`, so the installed Git revision remains **unverified**.
+  A successful `Verify deployment` run for a superseded commit merely skipped the
+  obsolete check (confirmed by logs); do not count it as deployment success.
 - CI-driven `Verify deployment` reads GET-only health + ready + home and demands
   the exact source SHA, with limited retries. Missing/mismatched build is an
   actionable failure (not proof the service is offline).

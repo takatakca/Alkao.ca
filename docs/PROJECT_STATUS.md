@@ -18,8 +18,9 @@ ALKAO water-commerce concept. Do not replace its existing product or merge tenan
 ## Current delivery evidence
 
 - Run 73: GitHub Actions CI and Package passed at `f339d3eb19a0f4e073ca89f7612c2c0bb5af5765`.
-- Run 74: source pushed to main, CI/Package triggered. Results must be checked on Actions
-  before marking validated. `.github/workflows/verify-deploy.yml` runs only after a
+- Run 74: code changes pushed to main. CI passed for test correction `a790c193`;
+  Package passed at `92a5c08d` (English venue navigation fix); newest CI was queued
+  at the last check and must not be marked passed without its own result. `.github/workflows/verify-deploy.yml` runs only after a
   successful CI, and can be dispatched manually; its result is authoritative only for
   its own verification of the public service.
 - The previous Live workflow on 2026-10-14 showed `/health`, `/health/ready`, and

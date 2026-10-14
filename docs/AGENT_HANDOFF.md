@@ -10,19 +10,31 @@ remain in [TAKATAK_AGENT_HANDOFF.md](TAKATAK_AGENT_HANDOFF.md).
   `f339d3eb19a0f4e073ca89f7612c2c0bb5af5765`.
 - Run 74: server-rendered venue name/organizer/city search, locale handling, accent
   normalization, strict deployment SHA checks, CI-driven verification workflow.
-- Code commit **pushed**: `413f2af9388c5052ce485bd0a0e19ee2c3171291`.
-  Documentation commits may advance `main` again; always run `git rev-parse HEAD`
-  or query the GitHub branch ref before making further changes.
-- Current task: confirm Run 74 GitHub CI and Package; correct any reported failures.
-  Verify whether the new workflow identifies the live version; do not interpret a
-  failing verification as a successful deployment.
+- Code commit initially pushed: `413f2af9388c5052ce485bd0a0e19ee2c3171291`.
+  Subsequent bugfix/tests: `a790c19395a17c4335ec3c4ec648120dc7a30769`,
+  locale navigation `7c6313de0af38238060cf74419466fe173187e7c`,
+  corresponding test `92a5c08d04987540108b3a2c7bf4790e6b263274`.
+  Workflow concurrency fix: `91515fe55ffdc227929854fa37f44d2689910fe9`.
+  The handoff documentation commit itself advances main further: read GitHub HEAD
+  before any write; never assume the code SHA is the newest ref.
+- Verification: CI **passed** for `a790c193`; `Package` **passed** for
+  `92a5c08d`. The CI for `92a5c08d` was **queued** at last observation, not
+  verified green. Older CI jobs were cancelled under new concurrency policy.
+- The first `Verify deployment` workflow labeled successful merely **skipped
+  a superseded CI commit**, as confirmed in its logs. This is NOT proof that
+  Coolify serves the latest main commit. Next step: inspect the verification
+  run for the latest green CI and the actual public `/health` build SHA.
+- Current task: monitor newest GitHub CI and deployment verification, fix any
+  concrete failures. Continue the next independent backlog item after release
+  evidence is recorded.
 
 ## Files touched in Run 74
 
 `src/api/venue-view.ts`, `src/api/home.ts`, `home-ui/home.css`,
 `test/api/venues.test.ts`, `src/ops/live-watch.ts`, `scripts/live-watch.ts`,
 `test/ops/live-watch.test.ts`, `.github/workflows/verify-deploy.yml`,
-`WORKLOG.md`, these five standard docs, historical handoff and README.
+`src/api/home-view.ts`, `.github/workflows/ci.yml`, `.github/workflows/package.yml`,
+`AGENTS.md`, `WORKLOG.md`, these five standard docs, historical handoff and README.
 
 ## Checks and commands
 
