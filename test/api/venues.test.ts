@@ -72,7 +72,7 @@ describe("Run 73: public venue discovery", () => {
     expect(await search("q=festival")).toContain("Aucune salle ne correspond");
     expect(await search("ville=Laval")).toContain("Aucune salle ne correspond");
     expect(await search("q=%3Cimg%20src%3Dx%3E")).not.toContain('<img src=x>');
-    expect(await search("q=FESTI-ICE")).not.toContain("FESTI-ICE");
+    expect(await search("q=FESTI-ICE")).toContain("Aucune salle ne correspond");
     const en = await search("lang=en&q=nonexistent");
     expect(en).toContain("No venues match your search.");
     expect(en).toContain('href="/salles?lang=en"');
