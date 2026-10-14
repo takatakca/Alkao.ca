@@ -65,6 +65,22 @@ const plus = (page: Page, name: string) => page.getByRole("button", { name: `Ajo
 const local = (url: string) => url.replace(PUBLIC_URL, origin);
 
 describe("hosted ticket shop", () => {
+  it("Run 69: shows what the organizer says about the event before the choice", async () => {
+    const f = seed.festi;
+    await db.pool.query(
+      `UPDATE public.ticketing_events SET category = 'festivals', min_age = 0, doors_open_minutes = 90, language = 'none', accessibility = 'Sentiers damés, accès en fauteuil roulant.' WHERE id = $1`, [f.eventId]);
+    try {
+      const page = await shop(f);
+      const facts = page.getByRole("region", { name: "À savoir" });
+      await facts.waitFor();
+      for (const text of ["Festival", "Pour tous", "Ouverture des portes 1 h 30 avant le début", "Sans paroles"]) await facts.getByText(text, { exact: true }).waitFor();
+      await facts.getByText("Sentiers damés, accès en fauteuil roulant.").waitFor();
+      await page.context().close();
+    } finally {
+      await db.pool.query(`UPDATE public.ticketing_events SET category = NULL, min_age = NULL, doors_open_minutes = NULL, language = NULL, accessibility = NULL WHERE id = $1`, [f.eventId]);
+    }
+  });
+
   it("sells paid tickets: session, quantities, server quote, hold, Stripe, then the buyer's QR codes", async () => {
     const f = seed.festi;
     const s = await session(f, 20);

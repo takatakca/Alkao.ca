@@ -2,6 +2,18 @@
 
 This file records the current cross-agent handoff. Do not erase prior repository history; the detailed chronological log remains in `WORKLOG.md`.
 
+## 2026-10-14 — Run 69: event details for buyers
+
+- Migration `20261102000100_alkao_event_details.sql`: `category`, `min_age`, `doors_open_minutes`,
+  `language`, `accessibility` on `ticketing_events` (all optional, checked in SQL and in
+  `EventDetails`, `src/contracts/api-v1.ts`).
+- /ops: « Fiche de l'événement » on the event page (`EventFacts` in `ops-ui/app.js`). It does
+  not reload the page after saving (the reload remounts it and loses its message).
+- Shop: « À savoir » (`Facts` in `shop-ui/app.js`). Home: the organizer's category wins over the
+  word guess; age badge; quick view facts and accessibility; JSON-LD `doorTime`,
+  `typicalAgeRange`, `inLanguage`. A duplicate now also copies the photo.
+- Next from the benchmark: venue pages, Wallet, transfer, waitlist, presale codes, light buyer account.
+
 ## 2026-10-14 — Run 67: follow, agenda, accessibility
 
 - « Suivre <Brand> » (quick view, and the results bar when one organizer is chosen) posts to

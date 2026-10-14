@@ -510,6 +510,51 @@ function PromoCodes({ api, base, eventId }) {
         <td><button class="secondary" onClick=${toggle(p)}>${p.active ? "Désactiver" : "Réactiver"}</button></td></tr>`)}</tbody></table>`}`;
 }
 
+// ── Run 69: what a buyer wants to know before choosing (shop, ALKAO home, search engines) ──
+const CATEGORY_LABELS = { concerts: "Concerts", festivals: "Festivals", sports: "Sports", famille: "Famille", "plein-air": "Plein air et camping", spectacles: "Théâtre et humour", soirees: "Soirées", experiences: "Expériences" };
+const LANGUAGE_LABELS = { fr: "Français", en: "Anglais", "fr-en": "Français et anglais", none: "Sans paroles (musique, cirque…)" };
+const AGE_CHOICES = [["", "Non précisé"], ["0", "Pour tous"], ["6", "6 ans et plus"], ["12", "12 ans et plus"], ["14", "14 ans et plus"], ["16", "16 ans et plus"], ["18", "18 ans et plus"]];
+function EventFacts({ api, base, eventId, event }) {
+  const initial = () => ({
+    category: event.category ?? "", minAge: event.minAge == null ? "" : String(event.minAge),
+    doors: event.doorsOpenMinutes == null ? "" : String(event.doorsOpenMinutes), language: event.language ?? "", accessibility: event.accessibility ?? "",
+  });
+  const [f, setF] = useState(initial);
+  const [msg, setMsg] = useState(null);
+  const [error, setError] = useState(null);
+  const set = (patch) => { setMsg(null); setF({ ...f, ...patch }); };
+  const save = async (e) => {
+    e.preventDefault(); setError(null); setMsg(null);
+    const doors = String(f.doors).trim();
+    try {
+      if (doors !== "" && !(Number.isInteger(Number(doors)) && Number(doors) >= 0 && Number(doors) <= 600)) throw new Error("Ouverture des portes : un nombre de minutes entre 0 et 600.");
+      await api(`${base}/events/${eventId}`, { method: "PATCH", body: {
+        category: f.category || null, minAge: f.minAge === "" ? null : Number(f.minAge),
+        doorsOpenMinutes: doors === "" ? null : Number(doors), language: f.language || null,
+        accessibility: String(f.accessibility).trim() || null,
+      } });
+      // No reload of the page: it would show "Chargement…" and lose this message; the form already holds what was saved.
+      setMsg("Enregistré. La billetterie et l’accueil ALKAO montrent ces informations.");
+    } catch (err) { setError(err); }
+  };
+  return html`<form class="card facts-form" onSubmit=${save}>
+    <p class="muted">Facultatif : ce qui n’est pas rempli n’est pas affiché. Montré dans la billetterie, sur l’accueil ALKAO et aux moteurs de recherche.</p>
+    <div class="inline">
+      <label>Catégorie<select value=${f.category} onChange=${(e) => set({ category: e.target.value })}>
+        <option value="">Non précisée</option>${Object.entries(CATEGORY_LABELS).map(([k, l]) => html`<option value=${k}>${l}</option>`)}</select></label>
+      <label>Âge<select value=${f.minAge} onChange=${(e) => set({ minAge: e.target.value })}>
+        ${AGE_CHOICES.map(([k, l]) => html`<option value=${k}>${l}</option>`)}</select></label>
+      <label>Ouverture des portes (minutes avant)<input type="number" min="0" max="600" step="5" value=${f.doors} placeholder="ex. 60" onInput=${(e) => set({ doors: e.target.value })} /></label>
+      <label>Langue<select value=${f.language} onChange=${(e) => set({ language: e.target.value })}>
+        <option value="">Non précisée</option>${Object.entries(LANGUAGE_LABELS).map(([k, l]) => html`<option value=${k}>${l}</option>`)}</select></label>
+    </div>
+    <label>Accessibilité<textarea rows="3" maxlength="1000" placeholder="Accès en fauteuil roulant, places pour accompagnateur, carte CAL acceptée, sous-titres…" value=${f.accessibility}
+      onInput=${(e) => set({ accessibility: e.target.value })}></textarea></label>
+    ${error && html`<${Failure} error=${error} />`}
+    <div class="row"><button type="submit">Enregistrer la fiche</button>${msg && html`<span class="badge ok" role="status">${msg}</span>`}</div>
+  </form>`;
+}
+
 function EventDetail({ api, base, eventId }) {
   const [ev, reloadEvent] = useLoad(() => api(`${base}/events/${eventId}`), [base, eventId]);
   const [sessions, reloadSessions] = useLoad(() => api(`${base}/events/${eventId}/sessions`), [base, eventId]);
@@ -612,6 +657,9 @@ function EventDetail({ api, base, eventId }) {
       <button class="secondary" onClick=${setPhoto}>${event.imageUrl ? "Changer la photo" : "Ajouter une photo"}</button>
       <span class="muted">Portes : ${event.admissionOpensBeforeMinutes} min avant · ${event.admissionClosesAfterMinutes} min après</span>
     </div>
+
+    <h2>Fiche de l’événement</h2>
+    <${EventFacts} api=${api} base=${base} eventId=${eventId} event=${event} />
 
     <h2>Vendre en ligne</h2>
     <div class="card">

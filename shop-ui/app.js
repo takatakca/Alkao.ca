@@ -79,6 +79,13 @@ const T = {
     change: "Modifier ma sélection",
     stripe: "Paiement sécurisé par Stripe, directement à l'organisateur.",
     policyTitle: "Politique d'échange et de remboursement",
+    // Run 69: what the organizer says about the event.
+    factsTitle: "À savoir",
+    categories: { concerts: "Concert", festivals: "Festival", sports: "Sport", famille: "Famille", "plein-air": "Plein air", spectacles: "Théâtre et humour", soirees: "Soirée", experiences: "Expérience" },
+    age: (n) => (n === 0 ? "Pour tous" : `${n} ans et plus`),
+    doors: (d) => `Ouverture des portes ${d} avant le début`,
+    languages: { fr: "En français", en: "En anglais", "fr-en": "En français et en anglais", none: "Sans paroles" },
+    accessibilityTitle: "Accessibilité",
     policyNone: (brand) => `Les échanges et remboursements suivent la politique de ${brand || "l'organisateur"}. Pour la connaître avant de payer, écrivez-lui :`,
     footer: "Billetterie ALKAO",
     shop: "Billetterie",
@@ -162,6 +169,12 @@ const T = {
     change: "Change my selection",
     stripe: "Secure payment by Stripe, directly to the organizer.",
     policyTitle: "Exchange and refund policy",
+    factsTitle: "Good to know",
+    categories: { concerts: "Concert", festivals: "Festival", sports: "Sports", famille: "Family", "plein-air": "Outdoors", spectacles: "Theatre and comedy", soirees: "Nightlife", experiences: "Experience" },
+    age: (n) => (n === 0 ? "All ages" : `Ages ${n} and over`),
+    doors: (d) => `Doors open ${d} before the start`,
+    languages: { fr: "In French", en: "In English", "fr-en": "In French and English", none: "No spoken words" },
+    accessibilityTitle: "Accessibility",
     policyNone: (brand) => `Exchanges and refunds follow ${brand || "the organizer"}'s policy. To read it before paying, write to them:`,
     footer: "ALKAO Ticketing",
     shop: "Tickets",
@@ -405,6 +418,7 @@ function EventShop({ config }) {
     <h1>${ev.title}</h1>
     ${ev.venue && html`<p class="muted">${ev.venue.name}${ev.venue.city ? `, ${ev.venue.city}` : ""}</p>`}
     ${ev.description && html`<p>${ev.description}</p>`}
+    <${Facts} ev=${ev} />
     ${error && html`<div class="alert bad" role="alert">${errText(error)}</div>`}
 
     ${!hold && html`
@@ -462,6 +476,24 @@ function EventShop({ config }) {
     ${!hold && !DOOR && html`<${FindTickets} />`}
     <footer>${T.footer}</footer>
   </main>`;
+}
+
+// ── Run 69: category, age, doors, language and accessibility, as the organizer set them ──
+const span = (m) => (m < 60 ? `${m} min` : `${Math.floor(m / 60)} h${m % 60 ? ` ${String(m % 60).padStart(2, "0")}` : ""}`);
+function Facts({ ev }) {
+  const items = [
+    T.categories[ev.category],
+    Number.isInteger(ev.minAge) ? T.age(ev.minAge) : null,
+    Number.isInteger(ev.doorsOpenMinutes) && ev.doorsOpenMinutes > 0 ? T.doors(span(ev.doorsOpenMinutes)) : null,
+    T.languages[ev.language],
+  ].filter(Boolean);
+  const access = String(ev.accessibility ?? "").trim();
+  if (!items.length && !access) return null;
+  return html`<section class="facts" aria-labelledby="facts-title">
+    <h3 id="facts-title">${T.factsTitle}</h3>
+    ${items.length > 0 && html`<ul>${items.map((i) => html`<li>${i}</li>`)}</ul>`}
+    ${access && html`<p><strong>${T.accessibilityTitle} : </strong>${access}</p>`}
+  </section>`;
 }
 
 // ── Run 65: the organizer's exchange and refund policy, before payment (OPC) ──

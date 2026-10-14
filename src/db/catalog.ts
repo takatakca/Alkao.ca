@@ -21,7 +21,9 @@ export function toApi<T extends Row>(row: T): Row {
 
 const VENUE_COLUMNS = "id, name, address_line1, city, region, postal_code, country, timezone, tax_region, created_at, updated_at";
 const EVENT_COLUMNS =
-  "id, venue_id, slug, title, description, status, sales_open_at, sales_close_at, admission_opens_before_minutes, admission_closes_after_minutes, image_url, created_at, updated_at";
+  "id, venue_id, slug, title, description, status, sales_open_at, sales_close_at, admission_opens_before_minutes, admission_closes_after_minutes, image_url, " +
+  // Run 69: what a buyer wants to know before choosing.
+  "category, min_age, doors_open_minutes, language, accessibility, created_at, updated_at";
 const SESSION_COLUMNS = "id, event_id, starts_at, ends_at, capacity, reserved_count, sold_count, status, created_at, updated_at";
 const TYPE_COLUMNS =
   "id, event_id, code, name, description, kind, price_cents, min_quantity, max_quantity, max_adults_in_order, counts_as_adult, add_on_scope, grants_session_change, open_date, active, sort_order, created_at, updated_at, stock_per_session";
@@ -91,16 +93,20 @@ export const getEvent = (q: Queryable, s: TenantScope, eventId: string) =>
 export function createEvent(q: Queryable, s: TenantScope, e: {
   venueId: string; slug: string; title: string; description?: string | null; salesOpenAt?: string | null; salesCloseAt?: string | null;
   admissionOpensBeforeMinutes?: number | undefined; admissionClosesAfterMinutes?: number | undefined; imageUrl?: string | null | undefined;
+  category?: string | null | undefined; minAge?: number | null | undefined; doorsOpenMinutes?: number | null | undefined;
+  language?: string | null | undefined; accessibility?: string | null | undefined;
 }) {
   return mapDbErrors(() =>
     one(
       q,
       `INSERT INTO public.ticketing_events
          (client_id, brand_id, venue_id, slug, title, description, sales_open_at, sales_close_at,
-          admission_opens_before_minutes, admission_closes_after_minutes, image_url)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, coalesce($9, 60), coalesce($10, 120), $11) RETURNING ${EVENT_COLUMNS}`,
+          admission_opens_before_minutes, admission_closes_after_minutes, image_url,
+          category, min_age, doors_open_minutes, language, accessibility)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, coalesce($9, 60), coalesce($10, 120), $11, $12, $13, $14, $15, $16) RETURNING ${EVENT_COLUMNS}`,
       [s.clientId, s.brandId, e.venueId, e.slug, e.title, e.description ?? null, e.salesOpenAt ?? null, e.salesCloseAt ?? null,
-        e.admissionOpensBeforeMinutes ?? null, e.admissionClosesAfterMinutes ?? null, e.imageUrl ?? null],
+        e.admissionOpensBeforeMinutes ?? null, e.admissionClosesAfterMinutes ?? null, e.imageUrl ?? null,
+        e.category ?? null, e.minAge ?? null, e.doorsOpenMinutes ?? null, e.language ?? null, e.accessibility ?? null],
       "event_not_found",
     ),
   );
@@ -111,6 +117,7 @@ export function updateEvent(q: Queryable, s: TenantScope, eventId: string, field
     title: "title", description: "description", status: "status", salesOpenAt: "sales_open_at", salesCloseAt: "sales_close_at",
     admissionOpensBeforeMinutes: "admission_opens_before_minutes", admissionClosesAfterMinutes: "admission_closes_after_minutes",
     imageUrl: "image_url",
+    category: "category", minAge: "min_age", doorsOpenMinutes: "doors_open_minutes", language: "language", accessibility: "accessibility",
   }, 4);
   return mapDbErrors(() =>
     one(q, `UPDATE public.ticketing_events SET ${set.sql} WHERE id = $1 AND client_id = $2 AND brand_id = $3 RETURNING ${EVENT_COLUMNS}`,
@@ -280,6 +287,7 @@ export const listPublicEvents = (q: Queryable, s: TenantScope) =>
   many(
     q,
     `SELECT e.id, e.slug, e.title, e.description, e.sales_open_at, e.sales_close_at, e.image_url,
+            e.category, e.min_age, e.doors_open_minutes, e.language, e.accessibility,
             v.name AS venue_name, v.address_line1 AS venue_address, v.city AS venue_city, v.timezone AS venue_timezone
      FROM public.ticketing_events e
      JOIN public.ticketing_venues v ON v.id = e.venue_id AND v.client_id = e.client_id AND v.brand_id = e.brand_id

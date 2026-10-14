@@ -82,6 +82,18 @@ export const BrandAppearance = z
     path: ["onAccentColor"],
   });
 
+/** Run 69: what a buyer wants to know before choosing. Each is optional (null = not said). */
+export const EVENT_CATEGORIES = ["concerts", "festivals", "sports", "famille", "plein-air", "spectacles", "soirees", "experiences"] as const;
+export const EventDetails = z.object({
+  category: z.enum(EVENT_CATEGORIES).nullable(),
+  /** 0 = for all ages, 18 = 18 and over. */
+  minAge: z.number().int().min(0).max(21).nullable(),
+  /** The doors open this many minutes before each session (separate from the scanners' window). */
+  doorsOpenMinutes: z.number().int().min(0).max(600).nullable(),
+  language: z.enum(["fr", "en", "fr-en", "none"]).nullable(),
+  accessibility: z.string().trim().min(1).max(1000).regex(/^[^<>]*$/, "plain text only").nullable(),
+});
+
 export const CreateEvent = z
   .object({
     venueId: id,
@@ -96,6 +108,7 @@ export const CreateEvent = z
     admissionClosesAfterMinutes: admissionMinutes.optional(),
     /** Run 50: the event's photo (https), on the tickets page, the shop and the tickets e-mail. */
     imageUrl: displayUrl.nullish(),
+    ...EventDetails.partial().shape,
   })
   .refine((e) => !e.salesOpenAt || !e.salesCloseAt || Date.parse(e.salesOpenAt) < Date.parse(e.salesCloseAt), {
     message: "salesOpenAt must be before salesCloseAt",
@@ -110,6 +123,7 @@ export const UpdateEvent = z
     admissionOpensBeforeMinutes: admissionMinutes,
     admissionClosesAfterMinutes: admissionMinutes,
     imageUrl: displayUrl.nullable(),
+    ...EventDetails.shape,
   })
   .partial()
   .refine((o) => Object.keys(o).length > 0, "empty update");

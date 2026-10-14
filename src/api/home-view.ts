@@ -17,6 +17,12 @@ export interface HomeEvent {
   venueCity: string | null;
   /** Run 66: the venue's street address, for directions. */
   venueAddress?: string | null;
+  /** Run 69: what the organizer says (each null when not said). */
+  category?: string | null;
+  minAge?: number | null;
+  doorsOpenMinutes?: number | null;
+  language?: "fr" | "en" | "fr-en" | "none" | string | null;
+  accessibility?: string | null;
   /** The venue's IANA time zone (dates are shown in it). */
   timezone?: string | null;
   /** The first session with seats left. */
@@ -239,6 +245,12 @@ interface Card {
   sessions: Date[];
   ends: (Date | null)[];
   timezone: string;
+  /** Run 69: the organizer's details, as the quick view lists them. */
+  facts: string[];
+  accessibility: string;
+  minAge: number | null;
+  doorsOpenMinutes: number | null;
+  language: string | null;
 }
 
 const dayKey = (d: Date, tz: string) => new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
@@ -277,7 +289,19 @@ function cardsOf(brands: HomeBrand[], lang: Lang, origin: string | null, asset: 
       // A word counts from its start ("tour" is not "autour"); punctuation splits words.
       // From the event's own words only: a venue or Brand name ("Havana Resort") says nothing of the event.
       const spaced = ` ${fold([e.title, e.description].filter(Boolean).join(" ")).replace(/[^a-z0-9]+/g, " ")} `;
-      const categories = CATEGORIES.filter((c) => c.words.some((w) => spaced.includes(` ${w.trim()}`))).map((c) => c.id);
+      // Run 69: the organizer's own category wins; the words are only a guess.
+      const chosen = CATEGORIES.find((c) => c.id === e.category);
+      const categories = chosen ? [chosen.id] : CATEGORIES.filter((c) => c.words.some((w) => spaced.includes(` ${w.trim()}`))).map((c) => c.id);
+      const minAge = Number.isInteger(e.minAge) && e.minAge! >= 0 ? e.minAge! : null;
+      const doors = Number.isInteger(e.doorsOpenMinutes) && e.doorsOpenMinutes! >= 0 ? e.doorsOpenMinutes! : null;
+      const language = e.language && e.language in t.languages ? e.language : null;
+      const span = (m: number) => (m < 60 ? `${m} min` : `${Math.floor(m / 60)} h${m % 60 ? ` ${String(m % 60).padStart(2, "0")}` : ""}`);
+      const facts = [
+        chosen ? chosen.label[lang] : null,
+        minAge === null ? null : t.age(minAge),
+        doors === null || doors === 0 ? null : t.doors(span(doors)),
+        language ? t.languages[language as keyof typeof t.languages] : null,
+      ].filter((x): x is string => Boolean(x));
       const fallback = CATEGORIES.find((c) => c.id === categories[0])?.image ?? "event-fallback.webp";
       cards.push({
         id: e.id,
@@ -308,6 +332,11 @@ function cardsOf(brands: HomeBrand[], lang: Lang, origin: string | null, asset: 
         sessions,
         ends,
         timezone,
+        facts,
+        accessibility: (e.accessibility ?? "").trim().slice(0, 1000),
+        minAge,
+        doorsOpenMinutes: doors,
+        language,
       });
     }
   }
@@ -412,7 +441,7 @@ export function renderHome({ origin, lang, brands, query, now, asset }: RenderOp
         ${c.place ? `<p class="card-meta">${icon("pin")}<span>${esc(c.place)}</span></p>` : ""}
         <div class="card-foot">
           ${c.price ? `<p class="price">${esc(c.price)}</p>` : "<span></span>"}
-          ${c.count > 1 ? `<span class="pill">${esc(t.dates(c.count))}</span>` : ""}
+          <span class="pills">${c.minAge ? `<span class="pill pill-age" title="${esc(t.age(c.minAge))}">${esc(t.agePill(c.minAge))}</span>` : ""}${c.count > 1 ? `<span class="pill">${esc(t.dates(c.count))}</span>` : ""}</span>
         </div>
         <div class="card-actions">
           <a class="btn btn-primary btn-sm" href="${esc(c.shop)}">${esc(t.buy)}</a>
@@ -488,6 +517,8 @@ export function renderHome({ origin, lang, brands, query, now, asset }: RenderOp
       // Run 66: the shown dates as instants (for the calendar file) and a map search.
       starts: c.sessions.slice(0, 6).map((d) => d.toISOString()),
       ends: c.ends.slice(0, 6).map((d) => d?.toISOString() ?? null),
+      facts: c.facts,
+      accessibility: c.accessibility || null,
       address: c.address,
       map: c.address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(c.address)}` : null,
     })),
@@ -501,6 +532,7 @@ export function renderHome({ origin, lang, brands, query, now, asset }: RenderOp
       share: t.share, copied: t.copied, buy: t.buy, close: t.close, nextDate: t.nextDate, otherDates: t.otherDates,
       pause: t.pause, play: t.play, dates: t.dates(2).replace("2", "{n}"), slideOf: t.slideOf(9, 8).replace("9", "{i}").replace("8", "{n}"),
       recent: t.recentTitle, addDate: t.addDateToCalendar("{d}"), directionsTo: t.directionsTo("{p}"),
+      accessibilityTitle: t.accessibilityTitle,
       follow: t.follow("{b}"), followLead: t.followLead("{b}"), followNote: t.followNote("{b}"), followDone: t.followDone("{b}"),
       followInvalid: t.followInvalid, followBusy: t.followBusy, followError: t.followError,
     },
@@ -527,6 +559,10 @@ export function renderHome({ origin, lang, brands, query, now, asset }: RenderOp
       name: c.title,
       startDate: start.toISOString(),
       ...(c.ends[i] ? { endDate: c.ends[i]!.toISOString() } : {}),
+      // Run 69: what the organizer said.
+      ...(c.doorsOpenMinutes ? { doorTime: new Date(start.getTime() - c.doorsOpenMinutes * 60_000).toISOString() } : {}),
+      ...(c.minAge ? { typicalAgeRange: `${c.minAge}-` } : {}),
+      ...(c.language === "fr" ? { inLanguage: "fr-CA" } : c.language === "en" ? { inLanguage: "en-CA" } : c.language === "fr-en" ? { inLanguage: ["fr-CA", "en-CA"] } : {}),
       eventStatus: "https://schema.org/EventScheduled",
       eventAttendanceMode: "https://schema.org/OfflineEventAttendanceMode",
       ...(c.photo ? { image: [c.image] } : {}),
@@ -725,7 +761,9 @@ ${siteFooter(frame)}
       <div class="sheet-head"><div><p class="card-brand" data-p-brand></p><h2 id="dlg-preview-title" data-p-title></h2></div><button class="round" type="button" data-close aria-label="${esc(t.close)}">${icon("close")}</button></div>
       <p class="card-meta">${icon("pin")}<span data-p-place></span></p>
       <p class="price" data-p-price></p>
+      <ul class="facts" data-p-facts aria-label="${esc(t.facts)}" hidden></ul>
       <p class="preview-text" data-p-text></p>
+      <div class="preview-access" data-p-access hidden><p class="preview-label">${esc(t.accessibilityTitle)}</p><p data-p-access-text></p></div>
       <p class="preview-label">${esc(t.nextDate)}</p>
       <ul class="preview-dates" data-p-dates></ul>
       <div class="actions"><a class="btn btn-primary" data-p-shop href="/">${esc(t.buy)}${icon("arrow")}</a><button class="btn btn-ghost" type="button" data-p-share>${icon("share")}${esc(t.share)}</button><button class="btn btn-ghost" type="button" data-p-fav aria-pressed="false">${icon("heart")}<span>${esc(t.favorite)}</span></button></div>
