@@ -479,3 +479,11 @@ dialog[open]{animation:pop .35s var(--ease) both}
 /* Run 73: public venue directory (no inline CSS under the strict content policy). */
 .venues-grid{margin-top:36px}
 .venues-back{margin-top:32px}
+
+/* Run 74: server-rendered, bilingual venue search. Strict CSP: no inline styles. */
+.venues-search{display:flex;flex-wrap:wrap;align-items:flex-end;gap:12px;margin:32px 0 12px}
+.venues-search label{display:grid;gap:8px;flex:1 1 220px;min-width:0;color:var(--silver);font-weight:650}
+.venues-search input,.venues-search select{width:100%;min-height:48px;padding:10px 14px;border:1px solid var(--line-2);border-radius:12px;background:var(--midnight);color:var(--white)}
+.venues-search input:focus-visible,.venues-search select:focus-visible{outline:3px solid var(--cyan);outline-offset:2px}
+.venues-count{color:var(--silver);margin:16px 0 0}
+@media(max-width:560px){.venues-search{display:grid;grid-template-columns:1fr}.venues-search .btn{width:100%}}

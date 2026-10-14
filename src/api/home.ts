@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Hono } from "hono";
 import { parseQuery, renderAccessibility, renderHome, type HomeBrand } from "./home-view.js";
-import { publicVenues, renderVenueDirectory, renderVenuePage, venuePath } from "./venue-view.js";
+import { parseVenueSearch, publicVenues, renderVenueDirectory, renderVenuePage, venuePath } from "./venue-view.js";
 
 export type { HomeBrand, HomeEvent } from "./home-view.js";
 
@@ -90,7 +90,8 @@ export function mountHome(app: Hono<any>, cfg: HomeConfig): void {
     const lang = c.req.query("lang") === "en" ? "en" : "fr";
     const html = renderVenueDirectory({
       origin: cfg.publicUrl ? new URL(cfg.publicUrl).origin : null,
-      lang, venues: publicVenues(await cfg.load()), now: cfg.now?.() ?? new Date(), asset: homeAsset,
+      lang, venues: publicVenues(await cfg.load()), search: parseVenueSearch((name) => c.req.query(name)),
+      now: cfg.now?.() ?? new Date(), asset: homeAsset,
     });
     return c.html(html, 200, PAGE_HEADERS);
   });

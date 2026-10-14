@@ -16,7 +16,7 @@ export interface LiveWatch {
 
 export async function watchAddress(
   origin: string,
-  { doFetch = fetch, expectBuild, timeoutMs = 10_000 }: { doFetch?: typeof fetch; expectBuild?: string; timeoutMs?: number } = {},
+  { doFetch = fetch, expectBuild, requireBuild = false, timeoutMs = 10_000 }: { doFetch?: typeof fetch; expectBuild?: string; requireBuild?: boolean; timeoutMs?: number } = {},
 ): Promise<LiveWatch> {
   const lines: string[] = [];
   let ok = true;
@@ -40,11 +40,14 @@ export async function watchAddress(
   }
   const build = typeof h.build === "string" ? h.build : null;
   lines.push(`✔ ALKAO répond${build ? ` (version ${build.slice(0, 12)})` : ""}`);
+  if (requireBuild && expectBuild && !build) bad("le serveur ne publie pas le SHA du build (Include source commit in build)");
   if (build && expectBuild && build !== expectBuild) {
-    lines.push(`⚠ main est à ${expectBuild.slice(0, 12)} : le dernier déploiement n'est pas encore en ligne`);
+    const notice = `main est à ${expectBuild.slice(0, 12)} : le dernier déploiement n'est pas encore en ligne`;
+    if (requireBuild) bad(notice);
+    else lines.push(`⚠ ${notice}`);
   }
 
-  const ready = await get("/health/ready");
+    const ready = await get("/health/ready");
   const r = ready ? await json(ready) : null;
   // Run 70: the build's migrations are applied ("unknown" when the database keeps no record).
   if (ready?.status === 200) lines.push(`✔ Base de données joignable${r?.schema === "current" ? ", schéma à jour" : ""}`);

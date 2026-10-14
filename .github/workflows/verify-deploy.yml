@@ -1,0 +1,51 @@
+name: Verify deployment
+
+# CI success does not prove that Coolify deployed. Read-only checks, without secrets.
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: alkao-verify-deploy
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --omit=dev --no-audit --no-fund
+      - name: Confirm live deployment commit
+        env:
+          SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          EXPECTED="$(git rev-parse HEAD)"
+          if [[ -n "$SOURCE_SHA" && "$SOURCE_SHA" != "$EXPECTED" ]]; then
+            echo "A newer main commit superseded this CI run; skipping obsolete verification."
+            exit 0
+          fi
+          for attempt in 1 2 3 4 5 6 7 8; do
+            echo "Production verification attempt ${attempt}/8; expected ${EXPECTED:0:12}"
+            if node --import tsx scripts/live-watch.ts --require-build --expect-build "$EXPECTED" https://alkao.ca; then
+              echo "Confirmed alkao.ca is serving the expected commit."
+              exit 0
+            fi
+            if [[ "$attempt" != 8 ]]; then sleep 35; fi
+          done
+          echo "::error::Cannot verify deployed commit. See docs/DEPLOYMENT.md and Coolify."
+          exit 1

@@ -1,4 +1,4 @@
-import { COPY, type Lang } from "./home-copy.js";
+import { COPY, fold, type Lang } from "./home-copy.js";
 import {
   esc, safeHttps, headAssets, siteHeader, siteFooter, icon,
   type Frame, type HomeBrand, type HomeEvent,
@@ -45,6 +45,20 @@ export function publicVenues(brands: HomeBrand[]): PublicVenue[] {
     .sort((a, b) => a.name.localeCompare(b.name) || a.city.localeCompare(b.city) || a.venueId.localeCompare(b.venueId));
 }
 
+/** Query parsing is bounded, and results are selected only from the gated public catalog. */
+export interface VenueSearch { q: string; city: string }
+export function parseVenueSearch(get: (name: string) => string | undefined): VenueSearch {
+  const clean = (name: string) => (get(name) ?? "").replace(/\s+/g, " ").trim().slice(0, 80);
+  return { q: clean("q"), city: clean("ville") };
+}
+export function filterVenues(venues: PublicVenue[], search: VenueSearch): PublicVenue[] {
+  const words = fold(search.q).split(/\s+/).filter(Boolean);
+  const city = fold(search.city);
+  return venues.filter((v) =>
+    (!city || fold(v.city) === city) &&
+    words.every((word) => fold(`${v.name} ${v.city} ${v.brand}`).includes(word)));
+}
+
 export const venuePath = (v: Pick<PublicVenue, "clientId" | "brandId" | "venueId">) =>
   `/salles/${v.clientId}/${v.brandId}/${v.venueId}`;
 
@@ -54,6 +68,9 @@ const WORDS = {
     indexDesc: "Explorez les salles et lieux d’événements actuellement en vente sur ALKAO.",
     indexLead: "Découvrez les lieux qui accueillent des événements en vente. Les dates et les disponibilités viennent des organisateurs.",
     noVenues: "Aucune salle avec des événements en vente pour le moment.",
+    search: "Rechercher une salle", searchHint: "Salle ou organisateur", city: "Ville", allCities: "Toutes les villes",
+    searchAction: "Rechercher", reset: "Effacer les filtres", found: (n: number) => `${n} salle${n > 1 ? "s" : ""} trouvée${n > 1 ? "s" : ""}`,
+    noMatch: "Aucune salle ne correspond à votre recherche.",
     next: "Prochains événements", back: "Toutes les salles", buy: "Voir les billets",
     directions: "Itinéraire", organizer: "Organisateur", events: "événement(s) en vente",
     from: "À partir de", free: "Gratuit", taxes: "+ taxes",
@@ -63,6 +80,9 @@ const WORDS = {
     indexDesc: "Explore venues with events currently on sale on ALKAO.",
     indexLead: "Discover places hosting events on sale. Dates and availability come directly from the organizers.",
     noVenues: "No venues have events on sale right now.",
+    search: "Search venues", searchHint: "Venue or organizer", city: "City", allCities: "All cities",
+    searchAction: "Search", reset: "Clear filters", found: (n: number) => `${n} venue${n === 1 ? "" : "s"} found`,
+    noMatch: "No venues match your search.",
     next: "Upcoming events", back: "All venues", buy: "View tickets",
     directions: "Directions", organizer: "Organizer", events: "event(s) on sale",
     from: "From", free: "Free", taxes: "+ taxes",
@@ -135,13 +155,28 @@ ${siteFooter(frame)}
 </html>`;
 }
 
-export function renderVenueDirectory(cfg: ViewConfig & { venues: PublicVenue[] }): string {
+export function renderVenueDirectory(cfg: ViewConfig & { venues: PublicVenue[]; search: VenueSearch }): string {
   const t = WORDS[cfg.lang];
+  const venues = filterVenues(cfg.venues, cfg.search);
+  const cities = [...new Set(cfg.venues.map((v) => v.city).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b, COPY[cfg.lang].lang));
+  const searching = Boolean(cfg.search.q || cfg.search.city);
   const content = `<p class="kicker">ALKAO</p>
       <h1>${esc(t.indexTitle)}</h1>
       <p class="lead">${esc(t.indexLead)}</p>
-      ${cfg.venues.length ? `<section aria-label="${esc(t.indexTitle)}" class="grid venues-grid">
-        ${cfg.venues.map((v) => `<article class="card">
+      <form class="venues-search" action="/salles" method="get" role="search" aria-label="${esc(t.search)}">
+        ${cfg.lang === "en" ? '<input type="hidden" name="lang" value="en" />' : ""}
+        <label for="venue-query">${esc(t.search)}<input id="venue-query" name="q" type="search" value="${esc(cfg.search.q)}" placeholder="${esc(t.searchHint)}" maxlength="80" /></label>
+        <label for="venue-city">${esc(t.city)}<select id="venue-city" name="ville">
+          <option value="">${esc(t.allCities)}</option>
+          ${cities.map((city) => `<option value="${esc(city)}"${fold(city) === fold(cfg.search.city) ? " selected" : ""}>${esc(city)}</option>`).join("")}
+        </select></label>
+        <button class="btn btn-primary" type="submit">${icon("search")}${esc(t.searchAction)}</button>
+        ${searching ? `<a class="btn btn-ghost" href="${esc(pathLang("/salles", cfg.lang))}">${esc(t.reset)}</a>` : ""}
+      </form>
+      ${searching ? `<p class="venues-count" role="status">${esc(t.found(venues.length))}</p>` : ""}
+      ${venues.length ? `<section aria-label="${esc(t.indexTitle)}" class="grid venues-grid">
+        ${venues.map((v) => `<article class="card">
           <div class="card-body">
             <p class="card-brand">${esc(v.brand)}</p>
             <h2 class="card-title"><a href="${esc(pathLang(venuePath(v), cfg.lang))}">${esc(v.name)}</a></h2>
@@ -150,14 +185,14 @@ export function renderVenueDirectory(cfg: ViewConfig & { venues: PublicVenue[] }
             <div class="card-actions"><a class="btn btn-primary btn-sm" href="${esc(pathLang(venuePath(v), cfg.lang))}">${esc(t.next)}</a></div>
           </div>
         </article>`).join("")}
-      </section>` : `<p class="empty-inline">${esc(t.noVenues)}</p>`}
+      </section>` : `<p class="empty-inline">${esc(searching ? t.noMatch : t.noVenues)}</p>`}
       <p class="venues-back"><a class="btn btn-ghost" href="${esc(cfg.lang === "en" ? "/?lang=en#evenements" : "/#evenements")}">${esc(COPY[cfg.lang].nav.events)}</a></p>`;
   return shell(cfg, "/salles", t.indexTitle, t.indexDesc, content, {
     "@context": "https://schema.org", "@type": "CollectionPage", name: t.indexTitle,
     url: absoluteUrl(cfg.origin, "/salles"),
     mainEntity: {
       "@type": "ItemList",
-      itemListElement: cfg.venues.map((v, i) => ({
+      itemListElement: venues.map((v, i) => ({
         "@type": "ListItem", position: i + 1, name: v.name,
         url: absoluteUrl(cfg.origin, venuePath(v)),
       })),

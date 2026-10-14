@@ -62,6 +62,37 @@ describe("Run 73: public venue discovery", () => {
     expect((await app.request(`/salles/${seed.festi.clientId}/${seed.festi.brandId}/${seed.festi.venueId}`)).status).toBe(404);
   });
 
+  it("filters public venues by name, organizer and city without listing private tenants", async () => {
+    await optIn();
+    const h = seed.havana;
+    const path = `/salles/${h.clientId}/${h.brandId}/${h.venueId}`;
+    const search = async (qs: string) => (await (await app.request(`/salles?${qs}`)).text());
+    expect(await search("q=Havana")).toContain(`href="${path}"`);
+    expect(await search("q=Maricourt&ville=Maricourt")).toContain(`href="${path}"`);
+    expect(await search("q=festival")).toContain("Aucune salle ne correspond");
+    expect(await search("ville=Laval")).toContain("Aucune salle ne correspond");
+    expect(await search("q=%3Cimg%20src%3Dx%3E")).not.toContain('<img src=x>');
+    expect(await search("q=FESTI-ICE")).not.toContain("FESTI-ICE");
+    const en = await search("lang=en&q=nonexistent");
+    expect(en).toContain("No venues match your search.");
+    expect(en).toContain('href="/salles?lang=en"');
+    expect(en).toContain('<input type="hidden" name="lang" value="en" />');
+    expect((await app.request("/salles?q=%20")).status).toBe(200);
+  });
+
+  it("supports accent-insensitive search without changing underlying tenant data", async () => {
+    await optIn();
+    const h = seed.havana;
+    await db.pool.query("UPDATE public.ticketing_venues SET name = 'Théâtre Montréal', city = 'Montréal' WHERE id = $1", [h.venueId]);
+    try {
+      const html = await (await app.request("/salles?q=theatre&ville=Montreal")).text();
+      expect(html).toContain("Théâtre Montréal");
+      expect(html).toContain(`/salles/${h.clientId}/${h.brandId}/${h.venueId}`);
+    } finally {
+      await db.pool.query("UPDATE public.ticketing_venues SET name = 'Havana Resort', city = 'Maricourt' WHERE id = $1", [h.venueId]);
+    }
+  });
+
   it("supports English, hides unsold venues promptly and does not expose white-label listings", async () => {
     await optIn();
     const { clientId, brandId, venueId, eventId } = seed.havana;

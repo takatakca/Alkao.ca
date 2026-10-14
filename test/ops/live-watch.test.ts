@@ -35,6 +35,24 @@ describe("live watch", () => {
     expect(r.lines).toContain("⚠ main est à 9820f4507157 : le dernier déploiement n'est pas encore en ligne");
   });
 
+  it("requires an exact build for deploy checks, but keeps the scheduled Live warning-only", async () => {
+    const correct = await watchAddress("https://alkao.test", {
+      doFetch: fakeFetch(up), requireBuild: true, expectBuild: "85cd05873e79c3899cd9dbceb698ca63eff2011b",
+    });
+    expect(correct.ok).toBe(true);
+    const stale = await watchAddress("https://alkao.test", {
+      doFetch: fakeFetch(up), requireBuild: true, expectBuild: "9820f4507157756eb8878ac2b9ddfda9ab27d786",
+    });
+    expect(stale.ok).toBe(false);
+    expect(stale.lines.some((s) => s.includes("dernier déploiement"))).toBe(true);
+    const missing = await watchAddress("https://alkao.test", {
+      doFetch: fakeFetch({ ...up, "/health": { status: 200, body: { ok: true, service: "alkao" } } }),
+      requireBuild: true, expectBuild: "85cd05873e79c3899cd9dbceb698ca63eff2011b",
+    });
+    expect(missing.ok).toBe(false);
+    expect(missing.lines.some((s) => s.includes("SHA du build"))).toBe(true);
+  });
+
   it("accepts a deployment without a build, and a white-label home redirect", async () => {
     const r = await watchAddress("https://billets.test", {
       doFetch: fakeFetch({ ...up, "/health": { status: 200, body: { ok: true, service: "alkao" } }, "/": { status: 302, location: "https://marque.test/" } }),
