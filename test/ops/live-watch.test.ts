@@ -49,6 +49,13 @@ describe("live watch", () => {
     expect(db.ok).toBe(false);
     expect(db.lines).toContain("✘ /health/ready répond 503 : la base ne répond pas");
 
+    // Run 70: a build whose migrations are not applied.
+    const behind = await watchAddress("https://alkao.test", { doFetch: fakeFetch({ ...up, "/health/ready": { status: 503, body: { ok: false, database: "up", schema: "behind" } } }) });
+    expect(behind.ok).toBe(false);
+    expect(behind.lines).toContain("✘ /health/ready : des migrations de cette version ne sont pas appliquées (ALKAO_MIGRATE_ON_START ou scripts/migrate.ts)");
+    const current = await watchAddress("https://alkao.test", { doFetch: fakeFetch({ ...up, "/health/ready": { status: 200, body: { ok: true, database: "up", schema: "current" } } }) });
+    expect(current.lines).toContain("✔ Base de données joignable, schéma à jour");
+
     // An older ALKAO without the platform home answers / with a JSON 404.
     const home = await watchAddress("https://alkao.test", { doFetch: fakeFetch({ ...up, "/": { status: 404, body: { error: { code: "not_found" } } } }) });
     expect(home.ok).toBe(false);

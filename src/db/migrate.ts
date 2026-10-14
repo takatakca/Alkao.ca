@@ -19,6 +19,24 @@ export function listMigrations(dir = MIGRATIONS_DIR): Migration[] {
     .map((name) => ({ name, sql: readFileSync(join(dir, name), "utf8") }));
 }
 
+/** Run 70: the names only, for the readiness check. */
+export const migrationNames = (dir = MIGRATIONS_DIR): string[] =>
+  readdirSync(dir).filter((f) => /^\d{14}_[a-z0-9_]+\.sql$/.test(f)).sort();
+
+/**
+ * Run 70: whether this build's migrations are all applied. "unknown" when the database keeps
+ * no record (a Supabase project migrated with the Supabase CLI) or the record cannot be read.
+ */
+export async function schemaState(q: { query: (sql: string) => Promise<{ rows: { name: string }[] }> }, shipped: string[]): Promise<"current" | "behind" | "unknown"> {
+  try {
+    const { rows } = await q.query("SELECT name FROM alkao_meta.schema_migrations");
+    const applied = new Set(rows.map((r) => r.name));
+    return shipped.every((name) => applied.has(name)) ? "current" : "behind";
+  } catch {
+    return "unknown";
+  }
+}
+
 /**
  * Apply pending migrations, each in its own transaction, recorded in
  * alkao_meta.schema_migrations. For Supabase projects use the Supabase CLI instead; this

@@ -59,12 +59,31 @@ describe("gate counter, readiness and logs (Run 14)", () => {
   });
 
   it("is ready when the database answers, and says so when it does not", async () => {
-    expect((await call(app, "GET", "/health/ready")).body).toEqual({ ok: true, database: "up" });
+    expect((await call(app, "GET", "/health/ready")).body).toEqual({ ok: true, database: "up", schema: "current" });
     const dead = new pg.Pool({ connectionString: "postgres://nobody@127.0.0.1:1/none", connectionTimeoutMillis: 300 });
     const down = testApp(dead);
     const res = await call(down, "GET", "/health/ready");
     expect(res).toEqual({ status: 503, body: { ok: false, database: "down" } });
     await dead.end();
+  });
+
+  it("Run 70: is not ready while a migration of this build is missing, and never names them", async () => {
+    const last = (await db.pool.query<{ name: string }>(`SELECT name FROM alkao_meta.schema_migrations ORDER BY name DESC LIMIT 1`)).rows[0]!.name;
+    await db.pool.query(`DELETE FROM alkao_meta.schema_migrations WHERE name = $1`, [last]);
+    try {
+      const res = await call(app, "GET", "/health/ready");
+      expect(res).toEqual({ status: 503, body: { ok: false, database: "up", schema: "behind" } });
+      expect(JSON.stringify(res.body)).not.toContain(last.slice(0, 14));
+    } finally {
+      await db.pool.query(`INSERT INTO alkao_meta.schema_migrations (name) VALUES ($1)`, [last]);
+    }
+    // A database migrated by other means (no record) is not held back.
+    await db.pool.query(`ALTER TABLE alkao_meta.schema_migrations RENAME TO schema_migrations_away`);
+    try {
+      expect((await call(app, "GET", "/health/ready")).body).toEqual({ ok: true, database: "up", schema: "unknown" });
+    } finally {
+      await db.pool.query(`ALTER TABLE alkao_meta.schema_migrations_away RENAME TO schema_migrations`);
+    }
   });
 
   it("logs the route pattern, never ids, tokens or queries", async () => {

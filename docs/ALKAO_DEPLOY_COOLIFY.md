@@ -134,7 +134,12 @@ pointless.
    - If a migration fails, the container stops with the migration's name. The previous
      container keeps serving, and the database keeps the migrations that passed.
 2. Open `https://<subdomain>/health`. It answers `{"ok":true,"service":"alkao",…,"build":"<commit>"}`.
-3. Open `/health/ready` (`"database":"up"`), then `/`, the ALKAO platform home.
+3. Open `/health/ready` (`"database":"up"`, `"schema":"current"`), then `/`, the ALKAO platform home.
+   Since Run 70, `/health/ready` answers 503 with `"schema":"behind"` while a migration of this
+   build is not applied: the container stays unhealthy and Coolify keeps the previous one. Fix it
+   with `ALKAO_MIGRATE_ON_START=true` (then redeploy) or by running `scripts/migrate.ts` once.
+   `"schema":"unknown"` means the database keeps no ALKAO migration record (a Supabase project
+   migrated with the Supabase CLI); readiness is not held back then.
 
 ## 5. Stripe webhook
 
