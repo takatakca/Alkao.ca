@@ -9,6 +9,16 @@ memberships, entitlements, platform billing and the dashboard shell. ALKAO never
 TAKATAK database. It keeps local projections, which TAKATAK updates through a signed,
 versioned control contract.
 
+## Public venue calendar — Run 75
+
+Each published, opted-in ALKAO venue has a bilingual event page and a real
+**Ajouter les événements au calendrier / Add events to calendar** link.
+It downloads `/salles/:clientId/:brandId/:venueId/agenda.ics` (text/calendar,
+UTF-8). The feed contains only current public sessions, stable calendar IDs,
+times in UTC, place details and public purchase URLs. It never exposes tickets,
+buyers or private events. The link returns 404 if the venue is no longer public.
+Previously imported entries can remain in third-party calendar apps.
+
 ## Development continuity
 
 - [Project status](docs/PROJECT_STATUS.md), [task queue](docs/TASK_QUEUE.md),

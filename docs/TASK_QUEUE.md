@@ -6,7 +6,7 @@ Updated 2026-10-14. Before starting any task, read `AGENTS.md`, the top of
 | Priority | Task | State | Acceptance criterion |
 | --- | --- | --- | --- |
 | P0 | Run 74: public venue filtering, verified SHA monitoring | CI + Package passed at 5743ab1d; production unverified | Actual deploy separately verified, source SHA matches server |
-| P1 | Run 75: public venue event calendar (.ics) | Active | Public-only timed sessions, calendar UI, no tenant leak, unit/API tests, CI success |
+| P1 | Run 75: public venue event calendar (.ics) | Source pushed; first CI test assertions fixed in ce9db10f; latest CI pending | Full CI success, live 404 controls revalidated after Coolify redeploy |
 | P0 | Coolify deployment / dedicated DB / key rotation | BLOCKED — owner infrastructure; issue #84 | Dedicated DB checked, secrets rotated, /health build matches main, /health/ready healthy, payments tested before enablement |
 | P1 | Buyer ticket transfer to a friend | TODO | Explicit opt-in per Brand, owner authenticated with scoped token, new credential revokes previous QR, exact-once audit, no sale/resale or cross-tenant leakage, tests |
 | P1 | Apple / Google Wallet | TODO — provider credentials needed for real passes | Valid signed passes, secure entitlement/refresh/revoke, check gate scan, real device/provider verification |

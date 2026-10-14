@@ -1198,3 +1198,14 @@ accounts): `checkout.session.completed`, `checkout.session.expired`,
 `account.updated`, and since Run 19 `charge.dispute.created`, `charge.dispute.updated`,
 `charge.dispute.closed`, `charge.dispute.funds_withdrawn`, `charge.dispute.funds_reinstated`
 and `charge.refunded`.
+
+
+## Public venue event calendar (Run 75)
+
+| Method | Route | Security and response |
+| --- | --- | --- |
+| GET | `/salles/:clientId/:brandId/:venueId/agenda.ics` (`?lang=en` optional) | `200 text/calendar; charset=utf-8`, attachment `alkao-salle.ics`. No user token: it uses exactly the public, opted-in, operational, available-session catalog. Other tenants, withdrawn/unknown venues and white-label home redirect domains receive `404`. RFC 5545 escaped/folded text, UTC start/end and stable event/date UIDs. |
+
+Calendar clients may retain entries imported previously even after the organizer
+closes ticket sales; the server only guarantees new downloads reflect current
+public availability. No private buyer identity or order credentials are included.

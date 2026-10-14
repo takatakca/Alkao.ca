@@ -28,4 +28,12 @@ constraints; it does not retroactively change approved product policy.
    transfer/Wallet/account features must respect those rules and require
    explicit privacy, entitlement, and scanning-revocation tests.
 
+9. **Venue calendars.** Calendar exports are read-only views of already-public,
+   currently on-sale sessions; they include venue/event details and a public shop
+   URL only. They never include order links, tokens or identities. Existing
+   calendar apps may retain previously imported sessions after they sell out;
+   ALKAO does not promise to delete events from a user's own calendar.
+10. **Deployment verification.** A CI workflow skipped due to a newer main commit
+    cannot be presented as a successful live release verification.
+
 These constraints remain in force while independent backlog tasks continue.

@@ -15,8 +15,17 @@ ALKAO water-commerce concept. Do not replace its existing product or merge tenan
 - Run 74 (code commit `413f2af9388c5052ce485bd0a0e19ee2c3171291`): server-side venue
   filtering and strict SHA-aware deployment verification (see current CI status below).
 
+- Run 75 (code commit `9a596345de8ede86a3d52cde8d92a006db597ba6`):
+  downloadable RFC 5545 .ics calendar per public venue (FR/EN), visible CTA and
+  tenant-gated API, plus server-side calendar and API tests. No migration.
+
 ## Current delivery evidence
 
+- Run 74: CI and Package confirmed successful at `5743ab1d540624a63c2ead00de7addcb7edb3e34`.
+- Run 75: Package passed at `9a596345`. CI typecheck/migrations/secrets
+  passed; the first full test run failed on test-only ICS line parsing assertions.
+  Tests were corrected in `ce9db10f4f707a694c69914e31f015f8513aef38`.
+  Its rerun was still in progress. Check CI at final main HEAD.
 - Run 73: GitHub Actions CI and Package passed at `f339d3eb19a0f4e073ca89f7612c2c0bb5af5765`.
 - Run 74: code changes pushed to main. CI passed for test correction `a790c193`;
   Package passed at `92a5c08d` (English venue navigation fix); newest CI was queued

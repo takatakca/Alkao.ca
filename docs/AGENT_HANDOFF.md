@@ -4,6 +4,38 @@ Updated: 2026-10-14. Repository: `takatakca/Alkao.ca`, target branch `main`.
 Read `AGENTS.md`, `WORKLOG.md` and this file **before** working. Historical agent notes
 remain in [TAKATAK_AGENT_HANDOFF.md](TAKATAK_AGENT_HANDOFF.md).
 
+## 2026-10-14 — Run 75 / current continuation
+
+- Previous `main` SHA: `5743ab1d540624a63c2ead00de7addcb7edb3e34`.
+  Its GitHub CI and Package both **passed** (Runs 38615140934, 38615141054).
+- Claimed Run 75 in `WORKLOG.md` (commit `b73c56af08e35480cba82ccc85b780f3e42ef3a3`).
+- Implemented `GET /salles/:clientId/:brandId/:venueId/agenda.ics`,
+  bilingual download link, RFC 5545 escaping/folding with stable public event
+  UIDs and every currently on-sale session. Direct requests go through the same
+  opted-in/entitled per-Brand catalog gate. Unknown, private, white-label and
+  withdrawn venues return 404. No payment changes or DB migration.
+- Implementation pushed to main: `9a596345de8ede86a3d52cde8d92a006db597ba6`.
+  Changes: `src/api/venue-calendar.ts`, `src/api/venue-view.ts`,
+  `src/api/home.ts`, `test/api/venue-calendar.test.ts`,
+  `test/api/venues.test.ts`, `test/api/gate.test.ts`,
+  `.github/workflows/verify-deploy.yml`, `docs/TASK_QUEUE.md`.
+- Eliminated misleading success for superseded CI in Verify deployment:
+  obsolete verification exits nonzero and explicitly says no release was verified.
+- Validation: GitHub Package **passed** for `9a596345`; GitHub CI
+  typecheck, migrations and secret guard passed, but its full test suite
+  initially failed on three **test assertions**, not implementation: counting
+  an escaped title as a VEVENT and expecting unfolded URL lines. Corrected
+  both tests in `ce9db10f4f707a694c69914e31f015f8513aef38`.
+  Check its CI run https://github.com/takatakca/Alkao.ca/actions/runs/38623785741.
+  This documentation commit advances `main` once more, so verify latest CI.
+- Production status: not verified. Public site probes were unavailable through
+  public web fetch; there is no evidence Coolify has run the latest SHA. Follow
+  production issue #84. No secret values have been accessed or modified.
+- **Exact next action:** inspect newest main SHA and CI run; if a test failed,
+  read the job logs and correct it. If green, inspect strict verification logs
+  for an actual SHA match (not a superseded skip). Continue the P1 buyer transfer
+  only after designing a genuinely revocable, tenant-safe ownership workflow.
+
 ## Latest completed work / current task
 
 - Run 73: FR/EN public venue directory/detail, home links and sitemap. Validated at

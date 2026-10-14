@@ -4,6 +4,20 @@ Updated 2026-10-14. Do not treat a GitHub push or a MochaHost Package artifact a
 Current source: `main`; production target: `https://alkao.ca` via Coolify
 (documented in [ALKAO_DEPLOY_COOLIFY.md](ALKAO_DEPLOY_COOLIFY.md)).
 
+## Run 75 evidence
+
+- Code `9a596345de8ede86a3d52cde8d92a006db597ba6` publishes a
+  read-only `.ics` per venue after the same opt-in and tenant gate as the
+  public venue page. No migration, token exchange, or payment change.
+- GitHub Package passed, typecheck/migration and secret guards passed.
+  Full tests initially exposed three incorrect .ics assertion assumptions, fixed
+  by test-only commit `ce9db10f`. Its CI was still running at the last check;
+  re-read Actions for the final documentation HEAD.
+- Workflow fix: superseded CI now generates an explicit failure instead of
+  reporting a successful deployment check without making one. A verified
+  successful release requires an observed live `build` matching main.
+- **Deployed revision remains UNVERIFIED.** Do not enable sales based on this run.
+
 ## Current evidence
 
 - GitHub CI + Package passed for Run 73 `f339d3eb...`.

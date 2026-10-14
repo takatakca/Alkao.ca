@@ -2,6 +2,17 @@
 
 This file records the current cross-agent handoff. Do not erase prior repository history; the detailed chronological log remains in `WORKLOG.md`.
 
+## 2026-10-14 — Run 75: public venue calendars
+
+- Public venue page now downloads an RFC 5545 .ics with all currently public
+  upcoming sessions from the opted-in venue, in FR/EN, with UTC timestamps and
+  escaped text. Unknown/unlisted/white-label venues remain 404.
+- Added unit/API/tenant route inventory tests; read-only public data, no migration.
+- Run 75 code: `9a596345de8ede86a3d52cde8d92a006db597ba6`.
+- Fixed the deployment verifier so skipped old CI jobs do not fake a green
+  deployed-version check. Coolify remains unverified pending issue #84.
+- Canonical up-to-date resumption is in [AGENT_HANDOFF.md](AGENT_HANDOFF.md).
+
 ## 2026-10-14 — Run 74: searchable venue directory and deploy version check
 
 - New `/salles?q=&ville=` search uses only the already-public, tenant-scoped venue
