@@ -280,7 +280,7 @@ export const listPublicEvents = (q: Queryable, s: TenantScope) =>
   many(
     q,
     `SELECT e.id, e.slug, e.title, e.description, e.sales_open_at, e.sales_close_at, e.image_url,
-            v.name AS venue_name, v.city AS venue_city, v.timezone AS venue_timezone
+            v.name AS venue_name, v.address_line1 AS venue_address, v.city AS venue_city, v.timezone AS venue_timezone
      FROM public.ticketing_events e
      JOIN public.ticketing_venues v ON v.id = e.venue_id AND v.client_id = e.client_id AND v.brand_id = e.brand_id
      WHERE e.client_id = $1 AND e.brand_id = $2 AND e.status = 'published'

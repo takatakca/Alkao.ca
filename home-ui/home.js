@@ -2,6 +2,8 @@
 // it (src/api/home-view.ts). No network call, no tracking, no framework: carousel, reveal on
 // scroll, rails, favourites (this browser only), quick view, search palette, the assistant
 // (answers from the page's own help topics and events) and a language suggestion.
+// Run 66: recently viewed (this browser only), "add to calendar" (.ics made here), directions
+// and the install prompt.
 // Organizers' text is only ever set with textContent.
 (() => {
   "use strict";
@@ -38,6 +40,8 @@
     help: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM9.5 9.5a2.5 2.5 0 0 1 4.9.6c0 1.6-2.4 2-2.4 3.4M12 17h.01",
     grid: "M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z",
     heart: "M12 20s-7.5-4.6-9.2-9.4C1.6 7.2 3.9 4 7.2 4c2 0 3.6 1.1 4.8 2.8C13.2 5.1 14.8 4 16.8 4c3.3 0 5.6 3.2 4.4 6.6C19.5 15.4 12 20 12 20z",
+    calendar: "M5 5h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2zM3 10h18M8 3v4M16 3v4",
+    clock: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7v5l3 2",
   };
   const svg = (name) => {
     const s = doc.createElementNS("http://www.w3.org/2000/svg", "svg");
@@ -146,6 +150,38 @@
     setPaused(paused);
   }
 
+  // ── Recently viewed (this browser only): copies of the page's own cards ──
+  const readList = (key) => { try { const v = JSON.parse(store.get(key) || "[]"); return Array.isArray(v) ? v.filter((id) => byId.has(id)) : []; } catch { return []; } };
+  const recent = readList("alkao.recent");
+  const viewed = (id) => {
+    if (!byId.has(id)) return;
+    const next = [id, ...recent.filter((x) => x !== id)].slice(0, 8);
+    recent.splice(0, recent.length, ...next);
+    store.set("alkao.recent", JSON.stringify(next));
+  };
+  const recentBlock = $("[data-recent]");
+  const recentRail = recentBlock ? $(".rail", recentBlock) : null;
+  if (recentBlock && recentRail && recent.length) {
+    const copies = recent.map((id) => $(`.grid article.card[data-id="${CSS.escape(id)}"]`)).filter(Boolean).map((source) => {
+      const copy = source.cloneNode(true);
+      copy.classList.add("is-visible");
+      return h("div", { role: "listitem", class: "rail-item" }, copy);
+    });
+    if (copies.length) { recentRail.replaceChildren(...copies); recentBlock.hidden = false; }
+    $("[data-recent-clear]", recentBlock)?.addEventListener("click", () => {
+      recent.splice(0, recent.length);
+      store.set("alkao.recent", "[]");
+      recentBlock.hidden = true;
+      // The button is gone: keep the keyboard on the list of events.
+      $(".grid .card-title a")?.focus();
+    });
+  }
+  doc.addEventListener("click", (e) => {
+    const a = e.target instanceof Element ? e.target.closest("a[href]") : null;
+    const ev = a && events.find((x) => x.shop === a.getAttribute("href"));
+    if (ev) viewed(ev.id);
+  }, true);
+
   // ── Horizontal rails ──
   $$(".rail-block").forEach((block) => {
     const rail = $(".rail", block);
@@ -197,6 +233,53 @@
   const tickets = doc.getElementById("dlg-tickets");
   $$("[data-open-tickets]").forEach((a) => a.addEventListener("click", (e) => { if (open(tickets)) e.preventDefault(); }));
 
+  // ── "Add to calendar": an iCalendar file (RFC 5545) made here, as on the tickets page ──
+  const stamp = (date) => date.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+  const icsText = (v) => String(v).replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\r?\n/g, "\\n");
+  const icsFold = (line) => {
+    const enc = new TextEncoder();
+    const parts = [];
+    let cur = "";
+    let size = 0;
+    for (const ch of line) {
+      const n = enc.encode(ch).length;
+      if (size + n > (parts.length ? 74 : 75)) { parts.push(cur); cur = ""; size = 0; }
+      cur += ch;
+      size += n;
+    }
+    parts.push(cur);
+    return parts.join("\r\n ");
+  };
+  const calendarFile = (ev, i) => {
+    const start = new Date(ev.starts[i]);
+    const end = ev.ends && ev.ends[i] ? new Date(ev.ends[i]) : null;
+    const lines = [
+      "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//ALKAO//Billetterie//FR", "CALSCALE:GREGORIAN", "METHOD:PUBLISH",
+      "BEGIN:VEVENT",
+      // Adding the same date again updates it instead of doubling it.
+      `UID:${ev.id}-${stamp(start)}@alkao`,
+      `DTSTAMP:${stamp(new Date())}`,
+      `DTSTART:${stamp(start)}`,
+      ...(end ? [`DTEND:${stamp(end)}`] : []),
+      `SUMMARY:${icsText(ev.title)}`,
+      ...(ev.address ? [`LOCATION:${icsText(ev.address)}`] : []),
+      `DESCRIPTION:${icsText(`${ev.brand}\n${ev.url}`)}`,
+      `URL:${ev.url}`,
+      "END:VEVENT", "END:VCALENDAR",
+    ];
+    return `${lines.map(icsFold).join("\r\n")}\r\n`;
+  };
+  const addToCalendar = (ev, i) => {
+    if (!ev || !ev.starts || !ev.starts[i]) return;
+    const url = URL.createObjectURL(new Blob([calendarFile(ev, i)], { type: "text/calendar;charset=utf-8" }));
+    const slug = fold(ev.title).replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "evenement";
+    const a = h("a", { href: url, download: `alkao-${slug}.ics`, hidden: true });
+    doc.body.append(a);
+    a.click();
+    a.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 4000);
+  };
+
   // Quick view
   const preview = doc.getElementById("dlg-preview");
   let previewId = null;
@@ -214,16 +297,27 @@
     text.textContent = ev.description || "";
     text.hidden = !ev.description;
     const list = $("[data-p-dates]", preview);
-    list.replaceChildren(...(ev.dates || []).map((d) => h("li", { text: d })));
+    list.replaceChildren(...(ev.dates || []).map((d, i) => h("li", {},
+      h("span", { text: d }),
+      ev.starts && ev.starts[i] ? h("button", { type: "button", class: "round round-sm", "aria-label": (t.addDate || "{d}").replace("{d}", d), title: (t.addDate || "{d}").replace("{d}", d), onclick: () => addToCalendar(ev, i) }, svg("calendar")) : null)));
     if (ev.count > (ev.dates || []).length) list.append(h("li", { text: (t.dates || "{n}").replace("{n}", String(ev.count)) }));
     $("[data-p-shop]", preview).href = ev.shop;
     paintFav($("[data-p-fav]", preview), ev.id);
+    const ics = $("[data-p-ics]", preview);
+    if (ics) ics.hidden = !(ev.starts && ev.starts.length);
+    const map = $("[data-p-map]", preview);
+    if (map) {
+      map.hidden = !ev.map;
+      if (ev.map) { map.href = ev.map; map.setAttribute("aria-label", (t.directionsTo || "{p}").replace("{p}", ev.address)); }
+    }
+    viewed(ev.id);
   };
   if (preview && canDialog) {
     $$("[data-preview]").forEach((btn) => {
       btn.hidden = false;
       btn.addEventListener("click", () => { const ev = byId.get(btn.dataset.preview); if (ev) { fillPreview(ev); open(preview); } });
     });
+    $("[data-p-ics]", preview)?.addEventListener("click", () => addToCalendar(byId.get(previewId), 0));
     $("[data-p-fav]", preview)?.addEventListener("click", () => {
       if (!previewId) return;
       toggleFav(previewId);
@@ -272,10 +366,12 @@
   const renderPalette = () => {
     const q = fold(input.value).trim();
     const words = q.split(/\s+/).filter(Boolean);
-    const evs = (q ? events.filter((e) => words.every((w) => e.text.includes(w))) : events.filter((e) => favs.has(e.id))).slice(0, 6);
+    const evs = (q ? events.filter((e) => words.every((w) => e.text.includes(w))) : events.filter((e) => favs.has(e.id) && !recent.includes(e.id))).slice(0, 6);
+    const seen = q ? [] : recent.map((id) => byId.get(id)).filter(Boolean).slice(0, 4);
     const cs = q ? cats.filter((c) => fold(c.label).includes(q) || c.words.some((w) => w.trim() && q.includes(w.trim()))) : cats.slice(0, 4);
     const hs = (q ? topics.filter((x) => fold(x.q).includes(q) || x.keys.some((k) => q.includes(k))) : topics.slice(0, 3)).slice(0, 4);
     const groups = [];
+    if (seen.length) groups.push(h("p", { class: "palette-group", text: t.recent }), ...seen.map((e) => item(e.shop, "clock", e.title, [e.next, e.city].filter(Boolean).join(" · "), e.image)));
     if (evs.length) groups.push(h("p", { class: "palette-group", text: q ? s.events : t.favorites }), ...evs.map((e) => item(e.shop, "search", e.title, [e.next, e.city].filter(Boolean).join(" · "), e.image)));
     if (cs.length) groups.push(h("p", { class: "palette-group", text: s.categories }), ...cs.map((c) => item(c.url, "grid", c.label, "", null)));
     if (hs.length) groups.push(h("p", { class: "palette-group", text: s.help }), ...hs.map((x) => item(`#faq-${x.id}`, "help", x.q, "", null, openTopic(x.id))));
@@ -394,6 +490,23 @@
     chipsBox.replaceChildren(...(a.chips || []).map((c) => h("button", { type: "button", text: c, onclick: () => send(c) })));
     form.addEventListener("submit", (e) => { e.preventDefault(); send(ask.value); ask.value = ""; });
   }
+
+  // ── Install (where the browser offers it) ──
+  let installEvent = null;
+  const installButtons = $$("[data-install]");
+  window.addEventListener("beforeinstallprompt", (e) => {
+    e.preventDefault();
+    installEvent = e;
+    installButtons.forEach((b) => { b.hidden = false; });
+  });
+  installButtons.forEach((b) => b.addEventListener("click", async () => {
+    if (!installEvent) return;
+    installEvent.prompt();
+    try { await installEvent.userChoice; } catch { /* dismissed */ }
+    installEvent = null;
+    installButtons.forEach((x) => { x.hidden = true; });
+  }));
+  window.addEventListener("appinstalled", () => installButtons.forEach((x) => { x.hidden = true; }));
 
   // ── Language suggestion, once, for a browser set to the other language ──
   const toast = $("[data-lang-toast]");

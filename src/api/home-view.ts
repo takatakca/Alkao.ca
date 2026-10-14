@@ -15,12 +15,16 @@ export interface HomeEvent {
   imageUrl: string | null;
   venueName: string | null;
   venueCity: string | null;
+  /** Run 66: the venue's street address, for directions. */
+  venueAddress?: string | null;
   /** The venue's IANA time zone (dates are shown in it). */
   timezone?: string | null;
   /** The first session with seats left. */
   startsAt: Date | string;
   /** Run 64: every upcoming session with seats left, soonest first. */
   sessions?: (Date | string)[];
+  /** Run 66: when each of those sessions ends, null when the organizer did not say. */
+  ends?: (Date | string | null)[];
   /** Run 64: the lowest price of an active paid admission, before taxes; null when none is paid. */
   fromCents?: number | null;
   shopPath: string;
@@ -35,14 +39,23 @@ export interface HomeBrand {
 }
 
 export type When = "" | "today" | "weekend" | "week" | "month";
+export type PriceBand = "" | "free" | "under25" | "25to50" | "over50";
 export interface HomeQuery {
   q: string;
   city: string;
   when: When;
   category: string;
+  /** Run 66: by the lowest price before taxes (fromCents). */
+  price: PriceBand;
+  /** Run 66: soonest first (default), or lowest price first. */
+  sort: "" | "price";
+  /** Run 66: one organizer's events (its Brand id). */
+  organizer: string;
 }
 
 const WHENS: When[] = ["today", "weekend", "week", "month"];
+const PRICES: PriceBand[] = ["free", "under25", "25to50", "over50"];
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** The search form's values, trimmed and bounded; anything unknown is dropped. */
 export function parseQuery(get: (name: string) => string | undefined): HomeQuery {
@@ -54,6 +67,9 @@ export function parseQuery(get: (name: string) => string | undefined): HomeQuery
     city: text("ville"),
     when: WHENS.includes(when) ? when : "",
     category: CATEGORIES.some((c) => c.id === category) ? category : "",
+    price: PRICES.includes(text("prix") as PriceBand) ? (text("prix") as PriceBand) : "",
+    sort: text("tri") === "prix" ? "price" : "",
+    organizer: UUID.test(text("organisateur")) ? text("organisateur").toLowerCase() : "",
   };
 }
 
@@ -124,12 +140,19 @@ interface Card {
   id: string;
   title: string;
   brand: string;
+  brandId: string;
+  /** Lowest paid admission before taxes; null when free; undefined when unknown. */
+  fromCents: number | null | undefined;
   description: string;
   image: string;
   /** The organizer set a photo for this event (not ALKAO's stand-in). */
   photo: boolean;
   logo: string | null;
   place: string;
+  /** Run 66: name, street and city, for a map search. */
+  address: string;
+  venue: string;
+  street: string;
   city: string;
   shop: string;
   url: string;
@@ -143,6 +166,7 @@ interface Card {
   categories: string[];
   text: string;
   sessions: Date[];
+  ends: (Date | null)[];
   timezone: string;
 }
 
@@ -165,7 +189,16 @@ function cardsOf(brands: HomeBrand[], lang: Lang, origin: string | null, asset: 
   for (const b of brands) {
     for (const e of b.events) {
       const timezone = e.timezone || "America/Toronto";
-      const sessions = (e.sessions?.length ? e.sessions : [e.startsAt]).map((s) => new Date(s)).filter((d) => !Number.isNaN(d.getTime()));
+      const given = e.sessions?.length ? e.sessions : [e.startsAt];
+      const sessions: Date[] = [];
+      const ends: (Date | null)[] = [];
+      given.forEach((s, i) => {
+        const start = new Date(s);
+        if (Number.isNaN(start.getTime())) return;
+        const end = e.sessions?.length && e.ends?.[i] ? new Date(e.ends[i]!) : null;
+        sessions.push(start);
+        ends.push(end && !Number.isNaN(end.getTime()) && end > start ? end : null);
+      });
       if (!sessions.length) continue;
       const next = sessions[0]!;
       const full = new Intl.DateTimeFormat(locale, { timeZone: timezone, weekday: "long", day: "numeric", month: "long", hour: "numeric", minute: "2-digit" });
@@ -179,11 +212,16 @@ function cardsOf(brands: HomeBrand[], lang: Lang, origin: string | null, asset: 
         id: e.id,
         title: e.title,
         brand: b.name,
+        brandId: b.brandId,
+        fromCents: e.fromCents,
         description: (e.description ?? "").replace(/\s+/g, " ").trim().slice(0, 420),
         image: safeHttps(e.imageUrl) ?? asset(`img/${fallback}`),
         photo: Boolean(safeHttps(e.imageUrl)),
         logo: safeHttps(b.logoUrl),
         place: [e.venueName, e.venueCity].filter(Boolean).join(" · "),
+        address: [e.venueName, e.venueAddress, e.venueCity].map((x) => (x ?? "").trim()).filter(Boolean).join(", "),
+        venue: (e.venueName ?? "").trim(),
+        street: (e.venueAddress ?? "").trim(),
         city: e.venueCity ?? "",
         shop: e.shopPath,
         url: absolute(origin, e.shopPath),
@@ -197,6 +235,7 @@ function cardsOf(brands: HomeBrand[], lang: Lang, origin: string | null, asset: 
         categories,
         text,
         sessions,
+        ends,
         timezone,
       });
     }
@@ -204,7 +243,16 @@ function cardsOf(brands: HomeBrand[], lang: Lang, origin: string | null, asset: 
   return cards.sort((a, b) => a.next.getTime() - b.next.getTime() || a.title.localeCompare(b.title));
 }
 
+function inBand(card: Card, band: PriceBand): boolean {
+  if (!band) return true;
+  if (card.fromCents === undefined) return false;
+  const cents = card.fromCents ?? 0;
+  return band === "free" ? cents === 0 : band === "under25" ? cents > 0 && cents < 2500 : band === "25to50" ? cents >= 2500 && cents <= 5000 : cents > 5000;
+}
+
 function matches(card: Card, query: HomeQuery, now: Date): boolean {
+  if (query.organizer && card.brandId.toLowerCase() !== query.organizer) return false;
+  if (!inBand(card, query.price)) return false;
   if (query.q && !fold(query.q).split(" ").every((word) => card.text.includes(word))) return false;
   if (query.city && !fold(card.city).includes(fold(query.city))) return false;
   if (query.category && !card.categories.includes(query.category)) return false;
@@ -239,15 +287,44 @@ export function renderHome({ origin, lang, brands, query, now, asset }: RenderOp
   const langQuery = (l: Lang) => (l === "en" ? "?lang=en" : "");
   const home = `/${langQuery(lang)}`;
   const otherHome = `/${langQuery(t.other)}`;
-  const filtered = Boolean(query.q || query.city || query.when || query.category);
+  // A sort alone also lists the results (no rail), in its order.
+  const filtered = Boolean(query.q || query.city || query.when || query.category || query.price || query.organizer || query.sort);
   const all = cardsOf(brands, lang, origin, asset);
+  const cheapest = (c: Card) => (c.fromCents === undefined ? Number.POSITIVE_INFINITY : (c.fromCents ?? 0));
   const shown = filtered ? all.filter((c) => matches(c, query, now)) : all;
+  if (query.sort === "price") shown.sort((a, b) => cheapest(a) - cheapest(b) || a.next.getTime() - b.next.getTime());
   const week = all.filter((c) => c.next.getTime() - now.getTime() <= 7 * 86_400_000);
   const cities = [...new Set(all.map((c) => c.city).filter(Boolean))].sort((a, b) => a.localeCompare(b, t.lang));
   const link = (params: Record<string, string>) => {
     const p = new URLSearchParams({ ...(lang === "en" ? { lang: "en" } : {}), ...params });
     return `/?${p}#evenements`;
   };
+  // Run 66: the current search with one value changed ("" removes it), for the filter chips.
+  const current: Record<string, string> = {
+    q: query.q, ville: query.city, quand: query.when, categorie: query.category,
+    prix: query.price, tri: query.sort === "price" ? "prix" : "", organisateur: query.organizer,
+  };
+  const refine = (change: Record<string, string>) =>
+    link(Object.fromEntries(Object.entries({ ...current, ...change }).filter(([, v]) => v)));
+  const organizers = brands
+    .filter((b) => all.some((c) => c.brandId === b.brandId))
+    .map((b) => ({ id: b.brandId.toLowerCase(), name: b.name, logo: safeHttps(b.logoUrl) }));
+  const organizer = organizers.find((o) => o.id === query.organizer);
+  const priced = all.some((c) => c.fromCents !== undefined);
+  const bands = PRICES.filter((band) => band === query.price || all.some((c) => inBand(c, band)));
+  const chip = (href: string, label: string, on: boolean, extra = "") =>
+    `<a class="chip${on ? " is-current" : ""}" href="${esc(href)}"${on ? ' aria-current="true"' : ""}>${extra}${esc(label)}</a>`;
+  const filterBar = all.length && (priced || organizers.length > 1)
+    ? `<div class="filters reveal">
+        <p class="filters-title">${esc(t.filters)}</p>
+        ${priced ? `<div class="filter" role="group" aria-labelledby="f-price"><p class="filter-label" id="f-price">${esc(t.priceTitle)} <small>${esc(t.priceNote)}</small></p>
+          <div class="chips">${chip(refine({ prix: "" }), t.priceOptions.all, !query.price)}${bands.map((band) => chip(refine({ prix: band }), t.priceOptions[band as Exclude<PriceBand, "">], query.price === band)).join("")}</div></div>
+        <div class="filter" role="group" aria-labelledby="f-sort"><p class="filter-label" id="f-sort">${esc(t.sortTitle)}</p>
+          <div class="chips">${chip(refine({ tri: "" }), t.sortOptions.date, query.sort !== "price")}${chip(refine({ tri: "prix" }), t.sortOptions.price, query.sort === "price")}</div></div>` : ""}
+        ${organizers.length > 1 || organizer ? `<div class="filter" role="group" aria-labelledby="f-org"><p class="filter-label" id="f-org">${esc(t.organizersTitle)}</p>
+          <div class="chips">${chip(refine({ organisateur: "" }), t.allOrganizers, !query.organizer)}${organizers.map((o) => chip(refine({ organisateur: o.id }), o.name, o.id === query.organizer, o.logo ? `<img src="${esc(o.logo)}" alt="" loading="lazy" decoding="async" />` : "")).join("")}</div></div>` : ""}
+      </div>`
+    : "";
 
   const card = (c: Card, eager = false) => `<article class="card reveal" data-id="${esc(c.id)}">
       <a class="card-media" href="${esc(c.shop)}" tabindex="-1" aria-hidden="true"><img src="${esc(c.image)}" alt="" ${eager ? "" : 'loading="lazy" '}decoding="async" /></a>
@@ -269,8 +346,8 @@ export function renderHome({ origin, lang, brands, query, now, asset }: RenderOp
       </div>
     </article>`;
 
-  const rail = (id: string, title: string, lead: string, items: Card[]) => `<div class="rail-block">
-      <div class="rail-head"><div><h3 id="${id}">${esc(title)}</h3>${lead ? `<p>${esc(lead)}</p>` : ""}</div>
+  const rail = (id: string, title: string, lead: string, items: Card[], extra = "") => `<div class="rail-block">
+      <div class="rail-head"><div><h3 id="${id}">${esc(title)}</h3>${lead ? `<p>${esc(lead)}</p>` : ""}${extra}</div>
         <div class="rail-nav" hidden><button class="round" type="button" data-rail-prev="${id}-rail" aria-label="${esc(t.scrollPrev)}">${icon("left")}</button><button class="round" type="button" data-rail-next="${id}-rail" aria-label="${esc(t.scrollNext)}">${icon("right")}</button></div>
       </div>
       <div class="rail" id="${id}-rail" role="list" aria-labelledby="${id}">${items.map((c) => `<div role="listitem" class="rail-item">${card(c)}</div>`).join("")}</div>
@@ -306,6 +383,11 @@ export function renderHome({ origin, lang, brands, query, now, asset }: RenderOp
     events: all.map((c) => ({
       id: c.id, title: c.title, brand: c.brand, description: c.description, image: c.image, place: c.place, city: c.city,
       shop: c.shop, url: c.url, price: c.price, next: c.nextLabel, dates: c.dates, count: c.count, categories: c.categories, text: c.text,
+      // Run 66: the shown dates as instants (for the calendar file) and a map search.
+      starts: c.sessions.slice(0, 6).map((d) => d.toISOString()),
+      ends: c.ends.slice(0, 6).map((d) => d?.toISOString() ?? null),
+      address: c.address,
+      map: c.address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(c.address)}` : null,
     })),
     categories: CATEGORIES.map((c) => ({ id: c.id, label: c.label[lang], url: link({ categorie: c.id }), words: c.words })),
     help: faq,
@@ -315,26 +397,45 @@ export function renderHome({ origin, lang, brands, query, now, asset }: RenderOp
       assistant: t.assistant, search: t.searchDialog, favorite: t.favorite, unfavorite: t.unfavorite, favorites: t.favorites,
       share: t.share, copied: t.copied, buy: t.buy, close: t.close, nextDate: t.nextDate, otherDates: t.otherDates,
       pause: t.pause, play: t.play, dates: t.dates(2).replace("2", "{n}"), slideOf: t.slideOf(9, 8).replace("9", "{i}").replace("8", "{n}"),
+      recent: t.recentTitle, addDate: t.addDateToCalendar("{d}"), directionsTo: t.directionsTo("{p}"),
     },
   };
 
-  const jsonLd = all.map((c) => ({
-    "@context": "https://schema.org",
-    "@type": "Event",
-    name: c.title,
-    startDate: c.next.toISOString(),
-    eventStatus: "https://schema.org/EventScheduled",
-    eventAttendanceMode: "https://schema.org/OfflineEventAttendanceMode",
-    ...(c.photo ? { image: [c.image] } : {}),
-    ...(c.description ? { description: c.description } : {}),
-    location: {
-      "@type": "Place",
-      name: c.place.split(" · ")[0] || c.brand,
-      ...(c.city ? { address: { "@type": "PostalAddress", addressLocality: c.city, addressCountry: "CA" } } : {}),
-    },
-    organizer: { "@type": "Organization", name: c.brand },
-    url: c.url,
-  }));
+  // Run 66: one Event per date (the next ten of each), with the lowest price as its offer. The
+  // listed dates all have seats left (src/api/app.ts), so each offer is in stock.
+  const jsonLd = all.flatMap((c) => {
+    const { venue, street } = c;
+    const offers = c.fromCents === undefined ? {} : {
+      offers: {
+        "@type": "Offer",
+        url: c.url,
+        price: ((c.fromCents ?? 0) / 100).toFixed(2),
+        priceCurrency: "CAD",
+        availability: "https://schema.org/InStock",
+        // "From": the lowest admission, taxes extra.
+        priceSpecification: { "@type": "PriceSpecification", minPrice: (c.fromCents ?? 0) / 100, priceCurrency: "CAD", valueAddedTaxIncluded: false },
+      },
+    };
+    return c.sessions.slice(0, 10).map((start, i) => ({
+      "@context": "https://schema.org",
+      "@type": "Event",
+      name: c.title,
+      startDate: start.toISOString(),
+      ...(c.ends[i] ? { endDate: c.ends[i]!.toISOString() } : {}),
+      eventStatus: "https://schema.org/EventScheduled",
+      eventAttendanceMode: "https://schema.org/OfflineEventAttendanceMode",
+      ...(c.photo ? { image: [c.image] } : {}),
+      ...(c.description ? { description: c.description } : {}),
+      location: {
+        "@type": "Place",
+        name: venue || c.brand,
+        ...(c.city || street ? { address: { "@type": "PostalAddress", ...(street ? { streetAddress: street } : {}), ...(c.city ? { addressLocality: c.city } : {}), addressCountry: "CA" } } : {}),
+      },
+      organizer: { "@type": "Organization", name: c.brand },
+      ...offers,
+      url: c.url,
+    }));
+  });
 
   const headLinks = `<a href="#evenements">${esc(t.nav.events)}</a><a href="#categories">${esc(t.nav.categories)}</a><a href="#organisateurs">${esc(t.nav.organizers)}</a><a href="#aide">${esc(t.nav.help)}</a>`;
   const navLinks = `<a href="#evenements">${esc(t.nav.events)}</a><a href="#categories">${esc(t.nav.categories)}</a><a href="#comment">${esc(t.nav.how)}</a><a href="#organisateurs">${esc(t.nav.organizers)}</a><a href="#aide">${esc(t.nav.help)}</a>`;
@@ -360,6 +461,8 @@ export function renderHome({ origin, lang, brands, query, now, asset }: RenderOp
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="theme-color" content="#060D1F" />
   <link rel="icon" href="${esc(asset("favicon.svg"))}" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="${esc(asset("img/icon-192.png"))}" />
+  <link rel="manifest" href="${esc(asset("manifest.webmanifest"))}" />
   <link rel="preload" href="${esc(asset("fonts/montserrat-latin.woff2"))}" as="font" type="font/woff2" crossorigin />
   <link rel="preload" href="${esc(asset("fonts/inter-latin.woff2"))}" as="font" type="font/woff2" crossorigin />
   <link rel="stylesheet" href="${esc(asset("home.css"))}" />
@@ -406,7 +509,7 @@ export function renderHome({ origin, lang, brands, query, now, asset }: RenderOp
             <label class="field"><span>${esc(t.what)}</span><input name="q" type="search" value="${esc(query.q)}" placeholder="${esc(t.whatHint)}" autocomplete="off" maxlength="80" /></label>
             <label class="field"><span>${esc(t.where)}</span><input name="ville" type="text" value="${esc(query.city)}" placeholder="${esc(t.whereHint)}" list="alkao-cities" autocomplete="address-level2" maxlength="80" /></label>
             <label class="field"><span>${esc(t.when)}</span><select name="quand">${whenSelect}</select></label>
-            ${query.category ? `<input type="hidden" name="categorie" value="${esc(query.category)}" />` : ""}
+            ${(["categorie", "prix", "tri", "organisateur"] as const).filter((k) => current[k]).map((k) => `<input type="hidden" name="${k}" value="${esc(current[k])}" />`).join("")}
             <button class="btn btn-primary btn-search" type="submit">${icon("search")}<span>${esc(t.search)}</span></button>
           </form>
           <datalist id="alkao-cities">${cities.map((c) => `<option value="${esc(c)}"></option>`).join("")}</datalist>
@@ -448,8 +551,9 @@ export function renderHome({ origin, lang, brands, query, now, asset }: RenderOp
     <section class="section events" id="evenements" aria-labelledby="events-title">
       <div class="wrap">
         <div class="section-head reveal"><p class="kicker">${esc(t.featuredTag)}</p><h2 id="events-title">${esc(t.eventsTitle)}</h2><p>${esc(t.featuredLead)}</p></div>
+        ${filterBar}
         ${filtered ? `<div class="results" role="status">
-            <p><strong>${esc(t.results(shown.length))}</strong>${query.q ? ` ${esc(t.resultsFor)} « ${esc(query.q)} »` : ""}${query.category ? ` · ${esc(CATEGORIES.find((c) => c.id === query.category)!.label[lang])}` : ""}${query.city ? ` · ${esc(query.city)}` : ""}${query.when ? ` · ${esc(t.whenOptions[query.when])}` : ""}</p>
+            <p><strong>${esc(t.results(shown.length))}</strong>${query.q ? ` ${esc(t.resultsFor)} « ${esc(query.q)} »` : ""}${query.category ? ` · ${esc(CATEGORIES.find((c) => c.id === query.category)!.label[lang])}` : ""}${query.city ? ` · ${esc(query.city)}` : ""}${query.when ? ` · ${esc(t.whenOptions[query.when])}` : ""}${query.price ? ` · ${esc(t.priceOptions[query.price])}` : ""}${organizer ? ` · ${esc(organizer.name)}` : ""}${query.sort === "price" ? ` · ${esc(t.sortOptions.price)}` : ""}</p>
             <a class="btn btn-ghost btn-sm" href="${esc(`${home}#evenements`)}">${esc(t.showAll)}</a>
           </div>` : ""}
         ${cities.length > 1 && !filtered ? `<nav class="chips" aria-label="${esc(t.citiesTitle)}">${cities.map((c) => `<a class="chip" href="${esc(link({ ville: c }))}">${icon("pin")}${esc(c)}</a>`).join("")}</nav>` : ""}
@@ -462,7 +566,8 @@ export function renderHome({ origin, lang, brands, query, now, asset }: RenderOp
             </div>`
           : filtered
             ? shown.length ? `<div class="grid">${shown.map((c) => card(c)).join("")}</div>` : `<p class="empty-inline">${esc(t.noResults)}</p>`
-            : `${week.length && all.length > 3 ? `${rail("week", t.weekTitle, "", week)}<h3 class="grid-title">${esc(t.allEvents)}</h3>` : ""}
+            : `${rail("recent", t.recentTitle, "", [], `<button class="link-btn" type="button" data-recent-clear aria-label="${esc(t.clearRecentLabel)}">${esc(t.clearRecent)}</button>`).replace('<div class="rail-block">', '<div class="rail-block" data-recent hidden>')}
+               ${week.length && all.length > 3 ? `${rail("week", t.weekTitle, "", week)}<h3 class="grid-title">${esc(t.allEvents)}</h3>` : ""}
                <div class="grid">${all.map((c, i) => card(c, i < 3)).join("")}</div>`}
       </div>
     </section>
@@ -526,6 +631,7 @@ export function renderHome({ origin, lang, brands, query, now, asset }: RenderOp
       <div class="foot-brand">
         <a class="logo" href="${esc(home)}" aria-label="ALKAO">${logoMark("lg-foot")}<span class="word">ALKAO</span></a>
         <p>${esc(t.footerTagline)}</p>
+        <button class="btn btn-ghost btn-sm" type="button" data-install hidden>${icon("arrow")}${esc(t.install)}</button>
       </div>
       <nav aria-label="${esc(t.footerDiscover)}"><p class="foot-title">${esc(t.footerDiscover)}</p><a href="#evenements">${esc(t.nav.events)}</a><a href="#categories">${esc(t.nav.categories)}</a><a href="#comment">${esc(t.nav.how)}</a></nav>
       <nav aria-label="${esc(t.footerHelp)}"><p class="foot-title">${esc(t.footerHelp)}</p><a href="#aide">${esc(t.faqTitle)}</a><a href="#faq-billets">${esc(t.myTickets)}</a><a href="#faq-paiement">${esc(t.trust[2]!)}</a></nav>
@@ -552,6 +658,7 @@ export function renderHome({ origin, lang, brands, query, now, asset }: RenderOp
       <p class="preview-label">${esc(t.nextDate)}</p>
       <ul class="preview-dates" data-p-dates></ul>
       <div class="actions"><a class="btn btn-primary" data-p-shop href="/">${esc(t.buy)}${icon("arrow")}</a><button class="btn btn-ghost" type="button" data-p-share>${icon("share")}${esc(t.share)}</button><button class="btn btn-ghost" type="button" data-p-fav aria-pressed="false">${icon("heart")}<span>${esc(t.favorite)}</span></button></div>
+      <div class="actions actions-small"><button class="btn btn-ghost btn-sm" type="button" data-p-ics>${icon("calendar")}${esc(t.addToCalendar)}</button><a class="btn btn-ghost btn-sm" data-p-map href="/" target="_blank" rel="noopener noreferrer">${icon("pin")}<span>${esc(t.directions)}</span></a></div>
     </div>
   </dialog>
 

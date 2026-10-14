@@ -211,8 +211,115 @@ describe("Run 64: the premium platform home", () => {
     const data = JSON.parse(json);
     expect(data.events).toHaveLength(1);
     expect(data.events[0].title).toBe("</script><script>alert(1)</script>");
-    expect(Object.keys(data.events[0]).sort()).toEqual(["brand", "categories", "city", "count", "dates", "description", "id", "image", "next", "place", "price", "shop", "text", "title", "url"]);
+    expect(Object.keys(data.events[0]).sort()).toEqual(["address", "brand", "categories", "city", "count", "dates", "description", "ends", "id", "image", "map", "next", "place", "price", "shop", "starts", "text", "title", "url"]);
     expect(json).not.toMatch(/[\w.+-]+@[\w-]+\.[\w.]+/);
     expect(data.help.map((x: { id: string }) => x.id)).toContain("perdus");
+  });
+});
+
+describe("Run 66: filters, search-engine data, calendar and installable home", () => {
+  const page = async (qs = "") => (await app.request(`/${qs ? `?${qs}` : ""}`)).text();
+  const found = (n: number) => `<strong>${n === 1 ? "1 événement" : `${n} événements`}</strong>`;
+  const none = "Aucun événement en vente ne correspond";
+  const ld = (html: string) => JSON.parse(html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/)![1]!) as Record<string, any>[];
+
+  it("filters by price before taxes and by organizer, sorts by price, and keeps them on a new search", async () => {
+    const h = seed.havana;
+    await setOptIn(h.clientId, h.brandId, havanaOwner, true);
+    // The lowest paid admission is 17,95 $.
+    expect(await page("prix=under25")).toContain(found(1));
+    expect(await page("prix=25to50")).toContain(none);
+    expect(await page("prix=free")).toContain(none);
+    const all = await page();
+    expect(all).toContain("Prix avant taxes");
+    expect(all).toMatch(/<a class="chip is-current" href="[^"]*" aria-current="true">Tous les prix<\/a>/);
+    expect(all).toContain(">Moins de 25 $<");
+    // A band with nothing in it is not offered.
+    expect(all).not.toContain(">25 $ à 50 $<");
+    // One organizer only: nothing to choose.
+    expect(all).not.toContain('id="f-org"');
+
+    const sorted = await page("tri=prix&prix=under25");
+    expect(sorted).toContain(found(1));
+    expect(sorted).toContain("· Moins de 25 $ · Prix le plus bas</p>");
+    expect(sorted).toContain('<input type="hidden" name="prix" value="under25" />');
+    expect(sorted).toContain('<input type="hidden" name="tri" value="prix" />');
+
+    const mine = await page(`organisateur=${h.brandId.toUpperCase()}`);
+    expect(mine).toContain(found(1));
+    expect(mine).toContain('id="f-org"');
+    expect(mine).toContain(`<input type="hidden" name="organisateur" value="${h.brandId}" />`);
+    expect(await page(`organisateur=${seed.festi.brandId}`)).toContain(none);
+    // Unknown values are dropped, never echoed.
+    const bogus = await page("prix=%3Cb%3E&tri=hasard&organisateur=havana");
+    expect(bogus).not.toContain('class="results"');
+    expect(bogus).not.toContain("hasard");
+
+    await db.pool.query(`UPDATE public.ticketing_ticket_types SET active = false WHERE event_id = $1 AND kind = 'admission' AND price_cents > 0`, [h.eventId]);
+    try {
+      expect(await page("prix=free")).toContain(found(1));
+      expect(await page("prix=under25")).toContain(none);
+    } finally {
+      await db.pool.query(`UPDATE public.ticketing_ticket_types SET active = true WHERE event_id = $1`, [h.eventId]);
+    }
+  });
+
+  it("describes every date to search engines, with its lowest price and its venue", async () => {
+    const h = seed.havana;
+    await setOptIn(h.clientId, h.brandId, havanaOwner, true);
+    await db.pool.query(`UPDATE public.ticketing_venues SET address_line1 = '100 chemin du Lac' WHERE id = $1`, [h.venueId]);
+    const { rows } = await db.pool.query<{ id: string }>(
+      `INSERT INTO public.ticketing_sessions (client_id, brand_id, event_id, starts_at, ends_at, capacity, status)
+       VALUES ($1, $2, $3, now() + interval '40 days', now() + interval '40 days 3 hours', 50, 'on_sale') RETURNING id`, [h.clientId, h.brandId, h.eventId]);
+    try {
+      const events = ld(await page());
+      expect(events).toHaveLength(2);
+      expect(events[0]!.endDate).toBeUndefined();
+      expect(new Date(events[1]!.endDate).getTime() - new Date(events[1]!.startDate).getTime()).toBe(3 * 3600_000);
+      for (const e of events) {
+        expect(e.offers).toEqual({
+          "@type": "Offer",
+          url: `https://alkao.test/acheter/${h.clientId}/${h.brandId}/${h.eventId}`,
+          price: "17.95",
+          priceCurrency: "CAD",
+          availability: "https://schema.org/InStock",
+          priceSpecification: { "@type": "PriceSpecification", minPrice: 17.95, priceCurrency: "CAD", valueAddedTaxIncluded: false },
+        });
+        expect(e.location).toEqual({
+          "@type": "Place",
+          name: "Havana Resort",
+          address: { "@type": "PostalAddress", streetAddress: "100 chemin du Lac", addressLocality: "Maricourt", addressCountry: "CA" },
+        });
+      }
+      const data = JSON.parse((await page()).match(/<script type="application\/json" id="alkao-data">([\s\S]*?)<\/script>/)![1]!);
+      expect(data.events[0].address).toBe("Havana Resort, 100 chemin du Lac, Maricourt");
+      expect(data.events[0].map).toBe("https://www.google.com/maps/search/?api=1&query=Havana%20Resort%2C%20100%20chemin%20du%20Lac%2C%20Maricourt");
+      expect(data.events[0].starts).toHaveLength(2);
+      expect(data.events[0].ends[0]).toBeNull();
+      expect(data.events[0].ends[1]).toBe(events[1]!.endDate);
+    } finally {
+      await db.pool.query(`DELETE FROM public.ticketing_sessions WHERE id = $1`, [rows[0]!.id]);
+      await db.pool.query(`UPDATE public.ticketing_venues SET address_line1 = NULL WHERE id = $1`, [h.venueId]);
+    }
+  });
+
+  it("is installable: a manifest and app icons under its own policy", async () => {
+    const res = await app.request("/");
+    expect(res.headers.get("content-security-policy")).toContain("manifest-src 'self'");
+    const html = await res.text();
+    const href = html.match(/<link rel="manifest" href="([^"]+)" \/>/)![1]!;
+    expect(html).toMatch(/<link rel="apple-touch-icon" href="\/assets\/home\/img\/icon-192\.png\?v=[0-9a-f]{10}" \/>/);
+    const manifest = await app.request(href);
+    expect(manifest.headers.get("content-type")).toBe("application/manifest+json");
+    const body = (await manifest.json()) as { icons: { src: string; sizes: string }[] };
+    expect(body).toMatchObject({ short_name: "ALKAO", start_url: "/", scope: "/", display: "standalone", background_color: "#060D1F", theme_color: "#060D1F" });
+    for (const icon of body.icons) {
+      const file = await app.request(new URL(icon.src, `https://alkao.test${href}`).pathname);
+      expect(file.status, icon.src).toBe(200);
+      expect(file.headers.get("content-type")).toBe("image/png");
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      const size = (o: number) => (bytes[o]! << 24) | (bytes[o + 1]! << 16) | (bytes[o + 2]! << 8) | bytes[o + 3]!;
+      expect(`${size(16)}x${size(20)}`).toBe(icon.sizes);
+    }
   });
 });

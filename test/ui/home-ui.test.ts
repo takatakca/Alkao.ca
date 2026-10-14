@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import type { AddressInfo } from "node:net";
 import { serve, type ServerType } from "@hono/node-server";
 import { chromium, type Browser, type BrowserContextOptions } from "playwright-core";
@@ -63,15 +63,15 @@ describe("platform home in the browser", () => {
     await page.getByRole("button", { name: "Mettre le carrousel en pause" }).click();
     await page.getByRole("button", { name: "Reprendre le carrousel" }).waitFor();
 
-    await page.locator(".card").getByRole("button", { name: "Aperçu" }).click();
+    await page.locator(".grid .card").getByRole("button", { name: "Aperçu" }).click();
     const dialog = page.getByRole("dialog", { name: TITLE });
     await dialog.waitFor();
     expect(await dialog.getByRole("link", { name: /Voir les billets/ }).getAttribute("href")).toBe(`/acheter/${seed.havana.clientId}/${seed.havana.brandId}/${seed.havana.eventId}`);
     await dialog.getByRole("button", { name: "Ajouter aux favoris" }).click();
     await page.keyboard.press("Escape");
-    await expect.poll(() => page.locator(".card .fav").getAttribute("aria-pressed")).toBe("true");
+    await expect.poll(() => page.locator(".grid .card .fav").getAttribute("aria-pressed")).toBe("true");
     await page.reload();
-    await expect.poll(() => page.locator(".card .fav").getAttribute("aria-pressed")).toBe("true");
+    await expect.poll(() => page.locator(".grid .card .fav").getAttribute("aria-pressed")).toBe("true");
     expect(errors).toEqual([]);
     await context.close();
   });
@@ -122,6 +122,51 @@ describe("platform home in the browser", () => {
     await fr.page.waitForTimeout(3000);
     expect(await fr.page.locator("[data-lang-toast]").isVisible()).toBe(false);
     await fr.context.close();
+  });
+
+  it("Run 66: adds a date to the calendar, links to directions and remembers what was viewed", async () => {
+    const { page, context, errors } = await home();
+    expect(await page.locator("[data-recent]").isVisible()).toBe(false);
+    await page.locator(".grid .card").getByRole("button", { name: "Aperçu" }).click();
+    const dialog = page.getByRole("dialog", { name: TITLE });
+    await dialog.waitFor();
+    const map = dialog.getByRole("link", { name: "Itinéraire vers Havana Resort, Maricourt (nouvel onglet)" });
+    expect(await map.getAttribute("href")).toBe("https://www.google.com/maps/search/?api=1&query=Havana%20Resort%2C%20Maricourt");
+    expect(await map.getAttribute("target")).toBe("_blank");
+    expect(await map.getAttribute("rel")).toBe("noopener noreferrer");
+    const [download] = await Promise.all([page.waitForEvent("download"), dialog.getByRole("button", { name: "Ajouter au calendrier", exact: true }).click()]);
+    expect(download.suggestedFilename()).toBe("alkao-havana-resort-evenements-2026-2027.ics");
+    const ics = readFileSync((await download.path())!, "utf8");
+    expect(ics.startsWith("BEGIN:VCALENDAR\r\nVERSION:2.0\r\n")).toBe(true);
+    expect(ics).toMatch(/\r\nDTSTART:\d{8}T\d{6}Z\r\n/);
+    expect(ics).toContain(`\r\nUID:${seed.havana.eventId}-`);
+    expect(ics).toContain("\r\nSUMMARY:Havana Resort — Événements 2026-2027\r\n");
+    expect(ics).toContain("\r\nLOCATION:Havana Resort\\, Maricourt\r\n");
+    // Each listed date has its own button too.
+    expect(await dialog.getByRole("button", { name: /^Ajouter au calendrier : / }).count()).toBe(1);
+    await page.keyboard.press("Escape");
+
+    await page.reload();
+    const recent = page.getByRole("list", { name: "Vus récemment" });
+    await recent.waitFor();
+    expect(await recent.locator(".card").count()).toBe(1);
+    // The copy works like the original: its quick view opens.
+    await recent.getByRole("button", { name: "Aperçu" }).click();
+    await dialog.waitFor();
+    await page.keyboard.press("Escape");
+    await page.keyboard.press("Control+k");
+    const palette = page.getByRole("dialog", { name: "Rechercher" });
+    await palette.getByText("Vus récemment").waitFor();
+    await palette.getByRole("link", { name: new RegExp(TITLE) }).waitFor();
+    await page.keyboard.press("Escape");
+    // Cleared on request, and stays cleared.
+    await page.getByRole("button", { name: "Effacer les événements vus récemment" }).click();
+    await expect.poll(() => recent.isVisible()).toBe(false);
+    await page.reload();
+    await page.waitForTimeout(300);
+    expect(await page.locator("[data-recent]").isVisible()).toBe(false);
+    expect(errors).toEqual([]);
+    await context.close();
   });
 
   it("still works without JavaScript: first slide, search form and answers", async () => {

@@ -266,6 +266,8 @@ How it works:
   return URL, alongside the Brand's `checkoutReturnOrigins`. Any other origin is refused.
 - **Event details:** `GET /v1/public/…/events/:eventId` now also returns `event.brand.name`
   and `event.venue` (name, city, timezone).
+- **Event list:** `GET /v1/public/…/events` also returns each event's `venueAddress` (the
+  venue's street, public like its name and city), since Run 66.
 
 **Door sales** (Run 35, owner decision, see [ALKAO_DECISIONS.md](ALKAO_DECISIONS.md)):
 
