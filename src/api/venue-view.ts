@@ -140,7 +140,7 @@ export function renderVenueDirectory(cfg: ViewConfig & { venues: PublicVenue[] }
   const content = `<p class="kicker">ALKAO</p>
       <h1>${esc(t.indexTitle)}</h1>
       <p class="lead">${esc(t.indexLead)}</p>
-      ${cfg.venues.length ? `<section aria-label="${esc(t.indexTitle)}" class="grid" style="margin-top:36px">
+      ${cfg.venues.length ? `<section aria-label="${esc(t.indexTitle)}" class="grid venues-grid">
         ${cfg.venues.map((v) => `<article class="card">
           <div class="card-body">
             <p class="card-brand">${esc(v.brand)}</p>
@@ -151,7 +151,7 @@ export function renderVenueDirectory(cfg: ViewConfig & { venues: PublicVenue[] }
           </div>
         </article>`).join("")}
       </section>` : `<p class="empty-inline">${esc(t.noVenues)}</p>`}
-      <p style="margin-top:32px"><a class="btn btn-ghost" href="${esc(cfg.lang === "en" ? "/?lang=en#evenements" : "/#evenements")}">${esc(COPY[cfg.lang].nav.events)}</a></p>`;
+      <p class="venues-back"><a class="btn btn-ghost" href="${esc(cfg.lang === "en" ? "/?lang=en#evenements" : "/#evenements")}">${esc(COPY[cfg.lang].nav.events)}</a></p>`;
   return shell(cfg, "/salles", t.indexTitle, t.indexDesc, content, {
     "@context": "https://schema.org", "@type": "CollectionPage", name: t.indexTitle,
     url: absoluteUrl(cfg.origin, "/salles"),

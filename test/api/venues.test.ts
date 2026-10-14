@@ -59,7 +59,7 @@ describe("Run 73: public venue discovery", () => {
     expect(html).toContain(`/acheter/${clientId}/${brandId}/`);
     expect((await (await app.request("/")).text())).toContain(`href="${path}"`);
     expect((await (await app.request("/sitemap.xml")).text())).toContain(`<loc>https://alkao.test${path}</loc>`);
-    expect((await app.request(`/salles/${seed.festiIce.clientId}/${seed.festiIce.brandId}/${seed.festiIce.venueId}`)).status).toBe(404);
+    expect((await app.request(`/salles/${seed.festi.clientId}/${seed.festi.brandId}/${seed.festi.venueId}`)).status).toBe(404);
   });
 
   it("supports English, hides unsold venues promptly and does not expose white-label listings", async () => {

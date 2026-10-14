@@ -475,3 +475,7 @@ dialog[open]{animation:pop .35s var(--ease) both}
   .js .reveal{opacity:1;transform:none}
   .aurora span{animation:none}
 }
+
+/* Run 73: public venue directory (no inline CSS under the strict content policy). */
+.venues-grid{margin-top:36px}
+.venues-back{margin-top:32px}
