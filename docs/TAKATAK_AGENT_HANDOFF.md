@@ -2,6 +2,16 @@
 
 This file records the current cross-agent handoff. Do not erase prior repository history; the detailed chronological log remains in `WORKLOG.md`.
 
+## 2026-10-14 — Runs 70–71: readiness schema check, waitlist
+
+- Run 70: `/health/ready` answers `"schema"`; a build whose migrations are missing is not ready.
+  After the merge, alkao.ca kept serving the Run 69 build for more than 25 minutes: most likely
+  `ALKAO_MIGRATE_ON_START` is off on Coolify, so the new container never becomes healthy. The
+  owner turns it on (or runs `scripts/migrate.ts` once) and redeploys; then `"schema":"current"`.
+- Run 71: `ticketing_waitlist` (server only), `src/delivery/waitlist.ts` (join, counts, notify),
+  route `POST …/sessions/:sessionId/waitlist`, shop « Séance complète ? », `/ops` count column.
+  Promo Havana PR takatakca/promohavanaca#23 (alkao.ca structure in Havana's look) is merged.
+
 ## 2026-10-14 — Run 69: event details for buyers
 
 - Migration `20261102000100_alkao_event_details.sql`: `category`, `min_age`, `doors_open_minutes`,

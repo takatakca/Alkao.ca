@@ -2,6 +2,7 @@ import type { Db } from "../db/pool.js";
 import { queueReminders } from "../delivery/reminders.js";
 import { deliverCampaignEmails } from "../delivery/campaigns.js";
 import { deliverSignupConfirmations } from "../delivery/newsletter.js";
+import { notifyWaitlists } from "../delivery/waitlist.js";
 import { deliverCampaignSms, type SmsDeliveryConfig } from "../delivery/sms.js";
 import { deliverTicketEmails, type DeliveryConfig } from "../delivery/worker.js";
 import type { PaymentsService } from "../payments/service.js";
@@ -35,6 +36,8 @@ export interface CronResult {
   campaignEmails: { sent: number; skipped: number; retried: number; failed: number; finished: number } | null;
   /** Run 44: newsletter sign-up confirmations. */
   signupEmails: { sent: number; skipped: number; retried: number; failed: number } | null;
+  /** Run 71: the waitlists of sold-out sessions. */
+  waitlistEmails: { sent: number; expired: number; retried: number; failed: number; purged: number } | null;
   /** Run 46: campaign texts (deferred: waiting for 9:00). */
   campaignSms: { sent: number; skipped: number; retried: number; failed: number; deferred: number } | null;
   cancellationJobs: number | null;
@@ -45,7 +48,7 @@ export interface CronResult {
 const LOCK = "alkao_cron";
 
 export async function runBackgroundOnce(db: Db, deps: CronDeps, now = new Date()): Promise<CronResult> {
-  const result: CronResult = { ran: false, expiredHolds: 0, remindersQueued: 0, emails: null, campaignEmails: null, signupEmails: null, campaignSms: null, cancellationJobs: null, customersSynced: 0 };
+  const result: CronResult = { ran: false, expiredHolds: 0, remindersQueued: 0, emails: null, campaignEmails: null, signupEmails: null, waitlistEmails: null, campaignSms: null, cancellationJobs: null, customersSynced: 0 };
   const lock = await db.connect();
   try {
     const { rows } = await lock.query<{ ok: boolean }>(`SELECT pg_try_advisory_lock(hashtext($1)) AS ok`, [LOCK]);
@@ -60,6 +63,7 @@ export async function runBackgroundOnce(db: Db, deps: CronDeps, now = new Date()
         result.emails = { sent: r.sent, skipped: r.skipped, retried: r.retried, failed: r.failed };
         result.signupEmails = await deliverSignupConfirmations(db, deps.email, now);
         result.campaignEmails = await deliverCampaignEmails(db, deps.email, now);
+        result.waitlistEmails = await notifyWaitlists(db, deps.email, now);
       }
       if (deps.sms) result.campaignSms = await deliverCampaignSms(db, deps.sms, now);
       if (deps.payments) result.cancellationJobs = await advanceCancellations(db, deps.payments);

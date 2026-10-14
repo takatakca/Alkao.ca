@@ -681,10 +681,10 @@ function EventDetail({ api, base, eventId }) {
       <button class="secondary" onClick=${setAllSessions("on_sale", "paused", "Suspendre les ventes de toutes les séances à venir ? Plus personne ne pourra acheter.")}>Suspendre toutes les ventes à venir</button>
       <button class="secondary" onClick=${setAllSessions("paused", "on_sale", "Reprendre les ventes de toutes les séances à venir suspendues ?")}>Reprendre les ventes suspendues</button>
     </div>`}
-    ${sessions.loading ? html`<${Loading} />` : html`<table><thead><tr><th>Début</th><th>Statut</th><th class="num">Capacité</th><th class="num">Vendus</th><th class="num">Réservés</th><th></th></tr></thead>
+    ${sessions.loading ? html`<${Loading} />` : html`<table><thead><tr><th>Début</th><th>Statut</th><th class="num">Capacité</th><th class="num">Vendus</th><th class="num">Réservés</th><th class="num">En attente</th><th></th></tr></thead>
       <tbody>${(sessions.data?.sessions ?? []).map((s) => html`<tr>
         <td>${when(s.startsAt)}</td><td><${Badge} status=${s.status} /></td>
-        <td class="num"><button class="link" onClick=${setCapacity(s.id, s.capacity)}>${s.capacity}</button></td><td class="num">${s.soldCount}</td><td class="num">${s.reservedCount}</td>
+        <td class="num"><button class="link" onClick=${setCapacity(s.id, s.capacity)}>${s.capacity}</button></td><td class="num">${s.soldCount}</td><td class="num">${s.reservedCount}</td><td class="num" title="Liste d'attente : ces personnes reçoivent un courriel dès que des places se libèrent">${s.waitlistCount ?? 0}</td>
         <td class="row">
           ${s.status !== "on_sale" && html`<button onClick=${setSessionStatus(s.id, "on_sale")}>Mettre en vente</button>`}
           ${s.status === "on_sale" && html`<button class="secondary" onClick=${setSessionStatus(s.id, "paused")}>Pause</button>`}

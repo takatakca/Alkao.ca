@@ -62,6 +62,8 @@ const EXPECTED: Record<string, Visibility> = {
   ticketing_add_on_stock: "none",
   // Run 65: changes of time or place told to buyers, server only.
   ticketing_session_changes: "none",
+  // Run 71: the waitlist of sold-out sessions, server only.
+  ticketing_waitlist: "none",
 };
 
 const clientColumn = (table: string) => (table === "ticketing_clients" ? "id" : "client_id");

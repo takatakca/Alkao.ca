@@ -509,6 +509,11 @@ export const NewsletterSignup = z.object({
   /** Where it came from, e.g. the storefront's short name. */
   source: z.string().trim().toLowerCase().regex(/^[a-z0-9][a-z0-9_.-]{0,59}$/).nullish(),
 });
+/** Run 71: the waitlist of a sold-out session. */
+export const WaitlistJoin = z.object({
+  email: z.string().trim().max(320).pipe(z.email()),
+  language: z.enum(["fr", "en"]).default("fr"),
+});
 export const NewsletterSettings = z.object({
   rewardCode: z.string().trim().toUpperCase().regex(/^[A-Z0-9-]{3,32}$/).nullable(),
   rewardText: z.string().trim().min(1).max(200).nullable(),
