@@ -1,5 +1,10 @@
 # ALKAO — Deployment state and verification
 
+## Run 77 — source vs production
+
+CI/Package passed for `c7864c57` (internal transfer foundations only). No transfer routes exposed or production migrations run here. Latest known strict deployment verification failed; the public server does not report an attested build SHA. Operator must resolve issue #84 before declaring any new `main` version live.
+
+
 ## Run 77 migration / rollout warning
 
 A new migration, `20261105000100_alkao_transfer_requests.sql`, adds a

@@ -1,5 +1,10 @@
 # ALKAO — Task queue (priority ordered)
 
+## Run 77 — next required work
+
+Default-off transfer request schema and internal invitation/cancellation service were pushed and passed CI/Package through `c7864c57`. Recipient email proof, one-time claim, transactional issuance/QR revocation, buyer UI, offline scanner policy and production deployment are NOT DONE. Implementation contract: `docs/TRANSFER_PROTOCOL.md`.
+
+
 ## Run 77 — Transfer request foundation
 
 Migration `20261105000100_alkao_transfer_requests.sql` and DB/RLS tests

@@ -24,6 +24,22 @@ Migration `20261105000100_alkao_transfer_requests.sql` adds:
 not accept claims, send email or expose a button. Organizers must not enable
 transfers until later phases and go-live checks have passed.
 
+## Phase 2 — private invitation/cancellation service (Run 77)
+
+`src/ops/transfer-request.ts` now implements transaction-locked
+`prepareTransferInvitation` and `cancelTransferInvitation`. Both enforce
+an existing order-scoped bearer token with optional expiry, require the correct
+Client and Brand, and audit the operation. The invitation returns the one-time
+recipient secret **only to the internal service caller**, which must eventually
+pass it to an authenticated email delivery worker; the database stores only its
+SHA-256. The cancellation is idempotent and leaves the original QR intact.
+See `test/db/transfer-service.test.ts` for tenant, expiry, audit, duplicate
+and wrong-token regression coverage.
+CI/Package passed for the service at `c7864c57` (CI 38631015271).
+
+There is still NO public initiation or claim route; no email is sent; no QR
+is reissued. This internal capability is not a complete transfer feature.
+
 ## Remaining acceptance requirements (not implemented)
 
 1. An authorized order-link holder must select one valid ticket, not an entire
@@ -53,6 +69,5 @@ transfers until later phases and go-live checks have passed.
 8. Live enablement requires dedicated ALKAO database, secrets, workers, signed
    QR keys and verified deployment SHA. See `docs/DEPLOYMENT.md` and issue #84.
 
-The next coding action is to implement the **private transaction-level request
-service and cancellable, verified email invitation**. Do not add a public
+The next coding action is to implement **verified, queued recipient email delivery**. Do not add a public
 claim endpoint or buyer-facing button before those checks exist.

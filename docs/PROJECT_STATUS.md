@@ -1,5 +1,10 @@
 # ALKAO — Project status
 
+## Run 77 — current source state
+
+Migration and DB/RLS tests passed CI; private transfer invitation/cancellation service `c7864c5757243ad3835ee1c22f71798240c23732` passed CI run 38631015271 and Package 38631014226. This is NOT the buyer transfer feature yet: no email, no recipient claim or QR replacement. Leave opt-in default OFF. Production is unverified; issue #84 remains blocked.
+
+
 ## Run 77 — Secure transfer request foundation
 
 Code commit `0da240f241e8c1eb9e0fbf8d23ba72f6567d3c7b` introduces a

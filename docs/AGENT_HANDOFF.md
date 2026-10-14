@@ -1,5 +1,15 @@
 # ALKAO — Agent handoff (mandatory)
 
+## Run 77 — latest execution checkpoint (2026-10-14)
+
+- Source: `c7864c5757243ad3835ee1c22f71798240c23732`, internal `src/ops/transfer-request.ts` and `test/db/transfer-service.test.ts`, building on migration `0da240f241e8c1eb9e0fbf8d23ba72f6567d3c7b`.
+- Private creation/cancellation validates the buyer order token, Client/Brand and ticket in transactions, stores only a hash of the one-time recipient secret, writes a PII-free audit entry. It DOES NOT deliver email, accept claims or change QR ownership.
+- CI **SUCCESS** 38631015271 for `c7864c57`; Package **SUCCESS** 38631014226. Earlier Run 77 migration CI/Package also succeeded on `824672fa`.
+- Production: NOT verified. Strict deployment check 38631011448 failed; Coolify `/health` does not attest to current source SHA. Issue #84 needs authorized operator for dedicated database, backups, secrets rotation, migrations and actual deployment.
+- This docs commit advances main; check fresh HEAD and its CI rather than assuming `c7864c57` is final.
+- Next: implement recipient-only verified email invitation; authenticated one-time claim; atomic new ticket + sender QR revocation + audit; tests for scan manifests/offline, concurrency and refunds. No public transfer UI until this is safe. Reference `docs/TRANSFER_PROTOCOL.md`.
+
+
 ## Run 77 — transfer-request safety foundation (October 14, 2026)
 
 - Read `AGENTS.md`, `WORKLOG.md`, all five standard status documents and open PRs.
