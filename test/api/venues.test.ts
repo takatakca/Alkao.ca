@@ -107,7 +107,7 @@ describe("Run 73: public venue discovery", () => {
     expect(body).toContain("BEGIN:VCALENDAR\r\n");
     expect(body).toContain("BEGIN:VEVENT");
     expect(body).toContain("DTSTART:");
-    expect(body).toContain(`URL:https://alkao.test/acheter/${h.clientId}/${h.brandId}/${h.eventId}`);
+    expect(body.replace(/\r\n /g, "")).toContain(`URL:https://alkao.test/acheter/${h.clientId}/${h.brandId}/${h.eventId}`);
     expect(body).not.toContain("x-alkao-order-token");
     const detail = await (await app.request(`/salles/${h.clientId}/${h.brandId}/${h.venueId}`)).text();
     expect(detail).toContain(`href="${calendarPath}"`);

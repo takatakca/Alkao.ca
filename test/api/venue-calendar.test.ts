@@ -33,12 +33,12 @@ describe("Run 75: public venue iCalendar", () => {
     const now = new Date("2026-10-14T19:00:00.000Z");
     const out = publicVenueCalendar(venue, { origin: "https://alkao.ca", now, lang: "fr" });
     expect(out).toContain("BEGIN:VCALENDAR\r\nVERSION:2.0");
-    expect(out.match(/BEGIN:VEVENT/g)).toHaveLength(2);
+    expect(out.split("\r\n").filter((line) => line === "BEGIN:VEVENT")).toHaveLength(2);
     expect(out).toContain("DTSTART:20261215T190000Z");
     expect(out).toContain("DTEND:20261215T203000Z");
     expect(out).toContain("DTSTART:20261216T190000Z");
     expect(out).toContain("UID:00000000-0000-4000-8000-000000000004-20261215T190000Z@alkao.ca");
-    expect(out).toContain("SUMMARY:Spectacle\\; spécial\\, entrée\\nBEGIN:VEVENT");
+    expect(out.replace(/\r\n /g, "")).toContain("SUMMARY:Spectacle\\; spécial\\, entrée\\nBEGIN:VEVENT");
     expect(out).toContain("LOCATION:Théâtre\\, Montréal\\; Sud\\, 10\\, rue St-Paul\\, Montréal");
     expect(out).toContain("URL:https://alkao.ca/acheter/");
     expect(out).not.toContain("order-token");
@@ -50,7 +50,7 @@ describe("Run 75: public venue iCalendar", () => {
     const out = publicVenueCalendar(venue, {
       origin: "https://alkao.ca", now: new Date("2026-12-15T19:01:00Z"), lang: "en",
     });
-    expect(out.match(/BEGIN:VEVENT/g)).toHaveLength(1);
+    expect(out.split("\r\n").filter((line) => line === "BEGIN:VEVENT")).toHaveLength(1);
     expect(out).toContain("DTSTART:20261216T190000Z");
     expect(out).toContain("X-WR-CALNAME:Events at");
   });
