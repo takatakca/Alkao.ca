@@ -321,7 +321,7 @@ function cardsOf(brands: HomeBrand[], lang: Lang, origin: string | null, asset: 
         place: [e.venueName, e.venueCity].filter(Boolean).join(" · "),
         address: [e.venueName, e.venueAddress, e.venueCity].map((x) => (x ?? "").trim()).filter(Boolean).join(", "),
         venue: (e.venueName ?? "").trim(),
-        venuePath: `/salles/${b.clientId}/${b.brandId}/${e.venueId}`,
+        venuePath: `/salles/${b.clientId}/${b.brandId}/${e.venueId}${lang === "en" ? "?lang=en" : ""}`,
         street: (e.venueAddress ?? "").trim(),
         city: e.venueCity ?? "",
         shop: e.shopPath,
