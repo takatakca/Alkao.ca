@@ -99,6 +99,7 @@ describe("Run 73: public venue discovery", () => {
     const path = `/salles/${clientId}/${brandId}/${venueId}`;
     const english = await (await app.request(`${path}?lang=en`)).text();
     expect(english).toContain('<html lang="en-CA">');
+    expect((await (await app.request("/?lang=en")).text())).toContain(`href="${path}?lang=en"`);
     expect(english).toContain("Upcoming events");
     expect(english).toContain(`href="https://alkao.test${path}?lang=en"`);
     expect((await app.request("/salles/not-a-uuid/a/b")).status).toBe(404);
