@@ -65,6 +65,27 @@ const plus = (page: Page, name: string) => page.getByRole("button", { name: `Ajo
 const local = (url: string) => url.replace(PUBLIC_URL, origin);
 
 describe("hosted ticket shop", () => {
+  it("Run 71: offers the waitlist for a sold-out session", async () => {
+    const f = seed.festi;
+    const { rows } = await db.pool.query<{ id: string }>(
+      `INSERT INTO public.ticketing_sessions (client_id, brand_id, event_id, starts_at, capacity, status)
+       VALUES ($1, $2, $3, now() + interval '26 days', 0, 'on_sale') RETURNING id`, [f.clientId, f.brandId, f.eventId]);
+    try {
+      const page = await shop(f);
+      const box = page.getByRole("region", { name: "Séance complète ? Inscrivez-vous à la liste d'attente" });
+      await box.waitFor();
+      await box.getByLabel("Votre courriel").fill("attente@example.test");
+      await box.getByRole("button", { name: "M'avertir" }).click();
+      await box.getByText("C'est noté. Vous recevrez un courriel si des places se libèrent pour cette séance.").waitFor();
+      const saved = await db.pool.query(`SELECT email, status FROM public.ticketing_waitlist WHERE session_id = $1`, [rows[0]!.id]);
+      expect(saved.rows).toEqual([{ email: "attente@example.test", status: "waiting" }]);
+      await page.context().close();
+    } finally {
+      await db.pool.query(`DELETE FROM public.ticketing_waitlist WHERE session_id = $1`, [rows[0]!.id]);
+      await db.pool.query(`UPDATE public.ticketing_sessions SET status = 'cancelled' WHERE id = $1`, [rows[0]!.id]);
+    }
+  });
+
   it("Run 69: shows what the organizer says about the event before the choice", async () => {
     const f = seed.festi;
     await db.pool.query(

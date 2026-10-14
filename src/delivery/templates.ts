@@ -538,3 +538,48 @@ export function newsletterConfirmEmail(d: NewsletterConfirmEmailData): Content {
   ], d.look);
   return { fromName: d.brandName, subject: t.subject(d.brandName), text, html };
 }
+
+// ── Waitlist: seats are back (Run 71) ───────────────────────────────────────
+export interface WaitlistEmailData {
+  look?: EmailLook | null;
+  language: Language;
+  brandName: string;
+  eventTitle: string;
+  /** The session, as the buyer reads it (date, time, venue). */
+  when: string;
+  place: string | null;
+  shopUrl: string;
+}
+
+const WAITLIST = {
+  fr: {
+    subject: (title: string) => `Des places sont de retour — ${title}`,
+    title: "Des places sont de retour",
+    intro: (brand: string, title: string) => `Bonne nouvelle : des places se sont libérées pour ${title}, avec ${brand}.`,
+    first: "Elles vont au premier qui achète : si vous les voulez, réservez dès maintenant.",
+    button: "Voir les billets",
+    why: "Vous recevez ce courriel parce que vous vous êtes inscrit à la liste d'attente de cette séance. C'est le seul : pour la suite, rien d'autre ne vous sera envoyé.",
+  },
+  en: {
+    subject: (title: string) => `Seats are back — ${title}`,
+    title: "Seats are back",
+    intro: (brand: string, title: string) => `Good news: seats have opened up for ${title}, with ${brand}.`,
+    first: "They go to whoever buys first: if you want them, book now.",
+    button: "View tickets",
+    why: "You are receiving this e-mail because you joined the waitlist for this session. It is the only one: nothing else will be sent to you.",
+  },
+};
+
+export function waitlistEmail(d: WaitlistEmailData): Content {
+  const t = WAITLIST[d.language];
+  const intro = t.intro(d.brandName, d.eventTitle);
+  const where = [d.when, d.place].filter(Boolean).join(" · ");
+  const text = [intro, "", where, "", t.first, "", `${t.button} : ${d.shopUrl}`, "", "—", t.why, d.brandName].join("\n");
+  const html = layout(d.language, d.brandName, t.title, [
+    paragraph(`${esc(intro)}<br><strong>${esc(where)}</strong>`),
+    paragraph(esc(t.first)),
+    button(d.shopUrl, t.button, d.look),
+    note(`${esc(t.why)}<br>${esc(d.brandName)}`, true),
+  ], d.look);
+  return { fromName: d.brandName, subject: t.subject(d.eventTitle), text, html };
+}

@@ -52,6 +52,7 @@ import { mountBuyerUi } from "./buyer-ui.js";
 import { mountShopUi } from "./shop-ui.js";
 import { mountHome, type HomeBrand } from "./home.js";
 import { migrationNames, schemaState } from "../db/migrate.js";
+import * as waitlist from "../delivery/waitlist.js";
 import { clientIp, ipKind } from "./client-ip.js";
 import * as delivery from "../delivery/db.js";
 import { orderEmailToken } from "../delivery/links.js";
@@ -120,6 +121,9 @@ export function createApp(deps: AppDeps) {
   const signupByEmail = new FixedWindowLimiter(3, 60 * 60_000);
   const signupByBrand = new FixedWindowLimiter(600, 60 * 60_000);
   const signupByIp = new FixedWindowLimiter(120, 10 * 60_000);
+  // Run 71: the waitlist of a sold-out session, per caller and per address.
+  const waitlistByIp = new FixedWindowLimiter(20, 10 * 60_000);
+  const waitlistByEmail = new FixedWindowLimiter(5, 60 * 60_000);
   const paymentsService = new PaymentsService({
     db: deps.db,
     gateway: deps.paymentGateway ?? null,
@@ -392,6 +396,22 @@ export function createApp(deps: AppDeps) {
     return c.json({ ok: true }, 202);
   });
 
+  // Run 71: a sold-out session's waitlist. The address gets one e-mail when seats come back.
+  app.post(`${PUBLIC}/sessions/:sessionId/waitlist`, publicGate, async (c) => {
+    const scope = c.get("scope");
+    const at = now().getTime();
+    const sessionId = param(c, "sessionId");
+    if (!sessionId) return fail(c, 404, "session_not_found");
+    if (!waitlistByIp.take(`${scope.clientId}:${clientIp(c, deps.trustedProxyHops ?? 1)}`, at)) return fail(c, 429, "rate_limited");
+    const body = api.WaitlistJoin.parse(await readJson(c));
+    if (!waitlistByEmail.take(`${scope.clientId}:${scope.brandId}:${body.email.toLowerCase()}`, at)) return fail(c, 429, "rate_limited");
+    const result = await waitlist.joinWaitlist(deps.db, scope, sessionId, body, now());
+    if (result === "session_not_found") return fail(c, 404, "session_not_found");
+    // Seats are there: buy them instead (availability is public).
+    if (result === "session_not_full") return fail(c, 409, "session_not_full");
+    return c.json({ ok: true }, 202);
+  });
+
   // Run 27: a buyer who lost the email asks for their tickets again. The answer is the same
   // whether or not the address has orders, so it reveals nothing about who bought.
   app.post(`${PUBLIC}/tickets/resend`, publicGate, async (c) => {
@@ -570,7 +590,9 @@ export function createApp(deps: AppDeps) {
   app.get(`${ADMIN}/events/:eventId/sessions`, ...admin, can("ticketing.inventory.read"), async (c) => {
     const eventId = param(c, "eventId");
     if (!eventId || !(await inScope("ticketing_events", eventId, c.get("scope")))) return fail(c, 404, "event_not_found");
-    return c.json({ sessions: await catalog.listSessions(deps.db, c.get("scope"), eventId) });
+    const [sessions, waiting] = await Promise.all([catalog.listSessions(deps.db, c.get("scope"), eventId), waitlist.waitingCounts(deps.db, c.get("scope"), eventId)]);
+    // Run 71: how many people wait for each sold-out session.
+    return c.json({ sessions: sessions.map((s) => ({ ...s, waitlistCount: waiting.get(String(s.id)) ?? 0 })) });
   });
 
   app.post(`${ADMIN}/events/:eventId/sessions`, ...admin, can("ticketing.catalog.write"), async (c) => {

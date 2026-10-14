@@ -94,6 +94,14 @@ const T = {
     thanks: "Merci !",
     confirming: "Votre paiement est en cours de confirmation. Vos billets vous seront envoyés par courriel dans quelques minutes.",
     badAddress: "Adresse de billetterie incomplète.",
+    // Run 71: the waitlist of a sold-out session.
+    waitTitle: "Séance complète ? Inscrivez-vous à la liste d'attente",
+    waitLead: "Si des places se libèrent, nous vous écrivons une fois. Elles vont ensuite au premier qui achète.",
+    waitSession: "Séance",
+    waitEmail: "Votre courriel",
+    waitSend: "M'avertir",
+    waitDone: "C'est noté. Vous recevrez un courriel si des places se libèrent pour cette séance.",
+    waitFree: "Des places viennent de se libérer : choisissez la séance ci-dessus.",
     findTitle: "Vous avez déjà acheté ? Retrouvez vos billets",
     findEmail: "Le courriel utilisé pour l'achat",
     findSend: "Renvoyer mes billets",
@@ -183,6 +191,13 @@ const T = {
     thanks: "Thank you!",
     confirming: "Your payment is being confirmed. Your tickets will be emailed to you within a few minutes.",
     badAddress: "Incomplete ticketing address.",
+    waitTitle: "Sold out? Join the waitlist",
+    waitLead: "If seats open up, we write to you once. They then go to whoever buys first.",
+    waitSession: "Session",
+    waitEmail: "Your email",
+    waitSend: "Notify me",
+    waitDone: "Got it. You will receive an email if seats open up for this session.",
+    waitFree: "Seats have just opened up: choose the session above.",
     findTitle: "Already bought? Find your tickets",
     findEmail: "The email used for the purchase",
     findSend: "Send my tickets again",
@@ -428,6 +443,7 @@ function EventShop({ config }) {
           <span>${whenFr(s.startsAt, tz)}</span>
           <span class="muted">${s.available === 0 ? T.full : s.available <= 20 ? T.fewLeft(s.available) : T.available}</span></button>`)}
       </div>`}
+      ${!DOOR && sessions.some((s) => s.available === 0) && html`<${Waitlist} sessions=${sessions.filter((s) => s.available === 0)} tz=${tz} onFree=${load} />`}
 
       ${sessionId && html`
         <h2>${T.step2}</h2>
@@ -503,6 +519,36 @@ function Policy({ brand }) {
   return html`<section class="policy" aria-labelledby="policy-title">
     <h3 id="policy-title">${T.policyTitle}</h3>
     ${text ? html`<p>${text}</p>` : html`<p>${T.policyNone(brand?.name ?? "")}${contact ? html` <strong>${contact}</strong>` : ""}</p>`}
+  </section>`;
+}
+
+// ── Run 71: a sold-out session's waitlist: one e-mail when seats come back ──
+function Waitlist({ sessions, tz, onFree }) {
+  const [sessionId, setSessionId] = useState(sessions[0]?.id ?? "");
+  const [email, setEmail] = useState("");
+  const [state, setState] = useState(null);
+  const submit = async (e) => {
+    e.preventDefault();
+    setState("busy");
+    try {
+      await call(`/sessions/${sessionId}/waitlist`, { method: "POST", body: { email: email.trim(), language: LANG === "en" ? "en" : "fr" } });
+      setState("sent");
+    } catch (err) {
+      if (err.code === "session_not_full") { setState("free"); onFree(); } else setState({ error: err });
+    }
+  };
+  return html`<section class="card waitlist" aria-labelledby="wait-title">
+    <h3 id="wait-title">${T.waitTitle}</h3>
+    ${state === "sent" ? html`<div class="alert ok" role="status">${T.waitDone}</div>` : html`
+      <p class="muted">${T.waitLead}</p>
+      <form onSubmit=${submit}>
+        ${sessions.length > 1 && html`<label>${T.waitSession}<select value=${sessionId} onChange=${(e) => setSessionId(e.target.value)}>
+          ${sessions.map((s) => html`<option value=${s.id}>${whenFr(s.startsAt, tz)}</option>`)}</select></label>`}
+        <label>${T.waitEmail}<input type="email" required autocomplete="email" value=${email} onInput=${(e) => setEmail(e.target.value)} /></label>
+        <div class="actions"><button type="submit" class="secondary" disabled=${state === "busy"}>${T.waitSend}</button></div>
+      </form>`}
+    ${state === "free" && html`<div class="alert" role="status">${T.waitFree}</div>`}
+    ${state?.error && html`<div class="alert bad" role="alert">${errText(state.error)}</div>`}
   </section>`;
 }
 

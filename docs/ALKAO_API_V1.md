@@ -268,6 +268,10 @@ How it works:
   and `event.venue` (name, city, timezone).
 - **Event list:** `GET /v1/public/…/events` also returns each event's `venueAddress` (the
   venue's street, public like its name and city), since Run 66.
+- **Waitlist (Run 71):** `POST /v1/public/…/sessions/:sessionId/waitlist` with `{ email, language }`
+  answers 202 for a full, upcoming session on sale (joining twice changes nothing), 409
+  `session_not_full` when seats are there, 404 otherwise. Limited to 20 calls per caller every
+  10 minutes and 5 per address an hour. The admin session list gives `waitlistCount`.
 - **Event details (Run 69):** events carry `category` (one of `concerts`, `festivals`, `sports`,
   `famille`, `plein-air`, `spectacles`, `soirees`, `experiences`), `minAge` (0–21, 0 = all
   ages), `doorsOpenMinutes` (0–600, before each session; separate from the scanners'
