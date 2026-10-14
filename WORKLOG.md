@@ -3,7 +3,7 @@
 Newest first, one line per piece of work. Rule: `AGENTS.md` › Work log rule.
 Format: `YYYY-MM-DD | agent | branch → PR | status | what | next step`
 
-- 2026-10-14 | ChatGPT (GitHub) | main → direct commit d67896fb | code pushed, Package success; CI running, Coolify release unverified | Run 76: tenant-scoped expiring order tokens verified for buyer order GET and exchange POST, regression tests | inspect CI and production SHA; continue P1 transfer
+- 2026-10-14 | ChatGPT (GitHub) | main → direct commits | done, CI and Package green at 1035bcf6; Coolify release unverified | Run 76: tenant-scoped expiry enforcement for order GET/exchange POST with tests | verify live SHA, implement secure P1 recipient transfer
 
 - 2026-10-14 | ChatGPT (GitHub) | main → direct commits (9a596345) | blocked: final CI result and Coolify release verification pending | Run 75: public .ics venue calendars, bilingual CTA, tests, strict deployment verification fix, source pushed and Package successful | inspect full CI, fix if needed; verify Coolify SHA before claiming live
 

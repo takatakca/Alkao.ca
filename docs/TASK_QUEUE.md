@@ -1,5 +1,10 @@
 # ALKAO — Task queue (priority ordered)
 
+## Run 76 QA
+
+Source implementation and tests completed; CI and Package successful at `1035bcf6`. Production delivery still blocked by issue #84. Next planned P1 feature is recipient-verified ticket transfer; not implemented.
+
+
 ## Current continuation — Run 76
 
 Run 75 CI and Package succeeded at 73cfd4f1. Run 76 (d67896fb) added expiry enforcement to order access authorization; Package succeeded, CI confirmation pending. Production still unverified (Coolify issue #84). Next P1 feature: securely claimed per-Brand buyer ticket transfer with an audit trail and revocable entry credential. Not yet available.

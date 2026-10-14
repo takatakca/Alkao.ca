@@ -1,5 +1,13 @@
 # ALKAO — Agent handoff (mandatory)
 
+## Run 76 verified
+
+- Main SHA `1035bcf63941990d6e28fc8d632ddbf2b51b23eb`: CI run 38626850981 SUCCESS (typecheck, migration check, secret check, tests), Package run 38626850976 SUCCESS.
+- Run 76 implementation commit `d67896fb317dcbaa6ba7aa373e5843b95b5440b8`; documentation commit advanced main, without source-code differences.
+- Strict production verification triggered as run 38627287634. Confirm its final logs before marking deployed. Previous strict verification 38624485645 failed: ALKAO replied but published no build SHA.
+- Next action: verify Coolify's build SHA and dedicated ALKAO DB, and implement the next P1 ticket-transfer workflow with sender revocation and recipient authorization. Do not mark transfer as complete before its tests pass.
+
+
 ## Run 76 — October 14, 2026
 
 - Code pushed: d67896fb317dcbaa6ba7aa373e5843b95b5440b8.
