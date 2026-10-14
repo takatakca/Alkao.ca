@@ -37,6 +37,8 @@ const UNGATED = new Set([
   // Disabled or unentitled tenants produce no venue listing and no venue detail page.
   "GET /salles",
   "GET /salles/:clientId/:brandId/:venueId",
+  // Run 75: static text/calendar built only from the already-gated public venue listing.
+  "GET /salles/:clientId/:brandId/:venueId/agenda.ics",
   "GET /health",
   "GET /health/ready",
   // Run 39: the kind of the caller's address only (public, private or unknown).

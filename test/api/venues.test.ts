@@ -93,6 +93,36 @@ describe("Run 73: public venue discovery", () => {
     }
   });
 
+  it("exports calendar only for opted-in venues with currently on-sale sessions", async () => {
+    const h = seed.havana;
+    const calendarPath = `/salles/${h.clientId}/${h.brandId}/${h.venueId}/agenda.ics`;
+    expect((await app.request(calendarPath)).status).toBe(404);
+    await optIn();
+    const res = await app.request(calendarPath);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toContain("text/calendar");
+    expect(res.headers.get("content-disposition")).toContain("alkao-salle.ics");
+    expect(res.headers.get("x-content-type-options")).toBe("nosniff");
+    const body = await res.text();
+    expect(body).toContain("BEGIN:VCALENDAR\r\n");
+    expect(body).toContain("BEGIN:VEVENT");
+    expect(body).toContain("DTSTART:");
+    expect(body).toContain(`URL:https://alkao.test/acheter/${h.clientId}/${h.brandId}/${h.eventId}`);
+    expect(body).not.toContain("x-alkao-order-token");
+    const detail = await (await app.request(`/salles/${h.clientId}/${h.brandId}/${h.venueId}`)).text();
+    expect(detail).toContain(`href="${calendarPath}"`);
+    const en = await (await app.request(`/salles/${h.clientId}/${h.brandId}/${h.venueId}?lang=en`)).text();
+    expect(en).toContain(`href="${calendarPath}?lang=en"`);
+    expect(en).toContain("Add events to calendar");
+    expect((await app.request(`${calendarPath}?lang=en`)).status).toBe(200);
+    expect((await app.request(`/salles/${seed.festi.clientId}/${seed.festi.brandId}/${seed.festi.venueId}/agenda.ics`)).status).toBe(404);
+    expect((await app.request("/salles/invalid/invalid/invalid/agenda.ics")).status).toBe(404);
+    const whiteLabel = testApp(db.pool, { publicUrl: "https://billets.example.ca", homeUrl: "https://www.example.ca/billets" });
+    expect((await whiteLabel.request(calendarPath)).status).toBe(404);
+    await db.pool.query("UPDATE public.ticketing_events SET sales_close_at = now() - interval '1 hour' WHERE id = $1", [h.eventId]);
+    expect((await app.request(calendarPath)).status).toBe(404);
+  });
+
   it("supports English, hides unsold venues promptly and does not expose white-label listings", async () => {
     await optIn();
     const { clientId, brandId, venueId, eventId } = seed.havana;

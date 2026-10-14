@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import type { Hono } from "hono";
 import { parseQuery, renderAccessibility, renderHome, type HomeBrand } from "./home-view.js";
 import { parseVenueSearch, publicVenues, renderVenueDirectory, renderVenuePage, venuePath } from "./venue-view.js";
+import { publicVenueCalendar } from "./venue-calendar.js";
 
 export type { HomeBrand, HomeEvent } from "./home-view.js";
 
@@ -95,6 +96,29 @@ export function mountHome(app: Hono<any>, cfg: HomeConfig): void {
     });
     return c.html(html, 200, PAGE_HEADERS);
   });
+  // Run 75: downloadable calendar contains only still-public sessions for this venue.
+  // Direct links are not an authorization bypass; white-label and withdrawn venues 404.
+  app.get("/salles/:clientId/:brandId/:venueId/agenda.ics", async (c) => {
+    if (cfg.homeUrl) return c.json({ error: { code: "not_found" } }, 404);
+    const ids = [c.req.param("clientId"), c.req.param("brandId"), c.req.param("venueId")];
+    if (!ids.every((value) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value ?? "")))
+      return c.json({ error: { code: "not_found" } }, 404);
+    const venue = publicVenues(await cfg.load()).find((v) =>
+      v.clientId === ids[0]!.toLowerCase() && v.brandId === ids[1]!.toLowerCase() && v.venueId === ids[2]!.toLowerCase());
+    if (!venue) return c.json({ error: { code: "not_found" } }, 404);
+    const calendar = publicVenueCalendar(venue, {
+      origin: cfg.publicUrl ? new URL(cfg.publicUrl).origin : null,
+      lang: c.req.query("lang") === "en" ? "en" : "fr",
+      now: cfg.now?.() ?? new Date(),
+    });
+    return c.body(calendar, 200, {
+      "content-type": "text/calendar; charset=utf-8",
+      "content-disposition": 'attachment; filename="alkao-salle.ics"',
+      "cache-control": "public, max-age=60",
+      "x-content-type-options": "nosniff",
+    });
+  });
+
   app.get("/salles/:clientId/:brandId/:venueId", async (c) => {
     if (cfg.homeUrl) return c.json({ error: { code: "not_found" } }, 404);
     const id = [c.req.param("clientId"), c.req.param("brandId"), c.req.param("venueId")];

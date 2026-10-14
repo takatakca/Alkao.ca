@@ -72,7 +72,7 @@ const WORDS = {
     searchAction: "Rechercher", reset: "Effacer les filtres", found: (n: number) => `${n} salle${n > 1 ? "s" : ""} trouvée${n > 1 ? "s" : ""}`,
     noMatch: "Aucune salle ne correspond à votre recherche.",
     next: "Prochains événements", back: "Toutes les salles", buy: "Voir les billets",
-    directions: "Itinéraire", organizer: "Organisateur", events: "événement(s) en vente",
+    directions: "Itinéraire", calendar: "Ajouter les événements au calendrier", organizer: "Organisateur", events: "événement(s) en vente",
     from: "À partir de", free: "Gratuit", taxes: "+ taxes",
   },
   en: {
@@ -84,7 +84,7 @@ const WORDS = {
     searchAction: "Search", reset: "Clear filters", found: (n: number) => `${n} venue${n === 1 ? "" : "s"} found`,
     noMatch: "No venues match your search.",
     next: "Upcoming events", back: "All venues", buy: "View tickets",
-    directions: "Directions", organizer: "Organizer", events: "event(s) on sale",
+    directions: "Directions", calendar: "Add events to calendar", organizer: "Organizer", events: "event(s) on sale",
     from: "From", free: "Free", taxes: "+ taxes",
   },
 } as const;
@@ -211,7 +211,7 @@ export function renderVenuePage(cfg: ViewConfig & { venue: PublicVenue }): strin
     <p class="kicker">${esc(v.brand)}</p>
     <h1>${esc(v.name)}</h1>
     ${location ? `<p class="lead">${icon("pin")}${esc(location)}</p>` : ""}
-    <div class="actions"><a class="btn btn-ghost" href="${esc(map)}" target="_blank" rel="noopener noreferrer">${icon("pin")}${esc(t.directions)}</a></div>
+    <div class="actions"><a class="btn btn-ghost" href="${esc(map)}" target="_blank" rel="noopener noreferrer">${icon("pin")}${esc(t.directions)}</a><a class="btn btn-ghost" href="${esc(pathLang(`${venuePath(v)}/agenda.ics`, cfg.lang))}">${icon("calendar")}${esc(t.calendar)}</a></div>
     <section class="section events" aria-labelledby="venue-events">
       <div class="section-head"><h2 id="venue-events">${esc(t.next)}</h2><p>${v.events.length} ${esc(t.events)} · ${esc(t.organizer)} : ${esc(v.brand)}</p></div>
       <div class="grid">

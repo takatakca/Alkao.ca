@@ -36,8 +36,8 @@ jobs:
           set -euo pipefail
           EXPECTED="$(git rev-parse HEAD)"
           if [[ -n "$SOURCE_SHA" && "$SOURCE_SHA" != "$EXPECTED" ]]; then
-            echo "A newer main commit superseded this CI run; skipping obsolete verification."
-            exit 0
+            echo "::error::CI belonged to an older main commit; no production version was verified."
+            exit 1
           fi
           for attempt in 1 2 3 4 5 6 7 8; do
             echo "Production verification attempt ${attempt}/8; expected ${EXPECTED:0:12}"
