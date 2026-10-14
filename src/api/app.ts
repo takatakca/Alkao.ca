@@ -51,6 +51,7 @@ import { mountOpsUi, type OpsUiConfig } from "./ops-ui.js";
 import { mountBuyerUi } from "./buyer-ui.js";
 import { mountShopUi } from "./shop-ui.js";
 import { mountHome, type HomeBrand } from "./home.js";
+import { migrationNames, schemaState } from "../db/migrate.js";
 import { clientIp, ipKind } from "./client-ip.js";
 import * as delivery from "../delivery/db.js";
 import { orderEmailToken } from "../delivery/links.js";
@@ -265,13 +266,17 @@ export function createApp(deps: AppDeps) {
   // ── Health ───────────────────────────────────────────────────────────────
   app.get("/health", (c) => c.json({ ok: true, service: "alkao", api: API_VERSION, control: CONTROL_CONTRACT_VERSION, ...(deps.buildId ? { build: deps.buildId } : {}) }));
   // Run 14: readiness for the load balancer — the database answers within 2 s.
+  // Run 70: and holds this build's tables. A build whose migrations are not applied is not ready,
+  // so the host keeps the previous one; the migration names stay private.
+  const shipped = (() => { try { return migrationNames(); } catch { return null; } })();
   app.get("/health/ready", async (c) => {
     try {
       await Promise.race([deps.db.query("SELECT 1"), new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 2000))]);
-      return c.json({ ok: true, database: "up" });
     } catch {
       return c.json({ ok: false, database: "down" }, 503);
     }
+    const schema = shipped ? await schemaState(deps.db, shipped) : "unknown";
+    return schema === "behind" ? c.json({ ok: false, database: "up", schema }, 503) : c.json({ ok: true, database: "up", schema });
   });
 
   // Run 39: whether ALKAO sees the caller's public address behind the host's proxies (per-buyer

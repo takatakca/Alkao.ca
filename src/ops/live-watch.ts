@@ -45,7 +45,10 @@ export async function watchAddress(
   }
 
   const ready = await get("/health/ready");
-  if (ready?.status === 200) lines.push("✔ Base de données joignable");
+  const r = ready ? await json(ready) : null;
+  // Run 70: the build's migrations are applied ("unknown" when the database keeps no record).
+  if (ready?.status === 200) lines.push(`✔ Base de données joignable${r?.schema === "current" ? ", schéma à jour" : ""}`);
+  else if (r?.schema === "behind") bad("/health/ready : des migrations de cette version ne sont pas appliquées (ALKAO_MIGRATE_ON_START ou scripts/migrate.ts)");
   else bad(`/health/ready répond ${ready?.status ?? "rien"} : la base ne répond pas`);
 
   // The platform home, or a white-label install's redirect to its own HTTPS home.

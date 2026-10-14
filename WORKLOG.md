@@ -3,7 +3,8 @@
 Newest first, one line per piece of work. Rule: `AGENTS.md` › Work log rule.
 Format: `YYYY-MM-DD | agent | branch → PR | status | what | next step`
 
-- 2026-10-14 | claude (Code, cloud) | claude/amazing-pascal-tppqd4 → PR #80 | review | Run 69: structured event data — category, minimum age, doors, language, accessibility notes (set in /ops, shown in the shop, on the home and to search engines) | merge when green, check alkao.ca
+- 2026-10-14 | claude (Code, cloud) | claude/amazing-pascal-tppqd4 → PR #81 | review | Run 70: /health/ready checks the build's migrations are applied (schema current/behind/unknown); live watch reports it | merge when green, read schema on alkao.ca
+- 2026-10-14 | claude (Code, cloud) | claude/amazing-pascal-tppqd4 → PR #80 | done | Run 69: structured event data — category, minimum age, doors, language, accessibility notes (set in /ops, shown in the shop, on the home and to search engines) | next: venue pages or Wallet (benchmark)
 - 2026-10-14 | claude (Code, cloud) | claude/amazing-pascal-tppqd4 → PR #79 | done | Run 68: robots.txt and sitemap.xml (home, accessibility, listed shops), in the same PR as Run 67 | next: Run 69
 - 2026-10-14 | claude (Code, cloud) | claude/amazing-pascal-tppqd4 → PR #79 | done | Run 67: "Suivre cet organisateur" (newsletter double opt-in from the home), agenda view day by day, accessibility page | next: Run 69
 - 2026-10-13 | claude (Code, cloud) | claude/amazing-pascal-tppqd4 → PR #78 | done | Run 66: home extras from the benchmark — price filter and sort, organizer chips, event JSON-LD with offers per date, add to calendar and directions in the quick view, recently viewed, installable (PWA manifest) | next: Run 67
