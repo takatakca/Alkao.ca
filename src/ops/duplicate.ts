@@ -40,11 +40,13 @@ export async function duplicateEvent(
     const { rows: created } = await tx.query<{ id: string }>(
       `INSERT INTO public.ticketing_events
          (client_id, brand_id, venue_id, slug, title, description, status, sales_open_at, sales_close_at,
-          admission_opens_before_minutes, admission_closes_after_minutes)
+          admission_opens_before_minutes, admission_closes_after_minutes,
+          image_url, category, min_age, doors_open_minutes, language, accessibility)
        SELECT client_id, brand_id, venue_id, $4, $5, description, 'draft',
               CASE WHEN $6::int IS NULL THEN NULL ELSE sales_open_at + make_interval(days => $6::int) END,
               CASE WHEN $6::int IS NULL THEN NULL ELSE sales_close_at + make_interval(days => $6::int) END,
-              admission_opens_before_minutes, admission_closes_after_minutes
+              admission_opens_before_minutes, admission_closes_after_minutes,
+              image_url, category, min_age, doors_open_minutes, language, accessibility
        FROM public.ticketing_events WHERE id = $1 AND client_id = $2 AND brand_id = $3
        RETURNING id`,
       [eventId, s.clientId, s.brandId, slug, title, shift],

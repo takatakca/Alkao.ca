@@ -211,7 +211,7 @@ describe("Run 64: the premium platform home", () => {
     const data = JSON.parse(json);
     expect(data.events).toHaveLength(1);
     expect(data.events[0].title).toBe("</script><script>alert(1)</script>");
-    expect(Object.keys(data.events[0]).sort()).toEqual(["address", "brand", "brandId", "categories", "city", "count", "dates", "description", "ends", "id", "image", "map", "next", "place", "price", "shop", "starts", "text", "title", "url"]);
+    expect(Object.keys(data.events[0]).sort()).toEqual(["accessibility", "address", "brand", "brandId", "categories", "city", "count", "dates", "description", "ends", "facts", "id", "image", "map", "next", "place", "price", "shop", "starts", "text", "title", "url"]);
     expect(json).not.toMatch(/[\w.+-]+@[\w-]+\.[\w.]+/);
     expect(data.help.map((x: { id: string }) => x.id)).toContain("perdus");
   });

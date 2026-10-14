@@ -121,6 +121,28 @@ describe("ALKAO Operations app", () => {
     expect(rows).toEqual([{ status: "published", session_status: "on_sale", capacity: 250, price_cents: 2495 }]);
   });
 
+  it("Run 69: fills in the event's details for buyers", async () => {
+    const page = await signedIn(seed.users.havanaOwner);
+    await page.goto(`${origin}/ops#${brandPath()}/events`);
+    await page.getByRole("link", { name: "Soirée Patin Rétro" }).click();
+    await page.getByRole("heading", { name: "Fiche de l’événement" }).waitFor();
+    await page.getByLabel("Catégorie").selectOption({ label: "Sports" });
+    await page.getByLabel("Âge").selectOption({ label: "Pour tous" });
+    await page.getByLabel("Ouverture des portes (minutes avant)").fill("30");
+    await page.getByLabel("Langue").selectOption({ label: "Français" });
+    await page.getByLabel("Accessibilité").fill("Patinoire accessible en fauteuil roulant.");
+    await page.getByRole("button", { name: "Enregistrer la fiche" }).click();
+    await page.getByRole("status").filter({ hasText: "Enregistré." }).waitFor();
+    const { rows } = await db.pool.query(
+      `SELECT category, min_age, doors_open_minutes, language, accessibility FROM public.ticketing_events WHERE client_id = $1 AND title = 'Soirée Patin Rétro'`,
+      [seed.havana.clientId],
+    );
+    expect(rows).toEqual([{ category: "sports", min_age: 0, doors_open_minutes: 30, language: "fr", accessibility: "Patinoire accessible en fauteuil roulant." }]);
+    // The form shows what was saved after a reload.
+    await page.reload();
+    await expect.poll(() => page.getByLabel("Ouverture des portes (minutes avant)").inputValue()).toBe("30");
+  });
+
   it("shows an order and explains in French why it cannot be refunded", async () => {
     const page = await signedIn(seed.users.havanaOwner);
     await page.goto(`${origin}/ops#${brandPath()}/order/${seed.havana.orderId}`);

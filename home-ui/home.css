@@ -317,6 +317,12 @@ dialog[open]{animation:pop .35s var(--ease) both}
 .actions-small{gap:8px;margin-top:-4px}
 .actions-small .i{width:18px;height:18px}
 .foot-brand [data-install]{margin-top:14px}
+/* Run 69: what the organizer says */
+.pills{display:inline-flex;flex-wrap:wrap;gap:6px;justify-content:flex-end}
+.pill-age{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.28);color:var(--white);font-weight:800}
+.facts{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:8px}
+.facts li{padding:6px 12px;border-radius:999px;background:rgba(41,195,255,.1);border:1px solid rgba(41,195,255,.3);color:var(--ice);font-size:.86rem;font-weight:600}
+.preview-access p:last-child{margin:4px 0 0;color:#dbe6f3;white-space:pre-line;font-size:.94rem}
 /* Run 67: follow an organizer */
 .follow-form{display:grid;gap:14px}
 .follow-form p{margin:0;color:#dbe6f3}

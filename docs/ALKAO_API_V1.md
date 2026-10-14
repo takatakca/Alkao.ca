@@ -268,6 +268,12 @@ How it works:
   and `event.venue` (name, city, timezone).
 - **Event list:** `GET /v1/public/…/events` also returns each event's `venueAddress` (the
   venue's street, public like its name and city), since Run 66.
+- **Event details (Run 69):** events carry `category` (one of `concerts`, `festivals`, `sports`,
+  `famille`, `plein-air`, `spectacles`, `soirees`, `experiences`), `minAge` (0–21, 0 = all
+  ages), `doorsOpenMinutes` (0–600, before each session; separate from the scanners'
+  `admissionOpensBeforeMinutes`), `language` (`fr`, `en`, `fr-en`, `none`) and `accessibility`
+  (plain text, 1000 characters). Each is null when not said. Set on `POST`/`PATCH …/events`, returned
+  by the admin and public event routes and the public event list.
 
 **Door sales** (Run 35, owner decision, see [ALKAO_DECISIONS.md](ALKAO_DECISIONS.md)):
 

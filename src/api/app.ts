@@ -1351,6 +1351,12 @@ export function createApp(deps: AppDeps) {
             venueName: event.venueName == null ? null : String(event.venueName),
             venueCity: event.venueCity == null ? null : String(event.venueCity),
             venueAddress: event.venueAddress == null ? null : String(event.venueAddress),
+            // Run 69: what the organizer says about the event.
+            category: event.category == null ? null : String(event.category),
+            minAge: event.minAge == null ? null : Number(event.minAge),
+            doorsOpenMinutes: event.doorsOpenMinutes == null ? null : Number(event.doorsOpenMinutes),
+            language: event.language == null ? null : String(event.language),
+            accessibility: event.accessibility == null ? null : String(event.accessibility),
             startsAt: first.startsAt as Date | string,
             // Run 64: every date with seats left, the venue's time zone and the lowest price.
             sessions: open.slice(0, 60).map((session) => session.startsAt as Date | string),

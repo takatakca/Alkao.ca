@@ -355,6 +355,17 @@
     const text = $("[data-p-text]", preview);
     text.textContent = ev.description || "";
     text.hidden = !ev.description;
+    // Run 69: what the organizer says (category, age, doors, language) and the accessibility notes.
+    const facts = $("[data-p-facts]", preview);
+    if (facts) {
+      facts.replaceChildren(...(ev.facts || []).map((f) => h("li", { text: f })));
+      facts.hidden = !(ev.facts || []).length;
+    }
+    const access = $("[data-p-access]", preview);
+    if (access) {
+      $("[data-p-access-text]", access).textContent = ev.accessibility || "";
+      access.hidden = !ev.accessibility;
+    }
     const list = $("[data-p-dates]", preview);
     list.replaceChildren(...(ev.dates || []).map((d, i) => h("li", {},
       h("span", { text: d }),

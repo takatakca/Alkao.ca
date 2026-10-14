@@ -130,6 +130,9 @@ describe("platform home in the browser", () => {
     await page.locator(".grid .card").getByRole("button", { name: "Aperçu" }).click();
     const dialog = page.getByRole("dialog", { name: TITLE });
     await dialog.waitFor();
+    // Run 69: nothing said by the organizer, nothing shown.
+    expect(await dialog.locator("[data-p-facts]").isVisible()).toBe(false);
+    expect(await dialog.locator("[data-p-access]").isVisible()).toBe(false);
     const map = dialog.getByRole("link", { name: "Itinéraire vers Havana Resort, Maricourt (nouvel onglet)" });
     expect(await map.getAttribute("href")).toBe("https://www.google.com/maps/search/?api=1&query=Havana%20Resort%2C%20Maricourt");
     expect(await map.getAttribute("target")).toBe("_blank");
