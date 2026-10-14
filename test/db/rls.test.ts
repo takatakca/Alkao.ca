@@ -66,6 +66,8 @@ const EXPECTED: Record<string, Visibility> = {
   ticketing_waitlist: "none",
   // Run 72: presale codes, server only.
   ticketing_presale_codes: "none",
+  // Run 77: recipient contacts and claim hashes never exposed via PostgREST.
+  ticketing_transfer_requests: "none",
 };
 
 const clientColumn = (table: string) => (table === "ticketing_clients" ? "id" : "client_id");
