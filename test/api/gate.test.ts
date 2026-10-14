@@ -30,6 +30,9 @@ const UNGATED = new Set([
   "GET /",
   // Run 67: the accessibility statement, static text in the home's look.
   "GET /accessibilite",
+  // Run 68: for search engines. The sitemap lists only what the home lists (same gated loader).
+  "GET /robots.txt",
+  "GET /sitemap.xml",
   "GET /health",
   "GET /health/ready",
   // Run 39: the kind of the caller's address only (public, private or unknown).

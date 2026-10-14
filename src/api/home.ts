@@ -94,6 +94,48 @@ export function mountHome(app: Hono<any>, cfg: HomeConfig): void {
     return c.html(html, 200, PAGE_HEADERS);
   });
 
+  // Run 68: what search engines may read, and the list of pages they should know.
+  app.get("/robots.txt", (c) => {
+    const origin = cfg.publicUrl ? new URL(cfg.publicUrl).origin : null;
+    const lines = [
+      "User-agent: *",
+      "Allow: /",
+      // Organizers' space, buyers' tickets, the API and e-mail links: nothing to index.
+      "Disallow: /ops",
+      "Disallow: /billets",
+      "Disallow: /v1/",
+      "Disallow: /inscription",
+      "Disallow: /desabonnement",
+      "Disallow: /acheter/merci/",
+      ...(origin ? [`Sitemap: ${origin}/sitemap.xml`] : []),
+    ];
+    return c.body(`${lines.join("\n")}\n`, 200, { "content-type": "text/plain; charset=utf-8", "cache-control": "public, max-age=3600" });
+  });
+
+  app.get("/sitemap.xml", async (c) => {
+    if (!cfg.publicUrl) return c.json({ error: { code: "not_found" } }, 404);
+    const origin = new URL(cfg.publicUrl).origin;
+    const xml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    // A page in both languages, each pointing at the other.
+    const pair = (path: string) => {
+      const fr = `${origin}${path}`;
+      const en = `${origin}${path}?lang=en`;
+      const alt = `<xhtml:link rel="alternate" hreflang="fr-CA" href="${xml(fr)}"/><xhtml:link rel="alternate" hreflang="en-CA" href="${xml(en)}"/>`;
+      return [`<url><loc>${xml(fr)}</loc>${alt}</url>`, `<url><loc>${xml(en)}</loc>${alt}</url>`];
+    };
+    // Only what the home lists: opted-in Brands with Ticketing active and dates on sale.
+    const shops = (await cfg.load()).flatMap((b) => b.events.map((e) => `<url><loc>${xml(`${origin}${e.shopPath}`)}</loc></url>`));
+    const body = [
+      '<?xml version="1.0" encoding="UTF-8"?>',
+      '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">',
+      ...(cfg.homeUrl ? [] : pair("/")),
+      ...pair("/accessibilite"),
+      ...shops,
+      "</urlset>",
+    ].join("\n");
+    return c.body(`${body}\n`, 200, { "content-type": "application/xml; charset=utf-8", "cache-control": "public, max-age=600", "x-content-type-options": "nosniff" });
+  });
+
   app.get("/assets/home/*", (c) => {
     const name = c.req.path.slice("/assets/home/".length);
     const a = ASSETS.get(name);

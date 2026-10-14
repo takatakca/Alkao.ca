@@ -399,3 +399,37 @@ describe("Run 67: agenda, follow an organizer, accessibility", () => {
     expect(await page("lang=en")).toContain('<a href="/accessibilite?lang=en">Accessibility</a>');
   });
 });
+
+describe("Run 68: robots.txt and sitemap.xml", () => {
+  it("lets search engines read the home and the shops, not the private pages", async () => {
+    const res = await app.request("/robots.txt");
+    expect(res.headers.get("content-type")).toBe("text/plain; charset=utf-8");
+    const text = await res.text();
+    expect(text).toContain("User-agent: *\nAllow: /\n");
+    for (const path of ["/ops", "/billets", "/v1/", "/inscription", "/desabonnement", "/acheter/merci/"]) expect(text).toContain(`Disallow: ${path}\n`);
+    expect(text).toContain("Sitemap: https://alkao.test/sitemap.xml\n");
+  });
+
+  it("lists the home, the accessibility page and the shop of every event the home lists", async () => {
+    const h = seed.havana;
+    const shop = `https://alkao.test/acheter/${h.clientId}/${h.brandId}/${h.eventId}`;
+    const before = await (await app.request("/sitemap.xml")).text();
+    expect(before).not.toContain(shop);
+    await setOptIn(h.clientId, h.brandId, havanaOwner, true);
+    const res = await app.request("/sitemap.xml");
+    expect(res.headers.get("content-type")).toBe("application/xml; charset=utf-8");
+    const xml = await res.text();
+    expect(xml.startsWith('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"')).toBe(true);
+    expect(xml).toContain("<url><loc>https://alkao.test/</loc><xhtml:link rel=\"alternate\" hreflang=\"fr-CA\" href=\"https://alkao.test/\"/>");
+    expect(xml).toContain("<loc>https://alkao.test/?lang=en</loc>");
+    expect(xml).toContain("<loc>https://alkao.test/accessibilite?lang=en</loc>");
+    expect(xml).toContain(`<url><loc>${shop}</loc></url>`);
+    // Sales closed: off the home, so off the sitemap.
+    await db.pool.query(`UPDATE public.ticketing_events SET sales_close_at = now() - interval '1 hour' WHERE id = $1`, [h.eventId]);
+    expect(await (await app.request("/sitemap.xml")).text()).not.toContain(shop);
+    // Without a public address there are no absolute URLs to list.
+    const local = testApp(db.pool, {});
+    expect((await local.request("/sitemap.xml")).status).toBe(404);
+    expect(await (await local.request("/robots.txt")).text()).not.toContain("Sitemap:");
+  });
+});
