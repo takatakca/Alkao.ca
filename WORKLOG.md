@@ -3,6 +3,8 @@
 Newest first, one line per piece of work. Rule: `AGENTS.md` › Work log rule.
 Format: `YYYY-MM-DD | agent | branch → PR | status | what | next step`
 
+- 2026-10-14 | ChatGPT (GitHub) | main → direct commits | active | Run 74: search/filter public venue directory, regression tests, delivery verification, five standard handoff documents | implement, CI, finalize handoff
+
 - 2026-10-14 | ChatGPT (GitHub) | main → direct commit | done | Run 73: bilingual venue index and venue pages, links from events, SEO sitemap, gated by ALKAO public catalog | deploy after Coolify migrations; check live site and QA
 
 - 2026-10-14 | claude (Code, cloud) | claude/amazing-pascal-tppqd4 → PR #83 | review | Run 72: presale codes (buy before the public sale opens) and "La vente ouvre le …" in the shop | merge when green
