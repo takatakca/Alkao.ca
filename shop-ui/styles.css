@@ -77,3 +77,7 @@ button.link { background: none; color: var(--muted); padding: .25rem 0; text-dec
 /* Run 71: the waitlist of a sold-out session */
 .waitlist h3 { margin: 0 0 .35rem; font-size: 1rem; }
 .waitlist form { display: grid; gap: .6rem; }
+/* Run 72: before the public sale */
+.sale-window h2 { margin: 0 0 .5rem; font-size: 1.1rem; }
+.sale-window .presale { display: grid; gap: .6rem; }
+.sale-window .presale h3 { margin: .25rem 0 0; font-size: .95rem; }

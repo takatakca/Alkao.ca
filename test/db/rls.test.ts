@@ -64,6 +64,8 @@ const EXPECTED: Record<string, Visibility> = {
   ticketing_session_changes: "none",
   // Run 71: the waitlist of sold-out sessions, server only.
   ticketing_waitlist: "none",
+  // Run 72: presale codes, server only.
+  ticketing_presale_codes: "none",
 };
 
 const clientColumn = (table: string) => (table === "ticketing_clients" ? "id" : "client_id");

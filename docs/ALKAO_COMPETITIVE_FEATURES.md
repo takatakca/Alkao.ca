@@ -117,6 +117,7 @@ Hors liste : l'argent comptant à la porte est écarté exprès (décision 3, `d
 
 **Fait au Run 66 :** les points 1 à 6 (sans les recherches récentes : la recherche Ctrl+K montre déjà les favoris et les vus récemment) et le 10 pour l'accueil.
 **Fait au Run 67 :** les points 7 (suivre un organisateur), 8 (vue agenda) et 9 (page Accessibilité).
+**Fait au Run 72 :** l'écart 7, les codes de prévente.
 **Fait au Run 71 :** l'écart 5, la liste d'attente des séances complètes.
 **Fait au Run 69 :** l'écart 4 en partie — données d'événement (catégorie, âge, portes, langue, accessibilité). Reste : les pages Salle.
 

@@ -29,7 +29,11 @@ export const CreateHoldRequest = z.object({
   sessionId: id,
   items: CartItems,
   promoCode,
+  /** Run 72: a presale code, to buy before the public sale opens. */
+  presaleCode: z.string().trim().min(1).max(40).optional(),
 });
+/** Run 72: does this presale code open the sale, and from when. */
+export const PresaleCheck = z.object({ code: z.string().trim().min(1).max(40) });
 
 // ── Admin: catalog ──────────────────────────────────────────────────────────
 export const CreateVenue = z.object({
@@ -332,6 +336,13 @@ export const CreatePromoCode = z
     message: "percent for kind percent, amountCents for kind amount", path: ["kind"],
   })
   .refine((p) => !p.startsAt || !p.endsAt || Date.parse(p.startsAt) < Date.parse(p.endsAt), { message: "endsAt must be after startsAt", path: ["endsAt"] });
+/** Run 72: presale codes, per event. */
+export const CreatePresaleCode = z.object({
+  code: z.string().trim().toUpperCase().regex(/^[A-Z0-9-]{3,32}$/),
+  label: z.string().trim().min(1).max(80).nullish(),
+  opensAt: timestamp,
+});
+export const UpdatePresaleCode = z.object({ active: z.boolean() });
 export const UpdatePromoCode = z
   .object({ active: z.boolean(), ...promoWindow })
   .partial()
