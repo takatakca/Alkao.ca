@@ -1,5 +1,20 @@
 # ALKAO — Project status
 
+## Run 77 — Secure transfer request foundation
+
+Code commit `0da240f241e8c1eb9e0fbf8d23ba72f6567d3c7b` introduces a
+server-only `ticketing_transfer_requests` table with Brand default-OFF opt-in,
+scoped composite FK, private hashed recipient secret, one pending request per
+ticket, 48-hour limit and immutable status history. Tests added for tenant
+isolation, invalid tickets, self-transfer and database RLS. Package succeeded;
+CI passed (run 38630063783). See `docs/TRANSFER_PROTOCOL.md`. This is groundwork,
+not a live buyer transfer: no recipient claim, email, QR rotation or UI exists.
+
+Previous main `2fe6bc50` passed CI and packaging. Strict production check
+failed because Coolify does not publish the current Git SHA on `/health`.
+New production migration must not be applied to an unverified/shared database.
+
+
 ## Run 76 QA evidence
 
 CI and Package both succeeded for SHA `1035bcf63941990d6e28fc8d632ddbf2b51b23eb`. The expiring bearer-token validation is therefore tested in GitHub. Coolify release SHA remains unverified.

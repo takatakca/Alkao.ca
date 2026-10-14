@@ -1,5 +1,34 @@
 # ALKAO — Agent handoff (mandatory)
 
+## Run 77 — transfer-request safety foundation (October 14, 2026)
+
+- Read `AGENTS.md`, `WORKLOG.md`, all five standard status documents and open PRs.
+  PR #53 is a separate Havana release; do not modify its branch.
+- Previous main `2fe6bc503d3c9e05f7725cff1069f12cbc89fda3` passed CI
+  38627463072 and Package 38627462930. Strict deploy workflow 38627810742
+  failed: `alkao.ca` responds but does not publish the expected `build` SHA.
+- Claimed Run 77 in `WORKLOG.md` at `a4d87533a445042498980a6ae958743330d2b78c`.
+- Code pushed `0da240f241e8c1eb9e0fbf8d23ba72f6567d3c7b`:
+  `supabase/migrations/20261105000100_alkao_transfer_requests.sql`,
+  `test/db/transfers.test.ts`, `test/db/rls.test.ts`.
+- New schema: Brand-specific default-OFF transfer flag, server-private transfer
+  intents with hashed claim secret, short expiry, one pending request per ticket,
+  immutable history, tenant composite FK and admission/order eligibility guard.
+- Scope is **DB foundation only**. There is intentionally no buyer-facing
+  transfer button, no claim endpoint, no email or transferred ownership yet.
+  Source QR stays valid until a later verified acceptance implementation.
+- Code package passed (run 38630063950). Run 77 CI **passed** at commit 0da240f2 (run 38630063783), including
+  TypeScript, migrations, secrets, PostgreSQL/RLS tests. Package also passed.
+- No local production migration or Coolify deployment performed. Next steps:
+  (1) inspect Run 77 CI and fix any concrete SQL/test error;
+  (2) check final `main` SHA and strict deployment logs separately;
+  (3) implement recipient email verification + atomic ticket reissuance before
+      exposing a transfer feature; reference `docs/TRANSFER_PROTOCOL.md`;
+  (4) Coolify owner resolves issue #84 (dedicated DB, key rotation, migration,
+      source SHA in build and deployment verification). No secrets in GitHub.
+- No external autonomous session orchestrator has been verified or connected.
+
+
 ## Run 76 verified
 
 - Main SHA `1035bcf63941990d6e28fc8d632ddbf2b51b23eb`: CI run 38626850981 SUCCESS (typecheck, migration check, secret check, tests), Package run 38626850976 SUCCESS.

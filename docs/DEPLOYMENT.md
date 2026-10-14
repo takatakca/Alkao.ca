@@ -1,5 +1,17 @@
 # ALKAO — Deployment state and verification
 
+## Run 77 migration / rollout warning
+
+A new migration, `20261105000100_alkao_transfer_requests.sql`, adds a
+default-disabled transfer switch plus server-only request history and DB guards.
+It does **not** expose a working transfer route; leave every Brand's flag OFF.
+Apply only after an authorized Coolify operator has validated backups and
+the dedicated ALKAO database. The migration is part of the source build and
+is checked against ephemeral CI PostgreSQL; CI is not evidence that production
+was migrated. Run 77 code `0da240f2` packaged successfully; CI succeeded (run 38630063783). Production check for previous main `2fe6bc50` failed because
+`/health` lacks the build SHA. Issue #84 remains an external blocker.
+
+
 ## Verification, October 14, 2026
 
 Run 75 at 73cfd4f1 passed CI and packaging. Strict deployment verification 38624485645 failed after eight attempts because the public /health response did not report the expected build SHA. ALKAO itself responded. Run 76 at d67896fb has no migration and passed packaging. Its live deployment is not confirmed. Coolify setup and source revision attestation remain tracked in GitHub issue #84.

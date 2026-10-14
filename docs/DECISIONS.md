@@ -1,5 +1,19 @@
 # ALKAO — Decisions and non-negotiable constraints
 
+## Run 77 transfer controls
+
+Organizer transfers are explicitly **default OFF** in the database. A
+`pending` transfer request is not an accepted transfer and does not affect
+ticket ownership or QR validity. Recipient contacts and claim-token hashes
+are never exposed to Data API roles. The ticketing engine must preserve
+immutable sale/ticket/credential audit history, enforce one active request per
+ticket and reject expired, void, admitted and cross-tenant requests. Future
+transfer acceptance requires recipient mailbox proof plus an atomic issuance
+of the recipient ticket and revocation of the original credential; no public
+button may be released before that is implemented and tested. See
+`docs/TRANSFER_PROTOCOL.md`.
+
+
 ## Run 76: bearer access expiry
 
 Order-reading and buyer session-change endpoints verify the same scope, order and optional expiry. Expired keys always receive the generic order-not-found response. Existing order links with no expiry remain compatible. Future ownership-transfer functions must use the same authorization invariant.
