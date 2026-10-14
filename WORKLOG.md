@@ -3,6 +3,8 @@
 Newest first, one line per piece of work. Rule: `AGENTS.md` › Work log rule.
 Format: `YYYY-MM-DD | agent | branch → PR | status | what | next step`
 
+- 2026-10-14 | ChatGPT (GitHub) | main → direct commits | active | Run 75: public venue iCalendar for opted-in sessions, bilingual CTA, regression/security tests; eliminate false-green skipped deploy verification | code, verify CI, update release handoff
+
 - 2026-10-14 | ChatGPT (GitHub) | main → direct commits (92a5c08d) | blocked: latest CI queued on GitHub; Coolify not verified | Run 74: real bilingual venue search, strict SHA-aware deployment monitor, five standard handoff documents, language routing fix; code pushed | read latest Actions, fix failures if any; then operator resolves Coolify #84
 
 - 2026-10-14 | ChatGPT (GitHub) | main → direct commit | done | Run 73: bilingual venue index and venue pages, links from events, SEO sitemap, gated by ALKAO public catalog | deploy after Coolify migrations; check live site and QA
