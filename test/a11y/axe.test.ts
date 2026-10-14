@@ -109,6 +109,14 @@ describe.each(["light", "dark"] as const)("accessibility (%s)", (scheme) => {
     await home.evaluate(() => (globalThis as any).document.querySelectorAll(".reveal").forEach((el: any) => el.classList.add("is-visible")));
     await home.waitForTimeout(1100);
     problems.push(...report("ALKAO platform homepage", await audit(home)));
+    // Run 67: the agenda view and the accessibility statement.
+    await home.goto(`${origin}/?vue=agenda`);
+    await home.evaluate(() => (globalThis as any).document.querySelectorAll(".reveal").forEach((el: any) => el.classList.add("is-visible")));
+    await home.waitForTimeout(1100);
+    problems.push(...report("ALKAO home, agenda view", await audit(home)));
+    await home.goto(`${origin}/accessibilite`);
+    await home.getByRole("heading", { level: 1, name: "Accessibilité" }).waitFor();
+    problems.push(...report("ALKAO accessibility page", await audit(home)));
     await db.pool.query(`UPDATE public.ticketing_brand_settings SET show_on_alkao = false WHERE client_id = $1 AND brand_id = $2`, [h.clientId, h.brandId]);
 
     const shop = await pageFor(scheme);

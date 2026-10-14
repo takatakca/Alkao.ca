@@ -3,7 +3,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Hono } from "hono";
-import { parseQuery, renderHome, type HomeBrand } from "./home-view.js";
+import { parseQuery, renderAccessibility, renderHome, type HomeBrand } from "./home-view.js";
 
 export type { HomeBrand, HomeEvent } from "./home-view.js";
 
@@ -76,6 +76,18 @@ export function mountHome(app: Hono<any>, cfg: HomeConfig): void {
       lang,
       brands,
       query: parseQuery((name) => c.req.query(name)),
+      now: cfg.now?.() ?? new Date(),
+      asset: homeAsset,
+    });
+    return c.html(html, 200, PAGE_HEADERS);
+  });
+
+  // Run 67: what ALKAO does for accessibility (no data, same look and policy as the home).
+  app.get("/accessibilite", (c) => {
+    const lang = c.req.query("lang") === "en" ? "en" : "fr";
+    const html = renderAccessibility({
+      origin: cfg.publicUrl ? new URL(cfg.publicUrl).origin : null,
+      lang,
       now: cfg.now?.() ?? new Date(),
       asset: homeAsset,
     });

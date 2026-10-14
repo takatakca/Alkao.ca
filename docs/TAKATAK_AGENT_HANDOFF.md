@@ -2,6 +2,17 @@
 
 This file records the current cross-agent handoff. Do not erase prior repository history; the detailed chronological log remains in `WORKLOG.md`.
 
+## 2026-10-14 — Run 67: follow, agenda, accessibility
+
+- « Suivre <Brand> » (quick view, and the results bar when one organizer is chosen) posts to
+  `/v1/public/clients/:c/brands/:b/newsletter` (Run 44) with `source: "alkao"`: pending until the
+  person clicks the e-mail. The page's data lists `organizers` with that path.
+- `vue=agenda`: every date of the events shown, day by day, within the `quand` window (first 120).
+- `/accessibilite` (`renderAccessibility` in `src/api/home-view.ts`): header and footer are now
+  shared functions (`siteHeader`, `siteFooter`, `headAssets`) for the home's other pages.
+- The home's front-now list from the benchmark is done. Next: the back-end gaps (structured event
+  data and venue pages, Wallet, transfer, waitlist, presale codes, light buyer account).
+
 ## 2026-10-13 — Run 66: home extras from the benchmark
 
 - Filters on `/`: `prix` (free, under25, 25to50, over50; before taxes), `tri=prix`,

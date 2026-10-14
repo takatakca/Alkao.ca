@@ -211,7 +211,7 @@ describe("Run 64: the premium platform home", () => {
     const data = JSON.parse(json);
     expect(data.events).toHaveLength(1);
     expect(data.events[0].title).toBe("</script><script>alert(1)</script>");
-    expect(Object.keys(data.events[0]).sort()).toEqual(["address", "brand", "categories", "city", "count", "dates", "description", "ends", "id", "image", "map", "next", "place", "price", "shop", "starts", "text", "title", "url"]);
+    expect(Object.keys(data.events[0]).sort()).toEqual(["address", "brand", "brandId", "categories", "city", "count", "dates", "description", "ends", "id", "image", "map", "next", "place", "price", "shop", "starts", "text", "title", "url"]);
     expect(json).not.toMatch(/[\w.+-]+@[\w-]+\.[\w.]+/);
     expect(data.help.map((x: { id: string }) => x.id)).toContain("perdus");
   });
@@ -321,5 +321,81 @@ describe("Run 66: filters, search-engine data, calendar and installable home", (
       const size = (o: number) => (bytes[o]! << 24) | (bytes[o + 1]! << 16) | (bytes[o + 2]! << 8) | bytes[o + 3]!;
       expect(`${size(16)}x${size(20)}`).toBe(icon.sizes);
     }
+  });
+});
+
+describe("Run 67: agenda, follow an organizer, accessibility", () => {
+  const page = async (qs = "") => (await app.request(`/${qs ? `?${qs}` : ""}`)).text();
+  const rows = (html: string) => html.split('class="agenda-row"').length - 1;
+
+  it("lists every date day by day, within the chosen window, and keeps the view on a new search", async () => {
+    const h = seed.havana;
+    await setOptIn(h.clientId, h.brandId, havanaOwner, true);
+    const { rows: added } = await db.pool.query<{ id: string }>(
+      `INSERT INTO public.ticketing_sessions (client_id, brand_id, event_id, starts_at, capacity, status)
+       VALUES ($1, $2, $3, now() + interval '3 days', 50, 'on_sale') RETURNING id`, [h.clientId, h.brandId, h.eventId]);
+    try {
+      const grid = await page();
+      expect(grid).toContain('class="grid"');
+      expect(grid).not.toContain('class="agenda"');
+      expect(grid).toMatch(/<a class="chip is-current" href="[^"]*" aria-current="true"><svg[^>]*>.*?<\/svg>Grille<\/a>/);
+      const agenda = await page("vue=agenda");
+      expect(agenda).not.toContain('class="grid"');
+      expect(rows(agenda)).toBe(2);
+      expect(agenda.match(/class="agenda-date"/g)).toHaveLength(2);
+      expect(agenda).toContain('aria-label="Voir les billets : Havana Resort — Événements 2026-2027, ');
+      expect(agenda).toContain('<input type="hidden" name="vue" value="agenda" />');
+      // Only the dates in the window: the one in three days.
+      expect(rows(await page("vue=agenda&quand=week"))).toBe(1);
+      expect(await page("vue=agenda&quand=today")).toContain("Aucun événement en vente ne correspond");
+      expect(rows(await page("vue=agenda&lang=en"))).toBe(2);
+      expect(await page("vue=calendrier")).toContain('class="grid"');
+    } finally {
+      await db.pool.query(`DELETE FROM public.ticketing_sessions WHERE id = $1`, [added[0]!.id]);
+    }
+  });
+
+  it("offers to follow an organizer through its own newsletter route, confirmed by e-mail", async () => {
+    const h = seed.havana;
+    await setOptIn(h.clientId, h.brandId, havanaOwner, true);
+    const html = await page(`organisateur=${h.brandId}`);
+    expect(html).toContain(`data-follow="${h.brandId}" hidden>`);
+    expect(html).toContain('<dialog class="sheet" id="dlg-follow"');
+    const data = JSON.parse(html.match(/<script type="application\/json" id="alkao-data">([\s\S]*?)<\/script>/)![1]!);
+    expect(data.events[0].brandId).toBe(h.brandId);
+    expect(data.organizers).toEqual([{ id: h.brandId, name: expect.any(String), follow: `/v1/public/clients/${h.clientId}/brands/${h.brandId}/newsletter` }]);
+    // The route the page calls is the Brand's real sign-up: pending until the e-mail is confirmed.
+    const res = await app.request(data.organizers[0].follow, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email: "suivre@example.test", firstName: null, language: "fr", source: "alkao" }),
+    });
+    expect(res.status).toBe(202);
+    const { rows } = await db.pool.query<{ status: string; source: string }>(
+      `SELECT status, source FROM public.ticketing_newsletter_signups WHERE client_id = $1 AND brand_id = $2 AND email = 'suivre@example.test'`, [h.clientId, h.brandId]);
+    expect(rows).toEqual([{ status: "pending", source: "alkao" }]);
+  });
+
+  it("has an accessibility page in both languages, in the home's look and under its policy", async () => {
+    const res = await app.request("/accessibilite");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-security-policy")).toContain("script-src 'self'");
+    const fr = await res.text();
+    expect(fr).toContain('<html lang="fr-CA">');
+    expect(fr).toContain("<title>Accessibilité — ALKAO</title>");
+    expect(fr).toContain("WCAG 2.1");
+    expect(fr).toContain("carte accompagnement loisir (CAL)");
+    expect(fr).toContain('<link rel="canonical" href="https://alkao.test/accessibilite" />');
+    // The header's links go back to the home's sections; the language switch stays on this page.
+    expect(fr).toContain('<a href="/#evenements">Événements</a>');
+    expect(fr).toContain('<a href="/accessibilite?lang=en" lang="en-CA" aria-label="English">EN</a>');
+    expect(fr).not.toContain("alkao-data");
+    const en = await (await app.request("/accessibilite?lang=en")).text();
+    expect(en).toContain('<html lang="en-CA">');
+    expect(en).toContain("<h1>Accessibility</h1>");
+    expect(en).toContain('<a href="/?lang=en#evenements">Events</a>');
+    // Linked from every home footer.
+    expect(await page()).toContain('<a href="/accessibilite">Accessibilité</a>');
+    expect(await page("lang=en")).toContain('<a href="/accessibilite?lang=en">Accessibility</a>');
   });
 });

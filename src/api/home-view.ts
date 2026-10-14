@@ -51,6 +51,8 @@ export interface HomeQuery {
   sort: "" | "price";
   /** Run 66: one organizer's events (its Brand id). */
   organizer: string;
+  /** Run 67: cards (default), or every date day by day. */
+  view: "" | "agenda";
 }
 
 const WHENS: When[] = ["today", "weekend", "week", "month"];
@@ -70,6 +72,7 @@ export function parseQuery(get: (name: string) => string | undefined): HomeQuery
     price: PRICES.includes(text("prix") as PriceBand) ? (text("prix") as PriceBand) : "",
     sort: text("tri") === "prix" ? "price" : "",
     organizer: UUID.test(text("organisateur")) ? text("organisateur").toLowerCase() : "",
+    view: text("vue") === "agenda" ? "agenda" : "",
   };
 }
 
@@ -126,6 +129,9 @@ const PATHS: Record<string, string> = {
   door: '<path d="M4 21h16M6 21V4h9l3 2v15"/><circle cx="13" cy="13" r=".8"/>',
   chart: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
   megaphone: '<path d="M3 11v2a2 2 0 0 0 2 2h2l5 4V5L7 9H5a2 2 0 0 0-2 2z"/><path d="M16 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/>',
+  bell: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
+  list: '<path d="M8 6h13M8 12h13M8 18h13"/><circle cx="3.5" cy="6" r="1"/><circle cx="3.5" cy="12" r="1"/><circle cx="3.5" cy="18" r="1"/>',
+  grid: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
   users: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8M18.5 20a6.5 6.5 0 0 0-3-5.5"/>',
 };
 export const icon = (name: string, cls = "i") =>
@@ -134,6 +140,71 @@ export const icon = (name: string, cls = "i") =>
 /** ALKAO's mark: an "A" cut in a ticket, in the brand's electric blue (BRAND.md). */
 const logoMark = (id: string) =>
   `<svg class="mark" viewBox="0 0 40 40" aria-hidden="true" focusable="false"><defs><linearGradient id="${id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#29C3FF"/><stop offset="1" stop-color="#1565D8"/></linearGradient></defs><path fill="url(#${id})" d="M9 6h22a4 4 0 0 1 4 4v5.2a4.8 4.8 0 0 0 0 9.6V30a4 4 0 0 1-4 4H9a4 4 0 0 1-4-4v-5.2a4.8 4.8 0 0 0 0-9.6V10a4 4 0 0 1 4-4z"/><path d="M13.5 27 20 13l6.5 14" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M16.6 22.2h6.8" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/></svg>`;
+
+// ── Header and footer, on the home and on its other pages ──────────────────
+type Words = (typeof COPY)[Lang];
+
+/** Run 67: what the header and footer need. */
+interface Frame {
+  t: Words;
+  lang: Lang;
+  /** "" on the home (its sections are on the page); the home's address on another page. */
+  base: string;
+  home: string;
+  /** This page, in this language and in the other one. */
+  here: string;
+  otherHere: string;
+  year: number;
+}
+
+function headAssets(asset: (name: string) => string): string {
+  return `  <link rel="icon" href="${esc(asset("favicon.svg"))}" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="${esc(asset("img/icon-192.png"))}" />
+  <link rel="manifest" href="${esc(asset("manifest.webmanifest"))}" />
+  <link rel="preload" href="${esc(asset("fonts/montserrat-latin.woff2"))}" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="${esc(asset("fonts/inter-latin.woff2"))}" as="font" type="font/woff2" crossorigin />
+  <link rel="stylesheet" href="${esc(asset("home.css"))}" />`;
+}
+
+function siteHeader({ t, base, home, here, otherHere }: Frame): string {
+  const a = (hash: string, label: string) => `<a href="${esc(`${base}#${hash}`)}">${esc(label)}</a>`;
+  return `  <header class="site-head" data-head>
+    <div class="wrap head-row">
+      <a class="logo" href="${esc(home)}" aria-label="ALKAO">${logoMark("lg-head")}<span class="word">ALKAO</span></a>
+      <nav class="main-nav" aria-label="${esc(t.menu)}">${a("evenements", t.nav.events)}${a("categories", t.nav.categories)}${a("organisateurs", t.nav.organizers)}${a("aide", t.nav.help)}</nav>
+      <div class="head-actions">
+        <a class="icon-btn" href="${esc(`${base}#evenements`)}" data-open-search aria-label="${esc(t.search)}">${icon("search")}</a>
+        <a class="btn btn-ghost btn-sm tickets-btn" href="${esc(`${base}#aide`)}" data-open-tickets>${icon("ticket")}<span>${esc(t.myTickets)}</span></a>
+        <div class="lang-switch" role="group" aria-label="Langue / Language">
+          <a href="${esc(here)}" aria-current="page" lang="${t.lang}">${t.short}</a><a href="${esc(otherHere)}" lang="${COPY[t.other].lang}" aria-label="${esc(t.otherLabel)}">${t.otherShort}</a>
+        </div>
+        <a class="btn btn-primary btn-sm head-cta" href="/ops">${esc(t.signin)}</a>
+        <details class="mobile-menu">
+          <summary aria-label="${esc(t.menu)}">${icon("menu")}</summary>
+          <div class="mobile-panel">${a("evenements", t.nav.events)}${a("categories", t.nav.categories)}${a("comment", t.nav.how)}${a("organisateurs", t.nav.organizers)}${a("aide", t.nav.help)}<a href="/ops">${esc(t.signin)}</a><a href="${esc(otherHere)}" lang="${COPY[t.other].lang}">${icon("globe")} ${esc(t.otherLabel)}</a></div>
+        </details>
+      </div>
+    </div>
+  </header>`;
+}
+
+function siteFooter({ t, lang, base, home, here, otherHere, year }: Frame): string {
+  const a = (hash: string, label: string) => `<a href="${esc(`${base}#${hash}`)}">${esc(label)}</a>`;
+  return `  <footer class="site-foot">
+    <div class="wrap foot-grid">
+      <div class="foot-brand">
+        <a class="logo" href="${esc(home)}" aria-label="ALKAO">${logoMark("lg-foot")}<span class="word">ALKAO</span></a>
+        <p>${esc(t.footerTagline)}</p>
+        <button class="btn btn-ghost btn-sm" type="button" data-install hidden>${icon("arrow")}${esc(t.install)}</button>
+      </div>
+      <nav aria-label="${esc(t.footerDiscover)}"><p class="foot-title">${esc(t.footerDiscover)}</p>${a("evenements", t.nav.events)}${a("categories", t.nav.categories)}${a("comment", t.nav.how)}</nav>
+      <nav aria-label="${esc(t.footerHelp)}"><p class="foot-title">${esc(t.footerHelp)}</p>${a("aide", t.faqTitle)}${a("faq-billets", t.myTickets)}${a("faq-paiement", t.trust[2]!)}<a href="${esc(`/accessibilite${lang === "en" ? "?lang=en" : ""}`)}">${esc(t.a11y.link)}</a></nav>
+      <nav aria-label="${esc(t.footerOrganizers)}"><p class="foot-title">${esc(t.footerOrganizers)}</p><a href="https://takatak.ca/register">${esc(t.signup)}</a><a href="/ops">${esc(t.signin)}</a>${a("organisateurs", t.footerFeatures)}</nav>
+      <nav aria-label="${esc(t.footerLanguage)}"><p class="foot-title">${esc(t.footerLanguage)}</p><a href="${esc(lang === "fr" ? here : otherHere)}" lang="fr-CA"${lang === "fr" ? ' aria-current="page"' : ""}>Français</a><a href="${esc(lang === "en" ? here : otherHere)}" lang="en-CA"${lang === "en" ? ' aria-current="page"' : ""}>English</a></nav>
+    </div>
+    <div class="wrap foot-legal"><p>${esc(t.rights(year))}</p><p>Digital Solutions. Real Results.</p></div>
+  </footer>`;
+}
 
 // ── Events, as the page shows them ─────────────────────────────────────────
 interface Card {
@@ -256,18 +327,16 @@ function matches(card: Card, query: HomeQuery, now: Date): boolean {
   if (query.q && !fold(query.q).split(" ").every((word) => card.text.includes(word))) return false;
   if (query.city && !fold(card.city).includes(fold(query.city))) return false;
   if (query.category && !card.categories.includes(query.category)) return false;
-  if (query.when) {
-    const today = dayKey(now, card.timezone);
-    const days = query.when === "today" ? 1 : query.when === "month" ? 31 : 7;
-    const until = now.getTime() + days * 86_400_000;
-    const ok = card.sessions.some((s) => {
-      if (query.when === "today") return dayKey(s, card.timezone) === today;
-      if (s.getTime() > until) return false;
-      return query.when === "weekend" ? ["Fri", "Sat", "Sun"].includes(weekday(s, card.timezone)) : true;
-    });
-    if (!ok) return false;
-  }
+  if (query.when && !card.sessions.some((s) => inWindow(s, card.timezone, query.when, now))) return false;
   return true;
+}
+
+/** A date in the "when" window: today, this weekend (Friday to Sunday), this week or this month. */
+function inWindow(s: Date, tz: string, when: When, now: Date): boolean {
+  if (!when) return true;
+  if (when === "today") return dayKey(s, tz) === dayKey(now, tz);
+  if (s.getTime() > now.getTime() + (when === "month" ? 31 : 7) * 86_400_000) return false;
+  return when === "weekend" ? ["Fri", "Sat", "Sun"].includes(weekday(s, tz)) : true;
 }
 
 // ── Page ───────────────────────────────────────────────────────────────────
@@ -302,21 +371,27 @@ export function renderHome({ origin, lang, brands, query, now, asset }: RenderOp
   // Run 66: the current search with one value changed ("" removes it), for the filter chips.
   const current: Record<string, string> = {
     q: query.q, ville: query.city, quand: query.when, categorie: query.category,
-    prix: query.price, tri: query.sort === "price" ? "prix" : "", organisateur: query.organizer,
+    prix: query.price, tri: query.sort === "price" ? "prix" : "", organisateur: query.organizer, vue: query.view,
   };
   const refine = (change: Record<string, string>) =>
     link(Object.fromEntries(Object.entries({ ...current, ...change }).filter(([, v]) => v)));
   const organizers = brands
     .filter((b) => all.some((c) => c.brandId === b.brandId))
-    .map((b) => ({ id: b.brandId.toLowerCase(), name: b.name, logo: safeHttps(b.logoUrl) }));
+    .map((b) => ({
+      id: b.brandId.toLowerCase(), name: b.name, logo: safeHttps(b.logoUrl),
+      // Run 67: "Suivre", the Brand's newsletter sign-up (Run 44, confirmed by e-mail).
+      follow: `/v1/public/clients/${b.clientId.toLowerCase()}/brands/${b.brandId.toLowerCase()}/newsletter`,
+    }));
   const organizer = organizers.find((o) => o.id === query.organizer);
   const priced = all.some((c) => c.fromCents !== undefined);
   const bands = PRICES.filter((band) => band === query.price || all.some((c) => inBand(c, band)));
   const chip = (href: string, label: string, on: boolean, extra = "") =>
     `<a class="chip${on ? " is-current" : ""}" href="${esc(href)}"${on ? ' aria-current="true"' : ""}>${extra}${esc(label)}</a>`;
-  const filterBar = all.length && (priced || organizers.length > 1)
+  const filterBar = all.length
     ? `<div class="filters reveal">
         <p class="filters-title">${esc(t.filters)}</p>
+        <div class="filter" role="group" aria-labelledby="f-view"><p class="filter-label" id="f-view">${esc(t.viewTitle)}</p>
+          <div class="chips">${chip(refine({ vue: "" }), t.viewOptions.grid, query.view !== "agenda", icon("grid"))}${chip(refine({ vue: "agenda" }), t.viewOptions.agenda, query.view === "agenda", icon("list"))}</div></div>
         ${priced ? `<div class="filter" role="group" aria-labelledby="f-price"><p class="filter-label" id="f-price">${esc(t.priceTitle)} <small>${esc(t.priceNote)}</small></p>
           <div class="chips">${chip(refine({ prix: "" }), t.priceOptions.all, !query.price)}${bands.map((band) => chip(refine({ prix: band }), t.priceOptions[band as Exclude<PriceBand, "">], query.price === band)).join("")}</div></div>
         <div class="filter" role="group" aria-labelledby="f-sort"><p class="filter-label" id="f-sort">${esc(t.sortTitle)}</p>
@@ -345,6 +420,33 @@ export function renderHome({ origin, lang, brands, query, now, asset }: RenderOp
         </div>
       </div>
     </article>`;
+
+  const AGENDA_MAX = 120;
+  const agendaRows = shown
+    .flatMap((c) => c.sessions.map((start) => ({ c, start })))
+    .filter(({ c, start }) => inWindow(start, c.timezone, query.when, now))
+    .sort((x, y) => x.start.getTime() - y.start.getTime() || x.c.title.localeCompare(y.c.title));
+  const agenda = () => {
+    const days: { key: string; label: string; rows: typeof agendaRows }[] = [];
+    for (const row of agendaRows.slice(0, AGENDA_MAX)) {
+      const key = dayKey(row.start, row.c.timezone);
+      const last = days.at(-1);
+      if (last?.key === key) last.rows.push(row);
+      else days.push({ key, label: new Intl.DateTimeFormat(t.lang, { timeZone: row.c.timezone, weekday: "long", day: "numeric", month: "long" }).format(row.start), rows: [row] });
+    }
+    const timeOf = (row: (typeof agendaRows)[number]) => new Intl.DateTimeFormat(t.lang, { timeZone: row.c.timezone, hour: "numeric", minute: "2-digit" }).format(row.start);
+    const fullOf = (row: (typeof agendaRows)[number]) => new Intl.DateTimeFormat(t.lang, { timeZone: row.c.timezone, weekday: "long", day: "numeric", month: "long", hour: "numeric", minute: "2-digit" }).format(row.start);
+    return `<div class="agenda">${days.map((d, i) => `<div class="agenda-day reveal">
+        <h3 class="agenda-date" id="jour-${i}">${esc(d.label)}</h3>
+        <ol class="agenda-list" aria-labelledby="jour-${i}">${d.rows.map((row) => `<li class="agenda-row">
+          <time class="agenda-time" datetime="${esc(row.start.toISOString())}">${esc(timeOf(row))}</time>
+          <div class="agenda-main"><a class="agenda-title" href="${esc(row.c.shop)}">${esc(row.c.title)}</a>
+            <p class="card-meta">${row.c.place ? `${icon("pin")}<span>${esc(row.c.place)}</span> · ` : ""}<span>${esc(row.c.brand)}</span></p></div>
+          ${row.c.price ? `<p class="price">${esc(row.c.price)}</p>` : "<span></span>"}
+          <a class="btn btn-primary btn-sm" href="${esc(row.c.shop)}" aria-label="${esc(t.agendaBuy(row.c.title, fullOf(row)))}">${esc(t.buy)}</a>
+        </li>`).join("")}</ol>
+      </div>`).join("")}</div>${agendaRows.length > AGENDA_MAX ? `<p class="agenda-more">${esc(t.agendaMore(agendaRows.length - AGENDA_MAX))}</p>` : ""}`;
+  };
 
   const rail = (id: string, title: string, lead: string, items: Card[], extra = "") => `<div class="rail-block">
       <div class="rail-head"><div><h3 id="${id}">${esc(title)}</h3>${lead ? `<p>${esc(lead)}</p>` : ""}${extra}</div>
@@ -381,7 +483,7 @@ export function renderHome({ origin, lang, brands, query, now, asset }: RenderOp
   const data = {
     lang,
     events: all.map((c) => ({
-      id: c.id, title: c.title, brand: c.brand, description: c.description, image: c.image, place: c.place, city: c.city,
+      id: c.id, title: c.title, brand: c.brand, brandId: c.brandId.toLowerCase(), description: c.description, image: c.image, place: c.place, city: c.city,
       shop: c.shop, url: c.url, price: c.price, next: c.nextLabel, dates: c.dates, count: c.count, categories: c.categories, text: c.text,
       // Run 66: the shown dates as instants (for the calendar file) and a map search.
       starts: c.sessions.slice(0, 6).map((d) => d.toISOString()),
@@ -390,6 +492,7 @@ export function renderHome({ origin, lang, brands, query, now, asset }: RenderOp
       map: c.address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(c.address)}` : null,
     })),
     categories: CATEGORIES.map((c) => ({ id: c.id, label: c.label[lang], url: link({ categorie: c.id }), words: c.words })),
+    organizers: organizers.map((o) => ({ id: o.id, name: o.name, follow: o.follow })),
     help: faq,
     otherUrl: otherHome,
     searchUrl: link({}),
@@ -398,6 +501,8 @@ export function renderHome({ origin, lang, brands, query, now, asset }: RenderOp
       share: t.share, copied: t.copied, buy: t.buy, close: t.close, nextDate: t.nextDate, otherDates: t.otherDates,
       pause: t.pause, play: t.play, dates: t.dates(2).replace("2", "{n}"), slideOf: t.slideOf(9, 8).replace("9", "{i}").replace("8", "{n}"),
       recent: t.recentTitle, addDate: t.addDateToCalendar("{d}"), directionsTo: t.directionsTo("{p}"),
+      follow: t.follow("{b}"), followLead: t.followLead("{b}"), followNote: t.followNote("{b}"), followDone: t.followDone("{b}"),
+      followInvalid: t.followInvalid, followBusy: t.followBusy, followError: t.followError,
     },
   };
 
@@ -437,8 +542,7 @@ export function renderHome({ origin, lang, brands, query, now, asset }: RenderOp
     }));
   });
 
-  const headLinks = `<a href="#evenements">${esc(t.nav.events)}</a><a href="#categories">${esc(t.nav.categories)}</a><a href="#organisateurs">${esc(t.nav.organizers)}</a><a href="#aide">${esc(t.nav.help)}</a>`;
-  const navLinks = `<a href="#evenements">${esc(t.nav.events)}</a><a href="#categories">${esc(t.nav.categories)}</a><a href="#comment">${esc(t.nav.how)}</a><a href="#organisateurs">${esc(t.nav.organizers)}</a><a href="#aide">${esc(t.nav.help)}</a>`;
+  const frame: Frame = { t, lang, base: "", home, here: home, otherHere: otherHome, year };
 
   return `<!doctype html>
 <html lang="${t.lang}">
@@ -460,36 +564,14 @@ export function renderHome({ origin, lang, brands, query, now, asset }: RenderOp
   <meta property="og:image" content="${esc(absolute(origin, asset("img/hero-festival.webp")))}" />` : ""}
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="theme-color" content="#060D1F" />
-  <link rel="icon" href="${esc(asset("favicon.svg"))}" type="image/svg+xml" />
-  <link rel="apple-touch-icon" href="${esc(asset("img/icon-192.png"))}" />
-  <link rel="manifest" href="${esc(asset("manifest.webmanifest"))}" />
-  <link rel="preload" href="${esc(asset("fonts/montserrat-latin.woff2"))}" as="font" type="font/woff2" crossorigin />
-  <link rel="preload" href="${esc(asset("fonts/inter-latin.woff2"))}" as="font" type="font/woff2" crossorigin />
-  <link rel="stylesheet" href="${esc(asset("home.css"))}" />
+${headAssets(asset)}
   ${jsonLd.length ? `<script type="application/ld+json">${inertJson(jsonLd)}</script>` : ""}
 </head>
 <body>
   <a class="skip" href="#contenu">${esc(t.skip)}</a>
   <div class="aurora" aria-hidden="true"><span></span><span></span><span></span></div>
 
-  <header class="site-head" data-head>
-    <div class="wrap head-row">
-      <a class="logo" href="${esc(home)}" aria-label="ALKAO">${logoMark("lg-head")}<span class="word">ALKAO</span></a>
-      <nav class="main-nav" aria-label="${esc(t.menu)}">${headLinks}</nav>
-      <div class="head-actions">
-        <a class="icon-btn" href="#evenements" data-open-search aria-label="${esc(t.search)}">${icon("search")}</a>
-        <a class="btn btn-ghost btn-sm tickets-btn" href="#aide" data-open-tickets>${icon("ticket")}<span>${esc(t.myTickets)}</span></a>
-        <div class="lang-switch" role="group" aria-label="Langue / Language">
-          <a href="${esc(home)}" aria-current="page" lang="${t.lang}">${t.short}</a><a href="${esc(otherHome)}" lang="${COPY[t.other].lang}" aria-label="${esc(t.otherLabel)}">${t.otherShort}</a>
-        </div>
-        <a class="btn btn-primary btn-sm head-cta" href="/ops">${esc(t.signin)}</a>
-        <details class="mobile-menu">
-          <summary aria-label="${esc(t.menu)}">${icon("menu")}</summary>
-          <div class="mobile-panel">${navLinks}<a href="/ops">${esc(t.signin)}</a><a href="${esc(otherHome)}" lang="${COPY[t.other].lang}">${icon("globe")} ${esc(t.otherLabel)}</a></div>
-        </details>
-      </div>
-    </div>
-  </header>
+${siteHeader(frame)}
 
   <main id="contenu">
     <section class="hero" aria-labelledby="hero-title">
@@ -509,7 +591,7 @@ export function renderHome({ origin, lang, brands, query, now, asset }: RenderOp
             <label class="field"><span>${esc(t.what)}</span><input name="q" type="search" value="${esc(query.q)}" placeholder="${esc(t.whatHint)}" autocomplete="off" maxlength="80" /></label>
             <label class="field"><span>${esc(t.where)}</span><input name="ville" type="text" value="${esc(query.city)}" placeholder="${esc(t.whereHint)}" list="alkao-cities" autocomplete="address-level2" maxlength="80" /></label>
             <label class="field"><span>${esc(t.when)}</span><select name="quand">${whenSelect}</select></label>
-            ${(["categorie", "prix", "tri", "organisateur"] as const).filter((k) => current[k]).map((k) => `<input type="hidden" name="${k}" value="${esc(current[k])}" />`).join("")}
+            ${(["categorie", "prix", "tri", "organisateur", "vue"] as const).filter((k) => current[k]).map((k) => `<input type="hidden" name="${k}" value="${esc(current[k])}" />`).join("")}
             <button class="btn btn-primary btn-search" type="submit">${icon("search")}<span>${esc(t.search)}</span></button>
           </form>
           <datalist id="alkao-cities">${cities.map((c) => `<option value="${esc(c)}"></option>`).join("")}</datalist>
@@ -554,7 +636,7 @@ export function renderHome({ origin, lang, brands, query, now, asset }: RenderOp
         ${filterBar}
         ${filtered ? `<div class="results" role="status">
             <p><strong>${esc(t.results(shown.length))}</strong>${query.q ? ` ${esc(t.resultsFor)} « ${esc(query.q)} »` : ""}${query.category ? ` · ${esc(CATEGORIES.find((c) => c.id === query.category)!.label[lang])}` : ""}${query.city ? ` · ${esc(query.city)}` : ""}${query.when ? ` · ${esc(t.whenOptions[query.when])}` : ""}${query.price ? ` · ${esc(t.priceOptions[query.price])}` : ""}${organizer ? ` · ${esc(organizer.name)}` : ""}${query.sort === "price" ? ` · ${esc(t.sortOptions.price)}` : ""}</p>
-            <a class="btn btn-ghost btn-sm" href="${esc(`${home}#evenements`)}">${esc(t.showAll)}</a>
+            <div class="actions">${organizer ? `<button class="btn btn-primary btn-sm" type="button" data-follow="${esc(organizer.id)}" hidden>${icon("bell")}${esc(t.follow(organizer.name))}</button>` : ""}<a class="btn btn-ghost btn-sm" href="${esc(`${home}#evenements`)}">${esc(t.showAll)}</a></div>
           </div>` : ""}
         ${cities.length > 1 && !filtered ? `<nav class="chips" aria-label="${esc(t.citiesTitle)}">${cities.map((c) => `<a class="chip" href="${esc(link({ ville: c }))}">${icon("pin")}${esc(c)}</a>`).join("")}</nav>` : ""}
         ${!all.length
@@ -564,6 +646,8 @@ export function renderHome({ origin, lang, brands, query, now, asset }: RenderOp
               <p>${esc(t.emptyLead)}</p>
               <div class="actions"><a class="btn btn-primary" href="https://takatak.ca/register">${esc(t.signup)}</a><a class="btn btn-ghost" href="/ops">${esc(t.signin)}</a></div>
             </div>`
+          : query.view === "agenda"
+            ? agendaRows.length ? agenda() : `<p class="empty-inline">${esc(t.noResults)}</p>`
           : filtered
             ? shown.length ? `<div class="grid">${shown.map((c) => card(c)).join("")}</div>` : `<p class="empty-inline">${esc(t.noResults)}</p>`
             : `${rail("recent", t.recentTitle, "", [], `<button class="link-btn" type="button" data-recent-clear aria-label="${esc(t.clearRecentLabel)}">${esc(t.clearRecent)}</button>`).replace('<div class="rail-block">', '<div class="rail-block" data-recent hidden>')}
@@ -626,20 +710,7 @@ export function renderHome({ origin, lang, brands, query, now, asset }: RenderOp
     </section>
   </main>
 
-  <footer class="site-foot">
-    <div class="wrap foot-grid">
-      <div class="foot-brand">
-        <a class="logo" href="${esc(home)}" aria-label="ALKAO">${logoMark("lg-foot")}<span class="word">ALKAO</span></a>
-        <p>${esc(t.footerTagline)}</p>
-        <button class="btn btn-ghost btn-sm" type="button" data-install hidden>${icon("arrow")}${esc(t.install)}</button>
-      </div>
-      <nav aria-label="${esc(t.footerDiscover)}"><p class="foot-title">${esc(t.footerDiscover)}</p><a href="#evenements">${esc(t.nav.events)}</a><a href="#categories">${esc(t.nav.categories)}</a><a href="#comment">${esc(t.nav.how)}</a></nav>
-      <nav aria-label="${esc(t.footerHelp)}"><p class="foot-title">${esc(t.footerHelp)}</p><a href="#aide">${esc(t.faqTitle)}</a><a href="#faq-billets">${esc(t.myTickets)}</a><a href="#faq-paiement">${esc(t.trust[2]!)}</a></nav>
-      <nav aria-label="${esc(t.footerOrganizers)}"><p class="foot-title">${esc(t.footerOrganizers)}</p><a href="https://takatak.ca/register">${esc(t.signup)}</a><a href="/ops">${esc(t.signin)}</a><a href="#organisateurs">${esc(t.footerFeatures)}</a></nav>
-      <nav aria-label="${esc(t.footerLanguage)}"><p class="foot-title">${esc(t.footerLanguage)}</p><a href="/" lang="fr-CA"${lang === "fr" ? ' aria-current="page"' : ""}>Français</a><a href="/?lang=en" lang="en-CA"${lang === "en" ? ' aria-current="page"' : ""}>English</a></nav>
-    </div>
-    <div class="wrap foot-legal"><p>${esc(t.rights(year))}</p><p>Digital Solutions. Real Results.</p></div>
-  </footer>
+${siteFooter(frame)}
 
   <a class="to-top" href="#contenu" aria-label="${esc(t.backToTop)}" data-to-top hidden>${icon("up")}</a>
 
@@ -658,8 +729,21 @@ export function renderHome({ origin, lang, brands, query, now, asset }: RenderOp
       <p class="preview-label">${esc(t.nextDate)}</p>
       <ul class="preview-dates" data-p-dates></ul>
       <div class="actions"><a class="btn btn-primary" data-p-shop href="/">${esc(t.buy)}${icon("arrow")}</a><button class="btn btn-ghost" type="button" data-p-share>${icon("share")}${esc(t.share)}</button><button class="btn btn-ghost" type="button" data-p-fav aria-pressed="false">${icon("heart")}<span>${esc(t.favorite)}</span></button></div>
-      <div class="actions actions-small"><button class="btn btn-ghost btn-sm" type="button" data-p-ics>${icon("calendar")}${esc(t.addToCalendar)}</button><a class="btn btn-ghost btn-sm" data-p-map href="/" target="_blank" rel="noopener noreferrer">${icon("pin")}<span>${esc(t.directions)}</span></a></div>
+      <div class="actions actions-small"><button class="btn btn-ghost btn-sm" type="button" data-p-ics>${icon("calendar")}${esc(t.addToCalendar)}</button><a class="btn btn-ghost btn-sm" data-p-map href="/" target="_blank" rel="noopener noreferrer">${icon("pin")}<span>${esc(t.directions)}</span></a><button class="btn btn-ghost btn-sm" type="button" data-p-follow hidden>${icon("bell")}<span></span></button></div>
     </div>
+  </dialog>
+
+  <dialog class="sheet" id="dlg-follow" aria-labelledby="dlg-follow-title">
+    <div class="sheet-head"><h2 id="dlg-follow-title">${icon("bell")}<span data-f-title></span></h2><button class="round" type="button" data-close aria-label="${esc(t.close)}">${icon("close")}</button></div>
+    <form class="follow-form" data-follow-form>
+      <p data-f-lead></p>
+      <label class="input"><span>${esc(t.followEmail)}</span><input name="email" type="email" required maxlength="320" autocomplete="email" inputmode="email" /></label>
+      <label class="input"><span>${esc(t.followName)}</span><input name="firstName" type="text" maxlength="120" autocomplete="given-name" /></label>
+      <p class="follow-note" data-f-note></p>
+      <p class="follow-error" role="alert" data-f-error hidden></p>
+      <button class="btn btn-primary" type="submit">${icon("bell")}${esc(t.followSubmit)}</button>
+    </form>
+    <p class="follow-done" role="status" tabindex="-1" data-f-done hidden></p>
   </dialog>
 
   <dialog class="palette" id="dlg-search" aria-labelledby="dlg-search-title">
@@ -696,6 +780,53 @@ export function renderHome({ origin, lang, brands, query, now, asset }: RenderOp
   </section>
 
   <script type="application/json" id="alkao-data">${inertJson(data)}</script>
+  <script src="${esc(asset("home.js"))}" defer></script>
+</body>
+</html>`;
+}
+
+/** Run 67: `/accessibilite`, what ALKAO does for accessibility, in the home's look. */
+export function renderAccessibility({ origin, lang, now, asset }: Pick<RenderOptions, "origin" | "lang" | "now" | "asset">): string {
+  const t = COPY[lang];
+  const a = t.a11y;
+  const path = (l: Lang) => `/accessibilite${l === "en" ? "?lang=en" : ""}`;
+  const home = `/${lang === "en" ? "?lang=en" : ""}`;
+  const year = Number(new Intl.DateTimeFormat("en-CA", { timeZone: "America/Toronto", year: "numeric" }).format(now));
+  const frame: Frame = { t, lang, base: home, home, here: path(lang), otherHere: path(t.other), year };
+  const url = (l: Lang) => absolute(origin, path(l));
+  return `<!doctype html>
+<html lang="${t.lang}">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>${esc(a.title)}</title>
+  <meta name="description" content="${esc(a.description)}" />
+  ${origin ? `<link rel="canonical" href="${esc(url(lang))}" />
+  <link rel="alternate" hreflang="fr-CA" href="${esc(url("fr"))}" />
+  <link rel="alternate" hreflang="en-CA" href="${esc(url("en"))}" />` : ""}
+  <meta name="theme-color" content="#060D1F" />
+${headAssets(asset)}
+</head>
+<body class="page">
+  <a class="skip" href="#contenu">${esc(t.skip)}</a>
+  <div class="aurora" aria-hidden="true"><span></span><span></span><span></span></div>
+${siteHeader(frame)}
+  <main id="contenu" class="page-main">
+    <div class="wrap narrow">
+      <p class="kicker">ALKAO</p>
+      <h1>${esc(a.h1)}</h1>
+      <p class="lead">${esc(a.lead)}</p>
+      <section aria-labelledby="a11y-do"><h2 id="a11y-do">${esc(a.doTitle)}</h2>
+        <ul class="checks">${a.does.map((d) => `<li>${icon("check")}<span>${esc(d)}</span></li>`).join("")}</ul>
+      </section>
+      <section aria-labelledby="a11y-venue"><h2 id="a11y-venue">${esc(a.venueTitle)}</h2><p>${esc(a.venue)}</p></section>
+      <section aria-labelledby="a11y-issue"><h2 id="a11y-issue">${esc(a.issueTitle)}</h2><p>${esc(a.issue)}</p>
+        <p><a class="btn btn-primary" href="https://takatak.ca">${esc(a.issueLink)}${icon("arrow")}</a></p>
+      </section>
+      <p class="muted">${esc(a.reviewed)}</p>
+    </div>
+  </main>
+${siteFooter(frame)}
   <script src="${esc(asset("home.js"))}" defer></script>
 </body>
 </html>`;

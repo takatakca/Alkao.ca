@@ -28,6 +28,8 @@ const UNGATED = new Set([
   // Run 61: public ALKAO landing page. It exposes no mutation and re-checks the normal
   // Client/Brand/entitlement gate before including any event. With Ticketing disabled it is empty.
   "GET /",
+  // Run 67: the accessibility statement, static text in the home's look.
+  "GET /accessibilite",
   "GET /health",
   "GET /health/ready",
   // Run 39: the kind of the caller's address only (public, private or unknown).
