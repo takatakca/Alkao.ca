@@ -169,6 +169,37 @@ describe("platform home in the browser", () => {
     await context.close();
   });
 
+  it("Run 67: follows the organizer from the quick view, with a confirmation e-mail to come", async () => {
+    const { page, context, errors } = await home();
+    await page.locator(".grid .card").getByRole("button", { name: "Aperçu" }).click();
+    const preview = page.getByRole("dialog", { name: TITLE });
+    await preview.waitFor();
+    const followBtn = preview.getByRole("button", { name: /^Suivre / });
+    const brand = (await followBtn.textContent())!.replace(/^Suivre /, "").trim();
+    await followBtn.click();
+    const dialog = page.getByRole("dialog", { name: `Suivre ${brand}` });
+    await dialog.waitFor();
+    await expect.poll(() => page.evaluate(() => (globalThis as any).document.activeElement?.getAttribute("name"))).toBe("email");
+    await dialog.getByRole("textbox", { name: "Courriel" }).fill("pas-une-adresse");
+    await dialog.getByRole("button", { name: "Suivre" }).click();
+    // The browser refuses the address itself: nothing is sent.
+    expect(await dialog.getByRole("status").isVisible()).toBe(false);
+    await dialog.getByRole("textbox", { name: "Courriel" }).fill("abonne@example.test");
+    await dialog.getByRole("textbox", { name: "Prénom (facultatif)" }).fill("Alex");
+    await dialog.getByRole("button", { name: "Suivre" }).click();
+    await dialog.getByText(`Presque fini! Ouvrez le courriel de ${brand} et confirmez votre inscription.`).waitFor();
+    const { rows } = await db.pool.query<{ status: string; source: string; first_name: string }>(
+      `SELECT status, source, first_name FROM public.ticketing_newsletter_signups WHERE email = 'abonne@example.test'`);
+    expect(rows).toEqual([{ status: "pending", source: "alkao", first_name: "Alex" }]);
+    // Escape closes the form and comes back to the quick view, on the button that opened it.
+    await page.keyboard.press("Escape");
+    await expect.poll(() => dialog.isVisible()).toBe(false);
+    expect(await preview.isVisible()).toBe(true);
+    await expect.poll(() => page.evaluate(() => (globalThis as any).document.activeElement?.hasAttribute("data-p-follow"))).toBe(true);
+    expect(errors).toEqual([]);
+    await context.close();
+  });
+
   it("still works without JavaScript: first slide, search form and answers", async () => {
     const { page, context } = await home({ locale: "fr-CA", javaScriptEnabled: false });
     expect(await page.locator("[data-caption]:not([hidden])").count()).toBe(1);

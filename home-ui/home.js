@@ -3,7 +3,8 @@
 // scroll, rails, favourites (this browser only), quick view, search palette, the assistant
 // (answers from the page's own help topics and events) and a language suggestion.
 // Run 66: recently viewed (this browser only), "add to calendar" (.ics made here), directions
-// and the install prompt.
+// and the install prompt. Run 67: "Suivre", the organizer's newsletter sign-up (confirmed by
+// e-mail), sent to this site's own public API.
 // Organizers' text is only ever set with textContent.
 (() => {
   "use strict";
@@ -217,17 +218,18 @@
   });
 
   // ── Dialogs ──
-  let opener = null;
+  // One opener per open dialog: the follow form can open over the quick view.
+  const openers = [];
   const open = (dialog) => {
     if (!dialog || !canDialog) return false;
-    opener = doc.activeElement;
+    openers.push(doc.activeElement);
     dialog.showModal();
     return true;
   };
   $$("dialog").forEach((dialog) => {
     dialog.addEventListener("click", (e) => { if (e.target === dialog) dialog.close(); });
     $$("[data-close]", dialog).forEach((b) => b.addEventListener("click", () => dialog.close()));
-    dialog.addEventListener("close", () => { if (opener && typeof opener.focus === "function") opener.focus(); opener = null; });
+    dialog.addEventListener("close", () => { const back = openers.pop(); if (back && typeof back.focus === "function") back.focus(); });
   });
 
   const tickets = doc.getElementById("dlg-tickets");
@@ -280,6 +282,63 @@
     window.setTimeout(() => URL.revokeObjectURL(url), 4000);
   };
 
+  // ── Follow an organizer: its newsletter, confirmed by e-mail (nothing is saved before) ──
+  const followDialog = doc.getElementById("dlg-follow");
+  const followForm = followDialog ? $("[data-follow-form]", followDialog) : null;
+  const organizers = new Map((Array.isArray(data.organizers) ? data.organizers : []).map((o) => [o.id, o]));
+  const fill = (text, name) => String(text || "").replace("{b}", name);
+  let following = null;
+  const openFollow = (id) => {
+    const o = organizers.get(id);
+    if (!o || !followForm) return;
+    following = o;
+    $("[data-f-title]", followDialog).textContent = fill(t.follow, o.name);
+    $("[data-f-lead]", followDialog).textContent = fill(t.followLead, o.name);
+    $("[data-f-note]", followDialog).textContent = fill(t.followNote, o.name);
+    $("[data-f-error]", followDialog).hidden = true;
+    $("[data-f-done]", followDialog).hidden = true;
+    followForm.hidden = false;
+    open(followDialog);
+    window.setTimeout(() => $("input[name=email]", followForm)?.focus(), 30);
+  };
+  if (followDialog && followForm && canDialog && typeof fetch === "function") {
+    $$("[data-follow]").forEach((b) => { b.hidden = !organizers.has(b.dataset.follow); b.addEventListener("click", () => openFollow(b.dataset.follow)); });
+    const submit = $("button[type=submit]", followForm);
+    const error = $("[data-f-error]", followDialog);
+    const done = $("[data-f-done]", followDialog);
+    followForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      if (!following) return;
+      const form = new FormData(followForm);
+      const fail = (text) => { error.textContent = text; error.hidden = false; };
+      error.hidden = true;
+      submit.disabled = true;
+      try {
+        const res = await fetch(following.follow, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            email: String(form.get("email") || "").trim(),
+            firstName: String(form.get("firstName") || "").trim() || null,
+            language: data.lang === "en" ? "en" : "fr",
+            source: "alkao",
+          }),
+        });
+        if (res.status === 202) {
+          followForm.hidden = true;
+          followForm.reset();
+          done.textContent = fill(t.followDone, following.name);
+          done.hidden = false;
+          done.focus();
+        } else fail(res.status === 429 ? t.followBusy : res.status === 400 ? t.followInvalid : t.followError);
+      } catch {
+        fail(t.followError);
+      } finally {
+        submit.disabled = false;
+      }
+    });
+  }
+
   // Quick view
   const preview = doc.getElementById("dlg-preview");
   let previewId = null;
@@ -310,6 +369,12 @@
       map.hidden = !ev.map;
       if (ev.map) { map.href = ev.map; map.setAttribute("aria-label", (t.directionsTo || "{p}").replace("{p}", ev.address)); }
     }
+    const followBtn = $("[data-p-follow]", preview);
+    if (followBtn) {
+      const o = organizers.get(ev.brandId);
+      followBtn.hidden = !o || !followForm || typeof fetch !== "function";
+      if (o) { followBtn.dataset.org = o.id; $("span", followBtn).textContent = fill(t.follow, o.name); }
+    }
     viewed(ev.id);
   };
   if (preview && canDialog) {
@@ -318,6 +383,7 @@
       btn.addEventListener("click", () => { const ev = byId.get(btn.dataset.preview); if (ev) { fillPreview(ev); open(preview); } });
     });
     $("[data-p-ics]", preview)?.addEventListener("click", () => addToCalendar(byId.get(previewId), 0));
+    $("[data-p-follow]", preview)?.addEventListener("click", (e) => openFollow(e.currentTarget.dataset.org));
     $("[data-p-fav]", preview)?.addEventListener("click", () => {
       if (!previewId) return;
       toggleFav(previewId);

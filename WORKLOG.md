@@ -3,7 +3,9 @@
 Newest first, one line per piece of work. Rule: `AGENTS.md` › Work log rule.
 Format: `YYYY-MM-DD | agent | branch → PR | status | what | next step`
 
-- 2026-10-13 | claude (Code, cloud) | claude/amazing-pascal-tppqd4 → PR #78 | review | Run 66: home extras from the benchmark — price filter and sort, organizer chips, event JSON-LD with offers per date, add to calendar and directions in the quick view, recently viewed, installable (PWA manifest) | merge when green, check alkao.ca
+- 2026-10-14 | claude (Code, cloud) | claude/amazing-pascal-tppqd4 → PR #79 | review | Run 68: robots.txt and sitemap.xml (home, accessibility, listed shops), in the same PR as Run 67 | merge when green
+- 2026-10-14 | claude (Code, cloud) | claude/amazing-pascal-tppqd4 → PR #79 | review | Run 67: "Suivre cet organisateur" (newsletter double opt-in from the home), agenda view day by day, accessibility page | merge when green, check alkao.ca
+- 2026-10-13 | claude (Code, cloud) | claude/amazing-pascal-tppqd4 → PR #78 | done | Run 66: home extras from the benchmark — price filter and sort, organizer chips, event JSON-LD with offers per date, add to calendar and directions in the quick view, recently viewed, installable (PWA manifest) | next: Run 67
 - 2026-10-13 | claude (Code, cloud) | claude/amazing-pascal-tppqd4 → PR #77 | done | Run 65: OPC — exchange and refund policy shown before payment, e-mail to buyers when a session's time or place changes; competitor benchmark (docs/ALKAO_COMPETITIVE_FEATURES.md) | next: structured event data (benchmark gap 4)
 - 2026-10-13 | claude (Code, cloud) | claude/amazing-pascal-tppqd4 → PR #76 | done | Run 64: alkao.ca premium home (hero carousel and search, categories, event rails, quick view, assistant, FR/EN, organizer band) | organizers opt in from /ops → Apparence
 - 2026-10-13 | claude (Code, cloud) | claude/amazing-pascal-tppqd4 → PR #74 | done | Run 63: live watch of alkao.ca every 3 hours (GitHub workflow, GET only), secret guard as its own CI step | add billets.promohavana.ca to live.yml once it serves the current ALKAO
