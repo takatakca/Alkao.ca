@@ -2,6 +2,12 @@
 
 This file records the current cross-agent handoff. Do not erase prior repository history; the detailed chronological log remains in `WORKLOG.md`.
 
+## 2026-10-14 — Run 73: pages Salles
+
+- Public routes `/salles` and `/salles/:clientId/:brandId/:venueId`, with FR/EN, event links, directions and structured place data. Search engines see only venues with already-public, on-sale ALKAO events. No migration and no changes to checkout or payments.
+- `src/api/venue-view.ts` groups public events by stable tenant-scoped venue id. The homepage links each event's venue; the sitemap includes venue detail pages only for opted-in, operational Brands. White-label deployments keep their independent homepage and do not expose the venue directory.
+- Added regression tests in `test/api/venues.test.ts`. The production deployment remains gated by the existing Coolify `ALKAO_MIGRATE_ON_START` requirement; verify `/health/ready` before enabling sales.
+
 ## 2026-10-14 — Run 72: presale codes
 
 - `ticketing_presale_codes` (server only), `src/db/presale.ts`; `isSessionSellable(…, presaleFrom)`

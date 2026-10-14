@@ -4,6 +4,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Hono } from "hono";
 import { parseQuery, renderAccessibility, renderHome, type HomeBrand } from "./home-view.js";
+import { publicVenues, renderVenueDirectory, renderVenuePage, venuePath } from "./venue-view.js";
 
 export type { HomeBrand, HomeEvent } from "./home-view.js";
 
@@ -82,6 +83,33 @@ export function mountHome(app: Hono<any>, cfg: HomeConfig): void {
     return c.html(html, 200, PAGE_HEADERS);
   });
 
+  // Run 73: venue discovery uses only already-gated, opted-in events. White-label domains
+  // do not expose the ALKAO directory. Unknown venues never reveal a private catalog.
+  app.get("/salles", async (c) => {
+    if (cfg.homeUrl) return c.json({ error: { code: "not_found" } }, 404);
+    const lang = c.req.query("lang") === "en" ? "en" : "fr";
+    const html = renderVenueDirectory({
+      origin: cfg.publicUrl ? new URL(cfg.publicUrl).origin : null,
+      lang, venues: publicVenues(await cfg.load()), now: cfg.now?.() ?? new Date(), asset: homeAsset,
+    });
+    return c.html(html, 200, PAGE_HEADERS);
+  });
+  app.get("/salles/:clientId/:brandId/:venueId", async (c) => {
+    if (cfg.homeUrl) return c.json({ error: { code: "not_found" } }, 404);
+    const id = [c.req.param("clientId"), c.req.param("brandId"), c.req.param("venueId")];
+    if (!id.every((value) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value ?? "")))
+      return c.json({ error: { code: "not_found" } }, 404);
+    const venue = publicVenues(await cfg.load()).find((v) =>
+      v.clientId === id[0]!.toLowerCase() && v.brandId === id[1]!.toLowerCase() && v.venueId === id[2]!.toLowerCase());
+    if (!venue) return c.json({ error: { code: "not_found" } }, 404);
+    const html = renderVenuePage({
+      origin: cfg.publicUrl ? new URL(cfg.publicUrl).origin : null,
+      lang: c.req.query("lang") === "en" ? "en" : "fr",
+      venue, now: cfg.now?.() ?? new Date(), asset: homeAsset,
+    });
+    return c.html(html, 200, PAGE_HEADERS);
+  });
+
   // Run 67: what ALKAO does for accessibility (no data, same look and policy as the home).
   app.get("/accessibilite", (c) => {
     const lang = c.req.query("lang") === "en" ? "en" : "fr";
@@ -124,12 +152,16 @@ export function mountHome(app: Hono<any>, cfg: HomeConfig): void {
       return [`<url><loc>${xml(fr)}</loc>${alt}</url>`, `<url><loc>${xml(en)}</loc>${alt}</url>`];
     };
     // Only what the home lists: opted-in Brands with Ticketing active and dates on sale.
-    const shops = (await cfg.load()).flatMap((b) => b.events.map((e) => `<url><loc>${xml(`${origin}${e.shopPath}`)}</loc></url>`));
+    const listed = await cfg.load();
+    const shops = listed.flatMap((b) => b.events.map((e) => `<url><loc>${xml(`${origin}${e.shopPath}`)}</loc></url>`));
+    const venuePages = cfg.homeUrl ? [] : publicVenues(listed).flatMap((venue) => pair(venuePath(venue)));
     const body = [
       '<?xml version="1.0" encoding="UTF-8"?>',
       '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">',
       ...(cfg.homeUrl ? [] : pair("/")),
       ...pair("/accessibilite"),
+      ...(venuePages.length ? pair("/salles") : []),
+      ...venuePages,
       ...shops,
       "</urlset>",
     ].join("\n");

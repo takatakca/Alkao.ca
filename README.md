@@ -31,6 +31,7 @@ versioned control contract.
 | `src/delivery`, `buyer-ui/` | Buyers' tickets email (outbox, Resend, worker) and the buyer's tickets page at `/billets` (Run 06) |
 | `shop-ui/` | Hosted ticket shop at `/acheter/<clientId>/<brandId>[/<eventId>]` (Run 08) |
 | `home-ui/` | The platform home's style, script, photos and fonts, served at `/assets/home/` (Run 64; the page itself is `src/api/home-view.ts`) |
+| `src/api/venue-view.ts` | Public FR/EN venue directory `/salles` and tenant-scoped venue details (Run 73); lists only events already approved for the ALKAO platform home |
 | `src/credentials`, `src/scanner` | Ed25519 QR credentials (`ALK1`), derived per-Client keys, scanner manifest and gate scans |
 | `contracts/` | Published JSON Schema of `alkao.control.v1` (generated; drift-tested) |
 | `supabase/migrations` | Schema. Every `ticketing_*` table enables RLS in the migration that creates it |

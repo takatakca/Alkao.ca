@@ -3,6 +3,8 @@
 Newest first, one line per piece of work. Rule: `AGENTS.md` › Work log rule.
 Format: `YYYY-MM-DD | agent | branch → PR | status | what | next step`
 
+- 2026-10-14 | ChatGPT (GitHub) | main → direct commit | done | Run 73: bilingual venue index and venue pages, links from events, SEO sitemap, gated by ALKAO public catalog | deploy after Coolify migrations; check live site and QA
+
 - 2026-10-14 | claude (Code, cloud) | claude/amazing-pascal-tppqd4 → PR #83 | review | Run 72: presale codes (buy before the public sale opens) and "La vente ouvre le …" in the shop | merge when green
 - 2026-10-14 | claude (Code, cloud) | claude/amazing-pascal-tppqd4 → PR #82 | done | Run 71: waitlist for sold-out sessions (shop form, one e-mail when seats come back, /ops count, purge after 30 days) | owner: turn on ALKAO_MIGRATE_ON_START so Runs 69-71 deploy
 - 2026-10-14 | claude (Code, cloud) | claude/amazing-pascal-tppqd4 → PR #81 | done | Run 70: /health/ready checks the build's migrations are applied (schema current/behind/unknown); live watch reports it | alkao.ca still on the Run 69 build 25 min later: owner turns on ALKAO_MIGRATE_ON_START

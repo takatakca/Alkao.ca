@@ -286,7 +286,7 @@ export async function loadPublicEventPlace(q: Queryable, s: TenantScope, eventId
 export const listPublicEvents = (q: Queryable, s: TenantScope) =>
   many(
     q,
-    `SELECT e.id, e.slug, e.title, e.description, e.sales_open_at, e.sales_close_at, e.image_url,
+    `SELECT e.id, e.venue_id, e.slug, e.title, e.description, e.sales_open_at, e.sales_close_at, e.image_url,
             e.category, e.min_age, e.doors_open_minutes, e.language, e.accessibility,
             v.name AS venue_name, v.address_line1 AS venue_address, v.city AS venue_city, v.timezone AS venue_timezone
      FROM public.ticketing_events e

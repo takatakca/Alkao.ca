@@ -13,6 +13,8 @@ export interface HomeEvent {
   title: string;
   description: string | null;
   imageUrl: string | null;
+  /** Stable id within this Brand, never published without an on-sale event. */
+  venueId: string;
   venueName: string | null;
   venueCity: string | null;
   /** Run 66: the venue's street address, for directions. */
@@ -151,7 +153,7 @@ const logoMark = (id: string) =>
 type Words = (typeof COPY)[Lang];
 
 /** Run 67: what the header and footer need. */
-interface Frame {
+export interface Frame {
   t: Words;
   lang: Lang;
   /** "" on the home (its sections are on the page); the home's address on another page. */
@@ -163,7 +165,7 @@ interface Frame {
   year: number;
 }
 
-function headAssets(asset: (name: string) => string): string {
+export function headAssets(asset: (name: string) => string): string {
   return `  <link rel="icon" href="${esc(asset("favicon.svg"))}" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="${esc(asset("img/icon-192.png"))}" />
   <link rel="manifest" href="${esc(asset("manifest.webmanifest"))}" />
@@ -172,12 +174,14 @@ function headAssets(asset: (name: string) => string): string {
   <link rel="stylesheet" href="${esc(asset("home.css"))}" />`;
 }
 
-function siteHeader({ t, base, home, here, otherHere }: Frame): string {
+const langPath = (language: string) => `/salles${language === "en-CA" ? "?lang=en" : ""}`;
+
+export function siteHeader({ t, base, home, here, otherHere }: Frame): string {
   const a = (hash: string, label: string) => `<a href="${esc(`${base}#${hash}`)}">${esc(label)}</a>`;
   return `  <header class="site-head" data-head>
     <div class="wrap head-row">
       <a class="logo" href="${esc(home)}" aria-label="ALKAO">${logoMark("lg-head")}<span class="word">ALKAO</span></a>
-      <nav class="main-nav" aria-label="${esc(t.menu)}">${a("evenements", t.nav.events)}${a("categories", t.nav.categories)}${a("organisateurs", t.nav.organizers)}${a("aide", t.nav.help)}</nav>
+      <nav class="main-nav" aria-label="${esc(t.menu)}">${a("evenements", t.nav.events)}${a("categories", t.nav.categories)}${a("organisateurs", t.nav.organizers)}<a href="${langPath(t.lang)}">${esc(t.nav.venues)}</a>${a("aide", t.nav.help)}</nav>
       <div class="head-actions">
         <a class="icon-btn" href="${esc(`${base}#evenements`)}" data-open-search aria-label="${esc(t.search)}">${icon("search")}</a>
         <a class="btn btn-ghost btn-sm tickets-btn" href="${esc(`${base}#aide`)}" data-open-tickets>${icon("ticket")}<span>${esc(t.myTickets)}</span></a>
@@ -187,14 +191,14 @@ function siteHeader({ t, base, home, here, otherHere }: Frame): string {
         <a class="btn btn-primary btn-sm head-cta" href="/ops">${esc(t.signin)}</a>
         <details class="mobile-menu">
           <summary aria-label="${esc(t.menu)}">${icon("menu")}</summary>
-          <div class="mobile-panel">${a("evenements", t.nav.events)}${a("categories", t.nav.categories)}${a("comment", t.nav.how)}${a("organisateurs", t.nav.organizers)}${a("aide", t.nav.help)}<a href="/ops">${esc(t.signin)}</a><a href="${esc(otherHere)}" lang="${COPY[t.other].lang}">${icon("globe")} ${esc(t.otherLabel)}</a></div>
+          <div class="mobile-panel">${a("evenements", t.nav.events)}${a("categories", t.nav.categories)}${a("comment", t.nav.how)}${a("organisateurs", t.nav.organizers)}<a href="${langPath(t.lang)}">${esc(t.nav.venues)}</a>${a("aide", t.nav.help)}<a href="/ops">${esc(t.signin)}</a><a href="${esc(otherHere)}" lang="${COPY[t.other].lang}">${icon("globe")} ${esc(t.otherLabel)}</a></div>
         </details>
       </div>
     </div>
   </header>`;
 }
 
-function siteFooter({ t, lang, base, home, here, otherHere, year }: Frame): string {
+export function siteFooter({ t, lang, base, home, here, otherHere, year }: Frame): string {
   const a = (hash: string, label: string) => `<a href="${esc(`${base}#${hash}`)}">${esc(label)}</a>`;
   return `  <footer class="site-foot">
     <div class="wrap foot-grid">
@@ -229,6 +233,7 @@ interface Card {
   /** Run 66: name, street and city, for a map search. */
   address: string;
   venue: string;
+  venuePath: string;
   street: string;
   city: string;
   shop: string;
@@ -316,6 +321,7 @@ function cardsOf(brands: HomeBrand[], lang: Lang, origin: string | null, asset: 
         place: [e.venueName, e.venueCity].filter(Boolean).join(" · "),
         address: [e.venueName, e.venueAddress, e.venueCity].map((x) => (x ?? "").trim()).filter(Boolean).join(", "),
         venue: (e.venueName ?? "").trim(),
+        venuePath: `/salles/${b.clientId}/${b.brandId}/${e.venueId}`,
         street: (e.venueAddress ?? "").trim(),
         city: e.venueCity ?? "",
         shop: e.shopPath,
@@ -438,7 +444,7 @@ export function renderHome({ origin, lang, brands, query, now, asset }: RenderOp
         <p class="card-brand">${c.logo ? `<img src="${esc(c.logo)}" alt="" loading="lazy" decoding="async" />` : ""}${esc(c.brand)}</p>
         <h3 class="card-title"><a href="${esc(c.shop)}">${esc(c.title)}</a></h3>
         <p class="card-meta">${icon("clock")}<time datetime="${esc(c.next.toISOString())}">${esc(c.nextLabel)}</time></p>
-        ${c.place ? `<p class="card-meta">${icon("pin")}<span>${esc(c.place)}</span></p>` : ""}
+        ${c.place ? `<p class="card-meta">${icon("pin")}<a href="${esc(c.venuePath)}">${esc(c.place)}</a></p>` : ""}
         <div class="card-foot">
           ${c.price ? `<p class="price">${esc(c.price)}</p>` : "<span></span>"}
           <span class="pills">${c.minAge ? `<span class="pill pill-age" title="${esc(t.age(c.minAge))}">${esc(t.agePill(c.minAge))}</span>` : ""}${c.count > 1 ? `<span class="pill">${esc(t.dates(c.count))}</span>` : ""}</span>

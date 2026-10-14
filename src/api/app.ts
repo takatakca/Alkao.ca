@@ -1419,6 +1419,7 @@ export function createApp(deps: AppDeps) {
             title: String(event.title),
             description: event.description == null ? null : String(event.description),
             imageUrl: event.imageUrl == null ? null : String(event.imageUrl),
+            venueId: String(event.venueId),
             venueName: event.venueName == null ? null : String(event.venueName),
             venueCity: event.venueCity == null ? null : String(event.venueCity),
             venueAddress: event.venueAddress == null ? null : String(event.venueAddress),
