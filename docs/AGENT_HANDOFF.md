@@ -1,5 +1,15 @@
 # ALKAO — Agent handoff (mandatory)
 
+## Run 76 — October 14, 2026
+
+- Code pushed: d67896fb317dcbaa6ba7aa373e5843b95b5440b8.
+- Updated src/api/app.ts; added src/api/order-token.ts and test/api/order-token.test.ts.
+- Order GET and session exchange now reject expired tokens while retaining existing non-expiring links.
+- Package succeeded. Inspect the latest CI before claiming complete validation.
+- Production remains unverified: deployment check 38624485645 failed because /health did not expose a build SHA.
+- Next: check latest CI, correct any failures, and continue secure ticket transfers without bypassing tenant checks.
+
+
 Updated: 2026-10-14. Repository: `takatakca/Alkao.ca`, target branch `main`.
 Read `AGENTS.md`, `WORKLOG.md` and this file **before** working. Historical agent notes
 remain in [TAKATAK_AGENT_HANDOFF.md](TAKATAK_AGENT_HANDOFF.md).

@@ -1,5 +1,10 @@
 # ALKAO — Task queue (priority ordered)
 
+## Current continuation — Run 76
+
+Run 75 CI and Package succeeded at 73cfd4f1. Run 76 (d67896fb) added expiry enforcement to order access authorization; Package succeeded, CI confirmation pending. Production still unverified (Coolify issue #84). Next P1 feature: securely claimed per-Brand buyer ticket transfer with an audit trail and revocable entry credential. Not yet available.
+
+
 Updated 2026-10-14. Before starting any task, read `AGENTS.md`, the top of
 `WORKLOG.md`, and open PR titles. Claim a distinct item; do not duplicate active work.
 

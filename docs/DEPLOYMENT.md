@@ -1,5 +1,10 @@
 # ALKAO — Deployment state and verification
 
+## Verification, October 14, 2026
+
+Run 75 at 73cfd4f1 passed CI and packaging. Strict deployment verification 38624485645 failed after eight attempts because the public /health response did not report the expected build SHA. ALKAO itself responded. Run 76 at d67896fb has no migration and passed packaging. Its live deployment is not confirmed. Coolify setup and source revision attestation remain tracked in GitHub issue #84.
+
+
 Updated 2026-10-14. Do not treat a GitHub push or a MochaHost Package artifact as a deployment.
 Current source: `main`; production target: `https://alkao.ca` via Coolify
 (documented in [ALKAO_DEPLOY_COOLIFY.md](ALKAO_DEPLOY_COOLIFY.md)).

@@ -1,5 +1,10 @@
 # ALKAO — Decisions and non-negotiable constraints
 
+## Run 76: bearer access expiry
+
+Order-reading and buyer session-change endpoints verify the same scope, order and optional expiry. Expired keys always receive the generic order-not-found response. Existing order links with no expiry remain compatible. Future ownership-transfer functions must use the same authorization invariant.
+
+
 Updated 2026-10-14. The existing product decisions are preserved in
 [ALKAO_DECISIONS.md](ALKAO_DECISIONS.md). This file links engineering and operational
 constraints; it does not retroactively change approved product policy.

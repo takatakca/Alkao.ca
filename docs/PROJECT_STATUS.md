@@ -1,5 +1,10 @@
 # ALKAO — Project status
 
+## Run 76 (October 14, 2026)
+
+Pushed d67896fb317dcbaa6ba7aa373e5843b95b5440b8: a shared authorization check for buyer order viewing and session exchanges. Expiring order access keys are rejected when their expiry is reached; existing links without expiry remain supported. Tenant-scoped regression tests added. Package succeeded. New CI result must be checked. Previous Run 75 passed CI and Package on 73cfd4f1. Production deployment is not verified: /health does not include the build SHA.
+
+
 Updated: 2026-10-14. Source of truth: `takatakca/Alkao.ca`, branch `main`.
 This repository is **ALKAO Ticket Hub**, a standalone ticketing engine, not the separate
 ALKAO water-commerce concept. Do not replace its existing product or merge tenant databases.
