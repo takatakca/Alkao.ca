@@ -1,5 +1,10 @@
 # ALKAO — Project status
 
+## Run 78 — 2026-10-15
+
+Source `e3b1777434f72db73110d1c0889e1af84c8adff2` passed full CI 38734506526 and Package 38734506570. Adds a private, RLS-isolated recipient-invitation outbox with deterministic server-derived one-time proofs, queued atomically with the request, and a staged retry-safe bilingual mail dispatcher. No customer mail is automatically sent and no claim or QR ownership transfer is exposed. Production Coolify SHA remains unverified; issue #84.
+
+
 ## Run 77 — current source state
 
 Migration and DB/RLS tests passed CI; private transfer invitation/cancellation service `c7864c5757243ad3835ee1c22f71798240c23732` passed CI run 38631015271 and Package 38631014226. This is NOT the buyer transfer feature yet: no email, no recipient claim or QR replacement. Leave opt-in default OFF. Production is unverified; issue #84 remains blocked.

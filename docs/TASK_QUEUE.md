@@ -1,5 +1,10 @@
 # ALKAO — Task queue (priority ordered)
 
+## Run 78 QA (2026-10-15)
+
+Source `e3b17774`: full CI and Package passed. Default-inactive recipient mail dispatcher and private transactional invitation outbox implemented. Next mandatory P1 work: recipient-only claim validation and atomic ticket credential replacement, sender access revocation, scan-manifest freshness and accessible bilingual UI. This is not an available customer feature. Deployment remains blocked on Coolify issue #84.
+
+
 ## Run 77 — next required work
 
 Default-off transfer request schema and internal invitation/cancellation service were pushed and passed CI/Package through `c7864c57`. Recipient email proof, one-time claim, transactional issuance/QR revocation, buyer UI, offline scanner policy and production deployment are NOT DONE. Implementation contract: `docs/TRANSFER_PROTOCOL.md`.

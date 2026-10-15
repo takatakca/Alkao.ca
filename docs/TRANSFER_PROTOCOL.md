@@ -40,6 +40,30 @@ CI/Package passed for the service at `c7864c57` (CI 38631015271).
 There is still NO public initiation or claim route; no email is sent; no QR
 is reissued. This internal capability is not a complete transfer feature.
 
+## Phase 3 — staged recipient invitation delivery (Run 78, 2026-10-15)
+
+- Source commit `e3b1777434f72db73110d1c0889e1af84c8adff2` adds a service-only
+  `ticketing_transfer_invitation_outbox`, with transactional enqueue, per-tenant
+  composite FK, no PostgREST read access, immutable delivery identity, retry
+  states and idempotency keys. Migration `20261106000100_alkao_transfer_invite_delivery.sql`.
+- `src/delivery/transfer-token.ts` derives the recipient proof from a
+  server-only master secret, random request UUID, tenant, ticket and recipient
+  address; only its SHA-256 is stored in the request. The delivery worker can
+  reconstruct a proof after retries, without persisting any raw token.
+  Existing requests created before this change cannot be reconstructed and
+  are intentionally NOT automatically backfilled or emailed.
+- `src/delivery/transfer-invitations.ts` implements a dedicated, testable,
+  FR/EN-compatible recipient email and transactional delivery function.
+  It checks request status, expiry, ticket/Brand eligibility, actual admission
+  and key rotation before dispatching. It does NOT copy sender's QR.
+- **Safety gate:** `deliverRecipientInvitations` is intentionally NOT called
+  by `startEmailWorker`. No recipient email is dispatched in production, as the
+  claim URL/page and atomic transfer/revocation have not been implemented.
+  Do not enable the sender, create a buyer transfer button or distribute claim
+  URLs until full claim, revocation and offline scanner tests pass.
+- Test coverage: transaction queue, deterministic proof/hash, cancellation,
+  opt-in disable, mail retry, deduplication, rotated key and HTML escaping.
+
 ## Remaining acceptance requirements (not implemented)
 
 1. An authorized order-link holder must select one valid ticket, not an entire
@@ -69,5 +93,4 @@ is reissued. This internal capability is not a complete transfer feature.
 8. Live enablement requires dedicated ALKAO database, secrets, workers, signed
    QR keys and verified deployment SHA. See `docs/DEPLOYMENT.md` and issue #84.
 
-The next coding action is to implement **verified, queued recipient email delivery**. Do not add a public
-claim endpoint or buyer-facing button before those checks exist.
+Next: implement recipient-only token consumption, atomic QR rotation and protected recipient ticket access; validate offline manifest freshness, revocation, refunds and race conditions, then activate the tested mail sender and buyer UI together.

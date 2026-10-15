@@ -1,5 +1,17 @@
 # ALKAO — Agent handoff (mandatory)
 
+## Run 78 — verified source and exact continuation (2026-10-15)
+
+- Current repository `takatakca/Alkao.ca`, main. Functional source SHA `e3b1777434f72db73110d1c0889e1af84c8adff2`.
+- CI run 38734506526 SUCCESS: TypeScript, migration checker, secret guard and all tests; Package 38734506570 SUCCESS. Do not mistake packaging for deployment.
+- Added `src/delivery/transfer-token.ts`, `src/delivery/transfer-invitations.ts`, migration `20261106000100_alkao_transfer_invite_delivery.sql`, test `test/delivery/transfer-invitations.test.ts`; updated `src/ops/transfer-request.ts`, transfer-service and RLS tests.
+- Recipient secret now reproducibly derives from server-only master secret + random request ID, scope, ticket, recipient. Only SHA-256 is retained. Creation transaction enqueues outbox row. Sender has retry, explicit recipient, state/expiry/tenant checks, key-rotation guard and no disclosure in DB.
+- **Not live:** new sender is NOT registered with the automatic worker. A functional recipient claim endpoint, one-time acceptance, atomic QR rotation and rights/ownership changes, refund interaction, offline scanner verification, and responsive FR/EN buyer experience are all UNFINISHED.
+- Last strict production verification 38734266563 FAILED. Site answers its probes but does not expose the current source SHA. Coolify issue #84: authorized operator must confirm separate database, backup, rotate historic leaks, run migrations, configure build SHA and provide health/Stripe test evidence. No production secrets modified.
+- Next action: inspect current main SHA and CI; develop recipient-only claim acceptance with new credential, revoke prior QR and prevent sender token access, plus race/refund/offline-manifest tests. Do not send invitations or show a transfer UI before the entire chain is proven.
+- Automated agent restart is NOT configured. GitHub Actions validates source and observes release only.
+
+
 ## Run 77 — latest execution checkpoint (2026-10-14)
 
 - Source: `c7864c5757243ad3835ee1c22f71798240c23732`, internal `src/ops/transfer-request.ts` and `test/db/transfer-service.test.ts`, building on migration `0da240f241e8c1eb9e0fbf8d23ba72f6567d3c7b`.
