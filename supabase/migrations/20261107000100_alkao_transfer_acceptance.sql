@@ -4,6 +4,10 @@ ALTER TABLE public.ticketing_transfer_requests DROP CONSTRAINT ticketing_transfe
 ALTER TABLE public.ticketing_transfer_requests ADD CONSTRAINT ticketing_transfer_requests_status_check
   CHECK (status IN ('pending', 'cancelled', 'expired', 'claimed'));
 
+-- A scoped unique key lets every foreign key retain Client + Brand integrity.
+ALTER TABLE public.ticketing_tickets
+  ADD CONSTRAINT ticketing_tickets_transfer_scope_key UNIQUE (id, client_id, brand_id);
+
 CREATE TABLE public.ticketing_transfer_acceptances (
   request_id uuid PRIMARY KEY,
   client_id uuid NOT NULL,
@@ -17,7 +21,8 @@ CREATE TABLE public.ticketing_transfer_acceptances (
     FOREIGN KEY (request_id, client_id, brand_id)
     REFERENCES public.ticketing_transfer_requests (id, client_id, brand_id) ON DELETE RESTRICT,
   CONSTRAINT ticketing_transfer_acceptances_ticket_fkey
-    FOREIGN KEY (ticket_id) REFERENCES public.ticketing_tickets (id) ON DELETE RESTRICT,
+    FOREIGN KEY (ticket_id, client_id, brand_id)
+    REFERENCES public.ticketing_tickets (id, client_id, brand_id) ON DELETE RESTRICT,
   CONSTRAINT ticketing_transfer_acceptances_credential_fkey
     FOREIGN KEY (credential_id, client_id, brand_id)
     REFERENCES public.ticketing_credentials (id, client_id, brand_id) ON DELETE RESTRICT

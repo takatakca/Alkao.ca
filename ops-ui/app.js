@@ -46,6 +46,7 @@ const SCAN_FR = {
   wrong_session: ["warn", "MAUVAISE SÉANCE"], too_early: ["warn", "TROP TÔT"], too_late: ["warn", "TROP TARD"],
   unknown_credential: ["bad", "BILLET INCONNU"], invalid_signature: ["bad", "FAUX BILLET"], unknown_key: ["bad", "BILLET D'UN AUTRE ORGANISATEUR"],
   malformed: ["bad", "CODE ILLISIBLE"],
+  manifest_expired: ["warn", "LISTE EXPIRÉE — RECONNECTER"],
 };
 
 // Run 33: the gate hears and feels the answer, with eyes on the line rather than the screen.

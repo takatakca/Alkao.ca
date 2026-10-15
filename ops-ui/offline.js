@@ -52,6 +52,12 @@ async function verifySignature(publicKey, signed, signature) {
 
 /** Check one QR code against the stored manifest, record it, and return the result. */
 export async function offlineScan(store, raw, now = Date.now()) {
+  // A manifest is a time-limited snapshot of revocations. A transferred QR
+  // must NOT remain admissible from an older offline copy. Never queue/accept
+  // a scan when validity cannot be proved; operator must reconnect/refresh.
+  const validUntil = Date.parse(store?.manifest?.validUntil ?? "");
+  if (!Number.isFinite(validUntil) || now >= validUntil)
+    return { result: "manifest_expired" };
   const payload = raw.trim();
   store.queue.push({ payload, scannedAt: new Date(now).toISOString() });
   const m = PAYLOAD_RE.exec(payload);
