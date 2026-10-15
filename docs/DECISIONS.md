@@ -1,5 +1,10 @@
 # ALKAO — Decisions and non-negotiable constraints
 
+## Run 79 — revocation before access, scanners fail closed
+
+Ticket transfers preserve immutable original order and ticket identity; recipient acceptance issues a separate ticket-view token while rotating the same ticket's signed credential in one transaction. The buyer's order QR lookup must exclude transferred tickets. Acceptances are one-time and restricted to a Client/Brand; old credentials can never become active again. Admission scanning must lock the ticket and recheck credential status after the lock. Offline manifests expire after ten minutes and the app must refuse missing/expired manifest validity rather than admit stale QR. Transfers are cut off at least fifteen minutes before the session's configured admission window. No public activation before end-to-end QA.
+
+
 ## Run 78 — secure recipient invitations
 
 The future recipient proof is derived deterministically only from a trusted server-side master secret, immutable random invitation UUID, tenant, ticket and normalized recipient. The database stores only its hash, not the raw proof. Invites use a private transactional outbox; sender-side order links are not recipient proof. Email delivery stays disconnected from the production worker and from buyer UI until a validated recipient claim page, atomic QR revocation/reissue, fraud controls and scanner refresh policy are implemented. Existing pending invitations from the earlier random-token prototype are not automatically migrated to the new queue.

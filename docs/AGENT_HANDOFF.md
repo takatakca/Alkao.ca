@@ -1,5 +1,16 @@
 # ALKAO — Agent handoff (mandatory)
 
+## Run 79 — validated internal QR transfer (2026-10-15)
+
+- Source code/main `a4994017953ed437bcfee50d740195949d9917fd`. GitHub CI 38736545944 SUCCESS (typecheck, migrations, secrets, all tests); Package 38736546000 SUCCESS.
+- Run 79 initial implementation `99f94e3582b3e8c063fdadf5c0d62e090fe296f1`, corrected a tenant-scoped FK and offline scanner stale-manifest handling in `a4994017`. All new acceptance tests passed before and after the fix.
+- New migration: `supabase/migrations/20261107000100_alkao_transfer_acceptance.sql`. New service: `src/ops/transfer-acceptance.ts`; changed `src/delivery/transfer-token.ts`, `src/db/credentials.ts`, `src/scanner/service.ts`, `ops-ui/offline.js`, `ops-ui/app.js`, `test/db/rls.test.ts`; tests `test/db/transfer-acceptance.test.ts` and `test/ops/offline.test.ts`.
+- The recipient claim service (INTERNAL ONLY) requires scoped claim secret, live paid and unscanned ticket, brand opt-in and request expiry. Claim locks the order/ticket and atomically revokes old QR, issues fresh credential and records one accepted transfer. The original order QR read excludes transferred tickets. Online scan rechecks revocation after ticket lock. Offline scanners reject expired/missing manifest validity rather than accepting stale QR.
+- Buyer-facing initiation, recipient claim page, publicly accessible recipient ticket page, signed invitation auto-delivery and full refund/browser/device E2E are NOT finished. The sender is NOT wired to the production email worker. No public transfer button is available.
+- Latest strict deployment verification 38736880991 started after CI; inspect its final result. Historical checks failed because Coolify did not expose the running source SHA. Site availability is not deployment proof. Dedicated ALKAO DB, migrations, old key rotation and Coolify access remain with authorized operator, issue #84; do not change unknown production DB.
+- Next exact action: inspect main SHA / latest Actions, finish gated public initiation + cancellation + recipient claim/QR routes, responsive FR/EN buyer/recipient UI, enable email delivery only after real E2E tests; confirm scanner freshness, refunds and live Coolify SHA. No autonomous agent-session restart exists.
+
+
 ## Run 78 — verified source and exact continuation (2026-10-15)
 
 - Current repository `takatakca/Alkao.ca`, main. Functional source SHA `e3b1777434f72db73110d1c0889e1af84c8adff2`.

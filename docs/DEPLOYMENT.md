@@ -1,5 +1,10 @@
 # ALKAO — Deployment state and verification
 
+## Run 79 release evidence (2026-10-15)
+
+Source `a4994017953ed437bcfee50d740195949d9917fd`: CI 38736545944 and Package 38736546000 succeeded. New migrations: `20261106000100_alkao_transfer_invite_delivery.sql`, `20261107000100_alkao_transfer_acceptance.sql`; run only on a backed-up dedicated ALKAO database with authorized operator. Transferring remains default OFF and mail dispatch not wired. Strict Verify deployment 38736880991 was in progress at handoff; older runs failed without public source SHA. An ALKAO HTTP response is not evidence of the requested commit. Refer to issue #84 for migration and Coolify operator approvals; no credentials in GitHub.
+
+
 ## Run 78 release status (2026-10-15)
 
 Code SHA `e3b1777434f72db73110d1c0889e1af84c8adff2` passed CI and packaging. New migration `20261106000100_alkao_transfer_invite_delivery.sql` requires an authorized migration on the dedicated ALKAO database. Invitation dispatch is intentionally NOT wired to the scheduled worker, and no payment or live transfer toggle was enabled. The previous strict deployment verifier (38734266563) failed because live ALKAO did not attest its Git SHA. Do not claim latest main is deployed. Verify build SHA, schema, readiness, and backup in Coolify #84.

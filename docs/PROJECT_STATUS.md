@@ -1,5 +1,10 @@
 # ALKAO — Project status
 
+## Run 79 — validated internal ticket transfer (2026-10-15)
+
+Code SHA `a4994017953ed437bcfee50d740195949d9917fd`: GitHub CI 38736545944 SUCCESS, Package 38736546000 SUCCESS. Atomic recipient claim/credential reissue, tenant-scoped append-only acceptance, sender QR exclusion and online/offline scanner replay mitigations are present and tested. No public claim routes or client transfer UI and email sender remains inactive. New database migration requires authorized operator on dedicated ALKAO DB. Production release is NOT verified (Coolify issue #84).
+
+
 ## Run 78 — 2026-10-15
 
 Source `e3b1777434f72db73110d1c0889e1af84c8adff2` passed full CI 38734506526 and Package 38734506570. Adds a private, RLS-isolated recipient-invitation outbox with deterministic server-derived one-time proofs, queued atomically with the request, and a staged retry-safe bilingual mail dispatcher. No customer mail is automatically sent and no claim or QR ownership transfer is exposed. Production Coolify SHA remains unverified; issue #84.

@@ -64,6 +64,31 @@ is reissued. This internal capability is not a complete transfer feature.
 - Test coverage: transaction queue, deterministic proof/hash, cancellation,
   opt-in disable, mail retry, deduplication, rotated key and HTML escaping.
 
+## Phase 4 — internal claim and QR rotation (Run 79, 2026-10-15)
+
+- Source `99f94e3582b3e8c063fdadf5c0d62e090fe296f1` and migration
+  `20261107000100_alkao_transfer_acceptance.sql` add append-only,
+  tenant-scoped `ticketing_transfer_acceptances`. Request moves to `claimed`
+  only alongside an acceptance in the same database transaction.
+- `src/ops/transfer-acceptance.ts` validates recipient's mailbox proof hash,
+  one-time status, expiry, Brand opt-in, valid paid ticket, scanner admissions,
+  and cutoff before the admission window. It revokes the prior credential,
+  creates the new credential for the SAME immutable ticket, writes a PII-free
+  audit entry, and gives the recipient a separate access capability.
+- Original buyer's order QR lookup excludes accepted-transfer tickets, so
+  refreshed buyer pages and embedded QR emails cannot display the new code.
+  Recipient-only credential reads require the separate access token; refunds
+  void the original ticket and revoke its active credential as before.
+- Online scanner locks the ticket and refreshes credential status before
+  admitting a scan, serializing claim/entry races. `ops-ui/offline.js` now
+  rejects absent or expired `manifest.validUntil` without admitting or
+  queuing a scan; staff see a reconnect instruction. Creation/acceptance
+  cutoff keeps QR changes outside the old manifest's validity window.
+- **Not live:** no public transfer route, no recipient claim page, no
+  automatic transfer email and no issuer configuration UI. End-to-end
+  payment/refund, browser, offline-device, accessibility and Coolify
+  release checks are still required before activation.
+
 ## Remaining acceptance requirements (not implemented)
 
 1. An authorized order-link holder must select one valid ticket, not an entire

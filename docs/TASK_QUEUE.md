@@ -1,5 +1,10 @@
 # ALKAO — Task queue (priority ordered)
 
+## Run 79 results and remaining work — 2026-10-15
+
+Implemented and CI validated at `a4994017`: scoped exactly-once recipient claim service, atomic old-QR revocation/new credential, sender-code suppression, scanner ticket row locking/freshness, private immutable acceptance ledger, tests. Production not verified. Public transfer initiation/cancellation and recipient claim/ticket page, email worker activation, FR/EN UX, end-to-end refund/scanner/device tests and Coolify go-live remain P1 TODO; do NOT describe transfers as available to buyers.
+
+
 ## Run 78 QA (2026-10-15)
 
 Source `e3b17774`: full CI and Package passed. Default-inactive recipient mail dispatcher and private transactional invitation outbox implemented. Next mandatory P1 work: recipient-only claim validation and atomic ticket credential replacement, sender access revocation, scan-manifest freshness and accessible bilingual UI. This is not an available customer feature. Deployment remains blocked on Coolify issue #84.
