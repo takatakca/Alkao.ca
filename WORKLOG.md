@@ -3,6 +3,8 @@
 Newest first, one line per piece of work. Rule: `AGENTS.md` › Work log rule.
 Format: `YYYY-MM-DD | agent | branch → PR | status | what | next step`
 
+- 2026-10-15 | ChatGPT (GitHub) | main → direct commits | active | Run 79: one-time transfer acceptance with transactional QR revocation, no sender access to reissued credential, scanner/refund race guards | migrations, tests, CI, handoff
+
 - 2026-10-15 | ChatGPT (GitHub) | main → e3b17774 | done in code, CI 38734506526 + Package 38734506570 SUCCESS; production unverified | Run 78: private recipient invitation outbox, reconstructible hashed proof, staged retry-safe dispatcher and security tests; NO public claim or QR transfer yet | implement atomic recipient claim, release only after Coolify verification
 
 - 2026-10-14 | ChatGPT (GitHub) | main → direct commits 0da240f2 and c7864c57 | done: DB and private service CI/Package green; Coolify unverified | Run 77: default-off tenant-safe transfer requests and private create/cancel invitations; NO public transfer/claim or QR replacement | next: verified email, atomic claim/QR revocation, tests, Coolify #84
