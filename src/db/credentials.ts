@@ -95,7 +95,11 @@ export async function activeCredentialsForOrder(q: Queryable, s: TenantScope, or
   const { rows } = await q.query<{ ticket_id: string; id: string }>(
     `SELECT c.ticket_id, c.id FROM public.ticketing_credentials c
      JOIN public.ticketing_tickets t ON t.id = c.ticket_id AND t.client_id = c.client_id AND t.brand_id = c.brand_id
-     WHERE t.order_id = $1 AND c.client_id = $2 AND c.brand_id = $3 AND c.status = 'active' AND t.status = 'valid'`,
+     WHERE t.order_id = $1 AND c.client_id = $2 AND c.brand_id = $3
+       AND c.status = 'active' AND t.status = 'valid'
+       -- Sender's old purchase never gains the recipient's reissued QR.
+       AND NOT EXISTS (SELECT 1 FROM public.ticketing_transfer_acceptances a
+         WHERE a.ticket_id = t.id AND a.client_id = t.client_id AND a.brand_id = t.brand_id)`,
     [orderId, s.clientId, s.brandId],
   );
   return new Map(rows.map((r) => [r.ticket_id, r.id]));

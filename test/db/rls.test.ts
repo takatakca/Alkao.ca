@@ -70,6 +70,8 @@ const EXPECTED: Record<string, Visibility> = {
   ticketing_transfer_requests: "none",
   // Run 78: transactional recipient-invitation delivery queue, server-only.
   ticketing_transfer_invitation_outbox: "none",
+  // Run 79: recipient credential access is server-only.
+  ticketing_transfer_acceptances: "none",
 };
 
 const clientColumn = (table: string) => (table === "ticketing_clients" ? "id" : "client_id");

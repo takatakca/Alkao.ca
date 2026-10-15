@@ -14,6 +14,19 @@ export function transferClaimSecret(masterSecret: string, scope: TenantScope,
   return Buffer.from(hkdfSync("sha256", masterSecret, "alkao.transfer.claim.v1", info, 32)).toString("base64url");
 }
 
+/** Independent ticket-view capability. Possession of the original claim code
+ * cannot be used as the access token and a second claim changes no state.
+ * Only a verified acceptance response may return this token to the recipient.
+ */
+export function transferAccessSecret(masterSecret: string, scope: TenantScope,
+  requestId: string, ticketId: string, recipientEmail: string): string {
+  if (!masterSecret || masterSecret.length < 16) throw new Error("transfer_master_secret_missing");
+  const info = Buffer.from(JSON.stringify([
+    requestId, scope.clientId, scope.brandId, ticketId, recipientEmail.toLowerCase().trim(),
+  ]));
+  return Buffer.from(hkdfSync("sha256", masterSecret, "alkao.transfer.access.v1", info, 32)).toString("base64url");
+}
+
 export const transferClaimHash = (secret: string): Buffer =>
   createHash("sha256").update(secret).digest();
 

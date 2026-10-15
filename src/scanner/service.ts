@@ -219,7 +219,20 @@ export class CredentialsService {
       return { result, ...base, ...extra };
     };
 
-    if (credential.status === "revoked") return decide("revoked");
+    // Serialize admission against a transfer and re-read credential status AFTER
+    // the ticket lock: the credential fetched earlier may have been revoked
+    // while another transaction was waiting on the same ticket.
+    const { rows: liveTickets } = await tx.query<{ status: string }>(
+      `SELECT status FROM public.ticketing_tickets
+       WHERE id = $1 AND client_id = $2 AND brand_id = $3 FOR UPDATE`,
+      [credential.ticketId, scope.clientId, scope.brandId],
+    );
+    const { rows: liveCredential } = await tx.query<{ status: string }>(
+      `SELECT status FROM public.ticketing_credentials
+       WHERE id = $1 AND client_id = $2 AND brand_id = $3`,
+      [credential.id, scope.clientId, scope.brandId],
+    );
+    if (liveTickets[0]?.status !== "valid" || liveCredential[0]?.status !== "active") return decide("revoked");
     if (credential.sessionId !== session.id) return decide("wrong_session", { ticketSession: { id: credential.sessionId } });
 
     const previous = await creds.findAdmission(tx, credential.ticketId);
