@@ -1,4 +1,5 @@
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
+import { transferClaimSecret, transferClaimHash } from "../delivery/transfer-token.js";
 import { writeAudit } from "../db/catalog.js";
 import type { TenantScope } from "../db/commerce.js";
 import { mapDbErrors } from "../db/errors.js";
@@ -36,10 +37,11 @@ async function requireBuyerToken(tx: Tx, scope: TenantScope, orderId: string, to
 
 export async function prepareTransferInvitation(
   db: Db, scope: TenantScope, orderId: string, ticketId: string,
-  orderToken: string, recipient: string, at = new Date(),
+  orderToken: string, recipient: string, masterSecret: string, at = new Date(),
 ): Promise<TransferInvitation> {
   const recipientEmail = normalizeEmail(recipient);
   if (!validEmail(recipientEmail)) throw new DomainError("invalid_recipient_email");
+  if (!masterSecret || masterSecret.length < 16) throw new DomainError("credentials_not_configured");
   return withTransaction(db, (tx) => mapDbErrors(async () => {
     await requireBuyerToken(tx, scope, orderId, orderToken, at);
     const { rows: tickets } = await tx.query<{ event_id: string; session_id: string }>(
@@ -50,17 +52,21 @@ export async function prepareTransferInvitation(
     );
     const ticket = tickets[0];
     if (!ticket) throw new DomainError("ticket_not_found");
-    const recipientClaimSecret = randomBytes(32).toString("base64url");
+    const id = randomUUID();
+    const recipientClaimSecret = transferClaimSecret(masterSecret, scope, id, ticketId, recipientEmail);
     const expiresAt = new Date(at.getTime() + 24 * 3600_000);
-    const { rows } = await tx.query<{ id: string }>(
+    await tx.query(
       `INSERT INTO public.ticketing_transfer_requests
-         (client_id, brand_id, event_id, session_id, ticket_id,
+         (id, client_id, brand_id, event_id, session_id, ticket_id,
           recipient_email, claim_token_hash, expires_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
-      [scope.clientId, scope.brandId, ticket.event_id, ticket.session_id, ticketId,
-        recipientEmail, tokenHash(recipientClaimSecret), expiresAt],
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [id, scope.clientId, scope.brandId, ticket.event_id, ticket.session_id, ticketId,
+        recipientEmail, transferClaimHash(recipientClaimSecret), expiresAt],
     );
-    const id = rows[0]!.id;
+    await tx.query(
+      `INSERT INTO public.ticketing_transfer_invitation_outbox (request_id, client_id, brand_id)
+       VALUES ($1, $2, $3)`, [id, scope.clientId, scope.brandId],
+    );
     await writeAudit(tx, scope, { type: "public", id: null }, "ticket.transfer_requested",
       { type: "ticket", id: ticketId }, { requestId: id });
     return { id, ticketId, recipientEmail, expiresAt, recipientClaimSecret };
