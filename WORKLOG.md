@@ -3,6 +3,8 @@
 Newest first, one line per piece of work. Rule: `AGENTS.md` › Work log rule.
 Format: `YYYY-MM-DD | agent | branch → PR | status | what | next step`
 
+- 2026-10-16 | ChatGPT (GitHub) | main → direct | active | Run 89: render offline scanner safely when automatic incident archiving fails or storage is corrupted, without discarding audit | tests, CI, handoff, Coolify
+
 - 2026-10-16 | ChatGPT (GitHub) | main → e0dbc920, 427668f7 | done in code; CI 38960997547 and Package 38960997727 SUCCESS; Coolify unverified | Run 88: durable redacted offline reconciliation incident ledger, local CSV after scanner exit, archive before post-close cleanup, Chromium and storage-failure tests | next: real mobile/multi-gate incident handling and Coolify #84 deployment
 
 - 2026-10-16 | ChatGPT (GitHub) | main → cb184a49, 6032a530, afb08df7, 88ae7715, fa915328 | done in code; CI 38958090144 and Package 38958090354 SUCCESS; Coolify unverified | Run 87: protect offline admissions across two tabs using origin-scoped Web Locks, fail closed when unavailable, preserve queued audit recovery | next: real iOS/Android and multi-device offline gate pilot, Coolify issue #84
