@@ -2,7 +2,7 @@
 // Plain ES modules, no build step. Every call goes to the gated ALKAO admin API with the
 // signed-in user's Supabase access token; the app itself holds no data.
 import { html, render, useEffect, useState, useCallback, useRef } from "/ops/vendor/htm-preact.js";
-import { loadOffline, newOfflineStore, offlineScan, saveOffline, syncOffline, createOfflineCoordinator } from "/ops/offline.js";
+import { loadOffline, newOfflineStore, offlineScan, saveOffline, syncOffline, createOfflineCoordinator, withOfflineSessionLock } from "/ops/offline.js";
 import { parseReservationsReport } from "/ops/reservations-csv.js";
 
 const SESSION_KEY = "alkao.ops.session";
@@ -48,6 +48,7 @@ const SCAN_FR = {
   malformed: ["bad", "CODE ILLISIBLE"],
   manifest_expired: ["warn", "LISTE EXPIRÉE — RECONNECTER"],
   storage_unavailable: ["bad", "ADMISSION NON ENREGISTRÉE — NE PAS ADMETTRE"],
+  offline_lock_unavailable: ["bad", "VERROU DE SÉCURITÉ ABSENT — SCAN EN LIGNE"],
   signature_unavailable: ["warn", "SIGNATURE NON VÉRIFIABLE — PASSER EN LIGNE"],
 };
 
@@ -1002,7 +1003,16 @@ function Scanner({ api, base }) {
   // subsequently overwrite different snapshots of the same local admission log.
   const offlineCoordinator = useRef(null);
   if (!offlineCoordinator.current) offlineCoordinator.current = createOfflineCoordinator();
-  const exclusiveOffline = (operation) => offlineCoordinator.current(operation);
+  const exclusiveOffline = (operation, { recovery = false } = {}) => offlineCoordinator.current(
+    () => withOfflineSessionLock(sessionId, operation, { recovery }),
+  ).catch((err) => {
+    // Some embedded/private browsers disable Web Locks. Never allow new
+    // admissions in that case: a second tab could overwrite their audit.
+    if (err?.message === "offline_lock_unavailable") {
+      setLast({ result: "offline_lock_unavailable", offline: true });
+      setError(new Error("Mode hors ligne indisponible sur cet appareil : verrouillage de sécurité non pris en charge. Utilisez le scan en ligne."));
+    } else setError(err);
+  });
   const toggleSound = (on) => { setSound(on); try { localStorage.setItem(SOUND_KEY, on ? "on" : "off"); } catch {} };
   const deviceId = (() => { let id = localStorage.getItem("alkao.ops.device"); if (!id) { id = `ops-${crypto.randomUUID().slice(0, 8)}`; localStorage.setItem("alkao.ops.device", id); } return id; })();
 
@@ -1035,7 +1045,8 @@ function Scanner({ api, base }) {
     if (done) { try { store.manifest = (await api(`${base}/sessions/${sessionId}/scanner-manifest`)).manifest; store.downloadedAt = Date.now(); store.localAdmitted = []; store.localEntered = []; } catch {} }
     persist(store);
   };
-  const sync = () => exclusiveOffline(syncCurrent);
+  // Keep previous audits recoverable even if a browser loses Web Locks support.
+  const sync = () => exclusiveOffline(syncCurrent, { recovery: true });
   const leaveOffline = () => exclusiveOffline(async () => {
     setError(null);
     await syncCurrent();
@@ -1046,7 +1057,7 @@ function Scanner({ api, base }) {
       return;
     }
     persist(null);
-  });
+  }, { recovery: true });
   useEffect(() => {
     if (!offline) return;
     const t = setInterval(() => { if (navigator.onLine && loadOffline(sessionId)?.queue.length) void sync(); }, 15_000);

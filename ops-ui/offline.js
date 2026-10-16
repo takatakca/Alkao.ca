@@ -15,6 +15,21 @@ const KEY = (sessionId) => `alkao.ops.offline.${sessionId}`;
 // Serialize local scanner operations so an async network sync cannot overwrite
 // an admission scanned while the HTTP request was in flight. Queue continues
 // after a failed request; operations in one Operations tab remain FIFO.
+/** Protect the per-session localStorage audit across multiple browser tabs.
+ * Web Locks are origin-scoped and held across an async HTTP batch, not just
+ * around the final write. Never grant NEW offline admissions without a lock.
+ * Recovery mode is only for uploading already recorded entries or safe exit
+ * from a preexisting queue on browsers that lost Web Locks support.
+ */
+export async function withOfflineSessionLock(sessionId, operation, { recovery = false } = {}) {
+  const manager = globalThis.navigator?.locks;
+  if (typeof manager?.request !== "function") {
+    if (recovery) return operation();
+    throw new Error("offline_lock_unavailable");
+  }
+  return manager.request(`alkao.ops.offline.audit.${sessionId}`, { mode: "exclusive" }, operation);
+}
+
 export function createOfflineCoordinator() {
   let previous = Promise.resolve();
   return (operation) => {
