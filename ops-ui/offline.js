@@ -46,7 +46,7 @@ async function verifySignature(publicKey, signed, signature) {
     }
     return await crypto.subtle.verify({ name: "Ed25519" }, key, b64u(signature), new TextEncoder().encode(signed));
   } catch {
-    return null; // Ed25519 not supported by this browser: rely on the manifest list alone.
+    return null; // Crypto not supported: never fall back to manifest-only admission.
   }
 }
 
@@ -65,7 +65,11 @@ export async function offlineScan(store, raw, now = Date.now()) {
   const [, kid, qrId, signature] = m;
   const key = store.manifest.keys.find((k) => k.kid === kid);
   if (!key) return { result: "unknown_key" };
-  if ((await verifySignature(key.publicKey, `ALK1.${kid}.${qrId}`, signature)) === false) return { result: "invalid_signature" };
+  // A matching id in a local manifest is NOT authentication. If the browser
+  // cannot verify Ed25519, the operator must reconnect and use online scan.
+  const verification = await verifySignature(key.publicKey, `ALK1.${kid}.${qrId}`, signature);
+  if (verification !== true)
+    return { result: verification === null ? "signature_unavailable" : "invalid_signature" };
   if (store.manifest.revoked.some((r) => r.qrId === qrId)) return { result: "revoked" };
   const credential = store.manifest.credentials.find((c) => c.qrId === qrId);
   if (!credential) return { result: "unknown_credential" };

@@ -47,6 +47,7 @@ const SCAN_FR = {
   unknown_credential: ["bad", "BILLET INCONNU"], invalid_signature: ["bad", "FAUX BILLET"], unknown_key: ["bad", "BILLET D'UN AUTRE ORGANISATEUR"],
   malformed: ["bad", "CODE ILLISIBLE"],
   manifest_expired: ["warn", "LISTE EXPIRÉE — RECONNECTER"],
+  signature_unavailable: ["warn", "SIGNATURE NON VÉRIFIABLE — PASSER EN LIGNE"],
 };
 
 // Run 33: the gate hears and feels the answer, with eyes on the line rather than the screen.
