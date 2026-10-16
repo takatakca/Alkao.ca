@@ -1,5 +1,10 @@
 # ALKAO — Decisions and non-negotiable constraints
 
+## Run 83 — absence of Ed25519 verification must deny admission
+
+A QR identifier's presence in a cached offline manifest is not proof of validity. Every offline admission MUST verify its Ed25519 signature using a known trusted key; cryptographic absence or unsupported browser implementations must fail closed with a reconnect/online-scanner instruction. Invalid signatures remain explicit rejects; revoked and expired manifests are also rejects. We do not silently fall back to identifier-only access, even for known ticket IDs.
+
+
 ## Run 82 — cancellation overrides QR reissue
 
 Session cancellation must immediately stop transfer initiation and recipient acceptance regardless of ticket status, because ticket void/refund work may execute asynchronously. Hold a session row lock while checking eligibility and during recipient claim, and reject direct backend request inserts using a private PostgreSQL trigger. Cancelled invitations may be marked skipped by the mail sender; no new QR or email is sent. Existing orders, ticket histories and provider refunds are unchanged. Global and Brand release switches stay OFF pending operator-approved production acceptance.

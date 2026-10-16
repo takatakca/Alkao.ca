@@ -1,5 +1,15 @@
 # ALKAO — Agent handoff (mandatory)
 
+## Run 83 — fail-closed offline QR signature check (2026-10-16)
+
+- Repo `takatakca/Alkao.ca`, `main`. Prior Run 82 functional SHA `7f5e7d135f35a59e9ac7e5f9d376a3f327992f63` passed CI 38884229198 and Package 38884229102. Run 82 handoff commit `217c01b27f62cd4bda056910e705a3cba21f0d68` preserved.
+- Latest Run 83 source SHA `7b004ba2b408d3e0f65ed710927f6c3684503a66`. Modified `ops-ui/offline.js`: a manifest ID match can NEVER compensate for unverified Ed25519 signature. Missing WebCrypto or unsupported Ed25519 returns `signature_unavailable` and does not admit the ticket. Invalid cryptographic signatures return `invalid_signature`. `ops-ui/app.js` instructs staff to switch to online verification instead of admitting without proof.
+- New `test/ops/offline-signature.test.ts` covers no WebCrypto, unsupported Ed25519, forged QR, authentic signed QR, revocation on refreshed manifest, and manifest expiry. Tests intentionally use local Node Ed25519 key pairs, not secrets or customer QR.
+- Source CI **SUCCESS** 38885296988, Package **SUCCESS** 38885297040 for code SHA `7b004ba2b408d3e0f65ed710927f6c3684503a66`. The documentation commit will advance main and trigger its own CI; a green package does not attest Coolify. No database migration in Run 83, no change to buyer or payment API or Brand data.
+- Production is NOT verified. Prior live strict deployment verifier failed to match `/health` build SHA; issue #84 requires Coolify source SHA, dedicated database, backups, migrations, historical secret rotation, Stripe/Resend, and pilot scanner verification. Transfers remain default OFF globally and by Brand. PR #53 belongs to a separate Havana branch.
+- NEXT: verify newest `main`, CI/Package and live strict check; fix any test/browser errors. Test actual mobile browser online fallback, multiple offline gates and manifest refresh; then authorized Coolify go-live. No agent restart orchestrator exists.
+
+
 ## Run 82 — cancellation window transfer safety (2026-10-16)
 
 - Repository `takatakca/Alkao.ca`, `main`. Previous Run 81 source `1debe096c9c8ad5421b7c39b1efe68ff744df8d6` passed CI 38883239557 and Package 38883239522. Run 81 docs commit `2529d343dbeb2c0a9abfa0c8a874a0d93ed7c8be` remains in history.

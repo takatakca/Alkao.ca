@@ -1,5 +1,11 @@
 # ALKAO — Task queue (priority ordered)
 
+## Run 83 — cryptographic offline gate (2026-10-16)
+
+- Implemented source `7b004ba2`: fail-closed Ed25519 in offline scanner; support absent -> explicit `signature_unavailable` (online fallback), forged QR rejected, valid signed QR can pass with fresh manifest, revocations and TTL respected. Unit tests added.
+- QA: source CI 38885296988 SUCCESS and Package 38885297040 SUCCESS on `7b004ba2`; check docs commit run separately. P1 next: real-device safari/android WebCrypto/Ed25519, offline multi-gate sync, scanner manifest refreshing and refund/chargeback acceptance. P0: Coolify #84 deployment SHA and backup/schema/operator approval, no activation before proof. Keep PR #53 isolated.
+
+
 ## Run 82 — continuation after session cancellation guard (2026-10-16)
 
 - Run 82 `7f5e7d13`: application locks/eligibility for cancelled sessions, additive PostgreSQL trigger and regression tests. Code SHA `7f5e7d13` passed CI 38884229198 and Package 38884229102. Check separate docs follow-up checks.

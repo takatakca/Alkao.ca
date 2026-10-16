@@ -1,5 +1,10 @@
 # ALKAO — Buyer ticket transfer security protocol
 
+## Phase 8 — cryptographic offline scanner verification (Run 83, 2026-10-16)
+
+`ops-ui/offline.js` no longer admits a QR from manifest lookup if WebCrypto Ed25519 verification is missing or throws: it returns `signature_unavailable`, and Operations prompts a switch to online scanning. The signed QR verification must return true before admission. `test/ops/offline-signature.test.ts` uses real Ed25519 keypairs and tampered signatures to assert the correct behavior, plus revocation and manifest expiration. Source CI 38885296988 and Package 38885297040 succeeded. This is a source-only safeguard; real-device and production rollout checks remain outstanding.
+
+
 ## Phase 7 — cancelled session and asynchronous refund gap (Run 82, 2026-10-16)
 
 Source `7f5e7d13`: ticket-transfer initiation and one-time recipient claim now refuse cancelled sessions under PostgreSQL session row locks. New migration `20261109000100_alkao_transfer_cancelled_sessions.sql` checks direct inserts independently of the API. Tests `test/db/transfer-cancelled-session.test.ts` establish that a valid ticket may exist while a session is already cancelled, yet no sender invitation, recipient QR rotation or invitation email can proceed. CI 38884229198 and Package 38884229102 succeeded for this code. This does not make the Coolify deployment verified and does not enable transfers by default.

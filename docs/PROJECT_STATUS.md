@@ -1,5 +1,10 @@
 # ALKAO — Project status
 
+## Run 83 — offline scanner cryptography safety (2026-10-16)
+
+Source `7b004ba2b408d3e0f65ed710927f6c3684503a66` hardens the already time-limited offline gate: QR admission now requires a *verified* Ed25519 signature; absence of crypto/browser support is no longer silently treated as valid merely because the QR ID occurs in a manifest. Staff see a reconnect/use-online warning. New real cryptographic unit tests in `test/ops/offline-signature.test.ts` cover signed/forged, unsupported, revoked and expired scenarios. Full GitHub CI **SUCCESS** 38885296988 and Package **SUCCESS** 38885297040 for this SHA. No production version attested; transfer flags remain OFF.
+
+
 ## Run 82 — cancelled-session transfer window (2026-10-16)
 
 Source `7f5e7d135f35a59e9ac7e5f9d376a3f327992f63` adds an application-level session row lock and a PostgreSQL trigger to refuse buyer invitations or recipient claims for cancelled sessions before asynchronous refund and voiding work finishes. New test asserts that even a still-valid ticket cannot be transferred or emailed during this gap. Migration: `20261109000100_alkao_transfer_cancelled_sessions.sql`. Source CI SUCCESS 38884229198 and Package SUCCESS 38884229102 at SHA `7f5e7d135f35a59e9ac7e5f9d376a3f327992f63`. Production Coolify SHA not verified; public transfer release stays OFF.

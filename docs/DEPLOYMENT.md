@@ -1,5 +1,10 @@
 # ALKAO — Deployment state and verification
 
+## Run 83 — WebCrypto is mandatory for offline admission (2026-10-16)
+
+After deploying source `7b004ba2`, unsupported Ed25519 on an offline scanner explicitly returns `signature_unavailable`; staff must reconnect and use the existing online scanner. Never configure a browser/device exception that bypasses signature verification. Maintain manifest expiry/refresh policy and inspect mobile browsers before production rollout. CI 38885296988 and Package 38885297040 passed for source `7b004ba2`. No new migration is needed for this code, but migrations from Runs 77–82 still require authorized application to the backed-up dedicated ALKAO database. The strict Coolify SHA/ready check remains the production gate (issue #84), independently of a green GitHub CI. Feature flags remain default OFF.
+
+
 ## Run 82 — cancellation eligibility rollout (2026-10-16)
 
 Append `20261109000100_alkao_transfer_cancelled_sessions.sql` after Run 81's payment guards and the preceding three transfer migrations ONLY on the verified, backed-up dedicated ALKAO DB. Its private trigger locks the session row and rejects a new transfer request if the session is cancelled. The claim service now locks/reads session state and refuses a recipient claim even when the original ticket still appears valid pending worker refunds. The invitation email worker already skips cancelled sessions.
