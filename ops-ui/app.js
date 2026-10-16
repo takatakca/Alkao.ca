@@ -2,7 +2,7 @@
 // Plain ES modules, no build step. Every call goes to the gated ALKAO admin API with the
 // signed-in user's Supabase access token; the app itself holds no data.
 import { html, render, useEffect, useState, useCallback, useRef } from "/ops/vendor/htm-preact.js";
-import { loadOffline, newOfflineStore, offlineScan, saveOffline, syncOffline } from "/ops/offline.js";
+import { loadOffline, newOfflineStore, offlineScan, saveOffline, syncOffline, createOfflineCoordinator } from "/ops/offline.js";
 import { parseReservationsReport } from "/ops/reservations-csv.js";
 
 const SESSION_KEY = "alkao.ops.session";
@@ -47,6 +47,7 @@ const SCAN_FR = {
   unknown_credential: ["bad", "BILLET INCONNU"], invalid_signature: ["bad", "FAUX BILLET"], unknown_key: ["bad", "BILLET D'UN AUTRE ORGANISATEUR"],
   malformed: ["bad", "CODE ILLISIBLE"],
   manifest_expired: ["warn", "LISTE EXPIRÉE — RECONNECTER"],
+  storage_unavailable: ["bad", "ADMISSION NON ENREGISTRÉE — NE PAS ADMETTRE"],
   signature_unavailable: ["warn", "SIGNATURE NON VÉRIFIABLE — PASSER EN LIGNE"],
 };
 
@@ -997,6 +998,11 @@ function Scanner({ api, base }) {
   const [reference, setReference] = useState("");
   const [found, setFound] = useState(null);
   const [sound, setSound] = useState(soundWanted);
+  // One FIFO per scanner instance. Sync, scan and exit must never read and
+  // subsequently overwrite different snapshots of the same local admission log.
+  const offlineCoordinator = useRef(null);
+  if (!offlineCoordinator.current) offlineCoordinator.current = createOfflineCoordinator();
+  const exclusiveOffline = (operation) => offlineCoordinator.current(operation);
   const toggleSound = (on) => { setSound(on); try { localStorage.setItem(SOUND_KEY, on ? "on" : "off"); } catch {} };
   const deviceId = (() => { let id = localStorage.getItem("alkao.ops.device"); if (!id) { id = `ops-${crypto.randomUUID().slice(0, 8)}`; localStorage.setItem("alkao.ops.device", id); } return id; })();
 
@@ -1009,30 +1015,38 @@ function Scanner({ api, base }) {
 
   // ── Offline mode (Run 09): the device checks QR codes itself and syncs later ──
   const persist = (store) => { saveOffline(sessionId, store); setOffline(store ? { ...store } : null); };
-  const goOffline = async () => {
+  const goOffline = () => exclusiveOffline(async () => {
     setError(null);
-    try { const r = await api(`${base}/sessions/${sessionId}/scanner-manifest`); setManifest(r.manifest); persist(newOfflineStore(r.manifest)); }
-    catch (err) { setError(err); }
-  };
-  const sync = async () => {
+    // Starting offline mode must never reset a previous audit queue.
+    const existing = loadOffline(sessionId);
+    if (existing) { setOffline({ ...existing }); return; }
+    try {
+      const r = await api(`${base}/sessions/${sessionId}/scanner-manifest`);
+      setManifest(r.manifest);
+      persist(newOfflineStore(r.manifest));
+    } catch (err) { setError(err); }
+  });
+  // Caller holds the FIFO. Do not invoke the public sync() wrapper here,
+  // otherwise leaving offline mode would deadlock waiting on itself.
+  const syncCurrent = async () => {
     const store = loadOffline(sessionId); if (!store) return;
     const send = async (scans) => (await api(`${base}/scanner/scans/batch`, { method: "POST", body: { sessionId, deviceId, scans } })).scans;
     const done = await syncOffline(store, send);
     if (done) { try { store.manifest = (await api(`${base}/sessions/${sessionId}/scanner-manifest`)).manifest; store.downloadedAt = Date.now(); store.localAdmitted = []; store.localEntered = []; } catch {} }
     persist(store);
   };
-  const leaveOffline = async () => {
+  const sync = () => exclusiveOffline(syncCurrent);
+  const leaveOffline = () => exclusiveOffline(async () => {
     setError(null);
-    await sync();
+    await syncCurrent();
     const store = loadOffline(sessionId);
     if (store?.queue.length) {
-      // A real offline admission is already physically at the venue. Do not
-      // allow a confirmation dialog to destroy its only pending audit record.
+      // Never discard local audit records with a pending server acknowledgment.
       setError(new Error(`${store.queue.length} admission(s) non synchronisée(s). Reconnectez-vous et synchronisez avant de quitter le mode hors ligne.`));
       return;
     }
     persist(null);
-  };
+  });
   useEffect(() => {
     if (!offline) return;
     const t = setInterval(() => { if (navigator.onLine && loadOffline(sessionId)?.queue.length) void sync(); }, 15_000);
@@ -1058,7 +1072,23 @@ function Scanner({ api, base }) {
     const code = (value ?? payload).trim(); if (!code || !sessionId) return;
     setError(null); setPayload("");
     const store = loadOffline(sessionId);
-    if (store) { const r = await offlineScan(store, code); persist(store); setLast({ ...r, offline: true }); return; }
+    if (store) {
+      return exclusiveOffline(async () => {
+        // Re-read only AFTER any earlier sync finishes to avoid overwriting it.
+        const latest = loadOffline(sessionId);
+        if (!latest) { setError(new Error("Mode hors ligne indisponible. Reconnectez-vous avant de scanner.")); return; }
+        const r = await offlineScan(latest, code);
+        try { persist(latest); }
+        catch {
+          // A physically admitted attendee with no durable audit is unsafe.
+          // Do not display a successful admission when storage is full/blocked.
+          setLast({ result: "storage_unavailable", offline: true });
+          setError(new Error("Stockage local indisponible. N'admettez pas le billet; reconnectez-vous."));
+          return;
+        }
+        setLast({ ...r, offline: true });
+      });
+    }
     try { setLast((await api(`${base}/scanner/scans`, { method: "POST", body: { sessionId, payload: code, deviceId } })).scan); refreshAttendance(); }
     catch (err) { setError(err); }
   };

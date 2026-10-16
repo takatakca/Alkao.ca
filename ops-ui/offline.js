@@ -12,6 +12,18 @@
 const PAYLOAD_RE = /^ALK1\.(k[0-9a-z]{10})\.([A-Za-z0-9_-]{22})\.([A-Za-z0-9_-]{86})$/;
 const KEY = (sessionId) => `alkao.ops.offline.${sessionId}`;
 
+// Serialize local scanner operations so an async network sync cannot overwrite
+// an admission scanned while the HTTP request was in flight. Queue continues
+// after a failed request; operations in one Operations tab remain FIFO.
+export function createOfflineCoordinator() {
+  let previous = Promise.resolve();
+  return (operation) => {
+    const current = previous.then(operation, operation);
+    previous = current.catch(() => {});
+    return current;
+  };
+}
+
 const b64u = (s) => {
   const b = atob(s.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((s.length + 3) % 4));
   return Uint8Array.from(b, (c) => c.charCodeAt(0));
