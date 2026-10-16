@@ -21,6 +21,7 @@ type DueRow = {
   ticket_transfers_enabled: boolean; starts_at: Date; buyer_erased: boolean;
   already_admitted: boolean; brand_name: string; event_title: string;
   language: "fr" | "en";
+  refund_pending: boolean; dispute_unresolved: boolean;
 };
 const escapeHtml = (s: string) => s.replace(/[&<>"']/g,
   (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
@@ -64,6 +65,13 @@ export async function deliverRecipientInvitations(db: Db, cfg: RecipientInviteDe
                 r.status AS request_status, t.status AS ticket_status, o.status AS order_status,
                 s.status AS session_status, s.starts_at, bs.ticket_transfers_enabled,
                 br.name AS brand_name, e.title AS event_title, b.language,
+                EXISTS (SELECT 1 FROM public.ticketing_refunds f
+                  WHERE f.order_id = o.id AND f.client_id = o.client_id
+                    AND f.brand_id = o.brand_id AND f.status = 'pending') AS refund_pending,
+                EXISTS (SELECT 1 FROM public.ticketing_payment_disputes d
+                  WHERE d.order_id = o.id AND d.client_id = o.client_id
+                    AND d.brand_id = o.brand_id
+                    AND d.status NOT IN ('won', 'warning_closed', 'prevented')) AS dispute_unresolved,
                 EXISTS (SELECT 1 FROM public.ticketing_buyer_erasures be WHERE be.buyer_id = o.buyer_id) AS buyer_erased,
                 EXISTS (SELECT 1 FROM public.ticketing_scans sc
                   WHERE sc.ticket_id = t.id AND sc.result = 'admitted') AS already_admitted
@@ -97,6 +105,8 @@ export async function deliverRecipientInvitations(db: Db, cfg: RecipientInviteDe
       if (row.expires_at <= now) return skip("request_expired");
       if (!row.ticket_transfers_enabled) return skip("brand_disabled");
       if (row.buyer_erased) return skip("buyer_erased");
+      // Never invite a recipient to claim an admission with unsettled money.
+      if (row.refund_pending || row.dispute_unresolved) return skip("payment_unsettled");
       if (row.ticket_status !== "valid" || !["paid", "partially_refunded"].includes(row.order_status))
         return skip("ticket_unavailable");
       if (row.session_status === "cancelled" || row.starts_at <= now || row.already_admitted)

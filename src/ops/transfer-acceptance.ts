@@ -4,6 +4,7 @@ import type { TenantScope } from "../db/commerce.js";
 import { mapDbErrors } from "../db/errors.js";
 import { withTransaction, type Db } from "../db/pool.js";
 import { DomainError } from "../domain/errors.js";
+import { transferPaymentIsClear } from "./transfer-payment.js";
 import { transferAccessSecret, transferClaimHash } from "../delivery/transfer-token.js";
 
 /**
@@ -44,6 +45,8 @@ export async function acceptTransferInvitation(
     );
     if (!orders[0] || !["paid", "partially_refunded"].includes(orders[0].status))
       throw unavailable();
+
+    if (!(await transferPaymentIsClear(tx, scope, refs[0].order_id))) throw unavailable();
 
     const { rows } = await tx.query<{
       ticket_id: string; event_id: string; session_id: string;

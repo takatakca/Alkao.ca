@@ -5,6 +5,7 @@ import type { TenantScope } from "../db/commerce.js";
 import { mapDbErrors } from "../db/errors.js";
 import { withTransaction, type Db, type Tx } from "../db/pool.js";
 import { DomainError } from "../domain/errors.js";
+import { transferPaymentIsClear } from "./transfer-payment.js";
 
 /** Internal service only. Never return the claim secret through the buyer API:
  * the eventual notification worker must deliver it to the recipient mailbox.
@@ -44,6 +45,17 @@ export async function prepareTransferInvitation(
   if (!masterSecret || masterSecret.length < 16) throw new DomainError("credentials_not_configured");
   return withTransaction(db, (tx) => mapDbErrors(async () => {
     await requireBuyerToken(tx, scope, orderId, orderToken, at);
+    // Match the Stripe refund's order-first locking sequence. No invitation
+    // may be created after a refund has started or while a dispute is open.
+    const { rows: orders } = await tx.query<{ status: string }>(
+      `SELECT status FROM public.ticketing_orders
+       WHERE id = $1 AND client_id = $2 AND brand_id = $3 FOR UPDATE`,
+      [orderId, scope.clientId, scope.brandId],
+    );
+    if (!orders[0] || !["paid", "partially_refunded"].includes(orders[0].status))
+      throw new DomainError("transfer_payment_unsettled");
+    if (!(await transferPaymentIsClear(tx, scope, orderId)))
+      throw new DomainError("transfer_payment_unsettled");
     const { rows: tickets } = await tx.query<{ event_id: string; session_id: string }>(
       `SELECT event_id, session_id FROM public.ticketing_tickets
        WHERE id = $1 AND order_id = $2 AND client_id = $3 AND brand_id = $4
