@@ -1,5 +1,10 @@
 # ALKAO — Decisions and non-negotiable constraints
 
+## Run 89 — unavailable incident archive is a recoverable blocked state
+
+On a scanner device, a broken/over-quota incident-report localStorage value must not erase the original admission audit or make the scanner UI unusable. During automatic expiry, catch that specific archival failure, return the retained offline audit with `incidentArchiveFailed=true` and visibly direct the operator to repair/reconcile local storage. Attempts to leave offline mode still fail closed until archiving succeeds; do not silently overwrite a corrupted report. No server-side persistence is inferred from a local report.
+
+
 ## Run 88 — privacy-preserving local offline discrepancy evidence
 
 A server-rejected scan that was physically admitted while offline is an operational incident, not merely a counter. Preserve individual incident evidence using the credential's public QR identifier, server result, scanned and reconciliation times, without retaining a full signed bearer QR or customer name/email. Display and export it for gate investigation after leaving offline mode. An archival localStorage failure must block audit deletion; a prior corrupted incident ledger must not be silently overwritten. Before any automatic post-close offline audit cleanup, archive outstanding incidents. Use Web Locks already enforced in Run 87 for same-origin atomic changes. LocalStorage is not a cross-device or permanent server backup; field/operator processes remain necessary.

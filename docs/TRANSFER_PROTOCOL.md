@@ -1,5 +1,10 @@
 # ALKAO — Buyer ticket transfer security protocol
 
+## Phase 10 — failed local incident archive recovery (Run 89, 2026-10-16)
+
+Source `8b06cf83` handles a corrupted/over-quota incident report during automatic scanner manifest cleanup by preserving the original audit, displaying an explicit warning, and allowing staff to repair storage before a successful archival retry. No silent deletion or blank scanner on this path. Tests in `test/ops/offline-incidents.test.ts` passed full CI 38962087021; Package 38962086850 succeeded. This does not replace server-side reconciliation, and does not attest Coolify production.
+
+
 ## Phase 9 — operational evidence for revoked/duplicate offline QR (Run 88, 2026-10-16)
 
 When a gate admits an old QR offline but the server later returns `revoked` (transfer) or `already_admitted` (multi-gate replay), the reconciliation code now keeps a redacted incident record, rather than a counter alone. Incident CSV is available in Operations even after leaving offline mode; source `e0dbc920`, follow-up `427668f7` also prevents post-close retention cleanup from losing incident evidence. The signed QR never enters the exported report. This supports manual investigation but does not reconcile conflicting physical admissions automatically. Run 88 source CI 38960997547 and Package 38960997727 succeeded. Live device testing, customer-support workflow and Coolify deployment remain outstanding.

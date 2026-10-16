@@ -1,5 +1,10 @@
 # ALKAO — Task queue (priority ordered)
 
+## Run 89 — local incident report storage failure (2026-10-16)
+
+Code `8b06cf83`: automatic post-close scanner cleanup gracefully retains original audit if incident archive storage is corrupt; accessible staff warning, and regression simulating recovery. CI 38962087021 **SUCCESS** and Package 38962086850 **SUCCESS** for code `8b06cf83`. New docs-only commit needs separate verification. Next P1: actual iOS/Android private mode/storage quota + CSV download acceptance, multi-physical-device attendance conflicts and operations remediation workflow. P0 unchanged: Coolify #84 SHA/DB/backup/migrations/key rotation/Resend/Stripe and transfer pilot, default-OFF global and Brand flags.
+
+
 ## Run 88 — offline incident evidence continuation (2026-10-16)
 
 Implemented `e0dbc920` and `427668f7`: persist reconciliation incidents with redacted identifiers and per-session CSV; archive on offline exit and manifest expiry, fail closed on storage corruption/quota; browser and unit tests. CI 38960997547 and Package 38960997727 **SUCCESS** on source `427668f7`; new documentation commit has its own CI/Package runs. Next P1: real mobile/webview CSV downloads and local storage durability, multi-physical-gate reconciliation/incident response, retention and operator access procedures. P0: Coolify #84 live SOURCE_COMMIT proof, dedicated ALKAO DB backup/migrations/rotation, Resend/Stripe/scanner pilot, transfer switches OFF. Do not alter Promo Havana PR #53.

@@ -1,5 +1,14 @@
 # ALKAO — Agent handoff (mandatory)
 
+## Run 89 — degraded incident archive must not blank the scanner (2026-10-16)
+
+- Repo `takatakca/Alkao.ca`, branch `main`. Previous functional SHA `427668f7f2a5700e25b294976d0c011bc9aafe28` passed CI 38960997547 and Package 38960997727. Run 88 documentation commit `e9fe3e76a943cb1f78b9e48ed49556d24f87b8ff`; its CI was cancelled when Run 89 began, Package 38961620983 succeeded. Strict Verify deployment 38961326402 for Run 88 source **FAILURE**: live Coolify did not attest matching build SHA.
+- Run 89 worklog claim `6ae3b48f5c6e14dd1d03e39c2c84d564f6e27d6d`. Functional code SHA `8b06cf8368d3a639f607d64a52610ff545fcc04f`. Files: `ops-ui/offline.js` catches failed/corrupt local incident-report archival during automatic 24-hour post-close cleanup and retains original local audit with `incidentArchiveFailed=true`; `ops-ui/app.js` displays an accessible, explicit red warning; `test/ops/offline-incidents.test.ts` checks that expired audit remains available and archiving resumes after storage recovery.
+- Run 89 source `8b06cf8368d3a639f607d64a52610ff545fcc04f` passed **CI SUCCESS** 38962087021 (TypeScript, migrations, secrets, full tests) and **Package SUCCESS** 38962086850. Docs-only follow-up SHA has its own CI/Package. This is a client-only safety fix; no DB migration, customer secret, production environment variable or feature switch changed.
+- Live deployment remains UNVERIFIED. Issue #84: Coolify operator must attest source SHA at `/health`, dedicated ALKAO DB and backup, authorized migrations, rotated secrets, provider Resend/Stripe and field scanner pilot. Preserve Promo Havana PR #53. Global/Brand ticket transfer switches remain default OFF.
+- NEXT EXACT ACTION: verify main HEAD and Run 89 GitHub Actions; fix failures; test real offline devices and corrupted localStorage recovery; confirm Coolify/DB and release only with authorized operator. No external agent restart orchestrator was configured.
+
+
 ## Run 88 — durable offline reconciliation incident ledger (2026-10-16)
 
 - Repo `takatakca/Alkao.ca`, branch `main`. Starting source/head `afa7f7f6860db42ab8f45d6010372383c48bc577`: CI 38958567201 **SUCCESS**, Package 38958567344 **SUCCESS**; strict Verify deployment 38958883411 **FAILURE** (live build SHA not attested). Separate Havana PR #53 remains active.

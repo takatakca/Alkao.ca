@@ -1,5 +1,10 @@
 # ALKAO — Deployment state and verification
 
+## Run 89 — degraded device storage and gate safety (2026-10-16)
+
+No new database migration or provider environment variable. The Operations offline scanner must retain its local admission audit when an old incident report cannot be parsed or written, and signal `incidentArchiveFailed` rather than crash or silently delete. Recover/copy the local device's incident data before clearing browser storage; avoid private-mode or storage-quota deployments without actual device tests. QA for source `8b06cf83` passed CI 38962087021 and Package 38962086850. It is NOT live deployment proof. Strict live verifier for earlier Run 88 source 38961326402 FAILED: live `/health` did not attest Git SHA. Coolify issue #84 remains; no deployment/transfer activation proved.
+
+
 ## Run 88 — no-migration offline incident ledger (2026-10-16)
 
 The scanner now stores a local per-session, sanitized incident report in `alkao.ops.incidents.<sessionId>` on the operator's browser, distinct from the temporary offline audit. Confirmed server discrepancies survive exiting offline mode and post-close manifest cleanup; failure to archive preserves the original audit. Browser exports a CSV with credential ID, server outcome and timestamps, not signed QR bearer data, buyer email or provider secrets. Source CI 38960997547 and Package 38960997727 passed for `427668f7`. No server schema or provider configuration change in Run 88. Browser local storage can still be erased by browser/private-mode storage eviction, so real device field validation, operator report retention and backup procedures are required.

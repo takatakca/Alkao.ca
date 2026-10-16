@@ -1,5 +1,10 @@
 # ALKAO — Project status
 
+## Run 89 — degraded local incident archive recovery (2026-10-16)
+
+Source commit `8b06cf8368d3a639f607d64a52610ff545fcc04f` ensures that an automatic expiry cleanup cannot crash a scanner view when the device's incident report storage is corrupted or at quota. The original local audit remains available with `incidentArchiveFailed`, staff receive a clear on-screen warning, and once archival storage recovers, old incidents can be preserved and the temporary audit retired normally. New regression in `test/ops/offline-incidents.test.ts`. Run 89 CI **SUCCESS** 38962087021 and Package **SUCCESS** 38962086850 on source `8b06cf83`; Coolify not verified and transfers OFF.
+
+
 ## Run 88 — retain scanner admission discrepancies (2026-10-16)
 
 Source commits `e0dbc920` and `427668f7` introduce a per-session local incident ledger for offline admissions disputed by server reconciliation. Instead of losing only a numeric counter when leaving offline mode, a sanitized report retains credential ID (not the signed QR), server result, offline/reconciliation timestamps and legacy counts; staff can export CSV locally. Exiting mode archives the ledger before clearing the temporary manifest; failed archive writes preserve the original audit. Expired post-close manifests likewise archive discrepancies before auto-removal. New unit and Chromium cross-tab tests. Initial CI failed a test-only TypeScript multiline import (corrected in follow-up). Full CI **SUCCESS** 38960997547 and Package **SUCCESS** 38960997727 for source SHA `427668f7f2a5700e25b294976d0c011bc9aafe28`. Production SHA remains unverified; no changes to global/Brand transfer flags.
