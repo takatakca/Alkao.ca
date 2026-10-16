@@ -1182,6 +1182,7 @@ function Scanner({ api, base }) {
           <span class="muted">Liste du ${when(new Date(offline.downloadedAt).toISOString())} · ${offline.manifest.credentials.length} billets</span>
           <span>${offline.queue.length} en attente de synchronisation</span>
           ${offline.conflicts > 0 && html`<span class="badge bad">${offline.conflicts} admission(s) hors ligne contestée(s) — vérifier les écarts avec le serveur</span>`}
+          ${offline.incidentArchiveFailed && html`<span role="alert" class="badge bad">Archivage des incidents impossible : journal conservé. Vérifiez le stockage local avant de quitter le scanner.</span>`}
           <button class="secondary" onClick=${sync}>Synchroniser maintenant</button>
           <button class="secondary" onClick=${leaveOffline}>Quitter le mode hors ligne</button>`
         : html`<span class="muted">Réseau instable à la porte ?</span><button class="secondary" onClick=${goOffline}>Préparer le mode hors ligne</button>`}

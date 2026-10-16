@@ -115,6 +115,29 @@ describe("Run 88: offline admission discrepancy evidence persists after exiting"
       id: "old-case", result: "revoked", qrId: "R".repeat(22),
     }]);
   });
+  it("keeps the scanner usable and the original audit when aged report storage fails", () => {
+    const local = storage();
+    vi.stubGlobal("localStorage", local);
+    const sessionId = "run89-storage-recovery";
+    const expired = new Date(Date.now() - 26 * 3600_000).toISOString();
+    const source = newOfflineStore({ session: { admission: { closesAt: expired } } });
+    source.conflicts = 1;
+    source.incidents.push({
+      id: "audit-recovery", qrId: "R".repeat(22),
+      scannedAt: now, reconciledAt: now, result: "revoked",
+    });
+    saveOffline(sessionId, source);
+    local.data.set("alkao.ops.incidents." + sessionId, "not-json");
+    const recovered = loadOffline(sessionId);
+    expect(recovered).toMatchObject({ incidentArchiveFailed: true, conflicts: 1 });
+    expect(recovered?.incidents).toHaveLength(1);
+    expect(local.getItem("alkao.ops.offline." + sessionId)).not.toBeNull();
+    // Once old storage is repaired the same auto-expiry can archive safely.
+    local.data.delete("alkao.ops.incidents." + sessionId);
+    expect(loadOffline(sessionId)).toBeNull();
+    expect(loadIncidentReport(sessionId)).toMatchObject([{ id: "audit-recovery" }]);
+  });
+
   it("escapes untrusted CSV spreadsheet formulas (defense in depth)", () => {
     const csv = incidentReportCsv([{ id: "id", qrId: "=SUM(1,1)", result: "@risk",
       scannedAt: now, reconciledAt: now }]);

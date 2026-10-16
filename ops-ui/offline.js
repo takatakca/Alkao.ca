@@ -111,7 +111,15 @@ export function loadOffline(sessionId, now = Date.now()) {
     // A reconciliation discrepancy remains important even when the temporary
     // scan manifest passes its retention window. Archive before deleting.
     // If archiving cannot persist, fail closed and keep the original audit.
-    if (store.conflicts > 0) archiveOfflineIncidents(sessionId, store, now);
+    if (store.conflicts > 0) {
+      try { archiveOfflineIncidents(sessionId, store, now); }
+      catch {
+        // Preserve the local audit and keep the scanner screen usable. The
+        // operator can inspect/recover the original log rather than losing it
+        // to an unhandled React effect error.
+        return { ...store, incidentArchiveFailed: true };
+      }
+    }
     localStorage.removeItem(KEY(sessionId));
     return null;
   }
