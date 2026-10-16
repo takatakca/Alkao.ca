@@ -3,6 +3,8 @@
 Newest first, one line per piece of work. Rule: `AGENTS.md` › Work log rule.
 Format: `YYYY-MM-DD | agent | branch → PR | status | what | next step`
 
+- 2026-10-16 | ChatGPT (GitHub) | main → direct commits | active | Run 81: block transfer initiation, recipient claim and queued email during pending refunds or unresolved payment disputes; enforce database guard and test tenant safety | verify CI/Package, handoff, Coolify SHA
+
 - 2026-10-16 | ChatGPT (GitHub) | main → 59e31276, d0f11e21, fe6abc32, f9203cec, e085b59f | done in code; CI 38854862144 and Package 38854861945 SUCCESS, Coolify unverified | Run 80: gated transfer APIs, real Resend worker/cron opt-in, FR/EN buyer and recipient UI, one-time claim/new QR, organizer toggle/audit, worker-release/browser tests; global and Brand flags default OFF | next: Coolify SHA/DB/Resend/scanner acceptance #84 and remaining backlog
 
 - 2026-10-15 | ChatGPT (GitHub) | main → 99f94e35 and a4994017 | done in code, CI 38736545944 + Package 38736546000 SUCCESS; Coolify unverified | Run 79: one-time recipient acceptance, atomic QR rotation, sender exclusion, scanner locks, expired offline manifest fail-closed, tenant FK/test fix | next gated public API, FR/EN UI, email activation after E2E, Coolify #84
