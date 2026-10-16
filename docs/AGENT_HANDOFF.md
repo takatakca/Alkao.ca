@@ -1,5 +1,21 @@
 # ALKAO — Agent handoff (mandatory)
 
+## Run 87 — multi-tab offline scan storage locks (2026-10-16)
+
+- First Chromium test run 38957592844: TypeScript, migrations, secrets and 606/607 tests passed; one browser test failed because Vitest rewrote a dynamic import inside `page.evaluate`. Commit `fa9153282e643700de8ee15ff998774be147121c` fixes the test harness by loading the browser module in its actual HTML page. Replacement source CI **SUCCESS** 38958090144 and Package **SUCCESS** 38958090354 for `fa9153282e643700de8ee15ff998774be147121c`. Verify deployment 38958356323 queued separately and is not proof of production yet. The docs follow-up commit will have new CI/Package runs.
+
+
+- Run 87 original source `cb184a49` passed CI 38956850284 and Package 38956850276. Added true Chromium two-tab Playwright integration `test/ui/offline-cross-tab.test.ts` in `6032a5303a2a7b79387da0da7e75a6c7a9b9c4bd`; initial CI 38957273249 failed ONLY new test TypeScript browser-module paths/types. Fixes `afb08df7d2543ef53cadc06d1cf1b56ce5f43157` and `88ae7715e9c7a25745558b73e4bbd02d88249c4f` use runtime module import and `globalThis` for browser types. Verify revised CI 38957592844 and Package 38957592600 before marking browser test passed.
+
+
+- Repo `takatakca/Alkao.ca`, publication branch `main`. Previous Run 86 final source `9fbd33a85c2c2ec04d92bdb56bdc88d6892fb1cb`: CI 38955598793 SUCCESS, Package 38955598811 SUCCESS. Run 86 handoff commit `706425134fbb9780085bd50aa003bd568c731133` followed. Strict live Verify deployment for Run 86 source 38955922348 FAILED; `https://alkao.ca/health` did not attest the build SHA.
+- Run 87 claimed by WORKLOG commit `5378e8cab0bf5b2cfcd17cb8cd1eaf863e67f84a`. Functional source commit `cb184a497470be50eed7a2e9aaf1cd5f47ce0517`. Files `ops-ui/offline.js`: new `withOfflineSessionLock(sessionId, operation, {recovery})`, acquiring the origin-scoped browser Web Lock `alkao.ops.offline.audit.<sessionId>` over the full async operation. `ops-ui/app.js`: wraps the previous same-tab FIFO in the shared Web Lock on scan, goOffline, sync and exit; if Web Locks unavailable, no NEW offline admission is allowed and staff see an online-scanner instruction; existing audit uploads and safe exit can use `recovery:true` to avoid trapping previously admitted guests. `test/ops/offline-cross-tab.test.ts`: two-tab delayed batch, unsupported browser, error-release and separate-session tests.
+- Run 87 source verification: check GitHub CI run 38956850284, Package run 38956850276 and strict verifier 38956859446 for the latest result. At draft time CI and Package were in progress. Record failures truthfully and repair before claiming success. No DB migration, provider credential or feature flag changes.
+- Production remains **UNVERIFIED**. Coolify issue #84: authenticated operator must verify isolated ALKAO DB, backup/restore, existing migrations, secret rotation and SOURCE_COMMIT in build, then compare live `/health` SHA and readiness with main and test Stripe/Resend + real gate scanners. Keep global and Brand transfer options OFF.
+- Remaining risk: Web Locks coordinate tabs within one origin/browser profile, not separate physical gates, browsers or storage partitions. With no Web Locks, only already-stored offline admission reconciliation is allowed, not new offline admission; test real iOS/Android and embedded contexts.
+- Next action: inspect latest `main`, Run 87 GitHub Actions and correct errors. Perform real Chromium/physical two-tab/terminal tests with delayed HTTP, validate multi-device scan conflicts, then operator-approved Coolify release. Preserve unrelated Promo Havana PR #53. External agent restart orchestrator unavailable.
+
+
 ## Run 86 — serialize same-tab offline scan, sync and exit (2026-10-16)
 
 - Run 86 follow-up commit `9fbd33a85c2c2ec04d92bdb56bdc88d6892fb1cb` adds explicit callback types to `test/ops/offline-concurrency.test.ts` after initial CI 38955194282 failed only TS7006 on two implicit-any test callbacks. Package 38955598811 SUCCESS; revised CI 38955598793 SUCCESS (TypeScript, migrations, secrets, full tests). Strict Verify deployment 38955922348 was still running during handoff; prior live 38945162509 FAILED.

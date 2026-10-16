@@ -1,5 +1,16 @@
 # ALKAO — Task queue (priority ordered)
 
+## Run 87 — cross-tab admission log safety (2026-10-16)
+
+The real Chromium two-tab test required a browser-side module-loading fix (`fa915328`); source CI 38958090144 SUCCESS and Package 38958090354 SUCCESS for `fa915328`. Next check docs follow-up CI and strict live SHA. Initial browser CI 38957592844 failed one test-only dynamic import issue.
+
+
+Verified `cb184a49` unit source CI 38956850284 and Package 38956850276. Real two-tab Chromium test added at `6032a530`, browser TypeScript fixes through `88ae7715`. Verify 38957592844 CI and 38957592600 Package; fix any failures before release.
+
+
+Source `cb184a49`: use secure, origin-scoped exclusive Web Locks around each offline scan, sync, preparation and exit in addition to per-tab FIFO. Fail closed for NEW offline admission when Web Locks unsupported; permit only existing audit recovery. Unit tests `test/ops/offline-cross-tab.test.ts` simulate two tabs contending during delayed network sync, unsupported browser and error recovery. Verify latest CI 38956850284 / Package 38956850276, correct any failures. Next P1: real browser cross-tab E2E and iOS/Android embedded contexts, multi-physical-gate/clock-skew pilot, durable auditing under storage eviction and offline access policy. P0: Coolify #84 source SHA, separate DB+backup, migrations, secret rotation and Stripe/Resend/gate signoff; transfer switches OFF.
+
+
 ## Run 86 — scanner local audit concurrency and remaining work (2026-10-16)
 
 Initial CI 38955194282 reported two test-only TS7006 annotations; corrected in `9fbd33a8`. Follow-up CI 38955598793 SUCCESS and Package 38955598811 SUCCESS on `9fbd33a8`. Confirm independent docs CI and strict live SHA separately.

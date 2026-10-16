@@ -1,5 +1,16 @@
 # ALKAO — Decisions and non-negotiable constraints
 
+## Run 87 — no multi-tab admission without origin-wide locking
+
+The actual two-tab browser regression now loads `/ops/offline.js` as a browser module (source test fix `fa915328`), rather than letting Node's test runner rewrite the import.
+
+
+Run 87 browser behavior is additionally checked in Chromium with two real tabs sharing origin storage; fixes through `88ae7715` correct the Node-typed test harness. Source CI 38958090144 and Package 38958090354 succeeded for `fa915328`; do not infer live deployment from these tests.
+
+
+The Run 86 FIFO alone protects one Operations tab, not a second tab in the same browser storage partition. All offline scan/read/reconcile/write flows now acquire one exclusive browser Web Lock for the same session, held until any network operation finishes. This prevents localStorage snapshots from clobbering the latest physical admissions. Web Locks are widely supported only in secure contexts; absence of support MUST deny new offline admissions and direct staff to online scanning. An explicit recovery-only exception permits uploading preexisting local audit records so an old device does not strand guests. Locks do not coordinate separate browser profiles or physical gates; the server remains authoritative and the multi-device pilot is still mandatory.
+
+
 ## Run 86 — offline writes and synchronization share one queue
 
 The first Run 86 CI caught strict TypeScript test callback annotations, corrected in `9fbd33a8`. Run 86 code passed CI 38955598793 and Package 38955598811; this does not certify Coolify.

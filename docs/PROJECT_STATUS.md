@@ -1,5 +1,16 @@
 # ALKAO — Project status
 
+## Run 87 — same-origin multi-tab offline audit coordination (2026-10-16)
+
+Browser two-tab E2E initial CI 38957592844 had 606 passes and one test-only Vitest dynamic import error; fixed in `fa915328`, replacement CI 38958090144 **SUCCESS** / Package 38958090354 **SUCCESS** for source `fa9153282e643700de8ee15ff998774be147121c`.
+
+
+The initial Web Locks unit source `cb184a49` passed CI 38956850284 and Package 38956850276. A real two-tab Chromium test was added and browser-specific TypeScript setup corrected through `88ae7715`; latest CI 38957592844 to be verified.
+
+
+Source `cb184a497470be50eed7a2e9aaf1cd5f47ce0517`: in addition to Run 86 single-tab FIFO, offline admissions and synchronization now hold `navigator.locks` exclusive locks per session across tabs. No new offline admission is allowed when secure Web Locks support is missing; already-recorded admissions remain eligible for server reconciliation in recovery mode. Realistic unit regressions validate two independent scanner instances racing over a delayed HTTP acknowledgment, lock release after error and other sessions' independence. Check CI 38956850284 and Package 38956850276 for final outcome. No migration/production changes; Coolify live SHA unverified.
+
+
 ## Run 86 — offline scanner same-tab audit durability (2026-10-16)
 
 Initial CI 38955194282 failed TS7006 in two new test callback annotations, corrected by `9fbd33a8`; replacement CI 38955598793 SUCCESS, Package 38955598811 SUCCESS for final Run 86 source SHA `9fbd33a85c2c2ec04d92bdb56bdc88d6892fb1cb`.

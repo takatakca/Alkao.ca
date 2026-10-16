@@ -1,5 +1,16 @@
 # ALKAO — Deployment state and verification
 
+## Run 87 — Web Locks browser prerequisite for offline gates (2026-10-16)
+
+Full Chromium test harness corrected in `fa915328` after CI 38957592844 had one browser-only import failure; final source CI 38958090144 and Package 38958090354 succeeded on `fa915328`. Live Coolify SHA still not attested.
+
+
+Chromium two-tab cross-session storage test added through source `88ae7715`; typecheck corrected after first browser-test additions. Verify latest CI 38957592844 and Package 38957592600 before release.
+
+
+Offline gate admission is blocked on browsers without `navigator.locks.request` (secure-context origin-scoped Web Locks). Staff must use online scanning; only the explicit `recovery:true` path can upload audit entries already saved by older versions. The existing FIFO plus exclusive session lock prevents two same-origin tabs from overwriting each other's localStorage ticket admissions while one is waiting on a network batch. Requires HTTPS and field testing on actual Safari/Android browsers and embedded operations views; no migration added. Source `cb184a49` needs CI/Package completion and the live SHA verifier is still separate. Do not override Web Lock absence to admit attendees without durable audit, and do not flip transfer flags prematurely. Coolify issue #84 remains blocked on build provenance and backed-up ALKAO-specific DB.
+
+
 ## Run 86 — on-device offline scanner serialization (2026-10-16)
 
 New source `9fbd33a8` corrects test strict typings; revised CI 38955598793 SUCCESS and Package 38955598811 SUCCESS. Strict Verify deployment 38955922348 launched; prior live SHA remained missing.

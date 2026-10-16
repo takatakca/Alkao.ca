@@ -3,7 +3,7 @@
 Newest first, one line per piece of work. Rule: `AGENTS.md` › Work log rule.
 Format: `YYYY-MM-DD | agent | branch → PR | status | what | next step`
 
-- 2026-10-16 | ChatGPT (GitHub) | main → direct commits | active | Run 87: protect offline admissions across two tabs using origin-scoped Web Locks, fail closed when unavailable, preserve queued audit recovery | test and CI, package, docs
+- 2026-10-16 | ChatGPT (GitHub) | main → cb184a49, 6032a530, afb08df7, 88ae7715, fa915328 | done in code; CI 38958090144 and Package 38958090354 SUCCESS; Coolify unverified | Run 87: protect offline admissions across two tabs using origin-scoped Web Locks, fail closed when unavailable, preserve queued audit recovery | next: real iOS/Android and multi-device offline gate pilot, Coolify issue #84
 
 - 2026-10-16 | ChatGPT (GitHub) | main → 29a5f8f2, 9fbd33a8 | done in code; CI 38955598793 and Package 38955598811 SUCCESS, Coolify unverified | Run 86: serialize offline scanner writes and batch synchronization on one device to prevent overwriting admissions; add concurrency/browser regressions | next: true multiple-window/device lock and field pilot; Coolify #84 source SHA and migration rollout
 
