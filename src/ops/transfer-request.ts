@@ -53,6 +53,14 @@ export async function prepareTransferInvitation(
     const ticket = tickets[0];
     if (!ticket) throw new DomainError("ticket_not_found");
     const id = randomUUID();
+    // Expired intents must stop occupying the unique pending slot before a
+    // fresh request is created for the same ticket.
+    await tx.query(
+      `UPDATE public.ticketing_transfer_requests SET status = 'expired'
+       WHERE ticket_id = $1 AND client_id = $2 AND brand_id = $3
+         AND status = 'pending' AND expires_at <= $4`,
+      [ticketId, scope.clientId, scope.brandId, at],
+    );
     const recipientClaimSecret = transferClaimSecret(masterSecret, scope, id, ticketId, recipientEmail);
     const expiresAt = new Date(at.getTime() + 24 * 3600_000);
     await tx.query(

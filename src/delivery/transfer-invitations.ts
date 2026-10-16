@@ -20,6 +20,7 @@ type DueRow = {
   request_status: string; ticket_status: string; order_status: string; session_status: string;
   ticket_transfers_enabled: boolean; starts_at: Date; buyer_erased: boolean;
   already_admitted: boolean; brand_name: string; event_title: string;
+  language: "fr" | "en";
 };
 const escapeHtml = (s: string) => s.replace(/[&<>"']/g,
   (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
@@ -62,7 +63,7 @@ export async function deliverRecipientInvitations(db: Db, cfg: RecipientInviteDe
                 r.ticket_id, r.recipient_email, r.claim_token_hash, r.expires_at,
                 r.status AS request_status, t.status AS ticket_status, o.status AS order_status,
                 s.status AS session_status, s.starts_at, bs.ticket_transfers_enabled,
-                br.name AS brand_name, e.title AS event_title,
+                br.name AS brand_name, e.title AS event_title, b.language,
                 EXISTS (SELECT 1 FROM public.ticketing_buyer_erasures be WHERE be.buyer_id = o.buyer_id) AS buyer_erased,
                 EXISTS (SELECT 1 FROM public.ticketing_scans sc
                   WHERE sc.ticket_id = t.id AND sc.result = 'admitted') AS already_admitted
@@ -73,6 +74,8 @@ export async function deliverRecipientInvitations(db: Db, cfg: RecipientInviteDe
            AND t.client_id = r.client_id AND t.brand_id = r.brand_id
          JOIN public.ticketing_orders o ON o.id = t.order_id
            AND o.client_id = t.client_id AND o.brand_id = t.brand_id
+         JOIN public.ticketing_buyers b ON b.id = o.buyer_id
+           AND b.client_id = o.client_id AND b.brand_id = o.brand_id
          JOIN public.ticketing_sessions s ON s.id = r.session_id
            AND s.client_id = r.client_id AND s.brand_id = r.brand_id
          JOIN public.ticketing_brand_settings bs ON bs.client_id = r.client_id AND bs.brand_id = r.brand_id
@@ -105,7 +108,7 @@ export async function deliverRecipientInvitations(db: Db, cfg: RecipientInviteDe
       if (!timingSafeEqual(expected, row.claim_token_hash)) return skip("key_rotated");
       const link = transferClaimUrl(cfg.publicUrl, scope, row.request_id, secret);
       const letter = recipientInvitationEmail({
-        language: "fr", brandName: row.brand_name, eventTitle: row.event_title, link,
+        language: row.language === "en" ? "en" : "fr", brandName: row.brand_name, eventTitle: row.event_title, link,
       });
       try {
         const messageId = await cfg.sender.send({

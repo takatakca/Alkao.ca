@@ -45,6 +45,15 @@ const T = {
     exchanged: "Changement de séance confirmé. Les billets ci-dessous remplacent les anciens.",
     present: (n) => `Présentez le code QR de chaque billet à l'entrée. ${n} billet${n > 1 ? "s" : ""} valide${n > 1 ? "s" : ""}.`,
     ticket: "Billet",
+    transferred: "Transféré à un destinataire",
+    transferTitle: "Transférer un billet",
+    transferIntro: "Le transfert est personnel, gratuit et définitif après acceptation. L’invitation sera préparée pour cette adresse.",
+    transferEmail: "Courriel du destinataire",
+    transferSend: "Préparer le transfert",
+    transferPending: "Invitation en attente d’acceptation",
+    transferCancel: "Annuler la demande",
+    transferNotice: "Demande enregistrée. Le destinataire doit accepter l’invitation avant de recevoir son billet.",
+    transferCancelNotice: "Demande annulée; votre code QR reste valide.",
     footer: "Billetterie ALKAO · Ce lien est personnel : ne le partagez pas.",
     other: "English",
     addToCalendar: "Ajouter à mon calendrier",
@@ -101,6 +110,15 @@ const T = {
     exchanged: "Session change confirmed. The tickets below replace the old ones.",
     present: (n) => `Show each ticket's QR code at the entrance. ${n} valid ticket${n > 1 ? "s" : ""}.`,
     ticket: "Ticket",
+    transferred: "Transferred to recipient",
+    transferTitle: "Transfer a ticket",
+    transferIntro: "Transfers are personal, free and final once accepted. An invitation will be prepared for this address.",
+    transferEmail: "Recipient email address",
+    transferSend: "Prepare transfer",
+    transferPending: "Invitation awaiting acceptance",
+    transferCancel: "Cancel request",
+    transferNotice: "Request saved. The recipient must accept the invitation before receiving the ticket.",
+    transferCancelNotice: "Request cancelled; your QR code remains valid.",
     footer: "ALKAO Ticketing · This link is personal: do not share it.",
     other: "Français",
     addToCalendar: "Add to my calendar",
@@ -194,7 +212,7 @@ function whenFr(iso, timeZone) {
 }
 
 function Ticket({ t, name, index, count, onFullscreen }) {
-  const valid = t.status === "valid";
+  const valid = t.status === "valid" && !t.transferred;
   return html`<article class="ticket ${valid ? "" : "void"}">
     <div class="ticket-band">
       <span class="type">${name}</span>
@@ -204,7 +222,7 @@ function Ticket({ t, name, index, count, onFullscreen }) {
       ${valid && t.credential
         ? html`<img class="qr" src=${qrDataUrl(t.credential)} alt=${T.qrAlt(t.id.slice(0, 8))} />`
         : valid ? html`<p class="muted">${T.qrSoon}</p>`
-        : html`<p><span class="badge bad">${T.void[t.voidReason] ?? T.voidDefault}</span></p>`}
+        : html`<p><span class="badge bad">${t.transferred ? T.transferred : (T.void[t.voidReason] ?? T.voidDefault)}</span></p>`}
       <code>${t.id.slice(0, 8).toUpperCase()}</code>
       ${valid && t.credential && html`<button class="ghost noprint" onClick=${onFullscreen}>${T.fullscreen}</button>`}
     </div>
@@ -335,6 +353,71 @@ function ChangeSession({ order, token }) {
   </div>`;
 }
 
+
+/** Run 80: real transfer API. This panel stays absent until the global switch
+ * and the organizer's separate opt-in are active. No claim code reaches sender. */
+function TransferTickets({ order, token }) {
+  const [info, setInfo] = useState(null);
+  const [emails, setEmails] = useState({});
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const [notice, setNotice] = useState(null);
+  const load = () => call(`/orders/${order.id}/transfers`, { token }).then(
+    (data) => setInfo(data),
+    (err) => { if (err.message !== "not_found") setError(message(err)); },
+  );
+  useEffect(() => { void load(); }, []);
+  if (!info?.enabled) return null;
+  const tickets = order.tickets.filter((t) => t.status === "valid" && !t.transferred && t.credential);
+  if (!tickets.length) return null;
+  const pendingFor = (id) => info.transfers.find((r) => r.ticketId === id &&
+    r.status === "pending" && Date.parse(r.expiresAt) > Date.now());
+  const submit = (ticketId) => async (event) => {
+    event.preventDefault();
+    const recipientEmail = emails[ticketId]?.trim();
+    if (!recipientEmail || busy) return;
+    setBusy(true); setNotice(null); setError(null);
+    try {
+      await call(`/orders/${order.id}/transfers`, { method: "POST", token,
+        body: { ticketId, recipientEmail } });
+      setEmails((prev) => ({ ...prev, [ticketId]: "" }));
+      setNotice(T.transferNotice);
+      await load();
+    } catch (e) { setError(message(e)); }
+    finally { setBusy(false); }
+  };
+  const cancel = async (requestId) => {
+    if (busy) return;
+    setBusy(true); setError(null); setNotice(null);
+    try {
+      await call(`/orders/${order.id}/transfers/${requestId}`, { method: "DELETE", token });
+      setNotice(T.transferCancelNotice);
+      await load();
+    } catch (e) { setError(message(e)); }
+    finally { setBusy(false); }
+  };
+  return html`<section class="card noprint" aria-label=${T.transferTitle}>
+    <h2>${T.transferTitle}</h2><p class="muted">${T.transferIntro}</p>
+    ${notice && html`<p role="status" class="alert ok">${notice}</p>`}
+    ${error && html`<p role="alert" class="alert bad">${error}</p>`}
+    <ul class="transfer-list">${tickets.map((ticket, index) => {
+      const pending = pendingFor(ticket.id);
+      return html`<li key=${ticket.id}>
+        <strong>${T.ticket} ${index + 1}</strong>
+        ${pending ? html`<p class="muted">${T.transferPending}</p>
+          <button type="button" class="ghost" disabled=${busy} onClick=${() => cancel(pending.id)}>${T.transferCancel}</button>`
+          : html`<form onSubmit=${submit(ticket.id)} class="transfer-form">
+              <label for=${`transfer-${ticket.id}`}>${T.transferEmail}</label>
+              <input id=${`transfer-${ticket.id}`} type="email" autocomplete="email"
+                required maxlength="320" value=${emails[ticket.id] ?? ""}
+                onInput=${(e) => setEmails((prev) => ({ ...prev, [ticket.id]: e.currentTarget.value }))} />
+              <button type="submit" disabled=${busy}>${T.transferSend}</button>
+            </form>`}
+      </li>`;
+    })}</ul>
+  </section>`;
+}
+
 // Run 31: an .ics file made here, from what the page shows; the personal link is not in it.
 function addToCalendar(o) {
   const file = calendarFile({
@@ -380,7 +463,7 @@ function App() {
   // them. The server reads them across session changes (order.options).
   const addOns = o.exchanged || o.status === "refunded" ? []
     : (o.options ?? o.lines.filter((l) => l.kind === "add_on" && l.quantity > 0).map((l) => ({ name: l.nameSnapshot, quantity: l.quantity })));
-  const valid = o.tickets.filter((t) => t.status === "valid");
+  const valid = o.tickets.filter((t) => t.status === "valid" && !t.transferred);
   const scannable = valid.filter((t) => t.credential);
   const tz = o.event.venue.timezone;
   const logo = https(o.brand.logoUrl);
@@ -416,6 +499,7 @@ function App() {
         onFullscreen=${() => setGate(Math.max(0, scannable.findIndex((x) => x.id === t.id)))} />`)}
     </div>
     ${o.canChangeSession && valid.length > 0 && !state.offlineSince && html`<${ChangeSession} order=${o} token=${link.k} />`}
+    ${!state.offlineSince && !o.exchanged && o.status !== "pending_payment" && html`<${TransferTickets} order=${o} token=${link.k} />`}
     ${link.door && html`<p class="noprint"><a class="button" href=${`/acheter/${link.c}/${link.b}/${o.event.id}?porte=1`}>${T.nextSale}</a></p>`}
     <${Contact} brand=${o.brand} />
     <footer>${T.footer}</footer>

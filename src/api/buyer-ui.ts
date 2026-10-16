@@ -10,6 +10,8 @@ const JS = "text/javascript; charset=utf-8";
 
 const FILES: Record<string, { path: string; type: string }> = {
   "app.js": { path: join(UI_DIR, "app.js"), type: JS },
+  "transfer.js": { path: join(UI_DIR, "transfer.js"), type: JS },
+  "transfer.css": { path: join(UI_DIR, "transfer.css"), type: "text/css; charset=utf-8" },
   "styles.css": { path: join(UI_DIR, "styles.css"), type: "text/css; charset=utf-8" },
   "i18n.js": { path: join(UI_DIR, "i18n.js"), type: JS },
   "calendar.js": { path: join(UI_DIR, "calendar.js"), type: JS },
@@ -51,6 +53,8 @@ export function mountBuyerUi(app: Hono<any>): void {
     return cache.get(path)!;
   };
   app.get("/billets", (c) => c.body(read(join(UI_DIR, "index.html")), 200, HEADERS("text/html; charset=utf-8")));
+  // Recipient-only ticket page: static shell, proof stays in URL fragment and is never logged.
+  app.get("/billets/transfert", (c) => c.body(read(join(UI_DIR, "transfer.html")), 200, HEADERS("text/html; charset=utf-8")));
   for (const [name, file] of Object.entries(FILES)) {
     // The service worker serves "/billets" itself, one level above its own folder.
     const extra: Record<string, string> = name === "sw.js" ? { "service-worker-allowed": "/billets" } : {};

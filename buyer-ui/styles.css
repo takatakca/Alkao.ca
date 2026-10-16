@@ -103,3 +103,13 @@ a.button { display: inline-block; padding: .65rem 1rem; border-radius: 10px; bac
 /* Run 65: the exchange and refund policy keeps its line breaks. */
 .contact .policy { white-space: pre-line; }
 .contact h3 { font-size: 1rem; margin: 1rem 0 .25rem; }
+
+
+/* Run 80: transfer controls are shown only when both API and Brand allow it. */
+.transfer-list{list-style:none;margin:.65rem 0 0;padding:0;display:grid;gap:1rem}
+.transfer-list li{padding:.85rem;border:1px solid var(--line);border-radius:12px}
+.transfer-form{display:grid;gap:.45rem;margin-top:.6rem}
+.transfer-form label{font-size:.9rem;font-weight:700}
+.transfer-form input{font:inherit;width:100%;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--ink);min-height:46px;padding:.55rem .7rem}
+.transfer-form input:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.transfer-form button{min-height:46px}

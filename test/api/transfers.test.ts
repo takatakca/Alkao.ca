@@ -81,7 +81,7 @@ describe("Run 80 transfer API release and authorization", () => {
     const id: string = invited.body.transfer.id;
     const secret = transferClaimSecret(TEST_CREDENTIAL_SECRET, scope(), id, ticketId, "recipient@example.com");
     const claimUrl = `${base()}/transfers/${id}/claim`;
-    expect((await call(app, "POST", claimUrl, { body: { secret: `secret-${order.orderId}` } })).status).toBe(400);
+    expect((await call(app, "POST", claimUrl, { body: { secret: `secret-${order.orderId}` } })).status).toBe(404);
     expect((await call(app, "POST", claimUrl, { body: { secret: "A".repeat(43) } })).status).toBe(404);
     const claim = await call(app, "POST", claimUrl, { body: { secret } });
     expect(claim.status).toBe(200);

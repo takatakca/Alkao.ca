@@ -909,7 +909,19 @@ export function createApp(deps: AppDeps) {
     const { commissionCents: _c, commissionRefundedCents: _cr, buyerPhone: _p, attribution: _a, ...publicOrder } = order;
     // QR payload per valid ticket (null for void tickets, or until credentials are configured).
     const payloads = await credentials.payloadsForOrder(scope, orderId);
-    const tickets = (order.tickets as { id: string }[]).map((t) => ({ ...t, credential: payloads.get(t.id) ?? null }));
+    // A transferred ticket is still valid for admission but belongs to the
+    // recipient. The original order view must never suggest that it is theirs.
+    const { rows: transferredRows } = await deps.db.query<{ ticket_id: string }>(
+      `SELECT a.ticket_id FROM public.ticketing_transfer_acceptances a
+       JOIN public.ticketing_tickets t ON t.id = a.ticket_id
+         AND t.client_id = a.client_id AND t.brand_id = a.brand_id
+       WHERE t.order_id = $1 AND a.client_id = $2 AND a.brand_id = $3`,
+      [orderId, scope.clientId, scope.brandId],
+    );
+    const transferred = new Set(transferredRows.map(r => r.ticket_id));
+    const tickets = (order.tickets as { id: string }[]).map((t) => ({
+      ...t, transferred: transferred.has(t.id), credential: transferred.has(t.id) ? null : (payloads.get(t.id) ?? null),
+    }));
     // Run 06: what the buyer's ticket page shows (brand, event, session, venue, Flex option).
     const context = await delivery.publicOrderContext(deps.db, scope, orderId);
     // Run 55: the options bought, kept across session changes.
@@ -948,9 +960,17 @@ export function createApp(deps: AppDeps) {
       [orderId, scope.clientId, scope.brandId],
     );
     // Keep the recipient email, hash, access key and all provider identifiers private.
-    return c.json({ transfers: rows.map(r => ({
-      id: r.id, ticketId: r.ticket_id, status: r.status, expiresAt: r.expires_at,
-    })) });
+    const { rows: settings } = await deps.db.query<{ ticket_transfers_enabled: boolean }>(
+      `SELECT ticket_transfers_enabled FROM public.ticketing_brand_settings
+       WHERE client_id = $1 AND brand_id = $2`,
+      [scope.clientId, scope.brandId],
+    );
+    return c.json({
+      enabled: settings[0]?.ticket_transfers_enabled === true,
+      transfers: rows.map(r => ({
+        id: r.id, ticketId: r.ticket_id, status: r.status, expiresAt: r.expires_at,
+      })),
+    });
   });
 
   app.post(`${PUBLIC}/orders/:orderId/transfers`, publicGate, transferReleaseGate, async (c) => {

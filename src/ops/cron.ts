@@ -1,6 +1,7 @@
 import type { Db } from "../db/pool.js";
 import { queueReminders } from "../delivery/reminders.js";
 import { deliverCampaignEmails } from "../delivery/campaigns.js";
+import { deliverRecipientInvitations } from "../delivery/transfer-invitations.js";
 import { deliverSignupConfirmations } from "../delivery/newsletter.js";
 import { notifyWaitlists } from "../delivery/waitlist.js";
 import { deliverCampaignSms, type SmsDeliveryConfig } from "../delivery/sms.js";
@@ -32,6 +33,7 @@ export interface CronResult {
   expiredHolds: number;
   remindersQueued: number;
   emails: { sent: number; skipped: number; retried: number; failed: number } | null;
+  transferInvites: { sent: number; skipped: number; retried: number; failed: number } | null;
   /** Run 42: campaign messages, after the buyers' emails; `finished` campaigns marked sent. */
   campaignEmails: { sent: number; skipped: number; retried: number; failed: number; finished: number } | null;
   /** Run 44: newsletter sign-up confirmations. */
@@ -48,7 +50,7 @@ export interface CronResult {
 const LOCK = "alkao_cron";
 
 export async function runBackgroundOnce(db: Db, deps: CronDeps, now = new Date()): Promise<CronResult> {
-  const result: CronResult = { ran: false, expiredHolds: 0, remindersQueued: 0, emails: null, campaignEmails: null, signupEmails: null, waitlistEmails: null, campaignSms: null, cancellationJobs: null, customersSynced: 0 };
+  const result: CronResult = { ran: false, expiredHolds: 0, remindersQueued: 0, emails: null, transferInvites: null, campaignEmails: null, signupEmails: null, waitlistEmails: null, campaignSms: null, cancellationJobs: null, customersSynced: 0 };
   const lock = await db.connect();
   try {
     const { rows } = await lock.query<{ ok: boolean }>(`SELECT pg_try_advisory_lock(hashtext($1)) AS ok`, [LOCK]);
@@ -61,6 +63,8 @@ export async function runBackgroundOnce(db: Db, deps: CronDeps, now = new Date()
         result.remindersQueued = await queueReminders(db, now);
         const r = await deliverTicketEmails(db, deps.email, now);
         result.emails = { sent: r.sent, skipped: r.skipped, retried: r.retried, failed: r.failed };
+        if (deps.email.transferInvitesEnabled)
+          result.transferInvites = await deliverRecipientInvitations(db, deps.email, now);
         result.signupEmails = await deliverSignupConfirmations(db, deps.email, now);
         result.campaignEmails = await deliverCampaignEmails(db, deps.email, now);
         result.waitlistEmails = await notifyWaitlists(db, deps.email, now);

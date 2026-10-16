@@ -28,6 +28,7 @@ try {
           credentialMasterSecret: config.credentialMasterSecret,
           maxAgeHours: email.data.ALKAO_EMAIL_MAX_AGE_HOURS,
           campaignEmailsPerHour: email.data.ALKAO_CAMPAIGN_EMAILS_PER_HOUR,
+          transferInvitesEnabled: config.transferApiEnabled,
         }
       : null,
     sms: config.twilio ? { sender: new TwilioSmsSender(config.twilio.accountSid, config.twilio.authToken, config.twilio.sender) } : null,

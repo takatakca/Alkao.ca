@@ -1,6 +1,7 @@
 import { withTransaction, type Db } from "../db/pool.js";
 import { EmailSendError, type EmailMessage, type EmailSender } from "./email.js";
 import { orderEmailToken, ticketsUrl } from "./links.js";
+import { deliverRecipientInvitations } from "./transfer-invitations.js";
 import { deliverCampaignEmails } from "./campaigns.js";
 import { deliverSignupConfirmations } from "./newsletter.js";
 import { queueReminders } from "./reminders.js";
@@ -15,6 +16,8 @@ export interface DeliveryConfig {
   /** Public HTTPS origin of ALKAO, where /billets is served. */
   publicUrl: string;
   credentialMasterSecret: string;
+  /** Run 80: invite emails are OFF unless the whole transfer API is explicitly released. */
+  transferInvitesEnabled?: boolean;
   /** Emails queued longer ago than this are skipped, never sent late (default 72 h). */
   maxAgeHours?: number;
   maxAttempts?: number;
@@ -234,6 +237,12 @@ export function startEmailWorker(db: Db, cfg: DeliveryConfig, intervalMs: number
       if (queued > 0) log(`alkao email: ${queued} reminder(s) queued`);
       const r = await deliverTicketEmails(db, cfg);
       if (r.sent + r.skipped + r.retried + r.failed > 0) log(`alkao email: ${JSON.stringify(r)}`);
+      // Run 80: recipient proof delivery only after explicit feature release.
+      if (cfg.transferInvitesEnabled) {
+        const transfers = await deliverRecipientInvitations(db, cfg);
+        if (transfers.sent + transfers.skipped + transfers.retried + transfers.failed > 0)
+          log(`alkao transfers: ${JSON.stringify(transfers)}`);
+      }
       // Run 44: sign-up confirmations, which the person is waiting for.
       const n = await deliverSignupConfirmations(db, cfg);
       if (n.sent + n.skipped + n.retried + n.failed > 0) log(`alkao signups: ${JSON.stringify(n)}`);

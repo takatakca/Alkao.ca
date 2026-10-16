@@ -1,0 +1,22 @@
+:root{font-family:system-ui,-apple-system,"Segoe UI",Arial,sans-serif;color:#10254a;background:#f5f8fd;font-size:16px}
+*{box-sizing:border-box}[hidden]{display:none!important}
+body{margin:0;min-height:100vh;display:flex;flex-direction:column}
+.band{background:#06172f;color:#fff;border-bottom:4px solid #1679f9}
+.bar{max-width:650px;margin:auto;padding:18px 20px;display:flex;justify-content:space-between;align-items:center}
+.logo{font-weight:900;letter-spacing:.12em;font-size:1.35rem}.logo small{font-size:.55rem;letter-spacing:.1em;margin-left:.35rem;color:#9ccaff}
+.language{background:transparent;color:#fff;border:1px solid #86b7ff;border-radius:8px;padding:9px 14px}
+main{width:100%;max-width:650px;flex:1;margin:auto;padding:32px 20px 48px}
+h1{font-size:clamp(1.7rem,5vw,2.3rem);line-height:1.17;letter-spacing:-.035em}
+h2{font-size:1.4rem}.panel{background:#fff;border:1px solid #cbd9f0;border-radius:18px;padding:24px;box-shadow:0 10px 24px #001f4210;margin:22px 0}
+button{cursor:pointer;font:inherit;font-weight:700;touch-action:manipulation}
+button:focus-visible{outline:3px solid #e0a900;outline-offset:3px}
+button:disabled{opacity:.6;cursor:wait}
+.primary,.secondary{width:100%;min-height:48px;border-radius:10px;padding:12px 16px;margin:12px 0 0}
+.primary{background:#0965d4;border:1px solid #0965d4;color:#fff}
+.secondary{color:#1156a5;background:#eef5ff;border:1px solid #88b8ef}
+#qr{display:block;margin:24px auto 8px;max-width:100%;height:auto;border:10px solid white;box-shadow:0 0 0 1px #a5bad7;border-radius:8px;image-rendering:pixelated}
+#message[data-error="true"]{color:#a11e24;font-weight:700}
+.warning{background:#edf5ff;border-left:3px solid #1369db;border-radius:6px;padding:16px;line-height:1.55}
+.muted{font-size:.9rem;color:#526785}
+footer{text-align:center;font-size:.85rem;color:#526785;padding:22px}
+@media(prefers-color-scheme:dark){:root{background:#091629;color:#f4f7ff}.panel{background:#132740;border-color:#315b91}.warning{background:#132b48}.muted,footer{color:#c2cde2}}

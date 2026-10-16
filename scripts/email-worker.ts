@@ -28,6 +28,8 @@ const stop = startEmailWorker(
     credentialMasterSecret: env.ALKAO_CREDENTIAL_MASTER_SECRET,
     maxAgeHours: env.ALKAO_EMAIL_MAX_AGE_HOURS,
     campaignEmailsPerHour: env.ALKAO_CAMPAIGN_EMAILS_PER_HOUR,
+    // The API and this worker must both opt in; default-off in loadConfig.
+    transferInvitesEnabled: loadConfig().transferApiEnabled,
   },
   env.ALKAO_EMAIL_INTERVAL_SECONDS * 1000,
 );
