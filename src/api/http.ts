@@ -54,6 +54,9 @@ const STATUS_BY_CODE: Record<string, ContentfulStatusCode> = {
   invalid_ticket: 422,
   credentials_not_configured: 503,
   already_exchanged: 409,
+  // Run 80: an outstanding or accepted transfer makes whole-order exchange unsafe.
+  order_has_transfer: 409,
+  transfer_unavailable: 404,
   order_not_exchangeable: 409,
   flex_not_purchased: 409,
   // Run 06

@@ -18,6 +18,12 @@ describe("configuration hardening", () => {
 
   it("starts with the operational API off and refuses weak secrets", () => {
     expect(loadConfig(base).operationalApiEnabled).toBe(false);
+    // Run 80: even an active Ticketing deployment does not expose transfer APIs
+    // until explicitly enabled by the operator after full recipient UI/mail QA.
+    expect(loadConfig(base).transferApiEnabled).toBe(false);
+    expect(loadConfig({ ...base, ALKAO_OPERATIONAL_API_ENABLED: "true" }).transferApiEnabled).toBe(false);
+    expect(loadConfig({ ...base, ALKAO_TRANSFER_API_ENABLED: "true" }).transferApiEnabled).toBe(true);
+    expect(() => loadConfig({ ...base, ALKAO_TRANSFER_API_ENABLED: "maybe" })).toThrow();
     expect(() => loadConfig({ ...base, ALKAO_CREDENTIAL_MASTER_SECRET: "short" })).toThrow();
     expect(() => loadConfig({ ...base, ALKAO_CONTROL_KEYS: "kid:short" })).toThrow();
     expect(() => loadConfig({ ...base, ALKAO_PUBLIC_URL: "http://billets.example.ca" })).toThrow();

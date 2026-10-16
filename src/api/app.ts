@@ -1,6 +1,7 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { Hono, type Context, type MiddlewareHandler } from "hono";
 import { bodyLimit } from "hono/body-limit";
+import { z } from "zod";
 import * as api from "../contracts/api-v1.js";
 import { CONTROL_CONTRACT_VERSION, ControlEvent, ControlStateRequest } from "../contracts/control-v1.js";
 import * as catalog from "../db/catalog.js";
@@ -58,6 +59,8 @@ import { clientIp, ipKind } from "./client-ip.js";
 import * as delivery from "../delivery/db.js";
 import { orderEmailToken } from "../delivery/links.js";
 import { validOrderAccessToken } from "./order-token.js";
+import { prepareTransferInvitation, cancelTransferInvitation } from "../ops/transfer-request.js";
+import { acceptTransferInvitation, transferredCredentialForRecipient } from "../ops/transfer-acceptance.js";
 import * as cancellation from "../ops/cancellation.js";
 import * as changeNotice from "../ops/change-notice.js";
 
@@ -78,6 +81,8 @@ export interface AppDeps {
   onboarding?: { refreshUrl: string; returnUrl: string } | null;
   /** Secret from which Client credential (QR) signing keys are derived; null until configured. */
   credentialMasterSecret?: string | null;
+  /** Run 80: explicit global release gate for transfer API, OFF by default. */
+  transferApiEnabled?: boolean;
   /** Standalone Operations web app served under /ops. */
   opsUi?: OpsUiConfig;
   /** Public HTTPS URL of this ALKAO deployment (hosted shop, ticket links). */
@@ -128,6 +133,8 @@ export function createApp(deps: AppDeps) {
   const waitlistByEmail = new FixedWindowLimiter(5, 60 * 60_000);
   // Run 72: presale codes are guessed one try at a time at most.
   const presaleByIp = new FixedWindowLimiter(10, 10 * 60_000);
+  const transferByIp = new FixedWindowLimiter(8, 10 * 60_000);
+  const claimByIp = new FixedWindowLimiter(5, 10 * 60_000);
   const paymentsService = new PaymentsService({
     db: deps.db,
     gateway: deps.paymentGateway ?? null,
@@ -186,7 +193,7 @@ export function createApp(deps: AppDeps) {
     if (c.req.method === "OPTIONS") {
       return c.body(null, 204, allowed ? {
         "access-control-allow-origin": origin!, "access-control-allow-methods": "GET, POST, DELETE",
-        "access-control-allow-headers": "content-type, x-alkao-hold-token, x-alkao-order-token",
+        "access-control-allow-headers": "content-type, x-alkao-hold-token, x-alkao-order-token, x-alkao-transfer-token",
         "access-control-max-age": "600", vary: "Origin",
       } : { vary: "Origin" });
     }
@@ -908,6 +915,98 @@ export function createApp(deps: AppDeps) {
     // Run 55: the options bought, kept across session changes.
     const options = await orderOptions(deps.db, scope, orderId);
     return c.json({ order: { ...publicOrder, tickets, ...context, options } });
+  });
+
+  // ── Run 80: transfer APIs; explicit global switch AND normal Client/Brand gate. ──────
+  // No route reveals the recipient claim secret to the original order holder.
+  // Activation stays OFF until verified mail delivery and recipient UI are released.
+  const transferReleaseGate: MiddlewareHandler<Env> = async (c, next) => {
+    if (!deps.transferApiEnabled || !deps.credentialMasterSecret || deps.credentialMasterSecret.length < 32)
+      return fail(c, 404, "not_found");
+    await next();
+  };
+  const transferCreation = z.object({
+    ticketId: z.uuid(),
+    recipientEmail: z.email().max(320),
+  }).strict();
+  const claimInput = z.object({ secret: z.string().regex(/^[A-Za-z0-9_-]{43}$/) }).strict();
+
+  app.get(`${PUBLIC}/orders/:orderId/transfers`, publicGate, transferReleaseGate, async (c) => {
+    const orderId = param(c, "orderId");
+    const scope = c.get("scope");
+    if (!orderId || !(await validOrderAccessToken(deps.db, scope, orderId, c.req.header("x-alkao-order-token"), now())))
+      return fail(c, 404, "order_not_found");
+    const { rows } = await deps.db.query<{
+      id: string; ticket_id: string; status: string; expires_at: Date;
+    }>(
+      `SELECT r.id, r.ticket_id, r.status, r.expires_at
+       FROM public.ticketing_transfer_requests r
+       JOIN public.ticketing_tickets t ON t.id = r.ticket_id
+         AND t.client_id = r.client_id AND t.brand_id = r.brand_id
+       WHERE t.order_id = $1 AND r.client_id = $2 AND r.brand_id = $3
+       ORDER BY r.created_at DESC LIMIT 100`,
+      [orderId, scope.clientId, scope.brandId],
+    );
+    // Keep the recipient email, hash, access key and all provider identifiers private.
+    return c.json({ transfers: rows.map(r => ({
+      id: r.id, ticketId: r.ticket_id, status: r.status, expiresAt: r.expires_at,
+    })) });
+  });
+
+  app.post(`${PUBLIC}/orders/:orderId/transfers`, publicGate, transferReleaseGate, async (c) => {
+    const orderId = param(c, "orderId");
+    if (!orderId) return fail(c, 404, "order_not_found");
+    const scope = c.get("scope");
+    if (!transferByIp.take(`${scope.clientId}:${clientIp(c, deps.trustedProxyHops ?? 1)}`, now().getTime()))
+      return fail(c, 429, "rate_limited");
+    const input = transferCreation.parse(await readJson(c));
+    const result = await prepareTransferInvitation(
+      deps.db, scope, orderId, input.ticketId, c.req.header("x-alkao-order-token") ?? "",
+      input.recipientEmail, deps.credentialMasterSecret!, now(),
+    );
+    return c.json({ transfer: {
+      id: result.id, ticketId: result.ticketId, status: "pending", expiresAt: result.expiresAt,
+    } }, 202);
+  });
+
+  app.delete(`${PUBLIC}/orders/:orderId/transfers/:requestId`, publicGate, transferReleaseGate, async (c) => {
+    const orderId = param(c, "orderId");
+    const requestId = param(c, "requestId");
+    if (!orderId || !requestId) return fail(c, 404, "not_found");
+    const scope = c.get("scope");
+    const cancelled = await cancelTransferInvitation(
+      deps.db, scope, orderId, requestId,
+      c.req.header("x-alkao-order-token") ?? "", now(),
+    );
+    return c.json({ cancelled });
+  });
+
+  app.post(`${PUBLIC}/transfers/:requestId/claim`, publicGate, transferReleaseGate, async (c) => {
+    const requestId = param(c, "requestId");
+    if (!requestId) return fail(c, 404, "transfer_unavailable");
+    const scope = c.get("scope");
+    if (!claimByIp.take(`${scope.clientId}:${clientIp(c, deps.trustedProxyHops ?? 1)}`, now().getTime()))
+      return fail(c, 429, "rate_limited");
+    const input = claimInput.parse(await readJson(c));
+    const result = await acceptTransferInvitation(
+      deps.db, scope, requestId, input.secret, deps.credentialMasterSecret!, now(),
+    );
+    return c.json({ transfer: {
+      id: result.requestId, ticketId: result.ticketId, accessToken: result.recipientAccessToken,
+    } });
+  });
+
+  app.get(`${PUBLIC}/transfers/:requestId/ticket`, publicGate, transferReleaseGate, async (c) => {
+    const requestId = param(c, "requestId");
+    if (!requestId) return fail(c, 404, "transfer_unavailable");
+    const scope = c.get("scope");
+    const recipient = await transferredCredentialForRecipient(
+      deps.db, scope, requestId, c.req.header("x-alkao-transfer-token") ?? "",
+    );
+    return c.json({ ticket: {
+      id: recipient.ticketId,
+      credential: await credentials.payloadFor(scope.clientId, recipient.credentialId),
+    } });
   });
 
   // ── Run 02: Stripe webhooks ──────────────────────────────────────────────

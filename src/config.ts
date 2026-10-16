@@ -15,6 +15,8 @@ export const EnvSchema = z.object({
   DATABASE_URL: z.string().min(1),
   /** Deployment switch. Off by default: merging or deploying ALKAO activates nothing. */
   ALKAO_OPERATIONAL_API_ENABLED: boolFlag,
+  /** Run 80: public buyer/recipient transfer APIs. Off even when Ticketing is enabled. */
+  ALKAO_TRANSFER_API_ENABLED: boolFlag,
   /** TAKATAK control-contract HMAC keys: "kid1:secret1,kid2:secret2" (rotation by key id). */
   ALKAO_CONTROL_KEYS: z.string().optional(),
   /** Supabase Auth: JWKS URL (asymmetric signing keys) or legacy HS256 JWT secret. */
@@ -59,6 +61,7 @@ export const EnvSchema = z.object({
 export interface Config {
   databaseUrl: string;
   operationalApiEnabled: boolean;
+  transferApiEnabled: boolean;
   controlKeys: Map<string, string>;
   jwt: { jwksUrl?: string; secret?: string; issuer?: string };
   holdTtlSeconds: number;
@@ -110,6 +113,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   return {
     databaseUrl: e.DATABASE_URL,
     operationalApiEnabled: e.ALKAO_OPERATIONAL_API_ENABLED,
+    transferApiEnabled: e.ALKAO_TRANSFER_API_ENABLED,
     controlKeys: parseControlKeys(e.ALKAO_CONTROL_KEYS),
     jwt: {
       ...(e.SUPABASE_JWKS_URL ? { jwksUrl: e.SUPABASE_JWKS_URL } : {}),

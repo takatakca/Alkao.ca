@@ -15,6 +15,7 @@ const app = createApp({
   db,
   auth: createSupabaseJwtVerifier(config.jwt),
   operationalApiEnabled: config.operationalApiEnabled,
+  transferApiEnabled: config.transferApiEnabled,
   controlKeys: config.controlKeys,
   holdTtlSeconds: config.holdTtlSeconds,
   publicHoldsPerMinute: config.publicHoldsPerMinute,

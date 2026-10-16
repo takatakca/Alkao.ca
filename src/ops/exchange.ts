@@ -50,6 +50,17 @@ export async function exchangeOrder(
       if (rootId !== orderId) {
         await tx.query(`SELECT 1 FROM public.ticketing_orders WHERE id = $1 AND client_id = $2 AND brand_id = $3 FOR UPDATE`, [rootId, scope.clientId, scope.brandId]);
       }
+      // Run 80: exchanging an order cannot invalidate a pending invitation or
+      // alter an admission already transferred to another person.
+      const { rowCount: transfers } = await tx.query(
+        `SELECT 1 FROM public.ticketing_transfer_requests r
+         JOIN public.ticketing_tickets t ON t.id = r.ticket_id
+           AND t.client_id = r.client_id AND t.brand_id = r.brand_id
+         WHERE t.order_id = $1 AND t.client_id = $2 AND t.brand_id = $3
+           AND r.status IN ('pending', 'claimed')`,
+        [orderId, scope.clientId, scope.brandId],
+      );
+      if (transfers) throw new DomainError("order_has_transfer");
       // Only the latest move can move again.
       const { rowCount: exchanged } = await tx.query(
         `SELECT 1 FROM public.ticketing_orders x
