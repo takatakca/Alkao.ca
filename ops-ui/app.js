@@ -1107,7 +1107,7 @@ function Scanner({ api, base }) {
       ${offline ? html`<span class="badge warn">Hors ligne</span>
           <span class="muted">Liste du ${when(new Date(offline.downloadedAt).toISOString())} · ${offline.manifest.credentials.length} billets</span>
           <span>${offline.queue.length} en attente de synchronisation</span>
-          ${offline.conflicts > 0 && html`<span class="badge bad">${offline.conflicts} billet(s) aussi entré(s) à une autre porte</span>`}
+          ${offline.conflicts > 0 && html`<span class="badge bad">${offline.conflicts} admission(s) hors ligne contestée(s) — vérifier les écarts avec le serveur</span>`}
           <button class="secondary" onClick=${sync}>Synchroniser maintenant</button>
           <button class="secondary" onClick=${leaveOffline}>Quitter le mode hors ligne</button>`
         : html`<span class="muted">Réseau instable à la porte ?</span><button class="secondary" onClick=${goOffline}>Préparer le mode hors ligne</button>`}

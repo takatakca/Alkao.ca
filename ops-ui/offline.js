@@ -5,7 +5,9 @@
 //   2. the key id against the manifest;
 //   3. the Ed25519 signature (WebCrypto);
 //   4. revocation, admission on this device, and the gate window.
-// Every attempt is queued and sent to the batch endpoint once back online. The server stays the
+// Only locally admitted tickets are queued for online reconciliation. A QR rejected
+// offline MUST NOT become an unattended admission just because connectivity returns.
+// The server stays the
 // authority: a ticket admitted at two offline gates is reported as a conflict after the sync.
 const PAYLOAD_RE = /^ALK1\.(k[0-9a-z]{10})\.([A-Za-z0-9_-]{22})\.([A-Za-z0-9_-]{86})$/;
 const KEY = (sessionId) => `alkao.ops.offline.${sessionId}`;
@@ -59,7 +61,6 @@ export async function offlineScan(store, raw, now = Date.now()) {
   if (!Number.isFinite(validUntil) || now >= validUntil)
     return { result: "manifest_expired" };
   const payload = raw.trim();
-  store.queue.push({ payload, scannedAt: new Date(now).toISOString() });
   const m = PAYLOAD_RE.exec(payload);
   if (!m) return { result: "malformed" };
   const [, kid, qrId, signature] = m;
@@ -79,7 +80,7 @@ export async function offlineScan(store, raw, now = Date.now()) {
   if (now < Date.parse(opensAt)) return { result: "too_early", ticket };
   if (now > Date.parse(closesAt)) return { result: "too_late", ticket };
   store.localAdmitted.push(qrId);
-  store.queue[store.queue.length - 1].admittedOffline = true;
+  store.queue.push({ payload, scannedAt: new Date(now).toISOString(), admittedOffline: true });
   // Run 58: the order's options to hand over, once per order (also on this device).
   const bought = credential.purchase && store.manifest.purchases?.find((p) => p.ref === credential.purchase);
   if (!bought) return { result: "admitted", ticket };
@@ -90,20 +91,38 @@ export async function offlineScan(store, raw, now = Date.now()) {
 }
 
 /**
- * Send queued scans (500 at a time). Returns false if the network is still down. A scan
- * admitted offline that the server answers "already_admitted" was let in at another gate too.
+ * Reconcile actual offline admissions only (500 at a time). Never discard a
+ * batch unless the server acknowledges every result in its original index.
+ * A rejected offline entry is not an admission and must never be uploaded for
+ * automatic admission once online. Divergent results require gate follow-up.
  */
+const SERVER_SCAN_RESULTS = new Set([
+  "admitted", "already_admitted", "revoked", "wrong_session", "too_early",
+  "too_late", "unknown_credential", "invalid_signature", "unknown_key", "malformed",
+]);
 export async function syncOffline(store, send) {
+  // Existing devices can have entries from older software which queued denied
+  // scans. Never replay such QR payloads as fresh admissions on reconnect.
+  store.queue = store.queue.filter((entry) => entry?.admittedOffline === true);
   while (store.queue.length > 0) {
     const batch = store.queue.slice(0, 500);
     let results;
     try {
       results = await send(batch.map(({ payload, scannedAt }) => ({ payload, scannedAt })));
-    } catch (error) {
-      if (error?.status && error.status !== 401 && error.status < 500) store.queue.splice(0, batch.length);
+    } catch {
+      // Even HTTP 400/403 or a timeout may follow partial server processing.
+      // Keep all entries until every one is explicitly acknowledged.
       return false;
     }
-    results.forEach((r, i) => { if (batch[i]?.admittedOffline && r.result === "already_admitted") store.conflicts++; });
+    if (!Array.isArray(results) || results.length !== batch.length ||
+        results.some((r, i) => !r || r.index !== i || !SERVER_SCAN_RESULTS.has(r.result)))
+      return false;
+    // The scanner admitted these people offline, but the server is authoritative.
+    // A revoked, already admitted, or otherwise denied ticket is an incident.
+    for (let i = 0; i < results.length; i++) {
+      if (batch[i]?.admittedOffline && results[i].result !== "admitted")
+        store.conflicts++;
+    }
     store.synced += batch.length;
     store.queue.splice(0, batch.length);
   }

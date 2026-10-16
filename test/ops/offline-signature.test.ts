@@ -36,7 +36,7 @@ describe("Run 83: offline admissions must verify Ed25519", () => {
     const store = newOfflineStore(manifest(), now);
     expect((await offlineScan(store, payload, now)).result).toBe("signature_unavailable");
     expect(store.localAdmitted).toEqual([]);
-    expect(store.queue).toHaveLength(1);
+    expect(store.queue).toHaveLength(0);
     expect(store.queue[0].admittedOffline).not.toBe(true);
   });
 

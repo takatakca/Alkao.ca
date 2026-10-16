@@ -24,8 +24,8 @@ describe("Run 79: fail closed on expired scanner manifests", () => {
   it("processes an available list only before the exact expiry instant", async () => {
     const store = newOfflineStore({ validUntil: new Date(now + 1).toISOString() }, now);
     expect((await offlineScan(store, "malformed", now)).result).toBe("malformed");
-    expect(store.queue).toHaveLength(1);
+    expect(store.queue).toHaveLength(0);
     expect((await offlineScan(store, "malformed", now + 1)).result).toBe("manifest_expired");
-    expect(store.queue).toHaveLength(1);
+    expect(store.queue).toHaveLength(0);
   });
 });
