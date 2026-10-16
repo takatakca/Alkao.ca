@@ -373,7 +373,7 @@ function TransferSettings({ api, base }) {
       ${error && html`<${Failure} error=${error} />`}
       <span>
         Transfert gratuit de billets entre acheteurs :
-        <strong>${enabled ? " autorisé" : " désactivé"}</strong>.
+        <strong>${enabled ? " autorisé" : " non autorisé"}</strong>.
         ${!available && html`<small class="muted"> Indisponible jusqu’à la validation de la plateforme et de l’envoi des courriels.</small>`}
       </span>
       <button class="secondary" disabled=${!available && !enabled}
