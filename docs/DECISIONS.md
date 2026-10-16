@@ -1,5 +1,13 @@
 # ALKAO — Decisions and non-negotiable constraints
 
+## Run 80 — public transfers guarded by two independent switches
+
+A regression checks that cron never sends transfer invitations with the release flag off, and sends only once after explicit activation (`f9203cec`).
+
+
+Public transfer routes and recipient view require the usual operational Client/Brand authorization plus `ALKAO_TRANSFER_API_ENABLED` and a configured credential master secret. The Brand must also explicitly opt in; only owner/admin roles may alter this setting, recorded in the audit log. Never return claim proof or recipient email in the original buyer API response. Recipient obtains a distinct ticket access token after one-time confirmation; the sender may never display the recipient QR. The sender may not exchange a whole order with a pending/claimed transfer. Tenant isolation and 404 for bad claim/recipient token prevent enumeration. Email worker/cron processes transfer invitation queue only when global release is explicitly enabled; no feature is enabled merely by deployment. Production acceptance requires matching Coolify source SHA, migrations, and live provider/scan verification.
+
+
 ## Run 79 — revocation before access, scanners fail closed
 
 Ticket transfers preserve immutable original order and ticket identity; recipient acceptance issues a separate ticket-view token while rotating the same ticket's signed credential in one transaction. The buyer's order QR lookup must exclude transferred tickets. Acceptances are one-time and restricted to a Client/Brand; old credentials can never become active again. Admission scanning must lock the ticket and recheck credential status after the lock. Offline manifests expire after ten minutes and the app must refuse missing/expired manifest validity rather than admit stale QR. Transfers are cut off at least fifteen minutes before the session's configured admission window. No public activation before end-to-end QA.

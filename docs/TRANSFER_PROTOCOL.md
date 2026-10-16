@@ -1,6 +1,16 @@
 # ALKAO — Buyer ticket transfer security protocol
 
-Status (2026-10-14): **foundation only; feature disabled and no public route**.
+## Phase 5 — feature-gated buyer/recipient delivery and interfaces (Run 80, 2026-10-16)
+
+Run 80 test hardening: cron dispatch is checked OFF by default and exactly once after enabling in `test/ops/transfer-worker-gate.test.ts` (`f9203cec`). The Operations toggle labels inactive transfer `non autorisé` (`e085b59f`).
+
+
+Source commits `59e31276`, `d0f11e21`, `fe6abc32` build an end-to-end API and browser workflow on the prior transaction-safe claim and credential rotation. Buyer page allows ticket-by-ticket invitation, cancellation and pending status only after opt-in. A standalone, noindex/referrer-protected bilingual recipient page confirms the one-use proof and retains a **separate** ticket-view token in the URL fragment after acceptance. The original buyer order responds with `transferred=true`, no recipient QR, and its whole-order exchange is refused when a transfer is pending/claimed. Organizer owner/admin controls Brand opt-in with audit; a separate platform flag `ALKAO_TRANSFER_API_ENABLED` remains false by default. Email worker and cPanel cron dispatch transfer invites through real Resend only when that flag is explicitly on, with retries and private recipient addresses. The backend checks Client/Brand, purpose, expiration, session cutoff, QR revocation and replay; tests include API isolation and real Chromium buyer/recipient flows.
+
+Run 80 source QA: CI 38854862144 and Package 38854861945 **SUCCESS** at `e085b59f`. **Source is NOT automatically live.** Do not activate transfers, email dispatch or pilot brands until exact Coolify SHA, migrations, backups, signed QR/scanner manifest tests and Resend delivery are verified under issue #84. Remaining operational acceptance includes end-to-end provider email delivery, refund/chargeback and offline multi-device races, pilot staff training, production health and accessibility signoff.
+
+
+Status (2026-10-16): **Run 80 implemented in source, but disabled and not verified live**.
 This document describes what remains before any organizer can safely enable a
 ticket transfer. ALKAO remains a separate tenant-owned ticketing engine; TAKATAK
 owns identity and entitlements.
@@ -89,7 +99,7 @@ is reissued. This internal capability is not a complete transfer feature.
   payment/refund, browser, offline-device, accessibility and Coolify
   release checks are still required before activation.
 
-## Remaining acceptance requirements (not implemented)
+## Acceptance controls (implementation varies; live verification outstanding)
 
 1. An authorized order-link holder must select one valid ticket, not an entire
    order. Require the current unexpired scoped bearer token for initiation.

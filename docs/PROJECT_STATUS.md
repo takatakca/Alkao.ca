@@ -1,5 +1,15 @@
 # ALKAO — Project status
 
+## Run 80 — public transfer workflow implemented in source (2026-10-16)
+
+Extra commits: `f9203cec` tests worker default-off and one-time delivery; `e085b59f` fixes a dashboard selector collision and documents the default-off environment flag.
+
+
+Source commits: `59e31276` (guarded REST APIs), `d0f11e21` (buyer/recipient UI and worker integration), `fe6abc324b93a2c6a8b4162c3d7413da8282f893` (organizer opt-in/audit and test fixes).
+Buyer link can request/cancel transfer; recipient confirms one-use email claim and receives a separate personal ticket QR. Sender's original order excludes transferred QR and rejects whole-order session exchange. Organizer owner/admin controls Brand opt-in. Tests include two-tenant isolation and real Chromium recipient/sender flows.
+**Disabled by default**: `ALKAO_TRANSFER_API_ENABLED=false`; each Brand's separate setting is also default OFF. Mail worker and cron only send transfer invitations when this same release flag is enabled. Full CI **SUCCESS** 38854862144 and Package **SUCCESS** 38854861945 at source SHA `e085b59f83409a37fd6f76d585b7493d6e5f2ef8`. Production deployment still unverified. **No verified Coolify deployment**; production activation, dedicated database/migrations, provider email delivery, backups and SHA proof remain blocked by issue #84.
+
+
 ## Run 79 — validated internal ticket transfer (2026-10-15)
 
 Code SHA `a4994017953ed437bcfee50d740195949d9917fd`: GitHub CI 38736545944 SUCCESS, Package 38736546000 SUCCESS. Atomic recipient claim/credential reissue, tenant-scoped append-only acceptance, sender QR exclusion and online/offline scanner replay mitigations are present and tested. No public claim routes or client transfer UI and email sender remains inactive. New database migration requires authorized operator on dedicated ALKAO DB. Production release is NOT verified (Coolify issue #84).

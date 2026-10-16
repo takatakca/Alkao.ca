@@ -1,5 +1,16 @@
 # ALKAO — Task queue (priority ordered)
 
+## Run 80 — next required execution (2026-10-16)
+
+Extension: worker release regression `f9203cec`, UI collision fix and `.env.example` release flag `e085b59f`. Check latest CI before closing.
+
+
+Run 80 source through `fe6abc32`: tenant-scoped buyer transfer prepare/list/cancel API; one-use recipient claim/new QR API; FR/EN recipient and buyer pages; opt-in admin API/UI; automatic Resend invitations through existing worker or cron gated by global OFF-by-default flag. Full CI 38854862144 and Package 38854861945 succeeded for `e085b59f`. Live release remains pending.
+**P0:** Coolify #84: dedicated database backup, run all migrations, restore live build SHA attestation, rotate historical leaked credentials and verify Resend, scanner, Stripe and end-to-end on production. DO NOT turn on `ALKAO_TRANSFER_API_ENABLED` or any Brand opt-in before verified live release and operational sign-off.
+**P1:** further harden transfer refund/chargeback races, cross-device/offline scanner E2E, test email provider delivery and regulatory/incident procedures. Apple/Google Wallet and assigned seats remain separate uncompleted backlog.
+Next action: inspect CI run for newest main; repair failures; audit actual Coolify `/health` SHA; document operator release if verified.
+
+
 ## Run 79 results and remaining work — 2026-10-15
 
 Implemented and CI validated at `a4994017`: scoped exactly-once recipient claim service, atomic old-QR revocation/new credential, sender-code suppression, scanner ticket row locking/freshness, private immutable acceptance ledger, tests. Production not verified. Public transfer initiation/cancellation and recipient claim/ticket page, email worker activation, FR/EN UX, end-to-end refund/scanner/device tests and Coolify go-live remain P1 TODO; do NOT describe transfers as available to buyers.

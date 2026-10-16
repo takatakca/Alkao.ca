@@ -1,5 +1,22 @@
 # ALKAO API v1 (`alkao.api.v1`)
 
+## Run 80 — gated buyer-to-recipient ticket transfer
+
+`.env.example` now documents `ALKAO_TRANSFER_API_ENABLED=false`; transfer email delivery is OFF by default.
+
+
+Feature OFF by default, even when standard ticketing works. Requires `ALKAO_TRANSFER_API_ENABLED=true` on API and mail worker/cron, a configured `ALKAO_CREDENTIAL_MASTER_SECRET`, and the individual Brand's `ticket_transfers_enabled=true` (owner/admin opt-in under `/v1/admin/clients/:clientId/brands/:brandId/settings/transfers`). All paths below use `/v1/public/clients/:clientId/brands/:brandId` as `P`, the existing operational gate and tenant isolation.
+- `GET P/orders/:orderId/transfers`: `X-Alkao-Order-Token` required. Returns `{enabled, transfers:[{id,ticketId,status,expiresAt}]}`, no recipient address, claim proof or QR.
+- `POST P/orders/:orderId/transfers`: same order token, body `{ticketId,recipientEmail}`. Returns HTTP 202 with `{transfer:{id,ticketId,status:"pending",expiresAt}}`. Does **not** reveal raw recipient secret; queues a private invitation.
+- `DELETE P/orders/:orderId/transfers/:requestId`: order token required; `{cancelled:boolean}`; safe against cross-order cancellation.
+- `POST P/transfers/:requestId/claim`: one-time private recipient proof `{secret}` (from an emailed fragment link), rate-limited; `{transfer:{id,ticketId,accessToken}}`. Replay/bad tenant/bad secret returns a generic 404.
+- `GET P/transfers/:requestId/ticket`: `X-Alkao-Transfer-Token: <accessToken>` required; `{ticket:{id,credential}}`, never buyer PII or order token. Invalid/revoked returns 404.
+- Admin `GET/PUT /v1/admin/clients/:clientId/brands/:brandId/settings/transfers`: TAKATAK owner/admin only (`ticketing.keys.manage`); GET `{transfers:{enabled,available}}`, PUT `{enabled:boolean}`, audit. Enabling when global release is OFF returns 409.
+- Recipient route `/billets/transfert#c=...&b=...&r=...&k=...` keeps proof in URL fragment; after acceptance the browser replaces `k` with distinct personal access `a`, then displays signed QR via `/ticket`. FR/EN mobile interface, no indexing or third-party scripts.
+
+Source CI 38854862144 and Package 38854861945 passed for `e085b59f`; this is not live proof. Do not activate before the strict Coolify SHA check and actual Resend, refund, scanner/offline-device acceptance. API source presence is not evidence of production release.
+
+
 Request schemas: [`src/contracts/api-v1.ts`](../src/contracts/api-v1.ts). Unknown body fields are
 dropped: a client can never send a price, a tenant id or a status it isn't allowed to set.
 

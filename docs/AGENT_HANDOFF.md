@@ -1,5 +1,19 @@
 # ALKAO — Agent handoff (mandatory)
 
+## Run 80 — newest handoff (2026-10-16)
+
+- More code: `f9203cec54a17bcb8d236aef98a55cc529083345` adds `test/ops/transfer-worker-gate.test.ts` (delivery default-off and once-on). `e085b59f83409a37fd6f76d585b7493d6e5f2ef8` fixes a browser selector collision by rendering `non autorisé` for transfer settings and documents `.env.example` default false.
+
+
+- Repo `takatakca/Alkao.ca`, branch `main`. Source code commits `59e31276b42ff695cadf9e5d90b2221616820fc6`, `d0f11e2107f324167c7535a6ed497ceaabec30d9`, `fe6abc324b93a2c6a8b4162c3d7413da8282f893`. Documentation commit may advance main: re-read live HEAD before edits.
+- Last task: Run 80, guarded transfer UX/APIs. API modules `src/api/app.ts`, `src/api/buyer-ui.ts`, `src/api/http.ts`, `src/config.ts`, `src/server.ts`; ops `src/ops/exchange.ts`, `src/ops/transfer-request.ts`; delivery `src/delivery/transfer-invitations.ts`, `src/delivery/worker.ts`, `src/ops/cron.ts`, `scripts/email-worker.ts`, `scripts/cron.ts`; UIs `buyer-ui/app.js`, `buyer-ui/styles.css`, `buyer-ui/transfer.html`, `buyer-ui/transfer.js`, `buyer-ui/transfer.css`, `ops-ui/app.js`; tests `test/api/transfers.test.ts`, `test/api/transfer-settings.test.ts`, `test/api/config.test.ts`, `test/ui/transfer-ui.test.ts`.
+- Public endpoints are protected by tenant's operational gate, `ALKAO_TRANSFER_API_ENABLED` (default false), independent Brand opt-in (default false), scoped order or recipient proof, optional expiry and basic in-process rate limits. No recipient claim secret is returned to sender. Buyer email invitation delivered by Resend only once feature enabled on email worker and API, and once queue is eligible; recipient confirms and receives a unique separate QR access token. Owner/admin Brand toggle with audit. Sender QR excluded after claim, order session exchange refused.
+- First CI on `59e31276` failed test expectation for a well-formed but wrong secret (404 is correct); second CI on `d0f11e21` failed test expectation for wrong tenant (404 correct). Both test assertions were corrected in later commits. Package passed on both. Run 80 full CI **SUCCESS** 38854862144 and Package **SUCCESS** 38854861945 for `e085b59f83409a37fd6f76d585b7493d6e5f2ef8`. Earlier intermediate CIs failed only test expectations and a UI selector collision, both corrected. This docs commit will advance `main` and trigger its own CI.
+- Production: **UNVERIFIED**. Prior strict verify runs failed because Coolify live `/health` did not attest the Git SHA; green CI and successful `Live` probes are not a deployment. Issue #84 requires authorized operator for dedicated DB, backup, historical key rotation, migrations and Coolify source SHA. No live feature flag, billing or production DB was changed.
+- NEXT exact action: inspect latest `main` SHA, GitHub CI, fix remaining assertions or browser failures if any; verify live source SHA and migrate only under authorized operation; ensure Resend real delivery, refund/chargeback and scanner offline-device safety tests; then and only then enable `ALKAO_TRANSFER_API_ENABLED=true` in API and email/cron worker and opt in a pilot Brand. Continue unrelated backlog independently. Do not touch unrelated PR #53.
+- Automatic session restart/orchestrator was not configured; Actions CI and Live checks are validation jobs only.
+
+
 ## Run 79 — validated internal QR transfer (2026-10-15)
 
 - Source code/main `a4994017953ed437bcfee50d740195949d9917fd`. GitHub CI 38736545944 SUCCESS (typecheck, migrations, secrets, all tests); Package 38736546000 SUCCESS.

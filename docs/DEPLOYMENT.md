@@ -1,5 +1,18 @@
 # ALKAO — Deployment state and verification
 
+## Run 80 — transfer rollout remains gated and unverified (2026-10-16)
+
+- `.env.example` explicitly sets `ALKAO_TRANSFER_API_ENABLED=false` in `e085b59f`; delivery default-off regression was added in `f9203cec`. The flag must remain off until rollout authorization.
+
+
+Full source QA green: CI 38854862144 and Package 38854861945 on `e085b59f83409a37fd6f76d585b7493d6e5f2ef8`. Coolify still unverified. Code through `fe6abc32` adds full protected sender/recipient routes and static FR/EN recipient page. This is **source completion, not a live deployment**.
+- The existing `Dockerfile` accepts `SOURCE_COMMIT` and sets `ALKAO_BUILD_ID`; Coolify must enable “Include Source Commit in Build” or supply the SHA so `/health` matches GitHub `main`.
+- Before deployment: confirm dedicated ALKAO PostgreSQL, backup and tested restore, rotate historical leaked secrets, configure `ALKAO_CREDENTIAL_MASTER_SECRET` (stable strong key), Stripe/Resend and deploy workers. Authorized operator runs migrations `20261105000100`, `20261106000100`, `20261107000100` (with other pending migrations) against the correct database. Never migrate an unverified live DB.
+- Global `ALKAO_TRANSFER_API_ENABLED` defaults to false. Keep it false in API and the `scripts/email-worker.ts` or `scripts/cron.ts` environment until `/health` proves the deployed SHA, pilot mail tests succeed, old/new signed QR and offline manifest revocation are verified, and payout/refund regressions pass. Both the API and email worker/cron must receive the explicit flag; otherwise requests may remain in the queue.
+- Once authorized to activate: enable global flag on API + worker/cron, then an owner/admin authorizes its own Brand in Operations. This two-level default-OFF switch prevents unsolicited transfers during deployment. Confirm message retries, one-use claim URL, recipient-only QR, sender QR denial, cancellation, expired-claim and scanner offline freshness, cross-tenant tests before public promotion.
+- **Blocked**: live SHA and actual release not verified by latest strict deployment checks; see issue #84. Do not claim green from `Live` or Package alone.
+
+
 ## Run 79 release evidence (2026-10-15)
 
 Source `a4994017953ed437bcfee50d740195949d9917fd`: CI 38736545944 and Package 38736546000 succeeded. New migrations: `20261106000100_alkao_transfer_invite_delivery.sql`, `20261107000100_alkao_transfer_acceptance.sql`; run only on a backed-up dedicated ALKAO database with authorized operator. Transferring remains default OFF and mail dispatch not wired. Strict Verify deployment 38736880991 was in progress at handoff; older runs failed without public source SHA. An ALKAO HTTP response is not evidence of the requested commit. Refer to issue #84 for migration and Coolify operator approvals; no credentials in GitHub.
