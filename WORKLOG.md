@@ -3,6 +3,8 @@
 Newest first, one line per piece of work. Rule: `AGENTS.md` › Work log rule.
 Format: `YYYY-MM-DD | agent | branch → PR | status | what | next step`
 
+- 2026-10-16 | claude (Code, cloud) | claude/amazing-pascal-tppqd4 | active | Run 90: premium revamp of every ALKAO buyer page — shop event page as a ticket center (90a), ticket wallet (90b), home and venue pages polish (90c); front only, no server logic | merge when green; deploy still waits on Coolify #84
+
 - 2026-10-16 | ChatGPT (GitHub) | main → 8b06cf83 | done in code; CI 38962087021 and Package 38962086850 SUCCESS; Coolify unverified | Run 89: degrade safely on corrupted incident report during auto-cleanup, retain audit and alert staff, storage recovery regression | next: real device tests/multi-gate response and Coolify #84
 
 - 2026-10-16 | ChatGPT (GitHub) | main → e0dbc920, 427668f7 | done in code; CI 38960997547 and Package 38960997727 SUCCESS; Coolify unverified | Run 88: durable redacted offline reconciliation incident ledger, local CSV after scanner exit, archive before post-close cleanup, Chromium and storage-failure tests | next: real mobile/multi-gate incident handling and Coolify #84 deployment
