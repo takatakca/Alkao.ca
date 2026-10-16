@@ -789,6 +789,39 @@ export function createApp(deps: AppDeps) {
     return c.json({ reminders: { enabled } });
   });
 
+  // Run 80: only the organizer's owner/admin may opt the Brand into transfers.
+  // Enabling requires the separate platform release switch and signing key.
+  app.get(`${ADMIN}/settings/transfers`, ...admin, can("ticketing.keys.manage"), async (c) => {
+    const scope = c.get("scope");
+    const { rows } = await deps.db.query<{ ticket_transfers_enabled: boolean }>(
+      `SELECT ticket_transfers_enabled FROM public.ticketing_brand_settings
+       WHERE client_id = $1 AND brand_id = $2`, [scope.clientId, scope.brandId],
+    );
+    return c.json({ transfers: {
+      enabled: rows[0]?.ticket_transfers_enabled === true,
+      available: Boolean(deps.transferApiEnabled && deps.credentialMasterSecret),
+    } });
+  });
+
+  app.put(`${ADMIN}/settings/transfers`, ...admin, can("ticketing.keys.manage"), async (c) => {
+    const input = z.object({ enabled: z.boolean() }).strict().parse(await readJson(c));
+    if (input.enabled && (!deps.transferApiEnabled || !deps.credentialMasterSecret))
+      return fail(c, 409, "transfer_release_disabled");
+    const scope = c.get("scope");
+    const enabled = await withTransaction(deps.db, async (tx) => {
+      const { rows } = await tx.query<{ ticket_transfers_enabled: boolean }>(
+        `UPDATE public.ticketing_brand_settings SET ticket_transfers_enabled = $3
+         WHERE client_id = $1 AND brand_id = $2 RETURNING ticket_transfers_enabled`,
+        [scope.clientId, scope.brandId, input.enabled],
+      );
+      if (!rows[0]) throw new DomainError("brand_not_found");
+      await catalog.writeAudit(tx, scope, actor(c), "settings.transfers_updated",
+        { type: "brand_settings", id: null }, { enabled: input.enabled });
+      return rows[0].ticket_transfers_enabled;
+    });
+    return c.json({ transfers: { enabled, available: Boolean(deps.transferApiEnabled && deps.credentialMasterSecret) } });
+  });
+
   // ── Run 21: what waits on staff, and tickets cancelled without a refund ───────
   app.get(`${ADMIN}/attention`, ...admin, can("ticketing.orders.read"), async (c) =>
     c.json({ attention: await attention.attentionList(deps.db, c.get("scope"), now()) }),

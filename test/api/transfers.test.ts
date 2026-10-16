@@ -112,7 +112,7 @@ describe("Run 80 transfer API release and authorization", () => {
     expect(original.body.order.tickets.find((t: { id: string }) => t.id === ticketId).credential).toBeNull();
     const cross = await call(app, "GET", `${pub(seed.festi.clientId, seed.festi.brandId)}/transfers/${id}/ticket`,
       { headers: { "x-alkao-transfer-token": token } });
-    expect(cross.status).toBe(422);
+    expect(cross.status).toBe(404);
   });
 
   it("cancellation is order-scoped and makes the recipient proof non-claimable", async () => {

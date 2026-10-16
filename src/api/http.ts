@@ -57,6 +57,7 @@ const STATUS_BY_CODE: Record<string, ContentfulStatusCode> = {
   // Run 80: an outstanding or accepted transfer makes whole-order exchange unsafe.
   order_has_transfer: 409,
   transfer_unavailable: 404,
+  transfer_release_disabled: 409,
   order_not_exchangeable: 409,
   flex_not_purchased: 409,
   // Run 06

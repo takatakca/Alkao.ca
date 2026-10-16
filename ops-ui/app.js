@@ -331,7 +331,8 @@ function Dashboard({ api, base, prefix }) {
       <button class="secondary" onClick=${() => download(api, `${base}/reports/orders.csv${query}`, "alkao-commandes.csv")}>Exporter les commandes (CSV)</button>
       <button class="secondary" onClick=${() => download(api, `${base}/reports/daily.csv${query}`, "alkao-ventes-par-jour.csv")}>Exporter par jour (CSV)</button>
     </p>
-    <${Reminders} api=${api} base=${base} />`;
+    <${Reminders} api=${api} base=${base} />
+    <${TransferSettings} api=${api} base=${base} />`;
 }
 
 // Run 23: the reminder email the buyers get the day before their session.
@@ -349,6 +350,34 @@ function Reminders({ api, base }) {
       ${error && html`<${Failure} error=${error} />`}
       <span>Rappel la veille de la séance, avec le lien vers les billets : <strong>${on ? "activé" : "désactivé"}</strong></span>
       <button class="secondary" onClick=${toggle}>${on ? "Désactiver" : "Activer"}</button>
+    </div>`;
+}
+
+// Run 80: per-Brand ticket transfer release. Owner/admin only on the API.
+// The platform switch must be enabled first; otherwise this remains read-only.
+function TransferSettings({ api, base }) {
+  const [state, reload] = useLoad(() => api(`${base}/settings/transfers`), [base]);
+  const [error, setError] = useState(null);
+  if (!state.data) return null;
+  const enabled = state.data.transfers.enabled;
+  const available = state.data.transfers.available;
+  const toggle = async () => {
+    setError(null);
+    try {
+      await api(`${base}/settings/transfers`, { method: "PUT", body: { enabled: !enabled } });
+      reload();
+    } catch (err) { setError(err); }
+  };
+  return html`<h2>Transfert de billets</h2>
+    <div class="card row">
+      ${error && html`<${Failure} error=${error} />`}
+      <span>
+        Transfert gratuit de billets entre acheteurs :
+        <strong>${enabled ? " autorisé" : " désactivé"}</strong>.
+        ${!available && html`<small class="muted"> Indisponible jusqu’à la validation de la plateforme et de l’envoi des courriels.</small>`}
+      </span>
+      <button class="secondary" disabled=${!available && !enabled}
+        onClick=${toggle}>${enabled ? "Désactiver" : "Autoriser"}</button>
     </div>`;
 }
 
