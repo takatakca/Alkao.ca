@@ -1,5 +1,10 @@
 # ALKAO — Deployment state and verification
 
+## Run 85 — offline scan queue cannot be discarded at exit (2026-10-16)
+
+Operations UI source `62aedcd5` (CI 38944264243 and Package 38944264279 SUCCESS) removes "Quitter quand même ?" for unresolved admissions. When offline queue contains admitted attendees who have not been acknowledged by the server, the scanner must stay in offline mode and display a reconnection/synchronization message. Only after all queued admissions reconcile may staff leave mode. No migration is required; do not override this guard during Coolify deployment. Validate on real disconnected tablets and retry HTTP errors in pilot. Production still UNVERIFIED: exact source SHA missing from live `/health`, no separate DB/backup or authenticated provider acceptance proof (#84). Brand/global transfer switches remain OFF.
+
+
 ## Run 84 — offline scanner release and exact Coolify build proof (2026-10-16)
 
 Run 84 code `faf44749` and test correction `21a7031c` passed CI 38942936131 and Package 38942935861; no database migration is needed. It prevents denied offline scans from becoming unattended server admissions on reconnection; old persisted denied scans are ignored. A locally admitted ticket is reconciled only on complete, indexed server acknowledgment; divergence (revoked/duplicate/invalid/etc.) shows as a gate incident. Confirm two-device scanner behavior before release.

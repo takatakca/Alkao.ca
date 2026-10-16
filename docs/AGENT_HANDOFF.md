@@ -1,5 +1,14 @@
 # ALKAO — Agent handoff (mandatory)
 
+## Run 85 — prevent data loss on offline scanner exit (2026-10-16)
+
+- Repository `takatakca/Alkao.ca`, `main`. Previous Run 84 source code `21a7031cde9ef7da4ca7077b7ab015bad00022c1` passed CI 38942936131 and Package 38942935861; Run 84 handoff commit `10b89922aef24802b1e1009e3fa17cb2b17cad5b`. Strict live Verify deployment for previous source failed again (GitHub Actions 38943283468), so no Coolify attestation.
+- Run 85 worklog claim `e71b08ada6e292461680d60a2e3ce5fb43ecb251`, functional commit `62aedcd5f8b4d75644162eead67267b2be2ec69e`. Changed `ops-ui/app.js` and `test/ui/ops-ui.test.ts`. Operator cannot leave offline mode when physically admitted ticket scans remain unacknowledged: the old destructive confirmation dialog is gone. Instead display actionable error requiring reconnection + successful synchronization, keeping local queue and offline mode intact. Browser integration test purchases ticket, admits it offline, attempts to exit while disconnected (queue preserved), reconnects/synchronizes and exits with server admission persisted.
+- QA source SHA `62aedcd5f8b4d75644162eead67267b2be2ec69e`: full CI **SUCCESS** 38944264243 (typecheck, migrations, secrets, integration/browser tests), Package **SUCCESS** 38944264279. A documentation-only commit will follow and trigger independent checks. No migration or production flag changes in Run 85.
+- Deployment stays UNVERIFIED. Coolify production `/health` does not show build commit; issue #84 demands enabling Include Source Commit in Build, dedicating/snapshotting ALKAO DB, applying authorized migrations, rotating historically exposed credentials and proving provider/scanner workflows. Keep `ALKAO_TRANSFER_API_ENABLED=false` and per-Brand opt-in OFF until evidence.
+- NEXT exact action: confirm SHA and CI/Package result; fix any browser regression; examine production verifier output, then use authorized Coolify access when available to deploy and prove live build SHA and readiness. Further P1: real device multi-gate/offline conflict pilot; retain unrelated PR #53 as separate agent work. No automatic session-restart orchestrator connected.
+
+
 ## Run 84 — offline gate queue and lossless reconciliation (2026-10-16)
 
 - Repo: `takatakca/Alkao.ca`, branch `main`. Previous confirmed HEAD `3b5846a4b534d4dd162f3a00be23add0ebfc4b5f`: CI 38885842348 **SUCCESS**, Package 38885842312 **SUCCESS**; strict Verify deployment 38886146185 **FAILURE**.

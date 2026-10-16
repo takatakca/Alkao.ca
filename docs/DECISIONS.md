@@ -1,5 +1,10 @@
 # ALKAO — Decisions and non-negotiable constraints
 
+## Run 85 — no manual override for unsynced offline admissions
+
+Every attendee admitted offline creates an audit record that must survive network interruption. The Operations scanner must not allow an operator to exit mode and delete the queue while admitted entries remain unacknowledged, even via a confirmation dialog. A disconnected exit attempt leaves the offline queue intact and shows a clear instruction to reconnect and synchronize. Already-synced sessions can exit normally. This is a safety boundary, not a background upload promise.
+
+
 ## Run 84 — offline gate reconciliation may not create new admissions
 
 Only an actual, cryptographically accepted offline entry may enter the upload queue. Offline rejected QR codes and old device queue entries lacking the `admittedOffline` flag must not be replayed after connectivity resumes; otherwise the live server could admit a ticket the gate operator rejected. The batch endpoint must acknowledge every index with a known outcome before pending admissions are removed, regardless of HTTP 4xx errors. A locally accepted entry later rejected by the server (duplicate, revoked, wrong session, etc.) counts as a discrepancy requiring operator review. Refuse silent data loss to preserve auditability. Keep all original backend money/order and tenant authority unchanged.

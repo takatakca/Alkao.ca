@@ -1,5 +1,11 @@
 # ALKAO — Task queue (priority ordered)
 
+## Run 85 — scanner audit-persistence follow-up (2026-10-16)
+
+- Implemented `62aedcd5`: prevent exit from offline scanning until all locally admitted QR records are acknowledged by the server; show actionable error, no destructive confirmation. E2E browser test covers disconnected exit and authorized exit after sync.
+- Source CI 38944264243 **SUCCESS**, Package 38944264279 **SUCCESS** at `62aedcd5`; check docs commit CI independently. P1 next: multi-scanner actual field testing and manual resolution of discrepancies (revoked, double admission, offline time drift). P0 production #84: live SHA attestation, backed-up dedicated ALKAO database, approved migrations, Stripe/Resend/scanner signoff. Global and Brand transfer switches remain OFF.
+
+
 ## Run 84 — offline scanner reconciliation QA and next task (2026-10-16)
 
 - New code `faf44749` and corrected UI/crypto tests `21a7031c`: queue ONLY offline accepted QR, filter legacy denied attempts, preserve unacknowledged batches, verify per-index scan result, increment gate reconciliation incident count when offline admitted QR is later denied by server. Tests for two gates, transferred revoked QR, HTTP failures, incomplete replies, batch sizes and replay behavior.

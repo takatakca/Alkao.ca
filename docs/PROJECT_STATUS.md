@@ -1,5 +1,10 @@
 # ALKAO — Project status
 
+## Run 85 — offline gate cannot abandon unsynced admissions (2026-10-16)
+
+Source commit `62aedcd5f8b4d75644162eead67267b2be2ec69e` removes the destructive "leave anyway" path from Operations scanner. If an offline-admitted attendee is still in the reconciliation queue, the UI retains the queue and mode and shows reconnection instructions. Browser E2E test verifies rejected exit and successful online sync followed by safe exit. CI **SUCCESS** 38944264243 and Package **SUCCESS** 38944264279 at source SHA `62aedcd5f8b4d75644162eead67267b2be2ec69e`. Production Coolify SHA remains unverified and transfer switches remain default OFF.
+
+
 ## Run 84 — offline admission reconciliation hardened (2026-10-16)
 
 Source `faf44749151a3614748d1dce1eb88a6546632190`, follow-up fix `21a7031cde9ef7da4ca7077b7ab015bad00022c1`: only physically admitted, signature-verified offline scans are queued for server replay; older denied attempts are ignored on reconnection. Interrupted or incomplete batch responses no longer erase pending admissions. The server's explicit acknowledgment validates count, source index and result. Rejected local admissions (including revoked/transfer QR) count as incidents, not silently cleared. New tests in `test/ops/offline-reconciliation.test.ts` and updated signature/expiry expectations. Full source CI **SUCCESS** 38942936131 and Package **SUCCESS** 38942935861 at `21a7031cde9ef7da4ca7077b7ab015bad00022c1`. No production release verified; strict Coolify `/health` did not expose build SHA on eight checks (Verify deployment 38886146185). Transfers remain OFF by default.

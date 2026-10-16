@@ -1,5 +1,10 @@
 # ALKAO — Buyer ticket transfer security protocol
 
+## Phase 10 — no destructive offline scanner exit (Run 85, 2026-10-16)
+
+Code `62aedcd5` (CI 38944264243 and Package 38944264279 passed) prevents an operator from leaving offline scanning and destroying the only copies of pending admission records. The UI replaces the "leave anyway" confirmation dialog with a mandatory sync requirement. `test/ui/ops-ui.test.ts` checks an actual signed QR admitted on a browser with network disabled, refused exit, restored connectivity, acknowledged server admission and then safe exit. No transfer feature switch or production database was changed. The real Coolify SHA remains unverified.
+
+
 ## Phase 9 — offline gate reconciliation after transfer (Run 84, 2026-10-16)
 
 Source `faf44749` with test update `21a7031c` (CI 38942936131, Package 38942935861 successful) ensures a QR denied offline for expired manifests, bad Ed25519 signature or absence of WebCrypto is never queued as an entrance to replay on reconnect. Existing legacy device queues are filtered to entries marked `admittedOffline: true`. The sync logic preserves all admissions unless each server batch result is complete, correctly indexed and recognized. A transferred/revoked code admitted from an old but still-fresh manifest becomes a counted reconciliation incident if server rejects it. Regression suite `test/ops/offline-reconciliation.test.ts` models two offline gates, duplicate/revoked conflict, partial batch response, HTTP failures and chunking. Real device acceptance and Coolify deployment remain separate outstanding tasks.
