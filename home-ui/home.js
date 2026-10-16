@@ -43,6 +43,11 @@
     heart: "M12 20s-7.5-4.6-9.2-9.4C1.6 7.2 3.9 4 7.2 4c2 0 3.6 1.1 4.8 2.8C13.2 5.1 14.8 4 16.8 4c3.3 0 5.6 3.2 4.4 6.6C19.5 15.4 12 20 12 20z",
     calendar: "M5 5h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2zM3 10h18M8 3v4M16 3v4",
     clock: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7v5l3 2",
+    left: "m15 18-6-6 6-6",
+    right: "m9 18 6-6-6-6",
+    close: "M6 6l12 12M18 6 6 18",
+    zoom: "M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM20 20l-3.5-3.5M11 8v6M8 11h6",
+    unzoom: "M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM20 20l-3.5-3.5M8 11h6",
   };
   const svg = (name) => {
     const s = doc.createElementNS("http://www.w3.org/2000/svg", "svg");
@@ -346,6 +351,10 @@
     previewId = ev.id;
     const img = $("[data-p-image]", preview);
     img.src = ev.image;
+    // Run 90: the organizer's own photo opens the viewer (ALKAO's stand-in does not).
+    img.parentElement.classList.toggle("is-photo", Boolean(ev.photo));
+    const zoomBtn = $("[data-p-zoom]", preview);
+    if (zoomBtn) zoomBtn.hidden = !ev.photo || !canDialog;
     $("[data-p-brand]", preview).textContent = ev.brand;
     $("[data-p-title]", preview).textContent = ev.title;
     $("[data-p-place]", preview).textContent = ev.place || ev.city || "";
@@ -422,6 +431,167 @@
       a.addEventListener("click", (e) => { if (e.metaKey || e.ctrlKey || e.shiftKey) return; e.preventDefault(); fillPreview(ev); open(preview); });
     });
   }
+
+  // ── Run 90: the photo viewer. Full screen; zoom with a click, the wheel, a pinch or + and -; pan while
+  // zoomed; arrows or a swipe for the next photo. Escape or the close button exits and focus goes back.
+  const z = t.zoom || {};
+  const MAX = 4;
+  let viewer = null;
+  let shots = [];
+  let at = 0;
+  let scale = 1;
+  let x = 0;
+  let y = 0;
+  const buildViewer = () => {
+    const img = h("img", { alt: "", draggable: "false" });
+    const stage = h("div", { class: "zoom-stage" }, img);
+    const title = h("p", { class: "zoom-title", id: "zoom-title" });
+    const count = h("span", { class: "zoom-count", "aria-live": "polite" });
+    const button = (cls, label, name, onclick) => h("button", { class: `round ${cls}`.trim(), type: "button", "aria-label": label, title: label, onclick }, svg(name));
+    const dialog = h("dialog", { class: "zoom", "aria-labelledby": "zoom-title" },
+      h("div", { class: "zoom-top" }, h("div", { class: "zoom-head" }, title, count), button("", t.close, "close", () => dialog.close())),
+      stage,
+      h("div", { class: "zoom-bar" },
+        button("", z.zoomOut, "unzoom", () => zoomBy(1 / 1.6)),
+        button("", z.zoomIn, "zoom", () => zoomBy(1.6)),
+        h("p", { class: "zoom-hint", text: z.hint })),
+      button("zoom-side prev", z.prev, "left", () => go(-1)),
+      button("zoom-side next", z.next, "right", () => go(1)));
+    doc.body.append(dialog);
+    const box = () => {
+      const r = stage.getBoundingClientRect();
+      return { left: r.left + img.offsetLeft, top: r.top + img.offsetTop, w: img.offsetWidth, h: img.offsetHeight };
+    };
+    const paint = () => {
+      const b = box();
+      // Never pan past the photo's edges.
+      x = Math.min(0, Math.max(b.w * (1 - scale), x));
+      y = Math.min(0, Math.max(b.h * (1 - scale), y));
+      if (scale === 1) { x = 0; y = 0; }
+      img.style.transform = `translate(${x}px, ${y}px) scale(${scale})`;
+      stage.classList.toggle("is-zoomed", scale > 1);
+    };
+    const zoomAt = (next, cx, cy) => {
+      const b = box();
+      const s2 = Math.min(MAX, Math.max(1, next));
+      const ix = (cx - b.left - x) / scale;
+      const iy = (cy - b.top - y) / scale;
+      x = cx - b.left - ix * s2;
+      y = cy - b.top - iy * s2;
+      scale = s2;
+      paint();
+    };
+    const zoomBy = (k) => { const b = box(); zoomAt(scale * k, b.left + b.w / 2, b.top + b.h / 2); };
+    const reset = () => { scale = 1; paint(); };
+    const show = (i) => {
+      at = (i + shots.length) % shots.length;
+      const shot = shots[at];
+      reset();
+      img.classList.add("is-loading");
+      img.onload = () => img.classList.remove("is-loading");
+      img.src = shot.src;
+      img.alt = shot.alt || "";
+      title.textContent = shot.alt || z.title || "";
+      const many = shots.length > 1;
+      count.textContent = many ? (z.of || "{i} / {n}").replace("{i}", String(at + 1)).replace("{n}", String(shots.length)) : "";
+      $$(".zoom-side", dialog).forEach((b) => { b.hidden = !many; });
+      // The next and previous photos load ahead.
+      if (many) [1, -1].forEach((d) => { new Image().src = shots[(at + d + shots.length) % shots.length].src; });
+    };
+    const go = (d) => { if (shots.length > 1) show(at + d); };
+    stage.addEventListener("wheel", (e) => { e.preventDefault(); zoomAt(scale * Math.exp(-e.deltaY * 0.0015), e.clientX, e.clientY); }, { passive: false });
+    // One finger or the mouse pans (or swipes to the next photo); two fingers pinch.
+    const pointers = new Map();
+    let moved = false;
+    let start = null;
+    let pinch = 0;
+    stage.addEventListener("pointerdown", (e) => {
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      stage.setPointerCapture(e.pointerId);
+      moved = false;
+      start = { x: e.clientX, y: e.clientY };
+      pinch = 0;
+    });
+    stage.addEventListener("pointermove", (e) => {
+      const last = pointers.get(e.pointerId);
+      if (!last) return;
+      const now = { x: e.clientX, y: e.clientY };
+      if (pointers.size === 2) {
+        const [a, b] = [...pointers.entries()].map(([id, p]) => (id === e.pointerId ? now : p));
+        const dist = Math.hypot(a.x - b.x, a.y - b.y);
+        if (pinch) zoomAt(scale * (dist / pinch), (a.x + b.x) / 2, (a.y + b.y) / 2);
+        pinch = dist;
+        stage.classList.add("is-pinching");
+        moved = true;
+      } else if (scale > 1) {
+        x += now.x - last.x;
+        y += now.y - last.y;
+        stage.classList.add("is-dragging");
+        paint();
+      }
+      if (start && Math.hypot(now.x - start.x, now.y - start.y) > 6) moved = true;
+      pointers.set(e.pointerId, now);
+    });
+    const up = (e) => {
+      if (!pointers.has(e.pointerId)) return;
+      pointers.delete(e.pointerId);
+      if (!pointers.size) {
+        stage.classList.remove("is-dragging", "is-pinching");
+        const dx = start ? e.clientX - start.x : 0;
+        if (scale === 1 && !pinch && Math.abs(dx) > 60) go(dx < 0 ? 1 : -1);
+      }
+      pinch = 0;
+    };
+    stage.addEventListener("pointerup", up);
+    stage.addEventListener("pointercancel", up);
+    stage.addEventListener("click", (e) => {
+      if (moved) return;
+      if (scale > 1) reset();
+      else zoomAt(2.5, e.clientX, e.clientY);
+    });
+    dialog.addEventListener("keydown", (e) => {
+      if (e.key === "ArrowRight") { e.preventDefault(); go(1); }
+      else if (e.key === "ArrowLeft") { e.preventDefault(); go(-1); }
+      else if (e.key === "+" || e.key === "=") { e.preventDefault(); zoomBy(1.6); }
+      else if (e.key === "-") { e.preventDefault(); zoomBy(1 / 1.6); }
+      else if (e.key === "0") { e.preventDefault(); reset(); }
+    });
+    dialog.addEventListener("click", (e) => { if (e.target === dialog) dialog.close(); });
+    dialog.addEventListener("close", () => { img.removeAttribute("src"); const back = openers.pop(); if (back && typeof back.focus === "function") back.focus(); });
+    window.addEventListener("resize", () => { if (dialog.open) paint(); });
+    return { dialog, show };
+  };
+  const openViewer = (list, i) => {
+    if (!canDialog || !list.length) return false;
+    viewer = viewer || buildViewer();
+    shots = list;
+    viewer.show(Math.max(0, i));
+    return open(viewer.dialog);
+  };
+  $$("[data-zoom]").forEach((el) => {
+    el.hidden = false;
+    el.addEventListener("click", (e) => {
+      if (e.metaKey || e.ctrlKey || e.shiftKey) return;
+      const group = el.dataset.zoomGroup;
+      const list = group ? $$(`[data-zoom-group="${CSS.escape(group)}"]`) : [el];
+      if (openViewer(list.map((x) => ({ src: x.dataset.zoom, alt: x.dataset.zoomAlt || "" })), list.indexOf(el))) e.preventDefault();
+    });
+  });
+  if (preview && canDialog) {
+    const zoomPreview = () => { const ev = byId.get(previewId); if (ev && ev.photo) openViewer([{ src: ev.image, alt: ev.title }], 0); };
+    $("[data-p-zoom]", preview)?.addEventListener("click", zoomPreview);
+    $("[data-p-image]", preview)?.addEventListener("click", zoomPreview);
+  }
+
+  // ── Run 90: the filter menus: one open at a time, closed by a click elsewhere or Escape ──
+  const menus = $$(".dd");
+  menus.forEach((d) => d.addEventListener("toggle", () => { if (d.open) menus.forEach((o) => { if (o !== d) o.open = false; }); }));
+  doc.addEventListener("click", (e) => menus.forEach((d) => { if (d.open && !d.contains(e.target)) d.open = false; }));
+  doc.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    const d = menus.find((m) => m.open);
+    if (d) { d.open = false; $("summary", d)?.focus(); }
+  });
 
   // ── Search palette (Ctrl/Cmd + K, or "/") ──
   const palette = doc.getElementById("dlg-search");

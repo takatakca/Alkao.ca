@@ -203,6 +203,56 @@ describe("platform home in the browser", () => {
     await context.close();
   });
 
+  it("Run 90: filter menus, and the photo viewer from the quick view and on the venue's page", async () => {
+    const h = seed.havana;
+    const { page, context, errors } = await home();
+    const menu = (id: string) => page.locator("details.dd").filter({ has: page.locator(`#${id}`) });
+    const isOpen = (id: string) => menu(id).evaluate((d: any) => d.open);
+    await menu("f-price").locator("summary").click();
+    await expect.poll(() => isOpen("f-price")).toBe(true);
+    // One menu open at a time; Escape closes it and gives the focus back to its button.
+    await menu("f-sort").locator("summary").click();
+    await expect.poll(() => isOpen("f-price")).toBe(false);
+    await expect.poll(() => isOpen("f-sort")).toBe(true);
+    await page.keyboard.press("Escape");
+    await expect.poll(() => isOpen("f-sort")).toBe(false);
+    expect(await menu("f-sort").locator("summary").evaluate((el) => el === (globalThis as any).document.activeElement)).toBe(true);
+
+    await page.locator(".grid .card").getByRole("button", { name: "Aperçu" }).click();
+    const preview = page.getByRole("dialog", { name: TITLE });
+    await preview.waitFor();
+    const enlarge = preview.getByRole("button", { name: "Agrandir la photo" });
+    await enlarge.click();
+    const viewer = page.locator("dialog.zoom");
+    await expect.poll(() => viewer.evaluate((d: any) => d.open)).toBe(true);
+    expect(await viewer.locator(".zoom-stage img").getAttribute("src")).toBe("https://photos.alkao.test/event.webp");
+    expect(await viewer.locator(".zoom-title").textContent()).toBe(TITLE);
+    await viewer.getByRole("button", { name: "Zoom avant" }).click();
+    await expect.poll(() => viewer.locator(".zoom-stage").getAttribute("class")).toContain("is-zoomed");
+    await page.keyboard.press("0");
+    await expect.poll(() => viewer.locator(".zoom-stage").getAttribute("class")).not.toContain("is-zoomed");
+    await page.keyboard.press("Escape");
+    await expect.poll(() => viewer.evaluate((d: any) => d.open)).toBe(false);
+    // The quick view is still open, and the focus is back on the button that opened the viewer.
+    expect(await preview.isVisible()).toBe(true);
+    expect(await enlarge.evaluate((b) => b === (globalThis as any).document.activeElement)).toBe(true);
+    await page.keyboard.press("Escape");
+
+    await page.goto(`${origin}/salles/${h.clientId}/${h.brandId}/${h.venueId}`);
+    await page.getByRole("heading", { level: 1, name: "Havana Resort" }).waitFor();
+    await page.getByRole("button", { name: `Agrandir la photo : ${TITLE}` }).click();
+    await expect.poll(() => page.locator("dialog.zoom").evaluate((d: any) => d.open)).toBe(true);
+    // A single photo: no counter, no arrows.
+    expect(await page.locator("dialog.zoom .zoom-count").textContent()).toBe("");
+    expect(await page.locator("dialog.zoom .zoom-side").first().isHidden()).toBe(true);
+    await page.keyboard.press("Escape");
+    // The home's quick view works on the venue's page too.
+    await page.locator(".grid .card").getByRole("button", { name: "Aperçu" }).click();
+    await page.getByRole("dialog", { name: TITLE }).waitFor();
+    expect(errors).toEqual([]);
+    await context.close();
+  });
+
   it("still works without JavaScript: first slide, search form and answers", async () => {
     const { page, context } = await home({ locale: "fr-CA", javaScriptEnabled: false });
     expect(await page.locator("[data-caption]:not([hidden])").count()).toBe(1);

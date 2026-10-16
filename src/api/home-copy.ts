@@ -262,6 +262,10 @@ export const COPY = {
     rights: (year: number) => `© ${year} ALKAO · GROUPE TAKATAK · Montréal`,
     backToTop: "Haut de la page",
     close: "Fermer",
+    // Run 90: the photo viewer and the compact filters.
+    zoom: { open: "Agrandir la photo", title: "Photo", zoomIn: "Zoom avant", zoomOut: "Zoom arrière", prev: "Photo précédente", next: "Photo suivante", hint: "Cliquez, pincez ou utilisez la molette pour zoomer; glissez pour vous déplacer.", of: "{i} sur {n}" },
+    gallery: "En images",
+    galleryLead: "Touchez une photo pour l’agrandir.",
     ticketsModal: {
       title: "Mes billets",
       steps: [
@@ -466,6 +470,9 @@ export const COPY = {
     rights: (year: number) => `© ${year} ALKAO · GROUPE TAKATAK · Montréal`,
     backToTop: "Back to top",
     close: "Close",
+    zoom: { open: "Enlarge photo", title: "Photo", zoomIn: "Zoom in", zoomOut: "Zoom out", prev: "Previous photo", next: "Next photo", hint: "Click, pinch or use the wheel to zoom; drag to move around.", of: "{i} of {n}" },
+    gallery: "In pictures",
+    galleryLead: "Tap a photo to enlarge it.",
     ticketsModal: {
       title: "My tickets",
       steps: [

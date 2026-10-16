@@ -211,7 +211,7 @@ describe("Run 64: the premium platform home", () => {
     const data = JSON.parse(json);
     expect(data.events).toHaveLength(1);
     expect(data.events[0].title).toBe("</script><script>alert(1)</script>");
-    expect(Object.keys(data.events[0]).sort()).toEqual(["accessibility", "address", "brand", "brandId", "categories", "city", "count", "dates", "description", "ends", "facts", "id", "image", "map", "next", "place", "price", "shop", "starts", "text", "title", "url"]);
+    expect(Object.keys(data.events[0]).sort()).toEqual(["accessibility", "address", "brand", "brandId", "categories", "city", "count", "dates", "description", "ends", "facts", "id", "image", "map", "next", "photo", "place", "price", "shop", "starts", "text", "title", "url"]);
     expect(json).not.toMatch(/[\w.+-]+@[\w-]+\.[\w.]+/);
     expect(data.help.map((x: { id: string }) => x.id)).toContain("perdus");
   });
@@ -431,5 +431,37 @@ describe("Run 68: robots.txt and sitemap.xml", () => {
     const local = testApp(db.pool, {});
     expect((await local.request("/sitemap.xml")).status).toBe(404);
     expect(await (await local.request("/robots.txt")).text()).not.toContain("Sitemap:");
+  });
+});
+
+describe("Run 90: compact filter menus", () => {
+  const page = async (qs = "") => (await app.request(`/${qs ? `?${qs}` : ""}`)).text();
+
+  it("puts each filter in a menu that works without JavaScript and says what is chosen", async () => {
+    const h = seed.havana;
+    await setOptIn(h.clientId, h.brandId, havanaOwner, true);
+    const all = await page();
+    expect(all).toContain('<div class="filters reveal" role="group" aria-label="Affiner">');
+    expect(all).toContain('<details class="dd"><summary><span class="dd-label" id="f-price">Prix</span><span class="dd-value">Tous les prix</span>');
+    expect(all).toContain('<div class="dd-menu" role="group" aria-labelledby="f-price"><p class="dd-note">Prix avant taxes</p>');
+    expect(all).toContain('<span class="dd-label" id="f-sort">Trier par</span><span class="dd-value">Date la plus proche</span>');
+    expect(all).toContain('<div class="view-switch" role="group" aria-labelledby="f-view">');
+    // A chosen value shows on the menu's button.
+    const cheap = await page("prix=under25&tri=prix");
+    expect(cheap).toContain('<details class="dd is-set"><summary><span class="dd-label" id="f-price">Prix</span><span class="dd-value">Moins de 25 $</span>');
+    expect(cheap).toContain('<details class="dd is-set"><summary><span class="dd-label" id="f-sort">Trier par</span><span class="dd-value">Prix le plus bas</span>');
+    const en = await page("lang=en");
+    expect(en).toContain('<span class="dd-label" id="f-price">Price</span><span class="dd-value">Any price</span>');
+  });
+
+  it("offers the quick view's photo viewer only through the page's own script", async () => {
+    const h = seed.havana;
+    await setOptIn(h.clientId, h.brandId, havanaOwner, true);
+    const html = await page();
+    expect(html).toContain('<button class="round preview-zoom" type="button" data-p-zoom aria-label="Agrandir la photo" hidden>');
+    const data = JSON.parse(html.match(/<script type="application\/json" id="alkao-data">([\s\S]*?)<\/script>/)![1]!);
+    expect(data.t.zoom).toMatchObject({ open: "Agrandir la photo", zoomIn: "Zoom avant", zoomOut: "Zoom arrière", of: "{i} sur {n}" });
+    // The stand-in photo is ALKAO's, not the organizer's.
+    expect(data.events[0].photo).toBe(false);
   });
 });

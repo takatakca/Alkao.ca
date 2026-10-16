@@ -117,6 +117,24 @@ describe.each(["light", "dark"] as const)("accessibility (%s)", (scheme) => {
     await home.goto(`${origin}/accessibilite`);
     await home.getByRole("heading", { level: 1, name: "Accessibilité" }).waitFor();
     problems.push(...report("ALKAO accessibility page", await audit(home)));
+    // Run 90: the venues in the home's look, and a filter menu open.
+    const shown = () => home.evaluate(() => (globalThis as any).document.querySelectorAll(".reveal").forEach((el: any) => el.classList.add("is-visible")));
+    await home.goto(`${origin}/salles`);
+    await home.getByRole("heading", { level: 1 }).waitFor();
+    await shown();
+    await home.waitForTimeout(1100);
+    problems.push(...report("ALKAO venues", await audit(home)));
+    await home.goto(`${origin}/salles/${h.clientId}/${h.brandId}/${h.venueId}`);
+    await home.getByRole("heading", { level: 1 }).waitFor();
+    await shown();
+    await home.waitForTimeout(1100);
+    problems.push(...report("ALKAO venue page", await audit(home)));
+    await home.goto(`${origin}/`);
+    await home.getByRole("heading", { level: 1 }).waitFor();
+    await shown();
+    await home.locator("details.dd summary").first().click();
+    await home.waitForTimeout(1100);
+    problems.push(...report("ALKAO home, filter menu open", await audit(home)));
     await db.pool.query(`UPDATE public.ticketing_brand_settings SET show_on_alkao = false WHERE client_id = $1 AND brand_id = $2`, [h.clientId, h.brandId]);
 
     const shop = await pageFor(scheme);
