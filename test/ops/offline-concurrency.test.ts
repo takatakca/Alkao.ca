@@ -35,7 +35,7 @@ describe("Run 86: serialize local offline scan writes and synchronization", () =
     const started = deferred<void>();
     const syncing = sequence(async () => {
       const snapshot = loadOffline(sessionId)!;
-      const done = await syncOffline(snapshot, async scans => {
+      const done = await syncOffline(snapshot, async (scans: { payload: string; scannedAt: string }[]) => {
         expect(scans.map((s: { payload: string }) => s.payload)).toEqual(["admission-before-sync"]);
         started.resolve();
         return http.promise;
@@ -59,7 +59,7 @@ describe("Run 86: serialize local offline scan writes and synchronization", () =
     expect(final.synced).toBe(1);
     const accepted = await sequence(async () => {
       const latest = loadOffline(sessionId)!;
-      const ok = await syncOffline(latest, async (scans) => successful(scans));
+      const ok = await syncOffline(latest, async (scans: { payload: string }[]) => successful(scans));
       saveOffline(sessionId, latest);
       return ok;
     });
