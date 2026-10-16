@@ -1,5 +1,10 @@
 # ALKAO API v1 (`alkao.api.v1`)
 
+## Run 81 — transfer payment safety
+
+With the global and Brand transfer switches enabled, POST `P/orders/:orderId/transfers` returns HTTP 409 (`transfer_payment_unsettled`) while the paid order has any pending ALKAO refund or a Stripe dispute not marked `won`, `warning_closed` or `prevented` (lost disputes remain disqualifying). Recipient claim remains a generic 404 if payment becomes unsettled after invitation creation; no QR is reissued. The private email outbox retries these invitations in fifteen minutes without consuming provider-error attempts; invitations expire normally. The database trigger applies the creation restriction to internal SQL as well. This change is verified by CI 38883239557 on source SHA `1debe096`, not verified live.
+
+
 ## Run 80 — gated buyer-to-recipient ticket transfer
 
 `.env.example` now documents `ALKAO_TRANSFER_API_ENABLED=false`; transfer email delivery is OFF by default.

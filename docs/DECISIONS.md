@@ -1,5 +1,10 @@
 # ALKAO — Decisions and non-negotiable constraints
 
+## Run 81 — payment eligibility must be transaction-safe
+
+A new transfer or claim is forbidden while the source purchase has any pending ALKAO refund or a Stripe dispute except recorded wins / warning_closed / prevented. A lost dispute (including partial losses that leave valid tickets needing review) blocks transfers. Hold the paid order row `FOR UPDATE` before checking eligibility and ticket state to serialize with refund creation and settlement; enforce creation rules in PostgreSQL as a second boundary. Do not send a recipient invitation while payment is unresolved: defer 15 minutes without incrementing provider attempts, retry until resolution or invitation expiration. The recipient's QR must never be rotated in an unsafe payment state. This decision does not automatically refund or cancel an order.
+
+
 ## Run 80 — public transfers guarded by two independent switches
 
 A regression checks that cron never sends transfer invitations with the release flag off, and sends only once after explicit activation (`f9203cec`).

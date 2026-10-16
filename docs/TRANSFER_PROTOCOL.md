@@ -1,5 +1,10 @@
 # ALKAO — Buyer ticket transfer security protocol
 
+## Phase 6 — pending refunds and disputes (Run 81, 2026-10-16)
+
+`src/ops/transfer-payment.ts` and order locks reject request creation or recipient claim with an unsettled payment. `20261108000100_alkao_transfer_payment_guards.sql` enforces the same protection against direct backend inserts. Disputes marked lost remain disqualifying until staff's separate remediation, even for partially disputed orders. Unresolved refunds/disputes defer the secure email invitation by 15 minutes without exhausting send attempts, allowing successful delivery after resolution and before the existing expiry. Regression tests in `test/db/transfer-payment.test.ts` cover direct schema bypass, deferred/returned delivery, unchanged QR on failed claim and tenant-local payments. Full source CI 38883239557 and Package 38883239522 passed for `1debe096`. No changes to Brand/global default-OFF flags. Coolify deployment and provider evidence remain outstanding.
+
+
 ## Phase 5 — feature-gated buyer/recipient delivery and interfaces (Run 80, 2026-10-16)
 
 Run 80 test hardening: cron dispatch is checked OFF by default and exactly once after enabling in `test/ops/transfer-worker-gate.test.ts` (`f9203cec`). The Operations toggle labels inactive transfer `non autorisé` (`e085b59f`).

@@ -1,5 +1,12 @@
 # ALKAO — Task queue (priority ordered)
 
+## Run 81 — finance/transfer safety continuation (2026-10-16)
+
+- Implemented: order-locked pending refund and dispute gates on create/claim; SQL guard preventing bypass; mail queue defers and retries without burning provider attempts; tenant-scoped regression tests.
+- QA: CI 38883239557 **SUCCESS**, Package 38883239522 **SUCCESS** for source `1debe096c9c8ad5421b7c39b1efe68ff744df8d6`; re-check CI of follow-on docs commit before claiming that newer SHA verified.
+- Next independent P1: cancelled session acceptance while cancellation/refund workers run; actual refund/chargeback and offline manifest admission races; user-visible handling of deferred invitations. P0 production #84: dedicated ALKAO database backup, source SHA and health proof, approved migrations and secret rotation, Stripe/Resend pilot. Global and Brand transfer flags remain OFF; no production activation.
+
+
 ## Run 80 — next required execution (2026-10-16)
 
 Extension: worker release regression `f9203cec`, UI collision fix and `.env.example` release flag `e085b59f`. Check latest CI before closing.

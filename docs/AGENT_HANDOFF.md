@@ -1,5 +1,15 @@
 # ALKAO — Agent handoff (mandatory)
 
+## Run 81 — payment dispute/refund hardening (2026-10-16)
+
+- Repository: `takatakca/Alkao.ca`, branch `main`. Previous main `e084ca7cd231cd9ffd6c885547a8ee01a92a1187`: CI 38855328040 SUCCESS; Package 38855327968 SUCCESS; strict Verify deployment 38855537560 FAILURE.
+- Run 81 functional commits `7b19da340072c7c11db2049991e97e79c3fa56c9` and `1debe096c9c8ad5421b7c39b1efe68ff744df8d6`. New `src/ops/transfer-payment.ts` checks pending order refunds and disputes other than won/warning_closed/prevented. `src/ops/transfer-request.ts` locks order before ticket and blocks unsafe invitations; `src/ops/transfer-acceptance.ts` checks the same boundary after the order lock before QR rotation.
+- `supabase/migrations/20261108000100_alkao_transfer_payment_guards.sql` replaces the private trigger to reject direct DB transfer creation under unsettled payments. `src/delivery/transfer-invitations.ts` defers delivery by 15 minutes without exhausting provider attempts, then sends after resolution or skips on expiry. `src/api/http.ts` maps initiation refusal to HTTP 409 without PII. `test/db/transfer-payment.test.ts` tests pending refund, direct DB write protection, no QR reissue, open/lost/won disputes, and real queued email deferred/resumed once.
+- Run 81 verified source SHA `1debe096c9c8ad5421b7c39b1efe68ff744df8d6`: CI **SUCCESS** run 38883239557 (typecheck, check:migrations, check:secrets, full tests), Package **SUCCESS** 38883239522. CI for this documentation-only commit will have its own run. Strict live verification is distinct.
+- No deployment or customer release authorized. `ALKAO_TRANSFER_API_ENABLED` remains OFF by default, Brands OFF by default. Latest strict production deployment evidence FAILED: no matching Coolify `/health` SHA. Issue #84 requires authorized operator to confirm separate ALKAO DB, backups, migrations, leak rotation, workers, Resend/Stripe tests and SHA.
+- Next exact action: check latest CI and Package on the current main SHA; correct any failing tests; validate full refund + chargeback / cancellation and offline device races before real pilot. Re-verify Coolify and migrate ONLY after operator confirms target DB and backup. Keep PR #53 separate. No automatic agent-session restart configured.
+
+
 ## Run 80 — newest handoff (2026-10-16)
 
 - More code: `f9203cec54a17bcb8d236aef98a55cc529083345` adds `test/ops/transfer-worker-gate.test.ts` (delivery default-off and once-on). `e085b59f83409a37fd6f76d585b7493d6e5f2ef8` fixes a browser selector collision by rendering `non autorisé` for transfer settings and documents `.env.example` default false.

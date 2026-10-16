@@ -1,5 +1,11 @@
 # ALKAO — Deployment state and verification
 
+## Run 81 — pending financial events block recipient transfers (2026-10-16)
+
+Source `7b19da34` and `1debe096` add migration `20261108000100_alkao_transfer_payment_guards.sql` after the three existing transfer migrations. Run it ONLY as part of authorized migrations on the backed-up dedicated ALKAO database; the function replacement rejects new invitations during pending refunds and unresolved or lost disputes. Application and queue enforce equivalent rules while retaining pending invitations for future delivery after temporary payment disputes resolve. Secrets remain server-only.
+Latest confirmed strict Verify deployment run for preceding main `e084ca7c` was FAILURE 38855537560 because live build SHA is not attested. Run 81 source CI **SUCCESS** 38883239557, Package **SUCCESS** 38883239522. The separate production verifier has not attested this SHA. A successful CI or Package is not a deployment. Leave `ALKAO_TRANSFER_API_ENABLED=false` on API and workers and all Brand opt-ins false until issue #84 is resolved with health, schema, backups, provider and scanner proof.
+
+
 ## Run 80 — transfer rollout remains gated and unverified (2026-10-16)
 
 - `.env.example` explicitly sets `ALKAO_TRANSFER_API_ENABLED=false` in `e085b59f`; delivery default-off regression was added in `f9203cec`. The flag must remain off until rollout authorization.
