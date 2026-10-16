@@ -2,7 +2,7 @@
 // Plain ES modules, no build step. Every call goes to the gated ALKAO admin API with the
 // signed-in user's Supabase access token; the app itself holds no data.
 import { html, render, useEffect, useState, useCallback, useRef } from "/ops/vendor/htm-preact.js";
-import { loadOffline, newOfflineStore, offlineScan, saveOffline, syncOffline, createOfflineCoordinator, withOfflineSessionLock } from "/ops/offline.js";
+import { loadOffline, newOfflineStore, offlineScan, saveOffline, syncOffline, createOfflineCoordinator, withOfflineSessionLock, loadIncidentReport, archiveOfflineIncidents, incidentReportCsv } from "/ops/offline.js";
 import { parseReservationsReport } from "/ops/reservations-csv.js";
 
 const SESSION_KEY = "alkao.ops.session";
@@ -995,6 +995,9 @@ function Scanner({ api, base }) {
   const [camera, setCamera] = useState(false);
   const [offline, setOffline] = useState(null);
   const [attendance, setAttendance] = useState(null);
+  // A reconciliation discrepancy must remain reviewable after exiting offline
+  // mode. This ledger is local to the authorized scanner browser/device.
+  const [archivedIncidents, setArchivedIncidents] = useState([]);
   const [prep, setPrep] = useState(null);
   const [reference, setReference] = useState("");
   const [found, setFound] = useState(null);
@@ -1020,6 +1023,8 @@ function Scanner({ api, base }) {
   useEffect(() => {
     if (!sessionId) return;
     setOffline(loadOffline(sessionId));
+    try { setArchivedIncidents(loadIncidentReport(sessionId)); }
+    catch (err) { setArchivedIncidents([]); setError(err); }
     api(`${base}/sessions/${sessionId}/scanner-manifest`).then((r) => setManifest(r.manifest), (err) => { if (!loadOffline(sessionId)) setError(err); });
   }, [sessionId]);
 
@@ -1056,6 +1061,11 @@ function Scanner({ api, base }) {
       setError(new Error(`${store.queue.length} admission(s) non synchronisée(s). Reconnectez-vous et synchronisez avant de quitter le mode hors ligne.`));
       return;
     }
+    // Before clearing the scanner's temporary audit, permanently retain the
+    // disagreement details (without signed QR, buyer PII or access token).
+    // Storage failure keeps the offline audit intact and blocks safe exit.
+    const report = archiveOfflineIncidents(sessionId, store);
+    setArchivedIncidents(report);
     persist(null);
   }, { recovery: true });
   useEffect(() => {
@@ -1064,6 +1074,23 @@ function Scanner({ api, base }) {
     return () => clearInterval(t);
   }, [Boolean(offline), sessionId]);
 
+  // Export from this device only. No signed QR, visitor name or buyer email.
+  const visibleIncidents = [...archivedIncidents, ...(offline?.incidents ?? [])]
+    .filter((item, i, entries) => entries.findIndex((x) => x.id === item.id) === i);
+  const exportIncidents = () => {
+    if (!visibleIncidents.length) return;
+    try {
+      const csv = incidentReportCsv(visibleIncidents);
+      const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `alkao-incidents-${sessionId}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (err) { setError(err); }
+  };
   // Run 14: live gate counter, refreshed every 10 s and after each scan (online only).
   // Run 57: with it, the session's options to prepare and how many were handed over.
   const refreshAttendance = () => {
@@ -1159,6 +1186,16 @@ function Scanner({ api, base }) {
           <button class="secondary" onClick=${leaveOffline}>Quitter le mode hors ligne</button>`
         : html`<span class="muted">Réseau instable à la porte ?</span><button class="secondary" onClick=${goOffline}>Préparer le mode hors ligne</button>`}
     </div>`}
+    ${sessionId && visibleIncidents.length > 0 && html`<section class="card noprint" aria-label="Incidents de synchronisation hors ligne">
+      <h2>Incidents de synchronisation hors ligne</h2>
+      <p class="muted">${visibleIncidents.length} écart(s) conservé(s) sur cet appareil, même après avoir quitté le mode hors ligne.
+        L'accueil doit comparer ces admissions avec le journal du serveur avant toute correction. Aucun code QR complet ni donnée personnelle n'est exporté.</p>
+      <button type="button" class="secondary" onClick=${exportIncidents}>Télécharger le rapport CSV des incidents</button>
+      <ul class="prep">${visibleIncidents.slice(-20).map((item) => html`<li key=${item.id}>
+        <span>${item.qrId || "Identifiant historique indisponible"} · ${item.result}</span>
+        <span class="muted">${item.scannedAt || "Ancienne admission"} · ${item.count ?? 1}</span>
+      </li>`)}</ul>
+    </section>`}
     ${sessionId && html`
       <form class="card" onSubmit=${(e) => { e.preventDefault(); submit(); }}>
         <label>Code du billet (lecteur ou saisie)<input class="scan" autofocus value=${payload} onInput=${(e) => setPayload(e.target.value)} placeholder="ALK1…" /></label>

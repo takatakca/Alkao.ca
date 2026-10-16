@@ -91,4 +91,52 @@ describe("Run 87: Chromium two-tab Web Locks reconciliation", () => {
       await context.close();
     }
   }, 30_000);
+  it("preserves a denied offline admission report across a fresh browser tab and reload", async () => {
+    const context = await browser.newContext();
+    try {
+      const tab = await context.newPage();
+      await tab.goto(origin);
+      await tab.waitForFunction(() => Boolean((globalThis as any).offlineModule));
+      const evidence = await tab.evaluate(async () => {
+        const mod = (globalThis as any).offlineModule;
+        const session = "run88";
+        const raw = "ALK1.k1234567890." + "A".repeat(22) + "." + "B".repeat(86);
+        const store = mod.newOfflineStore({});
+        store.queue.push({ payload: raw, scannedAt: "2026-10-16T19:00:00.000Z", admittedOffline: true });
+        mod.saveOffline(session, store);
+        await mod.withOfflineSessionLock(session, async () => {
+          const loaded = mod.loadOffline(session);
+          await mod.syncOffline(loaded, async () => [{ index: 0, result: "already_admitted" }]);
+          mod.saveOffline(session, loaded);
+          mod.archiveOfflineIncidents(session, loaded);
+          mod.saveOffline(session, null);
+        });
+        return {
+          count: mod.loadIncidentReport(session).length,
+          temporary: mod.loadOffline(session),
+          containsQr: JSON.stringify(mod.loadIncidentReport(session)).includes(raw),
+        };
+      });
+      expect(evidence).toEqual({ count: 1, temporary: null, containsQr: false });
+      const second = await context.newPage();
+      await second.goto(origin);
+      await second.waitForFunction(() => Boolean((globalThis as any).offlineModule));
+      const report = await second.evaluate(() => {
+        const mod = (globalThis as any).offlineModule;
+        return {
+          list: mod.loadIncidentReport("run88"),
+          csv: mod.incidentReportCsv(mod.loadIncidentReport("run88")),
+        };
+      });
+      expect(report.list).toHaveLength(1);
+      expect(report.list[0]).toMatchObject({
+        qrId: "A".repeat(22), result: "already_admitted",
+      });
+      expect(report.csv).toContain('"already_admitted"');
+      expect(report.csv).not.toContain("B".repeat(86));
+    } finally {
+      await context.close();
+    }
+  }, 30_000);
+
 });

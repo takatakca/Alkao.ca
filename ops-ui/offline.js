@@ -11,6 +11,62 @@
 // authority: a ticket admitted at two offline gates is reported as a conflict after the sync.
 const PAYLOAD_RE = /^ALK1\.(k[0-9a-z]{10})\.([A-Za-z0-9_-]{22})\.([A-Za-z0-9_-]{86})$/;
 const KEY = (sessionId) => `alkao.ops.offline.${sessionId}`;
+const INCIDENT_KEY = (sessionId) => `alkao.ops.incidents.${sessionId}`;
+
+// Incidents are locally retained after leaving offline mode. They contain only
+// the public credential identifier and server outcome, never the signed QR
+// payload, email, buyer identity, authentication token or signing key.
+export function loadIncidentReport(sessionId) {
+  const raw = localStorage.getItem(INCIDENT_KEY(sessionId));
+  if (!raw) return [];
+  let parsed;
+  try { parsed = JSON.parse(raw); } catch { throw new Error("offline_incident_report_corrupt"); }
+  if (!Array.isArray(parsed) || parsed.some((v) =>
+    !v || typeof v.id !== "string" || typeof v.result !== "string" ||
+    typeof v.reconciledAt !== "string"))
+    throw new Error("offline_incident_report_corrupt");
+  return parsed;
+}
+
+/** Caller holds the same Web Lock as the offline audit and must not delete
+ * that audit unless the write succeeds. A malformed existing report is never
+ * silently overwritten. Repeat archiving is idempotent across failed exits.
+ */
+export function archiveOfflineIncidents(sessionId, store, now = Date.now()) {
+  const existing = loadIncidentReport(sessionId);
+  const current = Array.isArray(store?.incidents) ? store.incidents : [];
+  const missing = Math.max(0, (store?.conflicts || 0) - current.length);
+  const legacy = missing ? [{
+    id: `legacy-${sessionId}-${store.downloadedAt}`,
+    qrId: "", result: "legacy_unspecified", scannedAt: "",
+    reconciledAt: new Date(now).toISOString(), count: missing,
+  }] : [];
+  const ids = new Set(existing.map((e) => e.id));
+  const combined = [...existing];
+  for (const item of [...current, ...legacy]) {
+    if (ids.has(item.id)) continue;
+    ids.add(item.id);
+    combined.push(item);
+  }
+  if (combined.length !== existing.length)
+    localStorage.setItem(INCIDENT_KEY(sessionId), JSON.stringify(combined));
+  return combined;
+}
+
+/** CSV export contains no signed QR or buyer PII. Escape CSV formula inputs
+ * even though all recorded qrIds/outcomes are already constrained.
+ */
+export function incidentReportCsv(incidents) {
+  const esc = (value) => {
+    const raw = String(value ?? "");
+    const safe = /^[=+@\-\t\r]/.test(raw) ? "'" + raw : raw;
+    return '"' + safe.replaceAll('"', '""') + '"';
+  };
+  const header = ["Credential ID", "Server result", "Offline scanned at", "Reconciled at", "Count"];
+  const rows = incidents.map((r) => [r.qrId, r.result, r.scannedAt, r.reconciledAt, r.count ?? 1]);
+  return [header, ...rows].map((r) => r.map(esc).join(",")).join("\r\n") + "\r\n";
+}
+
 
 // Serialize local scanner operations so an async network sync cannot overwrite
 // an admission scanned while the HTTP request was in flight. Queue continues
@@ -61,7 +117,7 @@ export function saveOffline(sessionId, store) {
   if (store) localStorage.setItem(KEY(sessionId), JSON.stringify(store)); else localStorage.removeItem(KEY(sessionId));
 }
 export function newOfflineStore(manifest, now = Date.now()) {
-  return { manifest, downloadedAt: now, localAdmitted: [], localEntered: [], queue: [], conflicts: 0, synced: 0 };
+  return { manifest, downloadedAt: now, localAdmitted: [], localEntered: [], queue: [], incidents: [], conflicts: 0, synced: 0 };
 }
 
 const keyCache = new Map();
@@ -146,9 +202,20 @@ export async function syncOffline(store, send) {
       return false;
     // The scanner admitted these people offline, but the server is authoritative.
     // A revoked, already admitted, or otherwise denied ticket is an incident.
+    store.incidents ??= [];
     for (let i = 0; i < results.length; i++) {
-      if (batch[i]?.admittedOffline && results[i].result !== "admitted")
+      if (batch[i]?.admittedOffline && results[i].result !== "admitted") {
         store.conflicts++;
+        const original = batch[i];
+        const qrId = PAYLOAD_RE.exec(original.payload)?.[2] ?? "";
+        // Do not persist the signed QR; a bearer ticket must not end up in
+        // an exported gate incident report.
+        const scannedAt = Number.isFinite(Date.parse(original.scannedAt))
+          ? new Date(original.scannedAt).toISOString() : "";
+        const reconciledAt = new Date().toISOString();
+        const id = `${qrId}:${scannedAt}:${results[i].result}`;
+        store.incidents.push({ id, qrId, scannedAt, reconciledAt, result: results[i].result });
+      }
     }
     store.synced += batch.length;
     store.queue.splice(0, batch.length);
