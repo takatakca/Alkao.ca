@@ -36,7 +36,7 @@ describe("Run 87: Chromium two-tab Web Locks reconciliation", () => {
       const tabA = await context.newPage();
       const tabB = await context.newPage();
       await Promise.all([tabA.goto(origin), tabB.goto(origin)]);
-      expect(await tabA.evaluate(() => typeof navigator.locks?.request)).toBe("function");
+      expect(await tabA.evaluate(() => typeof (globalThis as any).navigator.locks?.request)).toBe("function");
 
       await tabA.evaluate(async () => {
         const mod = await import("/ops/" + "offline.js");
@@ -50,21 +50,21 @@ describe("Run 87: Chromium two-tab Web Locks reconciliation", () => {
         await mod.withOfflineSessionLock("cross-tab", async () => {
           const snapshot = mod.loadOffline("cross-tab");
           await new Promise<void>((resolve) => {
-            (window as any).releaseSync = resolve;
-            (window as any).syncHoldingLock = true;
+            (globalThis as any).releaseSync = resolve;
+            (globalThis as any).syncHoldingLock = true;
           });
           snapshot.queue.splice(0, 1);
           snapshot.synced++;
           mod.saveOffline("cross-tab", snapshot);
         });
       });
-      await tabA.waitForFunction(() => (window as any).syncHoldingLock === true);
+      await tabA.waitForFunction(() => (globalThis as any).syncHoldingLock === true);
 
       const queuedScan = tabB.evaluate(async () => {
         const mod = await import("/ops/" + "offline.js");
-        (window as any).tabBStarted = true;
+        (globalThis as any).tabBStarted = true;
         await mod.withOfflineSessionLock("cross-tab", async () => {
-          (window as any).tabBEntered = true;
+          (globalThis as any).tabBEntered = true;
           const latest = mod.loadOffline("cross-tab");
           latest.queue.push({
             payload: "second-admission", scannedAt: "2026-10-16T19:01:00Z", admittedOffline: true,
@@ -72,10 +72,10 @@ describe("Run 87: Chromium two-tab Web Locks reconciliation", () => {
           mod.saveOffline("cross-tab", latest);
         });
       });
-      await tabB.waitForFunction(() => (window as any).tabBStarted === true);
-      expect(await tabB.evaluate(() => Boolean((window as any).tabBEntered))).toBe(false);
+      await tabB.waitForFunction(() => (globalThis as any).tabBStarted === true);
+      expect(await tabB.evaluate(() => Boolean((globalThis as any).tabBEntered))).toBe(false);
 
-      await tabA.evaluate(() => (window as any).releaseSync());
+      await tabA.evaluate(() => (globalThis as any).releaseSync());
       await Promise.all([pending, queuedScan]);
       const result = await tabB.evaluate(async () => {
         const mod = await import("/ops/" + "offline.js");
