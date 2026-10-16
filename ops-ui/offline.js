@@ -108,6 +108,10 @@ export function loadOffline(sessionId, now = Date.now()) {
   try { store = JSON.parse(localStorage.getItem(KEY(sessionId)) ?? "null"); } catch { return null; }
   const closesAt = Date.parse(store?.manifest?.session?.admission?.closesAt ?? "");
   if (store && store.queue.length === 0 && Number.isFinite(closesAt) && now > closesAt + KEEP_AFTER_CLOSE_MS) {
+    // A reconciliation discrepancy remains important even when the temporary
+    // scan manifest passes its retention window. Archive before deleting.
+    // If archiving cannot persist, fail closed and keep the original audit.
+    if (store.conflicts > 0) archiveOfflineIncidents(sessionId, store, now);
     localStorage.removeItem(KEY(sessionId));
     return null;
   }

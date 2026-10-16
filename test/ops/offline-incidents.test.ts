@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 // @ts-ignore Browser entrypoint ships as an untyped JS ES module.
-import { newOfflineStore, saveOffline, loadOffline, syncOffline, archiveOfflineIncidents,
-  loadIncidentReport, incidentReportCsv } from "../../ops-ui/offline.js";
+import { newOfflineStore, saveOffline, loadOffline, syncOffline, archiveOfflineIncidents, loadIncidentReport, incidentReportCsv } from "../../ops-ui/offline.js";
 
 const session = "run88-incident-session";
 const now = "2026-10-16T19:00:00.000Z";
@@ -99,6 +98,23 @@ describe("Run 88: offline admission discrepancy evidence persists after exiting"
     expect(store.incidents).toHaveLength(1);
   });
 
+
+  it("archives old-session incidents before the 24-hour automatic cleanup", async () => {
+    vi.stubGlobal("localStorage", storage());
+    const s = "old-admission-audit";
+    const expired = new Date(Date.now() - 25 * 3600_000).toISOString();
+    const store = newOfflineStore({ session: { admission: { closesAt: expired } } });
+    store.conflicts = 1;
+    store.incidents.push({
+      id: "old-case", qrId: "R".repeat(22), scannedAt: now,
+      reconciledAt: now, result: "revoked",
+    });
+    saveOffline(s, store);
+    expect(loadOffline(s)).toBeNull();
+    expect(loadIncidentReport(s)).toMatchObject([{
+      id: "old-case", result: "revoked", qrId: "R".repeat(22),
+    }]);
+  });
   it("escapes untrusted CSV spreadsheet formulas (defense in depth)", () => {
     const csv = incidentReportCsv([{ id: "id", qrId: "=SUM(1,1)", result: "@risk",
       scannedAt: now, reconciledAt: now }]);
