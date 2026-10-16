@@ -1,5 +1,10 @@
 # ALKAO — Project status
 
+## Run 82 — cancelled-session transfer window (2026-10-16)
+
+Source `7f5e7d135f35a59e9ac7e5f9d376a3f327992f63` adds an application-level session row lock and a PostgreSQL trigger to refuse buyer invitations or recipient claims for cancelled sessions before asynchronous refund and voiding work finishes. New test asserts that even a still-valid ticket cannot be transferred or emailed during this gap. Migration: `20261109000100_alkao_transfer_cancelled_sessions.sql`. Source CI SUCCESS 38884229198 and Package SUCCESS 38884229102 at SHA `7f5e7d135f35a59e9ac7e5f9d376a3f327992f63`. Production Coolify SHA not verified; public transfer release stays OFF.
+
+
 ## Run 81 — payment-boundary transfer safety (2026-10-16)
 
 Source commits `7b19da34`, `1debe096`: prevent new invitations and recipient QR reissues while the buyer's order has a pending refund or unresolved/lost chargeback. Enforced inside order-locked application transactions and a new private PostgreSQL trigger migration `20261108000100_alkao_transfer_payment_guards.sql`. Invitation delivery is now deferred while money is unsettled and can resume if a dispute resolves before expiry; provider failure attempt counts are preserved. New regression suite `test/db/transfer-payment.test.ts`. CI **SUCCESS** 38883239557 and Package **SUCCESS** 38883239522 for `1debe096c9c8ad5421b7c39b1efe68ff744df8d6`. Production Coolify SHA not verified; transfer feature disabled by default.

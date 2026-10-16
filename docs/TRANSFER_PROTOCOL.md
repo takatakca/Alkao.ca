@@ -1,5 +1,10 @@
 # ALKAO — Buyer ticket transfer security protocol
 
+## Phase 7 — cancelled session and asynchronous refund gap (Run 82, 2026-10-16)
+
+Source `7f5e7d13`: ticket-transfer initiation and one-time recipient claim now refuse cancelled sessions under PostgreSQL session row locks. New migration `20261109000100_alkao_transfer_cancelled_sessions.sql` checks direct inserts independently of the API. Tests `test/db/transfer-cancelled-session.test.ts` establish that a valid ticket may exist while a session is already cancelled, yet no sender invitation, recipient QR rotation or invitation email can proceed. CI 38884229198 and Package 38884229102 succeeded for this code. This does not make the Coolify deployment verified and does not enable transfers by default.
+
+
 ## Phase 6 — pending refunds and disputes (Run 81, 2026-10-16)
 
 `src/ops/transfer-payment.ts` and order locks reject request creation or recipient claim with an unsettled payment. `20261108000100_alkao_transfer_payment_guards.sql` enforces the same protection against direct backend inserts. Disputes marked lost remain disqualifying until staff's separate remediation, even for partially disputed orders. Unresolved refunds/disputes defer the secure email invitation by 15 minutes without exhausting send attempts, allowing successful delivery after resolution and before the existing expiry. Regression tests in `test/db/transfer-payment.test.ts` cover direct schema bypass, deferred/returned delivery, unchanged QR on failed claim and tenant-local payments. Full source CI 38883239557 and Package 38883239522 passed for `1debe096`. No changes to Brand/global default-OFF flags. Coolify deployment and provider evidence remain outstanding.

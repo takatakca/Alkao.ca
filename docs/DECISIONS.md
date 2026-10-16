@@ -1,5 +1,10 @@
 # ALKAO — Decisions and non-negotiable constraints
 
+## Run 82 — cancellation overrides QR reissue
+
+Session cancellation must immediately stop transfer initiation and recipient acceptance regardless of ticket status, because ticket void/refund work may execute asynchronously. Hold a session row lock while checking eligibility and during recipient claim, and reject direct backend request inserts using a private PostgreSQL trigger. Cancelled invitations may be marked skipped by the mail sender; no new QR or email is sent. Existing orders, ticket histories and provider refunds are unchanged. Global and Brand release switches stay OFF pending operator-approved production acceptance.
+
+
 ## Run 81 — payment eligibility must be transaction-safe
 
 A new transfer or claim is forbidden while the source purchase has any pending ALKAO refund or a Stripe dispute except recorded wins / warning_closed / prevented. A lost dispute (including partial losses that leave valid tickets needing review) blocks transfers. Hold the paid order row `FOR UPDATE` before checking eligibility and ticket state to serialize with refund creation and settlement; enforce creation rules in PostgreSQL as a second boundary. Do not send a recipient invitation while payment is unresolved: defer 15 minutes without incrementing provider attempts, retry until resolution or invitation expiration. The recipient's QR must never be rotated in an unsafe payment state. This decision does not automatically refund or cancel an order.

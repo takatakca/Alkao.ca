@@ -1,5 +1,11 @@
 # ALKAO — Task queue (priority ordered)
 
+## Run 82 — continuation after session cancellation guard (2026-10-16)
+
+- Run 82 `7f5e7d13`: application locks/eligibility for cancelled sessions, additive PostgreSQL trigger and regression tests. Code SHA `7f5e7d13` passed CI 38884229198 and Package 38884229102. Check separate docs follow-up checks.
+- Next P1: multi-device offline scanner manifest expiration vs revoked transferred QR, pending payment provider outcomes, clearer paused invitation UI. P0: issue #84 independent Coolify SHA, dedicated database/backup, migration, key rotation, full provider pilot. Flags remain OFF. PR #53 is separate.
+
+
 ## Run 81 — finance/transfer safety continuation (2026-10-16)
 
 - Implemented: order-locked pending refund and dispute gates on create/claim; SQL guard preventing bypass; mail queue defers and retries without burning provider attempts; tenant-scoped regression tests.

@@ -1,5 +1,11 @@
 # ALKAO — Deployment state and verification
 
+## Run 82 — cancellation eligibility rollout (2026-10-16)
+
+Append `20261109000100_alkao_transfer_cancelled_sessions.sql` after Run 81's payment guards and the preceding three transfer migrations ONLY on the verified, backed-up dedicated ALKAO DB. Its private trigger locks the session row and rejects a new transfer request if the session is cancelled. The claim service now locks/reads session state and refuses a recipient claim even when the original ticket still appears valid pending worker refunds. The invitation email worker already skips cancelled sessions.
+Global `ALKAO_TRANSFER_API_ENABLED` is still OFF by default, and every Brand's opt-in also defaults OFF. Code SHA `7f5e7d13` passed CI 38884229198 and Package 38884229102. Coolify live SHA remains unverified. Strict deployment evidence remains unavailable under issue #84.
+
+
 ## Run 81 — pending financial events block recipient transfers (2026-10-16)
 
 Source `7b19da34` and `1debe096` add migration `20261108000100_alkao_transfer_payment_guards.sql` after the three existing transfer migrations. Run it ONLY as part of authorized migrations on the backed-up dedicated ALKAO database; the function replacement rejects new invitations during pending refunds and unresolved or lost disputes. Application and queue enforce equivalent rules while retaining pending invitations for future delivery after temporary payment disputes resolve. Secrets remain server-only.

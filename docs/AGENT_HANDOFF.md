@@ -1,5 +1,14 @@
 # ALKAO — Agent handoff (mandatory)
 
+## Run 82 — cancellation window transfer safety (2026-10-16)
+
+- Repository `takatakca/Alkao.ca`, `main`. Previous Run 81 source `1debe096c9c8ad5421b7c39b1efe68ff744df8d6` passed CI 38883239557 and Package 38883239522. Run 81 docs commit `2529d343dbeb2c0a9abfa0c8a874a0d93ed7c8be` remains in history.
+- Run 82 code commit `7f5e7d135f35a59e9ac7e5f9d376a3f327992f63`: `src/ops/transfer-request.ts` locks session FOR SHARE and refuses new invitations after cancellation, `src/ops/transfer-acceptance.ts` locks and checks session while recipient claims, `src/api/http.ts` maps organizer cancellation to 409, new `supabase/migrations/20261109000100_alkao_transfer_cancelled_sessions.sql` enforces insert-time check with session row lock, and `test/db/transfer-cancelled-session.test.ts` verifies pending claim rejection/QR not rotated, new request and SQL bypass rejected, and no email after cancellation.
+- QA confirmed for `7f5e7d135f35a59e9ac7e5f9d376a3f327992f63`: CI SUCCESS 38884229198 (TypeScript, migrations, secrets, full tests), Package SUCCESS 38884229102. Docs-only follow-up commit will trigger its own checks.
+- Production: still NOT VERIFIED. Coolify strict live SHA checks failed in prior runs; no operator access or secrets were assumed. `ALKAO_TRANSFER_API_ENABLED` and Brand transfer switches remain default OFF. Issue #84 still requires dedicated DB verification, backup, migrations, historical secret rotation, provider tests and current build SHA attestation.
+- Next action: verify newest `main` and CI; correct any Run 82 failures; continue offline manifest/chargeback race tests or operator-approved Coolify deployment. Never deploy migrations against an unconfirmed shared DB, do not touch PR #53. No automatic agent restart configured.
+
+
 ## Run 81 — payment dispute/refund hardening (2026-10-16)
 
 - Repository: `takatakca/Alkao.ca`, branch `main`. Previous main `e084ca7cd231cd9ffd6c885547a8ee01a92a1187`: CI 38855328040 SUCCESS; Package 38855327968 SUCCESS; strict Verify deployment 38855537560 FAILURE.

@@ -1,5 +1,10 @@
 # ALKAO API v1 (`alkao.api.v1`)
 
+## Run 82 — cancelled sessions override transfer availability
+
+Even for a paid, valid ticket and an opted-in Brand, creation of a transfer invitation fails with HTTP 409 `transfer_session_cancelled` once its session is cancelled. Recipient claim fails closed with the generic 404 `transfer_unavailable` instead of rotating the QR. Both services lock session state to serialize with cancellations, and the dedicated DB trigger guards direct inserts. Invitation email processing skips cancelled-session requests. Source CI 38884229198 and Package 38884229102 passed. This behavior requires migration `20261109000100_alkao_transfer_cancelled_sessions.sql` and is NOT a claim of production deployment.
+
+
 ## Run 81 — transfer payment safety
 
 With the global and Brand transfer switches enabled, POST `P/orders/:orderId/transfers` returns HTTP 409 (`transfer_payment_unsettled`) while the paid order has any pending ALKAO refund or a Stripe dispute not marked `won`, `warning_closed` or `prevented` (lost disputes remain disqualifying). Recipient claim remains a generic 404 if payment becomes unsettled after invitation creation; no QR is reissued. The private email outbox retries these invitations in fifteen minutes without consuming provider-error attempts; invitations expire normally. The database trigger applies the creation restriction to internal SQL as well. This change is verified by CI 38883239557 on source SHA `1debe096`, not verified live.
