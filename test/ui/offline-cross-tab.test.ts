@@ -39,14 +39,14 @@ describe("Run 87: Chromium two-tab Web Locks reconciliation", () => {
       expect(await tabA.evaluate(() => typeof navigator.locks?.request)).toBe("function");
 
       await tabA.evaluate(async () => {
-        const mod = await import("/ops/offline.js");
+        const mod = await import("/ops/" + "offline.js");
         const local = mod.newOfflineStore({});
         local.queue.push({ payload: "first-admission", scannedAt: "2026-10-16T19:00:00Z", admittedOffline: true });
         mod.saveOffline("cross-tab", local);
       });
 
       const pending = tabA.evaluate(async () => {
-        const mod = await import("/ops/offline.js");
+        const mod = await import("/ops/" + "offline.js");
         await mod.withOfflineSessionLock("cross-tab", async () => {
           const snapshot = mod.loadOffline("cross-tab");
           await new Promise<void>((resolve) => {
@@ -61,7 +61,7 @@ describe("Run 87: Chromium two-tab Web Locks reconciliation", () => {
       await tabA.waitForFunction(() => (window as any).syncHoldingLock === true);
 
       const queuedScan = tabB.evaluate(async () => {
-        const mod = await import("/ops/offline.js");
+        const mod = await import("/ops/" + "offline.js");
         (window as any).tabBStarted = true;
         await mod.withOfflineSessionLock("cross-tab", async () => {
           (window as any).tabBEntered = true;
@@ -78,7 +78,7 @@ describe("Run 87: Chromium two-tab Web Locks reconciliation", () => {
       await tabA.evaluate(() => (window as any).releaseSync());
       await Promise.all([pending, queuedScan]);
       const result = await tabB.evaluate(async () => {
-        const mod = await import("/ops/offline.js");
+        const mod = await import("/ops/" + "offline.js");
         const local = mod.loadOffline("cross-tab");
         return { queue: local.queue.map((e: { payload: string }) => e.payload), synced: local.synced };
       });
