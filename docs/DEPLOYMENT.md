@@ -1,5 +1,11 @@
 # ALKAO — Deployment state and verification
 
+## Run 88 — no-migration offline incident ledger (2026-10-16)
+
+The scanner now stores a local per-session, sanitized incident report in `alkao.ops.incidents.<sessionId>` on the operator's browser, distinct from the temporary offline audit. Confirmed server discrepancies survive exiting offline mode and post-close manifest cleanup; failure to archive preserves the original audit. Browser exports a CSV with credential ID, server outcome and timestamps, not signed QR bearer data, buyer email or provider secrets. Source CI 38960997547 and Package 38960997727 passed for `427668f7`. No server schema or provider configuration change in Run 88. Browser local storage can still be erased by browser/private-mode storage eviction, so real device field validation, operator report retention and backup procedures are required.
+Latest strict `Verify deployment` for prior main `afa7f7f6` failed (38958883411): Coolify did not attest active SHA. Keep transfer flags OFF, do not claim deployment from green package/CI. Production issue #84 persists.
+
+
 ## Run 87 — Web Locks browser prerequisite for offline gates (2026-10-16)
 
 Full Chromium test harness corrected in `fa915328` after CI 38957592844 had one browser-only import failure; final source CI 38958090144 and Package 38958090354 succeeded on `fa915328`. Live Coolify SHA still not attested.

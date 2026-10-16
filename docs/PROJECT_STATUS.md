@@ -1,5 +1,10 @@
 # ALKAO — Project status
 
+## Run 88 — retain scanner admission discrepancies (2026-10-16)
+
+Source commits `e0dbc920` and `427668f7` introduce a per-session local incident ledger for offline admissions disputed by server reconciliation. Instead of losing only a numeric counter when leaving offline mode, a sanitized report retains credential ID (not the signed QR), server result, offline/reconciliation timestamps and legacy counts; staff can export CSV locally. Exiting mode archives the ledger before clearing the temporary manifest; failed archive writes preserve the original audit. Expired post-close manifests likewise archive discrepancies before auto-removal. New unit and Chromium cross-tab tests. Initial CI failed a test-only TypeScript multiline import (corrected in follow-up). Full CI **SUCCESS** 38960997547 and Package **SUCCESS** 38960997727 for source SHA `427668f7f2a5700e25b294976d0c011bc9aafe28`. Production SHA remains unverified; no changes to global/Brand transfer flags.
+
+
 ## Run 87 — same-origin multi-tab offline audit coordination (2026-10-16)
 
 Browser two-tab E2E initial CI 38957592844 had 606 passes and one test-only Vitest dynamic import error; fixed in `fa915328`, replacement CI 38958090144 **SUCCESS** / Package 38958090354 **SUCCESS** for source `fa9153282e643700de8ee15ff998774be147121c`.

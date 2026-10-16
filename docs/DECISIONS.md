@@ -1,5 +1,10 @@
 # ALKAO — Decisions and non-negotiable constraints
 
+## Run 88 — privacy-preserving local offline discrepancy evidence
+
+A server-rejected scan that was physically admitted while offline is an operational incident, not merely a counter. Preserve individual incident evidence using the credential's public QR identifier, server result, scanned and reconciliation times, without retaining a full signed bearer QR or customer name/email. Display and export it for gate investigation after leaving offline mode. An archival localStorage failure must block audit deletion; a prior corrupted incident ledger must not be silently overwritten. Before any automatic post-close offline audit cleanup, archive outstanding incidents. Use Web Locks already enforced in Run 87 for same-origin atomic changes. LocalStorage is not a cross-device or permanent server backup; field/operator processes remain necessary.
+
+
 ## Run 87 — no multi-tab admission without origin-wide locking
 
 The actual two-tab browser regression now loads `/ops/offline.js` as a browser module (source test fix `fa915328`), rather than letting Node's test runner rewrite the import.

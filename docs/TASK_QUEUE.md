@@ -1,5 +1,10 @@
 # ALKAO — Task queue (priority ordered)
 
+## Run 88 — offline incident evidence continuation (2026-10-16)
+
+Implemented `e0dbc920` and `427668f7`: persist reconciliation incidents with redacted identifiers and per-session CSV; archive on offline exit and manifest expiry, fail closed on storage corruption/quota; browser and unit tests. CI 38960997547 and Package 38960997727 **SUCCESS** on source `427668f7`; new documentation commit has its own CI/Package runs. Next P1: real mobile/webview CSV downloads and local storage durability, multi-physical-gate reconciliation/incident response, retention and operator access procedures. P0: Coolify #84 live SOURCE_COMMIT proof, dedicated ALKAO DB backup/migrations/rotation, Resend/Stripe/scanner pilot, transfer switches OFF. Do not alter Promo Havana PR #53.
+
+
 ## Run 87 — cross-tab admission log safety (2026-10-16)
 
 The real Chromium two-tab test required a browser-side module-loading fix (`fa915328`); source CI 38958090144 SUCCESS and Package 38958090354 SUCCESS for `fa915328`. Next check docs follow-up CI and strict live SHA. Initial browser CI 38957592844 failed one test-only dynamic import issue.

@@ -1,5 +1,10 @@
 # ALKAO — Buyer ticket transfer security protocol
 
+## Phase 9 — operational evidence for revoked/duplicate offline QR (Run 88, 2026-10-16)
+
+When a gate admits an old QR offline but the server later returns `revoked` (transfer) or `already_admitted` (multi-gate replay), the reconciliation code now keeps a redacted incident record, rather than a counter alone. Incident CSV is available in Operations even after leaving offline mode; source `e0dbc920`, follow-up `427668f7` also prevents post-close retention cleanup from losing incident evidence. The signed QR never enters the exported report. This supports manual investigation but does not reconcile conflicting physical admissions automatically. Run 88 source CI 38960997547 and Package 38960997727 succeeded. Live device testing, customer-support workflow and Coolify deployment remain outstanding.
+
+
 ## Phase 10 — no destructive offline scanner exit (Run 85, 2026-10-16)
 
 Code `62aedcd5` (CI 38944264243 and Package 38944264279 passed) prevents an operator from leaving offline scanning and destroying the only copies of pending admission records. The UI replaces the "leave anyway" confirmation dialog with a mandatory sync requirement. `test/ui/ops-ui.test.ts` checks an actual signed QR admitted on a browser with network disabled, refused exit, restored connectivity, acknowledged server admission and then safe exit. No transfer feature switch or production database was changed. The real Coolify SHA remains unverified.
