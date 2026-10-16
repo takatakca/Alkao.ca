@@ -1022,9 +1022,15 @@ function Scanner({ api, base }) {
     persist(store);
   };
   const leaveOffline = async () => {
+    setError(null);
     await sync();
     const store = loadOffline(sessionId);
-    if (store?.queue.length && !confirm(`${store.queue.length} scan(s) pas encore synchronisés. Quitter quand même ?`)) return;
+    if (store?.queue.length) {
+      // A real offline admission is already physically at the venue. Do not
+      // allow a confirmation dialog to destroy its only pending audit record.
+      setError(new Error(`${store.queue.length} admission(s) non synchronisée(s). Reconnectez-vous et synchronisez avant de quitter le mode hors ligne.`));
+      return;
+    }
     persist(null);
   };
   useEffect(() => {

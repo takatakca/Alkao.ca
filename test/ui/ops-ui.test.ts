@@ -382,6 +382,64 @@ describe("ALKAO Operations app", () => {
     expect(admissions[0].n).toBe(1);
   });
 
+  it("refuses to abandon offline mode when a physically admitted ticket has not synchronized", async () => {
+    const t = seed.havana;
+    const { rows } = await db.pool.query<{ id: string }>(
+      `INSERT INTO public.ticketing_sessions (client_id, brand_id, event_id, starts_at, capacity, status)
+       VALUES ($1, $2, $3, now() + interval '20 minutes', 20, 'on_sale') RETURNING id`,
+      [t.clientId, t.brandId, t.eventId],
+    );
+    const sessionId = rows[0]!.id;
+    const toddler = t.types.find((x) => x.code === "TODDLER")!.id;
+    const hold = await call(app, "POST", `${pub(t.clientId, t.brandId)}/holds`, {
+      body: { sessionId, items: [{ ticketTypeId: toddler, quantity: 1 }] },
+    });
+    const checkout = await call(app, "POST", `${pub(t.clientId, t.brandId)}/holds/${hold.body.hold.id}/checkout`, {
+      headers: { "x-alkao-hold-token": hold.body.hold.token },
+      body: { buyer: { email: "safe-exit@example.com" },
+        successUrl: `${t.returnOrigin}/ok`, cancelUrl: `${t.returnOrigin}/ko` },
+    });
+    const order = await call(app, "GET", `${pub(t.clientId, t.brandId)}/orders/${checkout.body.order.id}`, {
+      headers: { "x-alkao-order-token": checkout.body.order.token },
+    });
+    const code = order.body.order.tickets[0].credential as string;
+
+    const page = await signedIn(seed.users.havanaStaff);
+    await page.goto(`${origin}/ops#${brandPath()}/scanner`);
+    await page.getByLabel("Événement").selectOption({ label: "Havana Resort — Événements 2026-2027" });
+    await page.locator(`option[value="${sessionId}"]`).waitFor({ state: "attached" });
+    await page.getByLabel("Séance").selectOption(sessionId);
+    await page.getByRole("button", { name: "Préparer le mode hors ligne" }).click();
+    await page.getByText("0 en attente de synchronisation").waitFor();
+    await page.context().setOffline(true);
+    const scanner = page.getByLabel("Code du billet (lecteur ou saisie)");
+    await scanner.fill(code);
+    await scanner.press("Enter");
+    await page.getByRole("status").getByText("ENTRÉE ACCEPTÉE").waitFor();
+    await page.getByText("1 en attente de synchronisation").waitFor();
+
+    await page.getByRole("button", { name: "Quitter le mode hors ligne" }).click();
+    await page.getByRole("alert").getByText(
+      "1 admission(s) non synchronisée(s). Reconnectez-vous et synchronisez avant de quitter le mode hors ligne.",
+    ).waitFor();
+    await page.getByText("1 en attente de synchronisation").waitFor();
+    expect(await page.getByRole("button", { name: "Quitter le mode hors ligne" }).isVisible()).toBe(true);
+    expect((await db.pool.query<{ n: number }>(
+      "SELECT count(*)::int AS n FROM public.ticketing_scans WHERE session_id = $1",
+      [sessionId],
+    )).rows[0]?.n).toBe(0);
+
+    await page.context().setOffline(false);
+    await page.getByRole("button", { name: "Synchroniser maintenant" }).click();
+    await page.getByText("0 en attente de synchronisation").waitFor();
+    await page.getByRole("button", { name: "Quitter le mode hors ligne" }).click();
+    await page.getByRole("button", { name: "Préparer le mode hors ligne" }).waitFor();
+    expect((await db.pool.query<{ n: number }>(
+      "SELECT count(*)::int AS n FROM public.ticketing_scans WHERE session_id = $1 AND result = 'admitted'",
+      [sessionId],
+    )).rows[0]?.n).toBe(1);
+  });
+
   it("cancels a session from the event page and shows the refunds", async () => {
     const t = seed.havana;
     const { rows } = await db.pool.query<{ id: string }>(
