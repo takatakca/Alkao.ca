@@ -1,5 +1,13 @@
 # ALKAO — Decisions and non-negotiable constraints
 
+## Run 86 — offline writes and synchronization share one queue
+
+The first Run 86 CI caught strict TypeScript test callback annotations, corrected in `9fbd33a8`. Run 86 code passed CI 38955598793 and Package 38955598811; this does not certify Coolify.
+
+
+Because localStorage read/write and network reconciliation are not transactional together, every scan, offline-manifest preparation, manual/automatic synchronization and exit within the same Operations scanner tab must run sequentially. Otherwise delayed acknowledgment of a batch could overwrite a new, already admitted ticket or permit exit before the new admission is durably recorded. Failed operations must not poison the FIFO. If storage writes fail, fail closed: operators must not see "admitted" until the audit queue is stored. This rule is tab-local and does not claim cross-tab or device-level atomicity. Multiple windows and real device storage eviction remain separate required acceptance tests.
+
+
 ## Run 85 — no manual override for unsynced offline admissions
 
 Every attendee admitted offline creates an audit record that must survive network interruption. The Operations scanner must not allow an operator to exit mode and delete the queue while admitted entries remain unacknowledged, even via a confirmation dialog. A disconnected exit attempt leaves the offline queue intact and shows a clear instruction to reconnect and synchronize. Already-synced sessions can exit normally. This is a safety boundary, not a background upload promise.

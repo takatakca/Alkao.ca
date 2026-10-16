@@ -1,5 +1,14 @@
 # ALKAO — Deployment state and verification
 
+## Run 86 — on-device offline scanner serialization (2026-10-16)
+
+New source `9fbd33a8` corrects test strict typings; revised CI 38955598793 SUCCESS and Package 38955598811 SUCCESS. Strict Verify deployment 38955922348 launched; prior live SHA remained missing.
+
+
+The scanner source now executes same-tab offline admission, batch sync and exit serially. This prevents a network response from overwriting a newer local admission, and a failed local audit storage write must not show a green gate. No schema changes; keep existing pending runs of transfer migrations separate. Source `29a5f8f2` requires CI/Package check and real tablet/browser testing, especially multiple tabs, private browsing, and storage quotas.
+Last strict deployment verifier 38945162509 FAILED on `8634ea75fd`: the live ALKAO service still did not report its build SHA after 8 attempts. GitHub package and CI alone do not deploy Coolify. Issue #84: verify distinct DB + backup and restore, migration plan, source commit build metadata, live readiness, secret rotation, payment and email providers; keep transfer switches OFF.
+
+
 ## Run 85 — offline scan queue cannot be discarded at exit (2026-10-16)
 
 Operations UI source `62aedcd5` (CI 38944264243 and Package 38944264279 SUCCESS) removes "Quitter quand même ?" for unresolved admissions. When offline queue contains admitted attendees who have not been acknowledged by the server, the scanner must stay in offline mode and display a reconnection/synchronization message. Only after all queued admissions reconcile may staff leave mode. No migration is required; do not override this guard during Coolify deployment. Validate on real disconnected tablets and retry HTTP errors in pilot. Production still UNVERIFIED: exact source SHA missing from live `/health`, no separate DB/backup or authenticated provider acceptance proof (#84). Brand/global transfer switches remain OFF.

@@ -1,5 +1,18 @@
 # ALKAO — Agent handoff (mandatory)
 
+## Run 86 — serialize same-tab offline scan, sync and exit (2026-10-16)
+
+- Run 86 follow-up commit `9fbd33a85c2c2ec04d92bdb56bdc88d6892fb1cb` adds explicit callback types to `test/ops/offline-concurrency.test.ts` after initial CI 38955194282 failed only TS7006 on two implicit-any test callbacks. Package 38955598811 SUCCESS; revised CI 38955598793 SUCCESS (TypeScript, migrations, secrets, full tests). Strict Verify deployment 38955922348 was still running during handoff; prior live 38945162509 FAILED.
+
+
+- Repository `takatakca/Alkao.ca`, branch `main`. Previous verified docs SHA `8634ea75fd871ba21a8480ca80d05fb3ba7fd68a`: CI 38944905867 SUCCESS, Package 38944905732 SUCCESS. Strict Verify deployment 38945162509 FAILURE: repeated 8 times, live `/health` does not publish build SHA (Coolify "Include Source Commit in Build").
+- Run 86 claim `08ffba02cae920b2f7dc7241e2e9e53075fc8cc2`, source commit `29a5f8f213fc788653bd933d709c39fe1cae150b`. Files: `ops-ui/offline.js` new `createOfflineCoordinator` FIFO; `ops-ui/app.js` uses same per-tab FIFO for entering offline mode, background/manual synchronization, scan and exit, prevents concurrent stale read/write of localStorage, rejects local persistence failure with a "DO NOT ADMIT" instruction, never resets existing audit queue; `test/ops/offline-concurrency.test.ts` covers late HTTP acknowledgment vs new admission, premature exit and recovery after failed operation. No migration, live feature flag, customer data or provider secret changes.
+- Verification: inspect CI 38955194282 and Package 38955194286 for latest source; Package was SUCCESS while CI installed Chromium when docs drafted. Do not declare code green before CI completes; fix actual errors if any. Documentation-only follow-up will start independent workflows.
+- Deployment: unverified. Issue #84: authorized Coolify operator must prove dedicated ALKAO DB and backup, apply pending migrations, rotate previously leaked secrets, enable source commit in build, and attest exact live SHA and readiness; verify Stripe/Resend/multi-device offline scanning. Keep `ALKAO_TRANSFER_API_ENABLED=false` and Brand transfer opt-in OFF.
+- Known limitation: FIFO prevents races in one Operations scanner tab. Multiple tabs/windows sharing the same browser profile or storage eviction/failure still require separate field/device safeguards. UI must reject unsaved admissions; no claim of cross-tab atomic storage.
+- Next exact action: check source CI/Package and the new docs SHA; investigate any failing browser test; separately test cross-tab kiosk/device and degraded local storage, live Coolify authentication and SHA, then approved release. Do not touch active Promo Havana PR #53. External session restart orchestrator is not configured.
+
+
 ## Run 85 — prevent data loss on offline scanner exit (2026-10-16)
 
 - Repository `takatakca/Alkao.ca`, `main`. Previous Run 84 source code `21a7031cde9ef7da4ca7077b7ab015bad00022c1` passed CI 38942936131 and Package 38942935861; Run 84 handoff commit `10b89922aef24802b1e1009e3fa17cb2b17cad5b`. Strict live Verify deployment for previous source failed again (GitHub Actions 38943283468), so no Coolify attestation.

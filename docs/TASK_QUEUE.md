@@ -1,5 +1,13 @@
 # ALKAO — Task queue (priority ordered)
 
+## Run 86 — scanner local audit concurrency and remaining work (2026-10-16)
+
+Initial CI 38955194282 reported two test-only TS7006 annotations; corrected in `9fbd33a8`. Follow-up CI 38955598793 SUCCESS and Package 38955598811 SUCCESS on `9fbd33a8`. Confirm independent docs CI and strict live SHA separately.
+
+
+Implemented at `29a5f8f2`: per-Operations-tab FIFO for scan, sync, offline preparation and exit; queue persistence after late network responses; failure to write to storage blocks successful admission; regression tests simulate concurrent actions and HTTP failure recovery. Verify current CI 38955194282 and Package 38955194286, correct any failures; check docs commit separately. P1 next: prevent simultaneous scanner windows on shared browser storage, test quota/privacy-mode write failures on real devices, manage offline multi-gate duplicate admissions and operator discrepancy workflow. P0: Coolify #84 — source SHA absent on live `/health`, dedicated DB, backups, migrations, provider keys and real pilot. Global/Brand transfer flags OFF. Preserve Havana PR #53.
+
+
 ## Run 85 — scanner audit-persistence follow-up (2026-10-16)
 
 - Implemented `62aedcd5`: prevent exit from offline scanning until all locally admitted QR records are acknowledged by the server; show actionable error, no destructive confirmation. E2E browser test covers disconnected exit and authorized exit after sync.

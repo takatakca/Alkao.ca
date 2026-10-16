@@ -1,5 +1,13 @@
 # ALKAO — Project status
 
+## Run 86 — offline scanner same-tab audit durability (2026-10-16)
+
+Initial CI 38955194282 failed TS7006 in two new test callback annotations, corrected by `9fbd33a8`; replacement CI 38955598793 SUCCESS, Package 38955598811 SUCCESS for final Run 86 source SHA `9fbd33a85c2c2ec04d92bdb56bdc88d6892fb1cb`.
+
+
+Source commit `29a5f8f213fc788653bd933d709c39fe1cae150b` serializes asynchronous scan admission, manual/automatic reconciliation, initial offline preparation and exit in a single FIFO per Operations browser tab, eliminating the stale-snapshot overwrite of unacknowledged audit records. If local storage rejects an admission, the UI tells staff NOT to admit the ticket rather than displaying a success. Added `test/ops/offline-concurrency.test.ts` with network delay and exit races. Check CI 38955194282 and Package 38955194286 for final validation. Multi-tab races require more safeguards; this patch does not guarantee durable write across browser storage eviction. Coolify SHA still not present in live `/health`; issue #84 open.
+
+
 ## Run 85 — offline gate cannot abandon unsynced admissions (2026-10-16)
 
 Source commit `62aedcd5f8b4d75644162eead67267b2be2ec69e` removes the destructive "leave anyway" path from Operations scanner. If an offline-admitted attendee is still in the reconciliation queue, the UI retains the queue and mode and shows reconnection instructions. Browser E2E test verifies rejected exit and successful online sync followed by safe exit. CI **SUCCESS** 38944264243 and Package **SUCCESS** 38944264279 at source SHA `62aedcd5f8b4d75644162eead67267b2be2ec69e`. Production Coolify SHA remains unverified and transfer switches remain default OFF.
