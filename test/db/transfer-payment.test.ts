@@ -105,7 +105,10 @@ describe("Run 81 transfer payment eligibility", () => {
     expect(accepted.id).toMatch(/^[0-9a-f-]{36}$/i);
   });
 
-  it("does not email a recipient after an unresolved dispute is recorded", async () => {
+  it("defers a recipient invitation during a dispute, then sends it once after a win", async () => {
+    // Isolate the queue from earlier test scenarios using separate paid orders.
+    await db.pool.query(`UPDATE public.ticketing_transfer_invitation_outbox
+      SET status = 'skipped', last_error = 'test_isolation' WHERE status = 'pending'`);
     const order = await paid();
     const request = await invite(order, "blocked-friend@example.com");
     await dispute(order, "under_review");
@@ -118,12 +121,24 @@ describe("Run 81 transfer payment eligibility", () => {
       sender, publicUrl: "https://tickets.alkao.test",
       credentialMasterSecret: TEST_CREDENTIAL_SECRET,
     }, new Date(Date.now() + 1000));
-    expect(result).toMatchObject({ sent: 0, skipped: 1 });
+    expect(result).toMatchObject({ sent: 0, retried: 1 });
     expect(sent).toEqual([]);
-    const { rows } = await db.pool.query<{ status: string; last_error: string }>(
-      `SELECT status, last_error FROM public.ticketing_transfer_invitation_outbox
+    const status = async () => (await db.pool.query<{ status: string; last_error: string; attempts: number }>(
+      `SELECT status, last_error, attempts FROM public.ticketing_transfer_invitation_outbox
        WHERE request_id = $1`, [request.id],
+    )).rows[0];
+    expect(await status()).toEqual({ status: "pending", last_error: "payment_unsettled", attempts: 0 });
+    await db.pool.query(
+      "UPDATE public.ticketing_payment_disputes SET status = 'won', provider_updated_at = now() WHERE order_id = $1",
+      [order.orderId],
     );
-    expect(rows[0]).toEqual({ status: "skipped", last_error: "payment_unsettled" });
+    const delivered = await deliverRecipientInvitations(db.pool, {
+      sender, publicUrl: "https://tickets.alkao.test",
+      credentialMasterSecret: TEST_CREDENTIAL_SECRET,
+    }, new Date(Date.now() + 16 * 60_000));
+    expect(delivered.sent).toBe(1);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]?.to).toBe("blocked-friend@example.com");
+    expect(await status()).toEqual({ status: "sent", last_error: null, attempts: 1 });
   });
 });

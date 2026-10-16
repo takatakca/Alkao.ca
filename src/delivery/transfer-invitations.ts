@@ -106,7 +106,16 @@ export async function deliverRecipientInvitations(db: Db, cfg: RecipientInviteDe
       if (!row.ticket_transfers_enabled) return skip("brand_disabled");
       if (row.buyer_erased) return skip("buyer_erased");
       // Never invite a recipient to claim an admission with unsettled money.
-      if (row.refund_pending || row.dispute_unresolved) return skip("payment_unsettled");
+      // Refunds and disputes may resolve before the 24-hour invitation expires.
+      // Defer, rather than permanently skipping or consuming provider failure
+      // attempts; this keeps the invitation deliverable after resolution.
+      if (row.refund_pending || row.dispute_unresolved) {
+        await tx.query(`UPDATE public.ticketing_transfer_invitation_outbox
+          SET next_attempt_at = $2, last_error = 'payment_unsettled'
+          WHERE id = $1 AND status = 'pending'`,
+          [row.id, new Date(now.getTime() + 15 * 60_000)]);
+        return "retried";
+      }
       if (row.ticket_status !== "valid" || !["paid", "partially_refunded"].includes(row.order_status))
         return skip("ticket_unavailable");
       if (row.session_status === "cancelled" || row.starts_at <= now || row.already_admitted)
