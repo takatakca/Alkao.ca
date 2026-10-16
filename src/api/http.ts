@@ -59,6 +59,7 @@ const STATUS_BY_CODE: Record<string, ContentfulStatusCode> = {
   transfer_unavailable: 404,
   transfer_release_disabled: 409,
   transfer_payment_unsettled: 409,
+  transfer_session_cancelled: 409,
   order_not_exchangeable: 409,
   flex_not_purchased: 409,
   // Run 06

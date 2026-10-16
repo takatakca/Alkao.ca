@@ -52,12 +52,12 @@ export async function acceptTransferInvitation(
       ticket_id: string; event_id: string; session_id: string;
       recipient_email: string; claim_token_hash: Buffer;
       expires_at: Date; request_status: string; ticket_status: string;
-      starts_at: Date; admission_opens_before_minutes: number;
+      starts_at: Date; session_status: string; admission_opens_before_minutes: number;
       ticket_transfers_enabled: boolean;
     }>(
       `SELECT r.ticket_id, r.event_id, r.session_id, r.recipient_email, r.claim_token_hash,
               r.expires_at, r.status AS request_status, t.status AS ticket_status,
-              s.starts_at, e.admission_opens_before_minutes, bs.ticket_transfers_enabled
+              s.starts_at, s.status AS session_status, e.admission_opens_before_minutes, bs.ticket_transfers_enabled
        FROM public.ticketing_transfer_requests r
        JOIN public.ticketing_tickets t ON t.id = r.ticket_id AND t.client_id = r.client_id AND t.brand_id = r.brand_id
        JOIN public.ticketing_sessions s ON s.id = r.session_id AND s.client_id = r.client_id AND s.brand_id = r.brand_id
@@ -65,11 +65,12 @@ export async function acceptTransferInvitation(
        JOIN public.ticketing_brand_settings bs ON bs.client_id = r.client_id AND bs.brand_id = r.brand_id
        WHERE r.id = $1 AND r.client_id = $2 AND r.brand_id = $3
          AND t.order_id = $4
-       FOR UPDATE OF r, t`,
+       FOR UPDATE OF r, t FOR SHARE OF s`,
       [requestId, scope.clientId, scope.brandId, refs[0].order_id],
     );
     const r = rows[0];
     if (!r || r.request_status !== "pending" || !r.ticket_transfers_enabled
+      || r.session_status === "cancelled"
       || r.ticket_status !== "valid" || r.expires_at <= at
       || r.starts_at.getTime() <= at.getTime()
           + (r.admission_opens_before_minutes + 15) * 60_000) throw unavailable();

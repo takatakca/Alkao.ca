@@ -56,14 +56,20 @@ export async function prepareTransferInvitation(
       throw new DomainError("transfer_payment_unsettled");
     if (!(await transferPaymentIsClear(tx, scope, orderId)))
       throw new DomainError("transfer_payment_unsettled");
-    const { rows: tickets } = await tx.query<{ event_id: string; session_id: string }>(
-      `SELECT event_id, session_id FROM public.ticketing_tickets
-       WHERE id = $1 AND order_id = $2 AND client_id = $3 AND brand_id = $4
-       FOR UPDATE`,
+    const { rows: tickets } = await tx.query<{ event_id: string; session_id: string; session_status: string }>(
+      `SELECT t.event_id, t.session_id, s.status AS session_status
+       FROM public.ticketing_tickets t
+       JOIN public.ticketing_sessions s ON s.id = t.session_id
+         AND s.client_id = t.client_id AND s.brand_id = t.brand_id
+       WHERE t.id = $1 AND t.order_id = $2 AND t.client_id = $3 AND t.brand_id = $4
+       FOR UPDATE OF t FOR SHARE OF s`,
       [ticketId, orderId, scope.clientId, scope.brandId],
     );
     const ticket = tickets[0];
     if (!ticket) throw new DomainError("ticket_not_found");
+    // A cancellation takes the session row lock first and may refund later.
+    // Forbid invitations during that window, even while the ticket is valid.
+    if (ticket.session_status === "cancelled") throw new DomainError("transfer_session_cancelled");
     const id = randomUUID();
     // Expired intents must stop occupying the unique pending slot before a
     // fresh request is created for the same ticket.
