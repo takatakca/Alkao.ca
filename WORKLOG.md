@@ -3,6 +3,8 @@
 Newest first, one line per piece of work. Rule: `AGENTS.md` › Work log rule.
 Format: `YYYY-MM-DD | agent | branch → PR | status | what | next step`
 
+- 2026-10-16 | ChatGPT (GitHub) | main → direct commits | active | Run 85: block leaving offline gate while recorded admissions remain unacknowledged, browser QA | run CI/Package, update docs, preserve Coolify release gate
+
 - 2026-10-16 | ChatGPT (GitHub) | main → faf44749, 21a7031c | done in code; CI 38942936131 and Package 38942935861 SUCCESS, production not verified | Run 84: only locally admitted offline QR enters sync queue, prevents unattended entry from rejected scans, preserves unacknowledged batches, counts server-side discrepancies, multi-gate regression suite | next: Coolify #84 SHA/DB/secret release and real multi-device pilot
 
 - 2026-10-16 | ChatGPT (GitHub) | main → 7b004ba2 | done in code; CI 38885296988 and Package 38885297040 SUCCESS; deployment unverified | Run 83: offline scanner fail-closed signature verification on Ed25519-unavailable devices and regression tests for forged QRs | next: test mobile devices and multi-gate offline; Coolify #84
