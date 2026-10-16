@@ -3,6 +3,8 @@
 Newest first, one line per piece of work. Rule: `AGENTS.md` › Work log rule.
 Format: `YYYY-MM-DD | agent | branch → PR | status | what | next step`
 
+- 2026-10-16 | ChatGPT (GitHub) | main → direct commits | active | Run 82: prevent creation and recipient claim for cancelled sessions before asynchronous refunds, with database guard and scanner/mail regressions | validate CI/Package, docs, live SHA
+
 - 2026-10-16 | ChatGPT (GitHub) | main → 7b19da34 and 1debe096 | done in code, CI 38883239557 + Package 38883239522 SUCCESS; Coolify not verified | Run 81: order-locked refund/dispute eligibility, PostgreSQL trigger, delayed/retry-safe invitation mail, financial and direct-SQL regression tests | next: live #84 and cancelled-session/refund/offline scanner QA
 
 - 2026-10-16 | ChatGPT (GitHub) | main → 59e31276, d0f11e21, fe6abc32, f9203cec, e085b59f | done in code; CI 38854862144 and Package 38854861945 SUCCESS, Coolify unverified | Run 80: gated transfer APIs, real Resend worker/cron opt-in, FR/EN buyer and recipient UI, one-time claim/new QR, organizer toggle/audit, worker-release/browser tests; global and Brand flags default OFF | next: Coolify SHA/DB/Resend/scanner acceptance #84 and remaining backlog
