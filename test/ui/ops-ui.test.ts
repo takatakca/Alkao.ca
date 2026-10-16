@@ -359,7 +359,8 @@ describe("ALKAO Operations app", () => {
     const forged = first.credential.slice(0, -2) + (first.credential.endsWith("AA") ? "BA" : "AA");
     await scan(forged, "FAUX BILLET");
     await scan(second.credential, "ENTRÉE ACCEPTÉE");
-    await page.getByText("4 en attente de synchronisation").waitFor();
+    // Only two actual offline admissions are uploaded, not the duplicate or forged attempt.
+    await page.getByText("2 en attente de synchronisation").waitFor();
     // Nothing reached the server yet.
     const logged = async () => (await db.pool.query(`SELECT result, offline FROM public.ticketing_scans WHERE session_id = $1 ORDER BY id`, [sessionId])).rows;
     expect(await logged()).toEqual([]);
@@ -372,10 +373,11 @@ describe("ALKAO Operations app", () => {
     await page.context().setOffline(false);
     await page.getByRole("button", { name: "Synchroniser maintenant" }).click();
     await page.getByText("0 en attente de synchronisation").waitFor();
-    await page.getByText("1 billet(s) aussi entré(s) à une autre porte").waitFor();
+    await page.getByText("1 admission(s) hors ligne contestée(s) — vérifier les écarts avec le serveur").waitFor();
     const results = (await logged()).map((r: { result: string }) => r.result);
     expect(results.filter((r: string) => r === "admitted")).toHaveLength(2);
-    expect(results).toContain("invalid_signature");
+    expect(results).toContain("already_admitted");
+    expect(results).not.toContain("invalid_signature");
     const { rows: admissions } = await db.pool.query(`SELECT count(*)::int AS n FROM public.ticketing_scans WHERE ticket_id = $1 AND result = 'admitted'`, [second.id]);
     expect(admissions[0].n).toBe(1);
   });

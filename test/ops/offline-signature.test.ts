@@ -37,7 +37,7 @@ describe("Run 83: offline admissions must verify Ed25519", () => {
     expect((await offlineScan(store, payload, now)).result).toBe("signature_unavailable");
     expect(store.localAdmitted).toEqual([]);
     expect(store.queue).toHaveLength(0);
-    expect(store.queue[0].admittedOffline).not.toBe(true);
+    // Rejected QR never enters a queue that would later auto-admit online.
   });
 
   it("also fails closed when subtle crypto is present but cannot import Ed25519", async () => {
