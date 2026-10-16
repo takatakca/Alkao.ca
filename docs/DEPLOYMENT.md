@@ -1,5 +1,11 @@
 # ALKAO — Deployment state and verification
 
+## Run 84 — offline scanner release and exact Coolify build proof (2026-10-16)
+
+Run 84 code `faf44749` and test correction `21a7031c` passed CI 38942936131 and Package 38942935861; no database migration is needed. It prevents denied offline scans from becoming unattended server admissions on reconnection; old persisted denied scans are ignored. A locally admitted ticket is reconciled only on complete, indexed server acknowledgment; divergence (revoked/duplicate/invalid/etc.) shows as a gate incident. Confirm two-device scanner behavior before release.
+Production is still NOT ATTESTED. In strict Verify deployment workflow 38886146185 all eight HTTPS probes returned `le serveur ne publie pas le SHA du build (Include source commit in build)`. `Live` only shows availability. For Coolify #84, enable "Include Source Commit in Build" or supply Docker build arg `SOURCE_COMMIT`, redeploy the authorized Git `main` SHA, verify `/health` contains that SHA and `/health/ready` succeeds, after confirming dedicated ALKAO DB, backup/restore, required additive migrations and worker/provider configuration. Do not enable transfers until Stripe, Resend and scanner acceptance pass. Never infer actual publication from GitHub Package/CI success or change unrelated PR #53.
+
+
 ## Run 83 — WebCrypto is mandatory for offline admission (2026-10-16)
 
 After deploying source `7b004ba2`, unsupported Ed25519 on an offline scanner explicitly returns `signature_unavailable`; staff must reconnect and use the existing online scanner. Never configure a browser/device exception that bypasses signature verification. Maintain manifest expiry/refresh policy and inspect mobile browsers before production rollout. CI 38885296988 and Package 38885297040 passed for source `7b004ba2`. No new migration is needed for this code, but migrations from Runs 77–82 still require authorized application to the backed-up dedicated ALKAO database. The strict Coolify SHA/ready check remains the production gate (issue #84), independently of a green GitHub CI. Feature flags remain default OFF.

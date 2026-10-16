@@ -1,5 +1,12 @@
 # ALKAO — Task queue (priority ordered)
 
+## Run 84 — offline scanner reconciliation QA and next task (2026-10-16)
+
+- New code `faf44749` and corrected UI/crypto tests `21a7031c`: queue ONLY offline accepted QR, filter legacy denied attempts, preserve unacknowledged batches, verify per-index scan result, increment gate reconciliation incident count when offline admitted QR is later denied by server. Tests for two gates, transferred revoked QR, HTTP failures, incomplete replies, batch sizes and replay behavior.
+- Run 84 code at `21a7031c` passed CI 38942936131 and Package 38942935861; check documentation follow-up SHA separately. Address any new failures instead of assuming success.
+- P1 acceptance: real devices and simultaneous offline gate scanners, true network interruption during batch commit, attendance discrepancy response and operator training. P0 release: issue #84, enable Coolify Include Source Commit in Build, attest `/health` SHA, backup dedicated DB and run migrations under explicit operator authority, rotate historical leaked secrets and test payment/email/scanner. Keep global/Brand transfer flags OFF and Promo Havana PR #53 isolated.
+
+
 ## Run 83 — cryptographic offline gate (2026-10-16)
 
 - Implemented source `7b004ba2`: fail-closed Ed25519 in offline scanner; support absent -> explicit `signature_unavailable` (online fallback), forged QR rejected, valid signed QR can pass with fresh manifest, revocations and TTL respected. Unit tests added.

@@ -1,5 +1,10 @@
 # ALKAO — Decisions and non-negotiable constraints
 
+## Run 84 — offline gate reconciliation may not create new admissions
+
+Only an actual, cryptographically accepted offline entry may enter the upload queue. Offline rejected QR codes and old device queue entries lacking the `admittedOffline` flag must not be replayed after connectivity resumes; otherwise the live server could admit a ticket the gate operator rejected. The batch endpoint must acknowledge every index with a known outcome before pending admissions are removed, regardless of HTTP 4xx errors. A locally accepted entry later rejected by the server (duplicate, revoked, wrong session, etc.) counts as a discrepancy requiring operator review. Refuse silent data loss to preserve auditability. Keep all original backend money/order and tenant authority unchanged.
+
+
 ## Run 83 — absence of Ed25519 verification must deny admission
 
 A QR identifier's presence in a cached offline manifest is not proof of validity. Every offline admission MUST verify its Ed25519 signature using a known trusted key; cryptographic absence or unsupported browser implementations must fail closed with a reconnect/online-scanner instruction. Invalid signatures remain explicit rejects; revoked and expired manifests are also rejects. We do not silently fall back to identifier-only access, even for known ticket IDs.

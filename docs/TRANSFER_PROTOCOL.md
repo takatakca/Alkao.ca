@@ -1,5 +1,10 @@
 # ALKAO — Buyer ticket transfer security protocol
 
+## Phase 9 — offline gate reconciliation after transfer (Run 84, 2026-10-16)
+
+Source `faf44749` with test update `21a7031c` (CI 38942936131, Package 38942935861 successful) ensures a QR denied offline for expired manifests, bad Ed25519 signature or absence of WebCrypto is never queued as an entrance to replay on reconnect. Existing legacy device queues are filtered to entries marked `admittedOffline: true`. The sync logic preserves all admissions unless each server batch result is complete, correctly indexed and recognized. A transferred/revoked code admitted from an old but still-fresh manifest becomes a counted reconciliation incident if server rejects it. Regression suite `test/ops/offline-reconciliation.test.ts` models two offline gates, duplicate/revoked conflict, partial batch response, HTTP failures and chunking. Real device acceptance and Coolify deployment remain separate outstanding tasks.
+
+
 ## Phase 8 — cryptographic offline scanner verification (Run 83, 2026-10-16)
 
 `ops-ui/offline.js` no longer admits a QR from manifest lookup if WebCrypto Ed25519 verification is missing or throws: it returns `signature_unavailable`, and Operations prompts a switch to online scanning. The signed QR verification must return true before admission. `test/ops/offline-signature.test.ts` uses real Ed25519 keypairs and tampered signatures to assert the correct behavior, plus revocation and manifest expiration. Source CI 38885296988 and Package 38885297040 succeeded. This is a source-only safeguard; real-device and production rollout checks remain outstanding.

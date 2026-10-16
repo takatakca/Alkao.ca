@@ -1,5 +1,10 @@
 # ALKAO — Project status
 
+## Run 84 — offline admission reconciliation hardened (2026-10-16)
+
+Source `faf44749151a3614748d1dce1eb88a6546632190`, follow-up fix `21a7031cde9ef7da4ca7077b7ab015bad00022c1`: only physically admitted, signature-verified offline scans are queued for server replay; older denied attempts are ignored on reconnection. Interrupted or incomplete batch responses no longer erase pending admissions. The server's explicit acknowledgment validates count, source index and result. Rejected local admissions (including revoked/transfer QR) count as incidents, not silently cleared. New tests in `test/ops/offline-reconciliation.test.ts` and updated signature/expiry expectations. Full source CI **SUCCESS** 38942936131 and Package **SUCCESS** 38942935861 at `21a7031cde9ef7da4ca7077b7ab015bad00022c1`. No production release verified; strict Coolify `/health` did not expose build SHA on eight checks (Verify deployment 38886146185). Transfers remain OFF by default.
+
+
 ## Run 83 — offline scanner cryptography safety (2026-10-16)
 
 Source `7b004ba2b408d3e0f65ed710927f6c3684503a66` hardens the already time-limited offline gate: QR admission now requires a *verified* Ed25519 signature; absence of crypto/browser support is no longer silently treated as valid merely because the QR ID occurs in a manifest. Staff see a reconnect/use-online warning. New real cryptographic unit tests in `test/ops/offline-signature.test.ts` cover signed/forged, unsupported, revoked and expired scenarios. Full GitHub CI **SUCCESS** 38885296988 and Package **SUCCESS** 38885297040 for this SHA. No production version attested; transfer flags remain OFF.

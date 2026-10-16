@@ -1,5 +1,15 @@
 # ALKAO — Agent handoff (mandatory)
 
+## Run 84 — offline gate queue and lossless reconciliation (2026-10-16)
+
+- Repo: `takatakca/Alkao.ca`, branch `main`. Previous confirmed HEAD `3b5846a4b534d4dd162f3a00be23add0ebfc4b5f`: CI 38885842348 **SUCCESS**, Package 38885842312 **SUCCESS**; strict Verify deployment 38886146185 **FAILURE**.
+- Run 84 worklog claimed at `f594d7e9833de65a4de34944c47581f886954ea6`, code commits `faf44749151a3614748d1dce1eb88a6546632190` and `21a7031cde9ef7da4ca7077b7ab015bad00022c1` (adapted existing UI and cryptographic regression tests) (check final current SHA). Changed `ops-ui/offline.js`, `ops-ui/app.js`, `test/ops/offline.test.ts`, `test/ops/offline-signature.test.ts`; added `test/ops/offline-reconciliation.test.ts`, and `test/ui/ops-ui.test.ts`.
+- Fix: offline scanner now enqueues ONLY locally authenticated/admitted QR. Malformed, unsupported Ed25519, expired manifest and all other locally denied attempts cannot be replayed by the server as unattended admissions. Legacy persisted queues with no `admittedOffline: true` are filtered without submission. `syncOffline` retains the whole admission batch on HTTP errors, malformed/partial acknowledgment, bad index or unknown result; it removes entries only after all 500-or-fewer indexed results are recognized. Any locally admitted QR rejected online (already_admitted/revoked/etc.) increments an incident counter with generic wording rather than asserting another gate was responsible. New unit tests cover two gates, revoked transferred QR, bad HTTP 403, incomplete results, 501 entries and stale queued denials.
+- Source code CI **SUCCESS** run 38942936131 (typecheck, migrations, secrets, all tests) and Package **SUCCESS** run 38942935861 for `21a7031cde9ef7da4ca7077b7ab015bad00022c1`. A documentation-only commit will advance HEAD and get independent checks. No migration in Run 84. Production transfer flags still default OFF.
+- Deployment: live strict Verify deployment `38886146185` FAILED on previous SHA: logs explicitly say `le serveur ne publie pas le SHA du build (Include source commit in build)` on eight attempts. Issue #84 requires Coolify include source commit, clean dedicated ALKAO DB, backup, migrations, secret rotation, live Stripe/Resend/scanner acceptance; do not infer deployment from `Live` SUCCESS. No production deployment performed.
+- NEXT exact action: confirm current CI/Package; repair failures; check current live `/health` SHA and `/health/ready`; coordinate authorized Coolify configuration and DB backup/migration. Independently run real mobile/browser two-gate acceptance and network-loss QA. Do not touch unrelated Promo Havana PR #53. External session orchestrator is not connected.
+
+
 ## Run 83 — fail-closed offline QR signature check (2026-10-16)
 
 - Repo `takatakca/Alkao.ca`, `main`. Prior Run 82 functional SHA `7f5e7d135f35a59e9ac7e5f9d376a3f327992f63` passed CI 38884229198 and Package 38884229102. Run 82 handoff commit `217c01b27f62cd4bda056910e705a3cba21f0d68` preserved.
