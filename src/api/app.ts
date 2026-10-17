@@ -63,6 +63,8 @@ import { prepareTransferInvitation, cancelTransferInvitation } from "../ops/tran
 import { acceptTransferInvitation, transferredCredentialForRecipient } from "../ops/transfer-acceptance.js";
 import * as cancellation from "../ops/cancellation.js";
 import * as changeNotice from "../ops/change-notice.js";
+import * as drafts from "../ai/drafts.js";
+import { WriterError, type Writer } from "../ai/writer.js";
 
 export const API_VERSION = "alkao.api.v1";
 
@@ -101,6 +103,10 @@ export interface AppDeps {
   resendWebhookSecret?: string | null;
   /** Run 62: the release answering, shown by /health; null when unknown. */
   buildId?: string | null;
+  /** Run 92: the writing assistant in /ops (a paid language model); null: off, the default. */
+  writer?: Writer | null;
+  /** Run 92: drafts per Brand per 24 hours, a ceiling on what the assistant can cost. */
+  assistantDailyLimit?: number;
   now?: () => Date;
 }
 
@@ -544,7 +550,7 @@ export function createApp(deps: AppDeps) {
   app.get(`${ADMIN}/status`, requireUser, requireMember, async (c) => {
     const { clientId, brandId } = c.get("scope");
     const decision = await decide(clientId, brandId);
-    return c.json({ role: c.get("role"), ticketing: decision });
+    return c.json({ role: c.get("role"), ticketing: decision, assistant: Boolean(deps.writer) });
   });
 
   app.get(`${ADMIN}/venues`, ...admin, can("ticketing.catalog.read"), async (c) =>
@@ -1448,6 +1454,50 @@ export function createApp(deps: AppDeps) {
     const body = api.CampaignSend.parse(await readJson(c));
     await withTransaction(deps.db, (tx) => campaignsDb.sendCampaign(tx, c.get("scope"), id, body.expectedRecipients, today(), actor(c), now()));
     return c.json({ campaign: await campaignsDb.getCampaign(deps.db, c.get("scope"), id, today()) }, 202);
+  });
+
+  // ── Run 92: the writing assistant (drafts only: staff read, change and save) ──
+  const assistantLimit = deps.assistantDailyLimit ?? 30;
+  /** Runs one draft: off without a writer, at most N per Brand per day, each one in the Journal. */
+  const assist = async (c: Context<Env>, entity: { type: string; id: string | null }, kind: string, run: (w: Writer) => Promise<{ draft: Record<string, string>; usage: drafts.DraftUsage }>) => {
+    const writer = deps.writer;
+    if (!writer) return fail(c, 503, "assistant_disabled");
+    const scope = c.get("scope");
+    const { rows: [used] } = await deps.db.query<{ n: number }>(
+      `SELECT count(*)::int AS n FROM public.ticketing_audit_log
+       WHERE client_id = $1 AND brand_id = $2 AND action = 'assistant.drafted' AND created_at > $3::timestamptz - interval '24 hours'`,
+      [scope.clientId, scope.brandId, now()]);
+    if (used!.n >= assistantLimit) return fail(c, 429, "assistant_daily_limit");
+    const record = (usage: drafts.DraftUsage | null, outcome: string) =>
+      catalog.writeAudit(deps.db, scope, actor(c), "assistant.drafted", entity, { kind, outcome, ...(usage ?? {}) });
+    try {
+      const { draft, usage } = await run(writer);
+      await record(usage, "ok");
+      return c.json({ draft, model: usage.model });
+    } catch (err) {
+      if (err instanceof drafts.DraftRejected) {
+        if (err.usage) await record(err.usage, "rejected");
+        return fail(c, 422, "assistant_draft_rejected", err.problems);
+      }
+      if (err instanceof WriterError) {
+        await record(null, err.reason);
+        return fail(c, err.reason === "refused" || err.reason === "unparsed" ? 422 : 503, `assistant_${err.reason}`);
+      }
+      throw err;
+    }
+  };
+
+  app.post(`${ADMIN}/assistant/campaign`, ...admin, manageCampaigns, async (c) => {
+    const body = drafts.CampaignDraftRequest.parse(await readJson(c));
+    return assist(c, { type: body.eventId ? "event" : "brand", id: body.eventId ?? c.get("scope").brandId }, `campaign_${body.channel}`,
+      (w) => drafts.draftCampaign(deps.db, w, c.get("scope"), body, now()));
+  });
+
+  app.post(`${ADMIN}/events/:eventId/assistant/description`, ...admin, can("ticketing.catalog.write"), async (c) => {
+    const eventId = param(c, "eventId");
+    if (!eventId) return fail(c, 404, "event_not_found");
+    const body = drafts.DescriptionDraftRequest.parse(await readJson(c));
+    return assist(c, { type: "event", id: eventId }, "event_description", (w) => drafts.draftEventDescription(deps.db, w, c.get("scope"), eventId, body, now()));
   });
 
   // Run 45: an automation on or off.

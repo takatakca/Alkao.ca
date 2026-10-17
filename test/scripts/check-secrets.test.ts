@@ -11,6 +11,7 @@ describe("secret guard", () => {
       `webhook: ${fake("wh" + "sec_", 20)}`,
       `SUPA=${fake("sb_" + "secret_", 16)}`,
       `mail ${fake("re_" + "abcdef12_", 16)}`,
+      `ANTHROPIC=${fake("sk-" + "ant-api03-", 40)}`,
       `postgresql://postgres.ref:${"Rea1Pa55"}word@aws-0-ca-central-1.pooler.supabase.com:5432/postgres`,
     ].join("\n");
     const found = scan("src/x.ts", text);
@@ -19,7 +20,8 @@ describe("secret guard", () => {
       [2, "Stripe or Resend webhook secret"],
       [3, "Supabase secret key"],
       [4, "Resend API key"],
-      [5, "database password"],
+      [5, "Anthropic API key"],
+      [6, "database password"],
     ]);
     expect(JSON.stringify(found)).not.toContain("a1B2");
   });

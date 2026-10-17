@@ -193,3 +193,12 @@ form.card fieldset legend { font-size: 12px; font-weight: 500; color: var(--mute
 .facts-form { display: grid; gap: .75rem; }
 .facts-form .inline { display: flex; flex-wrap: wrap; gap: .6rem; align-items: end; }
 .facts-form textarea { width: 100%; }
+
+/* Run 92: the writing assistant, a plain card marked by the brand blue. */
+.assistant-card { border-left: 3px solid var(--brand); display: grid; gap: .6rem; }
+.assistant-card h3, .assistant-card > p { margin: 0; }
+.assistant-card textarea { width: 100%; }
+.assistant-card ul { margin: .4rem 0 0; padding-left: 1.2rem; }
+.assistant-row { display: flex; flex-wrap: wrap; gap: .6rem; align-items: end; padding: .6rem .75rem; border-radius: 8px; background: var(--soft); border-left: 3px solid var(--brand); }
+.assistant-row label { flex: 1 1 18rem; }
+.assistant-row input { width: 100%; }

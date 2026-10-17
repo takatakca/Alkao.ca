@@ -184,6 +184,13 @@ const ERRORS_FR = {
   audience_empty: "Aucun client ne peut recevoir cette campagne.",
   audience_changed: "Le nombre de destinataires a changé : vérifiez-le, puis envoyez de nouveau.",
   campaign_not_held: "Cette campagne n'est pas suspendue.",
+  assistant_disabled: "L'assistant de rédaction n'est pas activé sur ce déploiement.",
+  assistant_daily_limit: "Limite quotidienne de brouillons atteinte pour cette marque : réessayez demain.",
+  assistant_draft_rejected: "L'assistant n'a pas respecté les règles (prix, rabais ou lien inventé). Précisez la consigne ou rédigez vous-même :",
+  assistant_refused: "L'assistant a refusé cette demande : reformulez la consigne.",
+  assistant_unparsed: "L'assistant a répondu dans un format inattendu : réessayez.",
+  assistant_unavailable: "L'assistant ne répond pas pour le moment : réessayez dans quelques minutes.",
+  assistant_rate_limited: "L'assistant est très sollicité : réessayez dans une minute.",
 };
 const errText = (e) => (e instanceof ApiError ? ERRORS_FR[e.code] ?? `Erreur : ${e.code}` : String(e?.message ?? e));
 
@@ -576,21 +583,34 @@ function PromoCodes({ api, base, eventId }) {
 const CATEGORY_LABELS = { concerts: "Concerts", festivals: "Festivals", sports: "Sports", famille: "Famille", "plein-air": "Plein air et camping", spectacles: "Théâtre et humour", soirees: "Soirées", experiences: "Expériences" };
 const LANGUAGE_LABELS = { fr: "Français", en: "Anglais", "fr-en": "Français et anglais", none: "Sans paroles (musique, cirque…)" };
 const AGE_CHOICES = [["", "Non précisé"], ["0", "Pour tous"], ["6", "6 ans et plus"], ["12", "12 ans et plus"], ["14", "14 ans et plus"], ["16", "16 ans et plus"], ["18", "18 ans et plus"]];
-function EventFacts({ api, base, eventId, event }) {
+function EventFacts({ api, base, eventId, event, assistant }) {
   const initial = () => ({
+    description: event.description ?? "",
     category: event.category ?? "", minAge: event.minAge == null ? "" : String(event.minAge),
     doors: event.doorsOpenMinutes == null ? "" : String(event.doorsOpenMinutes), language: event.language ?? "", accessibility: event.accessibility ?? "",
   });
   const [f, setF] = useState(initial);
   const [msg, setMsg] = useState(null);
   const [error, setError] = useState(null);
+  const [notes, setNotes] = useState("");
+  const [busy, setBusy] = useState(false);
   const set = (patch) => { setMsg(null); setF({ ...f, ...patch }); };
+  // Run 92: a description drafted from the event's own facts and the notes typed here.
+  const draft = async () => {
+    setError(null); setMsg(null); setBusy(true);
+    try {
+      const r = await api(`${base}/events/${eventId}/assistant/description`, { method: "POST", body: { notes } });
+      setF({ ...f, description: r.draft.description });
+      setMsg("Brouillon de l’assistant inséré : relisez-le, puis enregistrez la fiche.");
+    } catch (err) { setError(err); } finally { setBusy(false); }
+  };
   const save = async (e) => {
     e.preventDefault(); setError(null); setMsg(null);
     const doors = String(f.doors).trim();
     try {
       if (doors !== "" && !(Number.isInteger(Number(doors)) && Number(doors) >= 0 && Number(doors) <= 600)) throw new Error("Ouverture des portes : un nombre de minutes entre 0 et 600.");
       await api(`${base}/events/${eventId}`, { method: "PATCH", body: {
+        description: String(f.description).trim() || null,
         category: f.category || null, minAge: f.minAge === "" ? null : Number(f.minAge),
         doorsOpenMinutes: doors === "" ? null : Number(doors), language: f.language || null,
         accessibility: String(f.accessibility).trim() || null,
@@ -601,6 +621,12 @@ function EventFacts({ api, base, eventId, event }) {
   };
   return html`<form class="card facts-form" onSubmit=${save}>
     <p class="muted">Facultatif : ce qui n’est pas rempli n’est pas affiché. Montré dans la billetterie, sur l’accueil ALKAO et aux moteurs de recherche.</p>
+    <label>Description<textarea rows="6" maxlength="5000" placeholder="Ce qu’on y vit, pour qui, ce qui est inclus." value=${f.description}
+      onInput=${(e) => set({ description: e.target.value })}></textarea></label>
+    ${assistant && html`<div class="assistant-row">
+      <label>Notes pour l’assistant (facultatif)<input maxlength="1000" placeholder="Tour de train, maquillage pour enfants, chocolat chaud…" value=${notes} onInput=${(e) => setNotes(e.target.value)} /></label>
+      <button type="button" class="secondary" disabled=${busy} onClick=${draft}>${busy ? "Rédaction…" : "Rédiger avec l’assistant"}</button>
+    </div>`}
     <div class="inline">
       <label>Catégorie<select value=${f.category} onChange=${(e) => set({ category: e.target.value })}>
         <option value="">Non précisée</option>${Object.entries(CATEGORY_LABELS).map(([k, l]) => html`<option value=${k}>${l}</option>`)}</select></label>
@@ -612,12 +638,12 @@ function EventFacts({ api, base, eventId, event }) {
     </div>
     <label>Accessibilité<textarea rows="3" maxlength="1000" placeholder="Accès en fauteuil roulant, places pour accompagnateur, carte CAL acceptée, sous-titres…" value=${f.accessibility}
       onInput=${(e) => set({ accessibility: e.target.value })}></textarea></label>
-    ${error && html`<${Failure} error=${error} />`}
+    ${error && html`<${AssistantFailure} error=${error} />`}
     <div class="row"><button type="submit">Enregistrer la fiche</button>${msg && html`<span class="badge ok" role="status">${msg}</span>`}</div>
   </form>`;
 }
 
-function EventDetail({ api, base, eventId }) {
+function EventDetail({ api, base, eventId, assistant }) {
   const [ev, reloadEvent] = useLoad(() => api(`${base}/events/${eventId}`), [base, eventId]);
   const [sessions, reloadSessions] = useLoad(() => api(`${base}/events/${eventId}/sessions`), [base, eventId]);
   const [types, reloadTypes] = useLoad(() => api(`${base}/events/${eventId}/ticket-types`), [base, eventId]);
@@ -721,7 +747,7 @@ function EventDetail({ api, base, eventId }) {
     </div>
 
     <h2>Fiche de l’événement</h2>
-    <${EventFacts} api=${api} base=${base} eventId=${eventId} event=${event} />
+    <${EventFacts} api=${api} base=${base} eventId=${eventId} event=${event} assistant=${assistant} />
 
     <h2>Vendre en ligne</h2>
     <div class="card">
@@ -934,10 +960,11 @@ const ACTION_FR = {
   "credentials.key_rotated": "Clé des codes QR remplacée", "credentials.reissued": "Code QR réémis", "scan.manual_admission": "Entrée sans code QR",
   "reports.daily_exported": "Rapport par jour exporté", "reports.attendees_exported": "Liste des participants exportée", "reports.orders_exported": "Commandes exportées",
   "settings.reminders_updated": "Courriels de rappel modifiés",
+  "assistant.drafted": "Brouillon demandé à l'assistant de rédaction",
 };
 const ROLE_FR = { owner: "propriétaire", admin: "administrateur", manager: "gestionnaire", editor: "éditeur", staff: "personnel", viewer: "lecteur" };
 const FAMILIES = [["", "Tout"], ["order", "Commandes"], ["refund", "Remboursements"], ["payment", "Paiements Stripe"], ["tickets", "Billets annulés"],
-  ["buyer", "Données personnelles"], ["session", "Séances"], ["event", "Événements"], ["reports", "Exports"], ["control", "Synchronisation TAKATAK"]];
+  ["buyer", "Données personnelles"], ["session", "Séances"], ["event", "Événements"], ["reports", "Exports"], ["assistant", "Assistant de rédaction"], ["control", "Synchronisation TAKATAK"]];
 const actionText = (a) => ACTION_FR[a] ?? (a.startsWith("control.") ? `Synchronisation TAKATAK (${a.slice(8)})` : a);
 const actorText = (e, me) => e.actorType === "user" ? `${e.actorId === me ? "Vous" : "Personnel"}${e.actorRole ? ` (${ROLE_FR[e.actorRole] ?? e.actorRole})` : ""}`
   : e.actorType === "public" ? "Acheteur" : e.actorType === "control" ? "TAKATAK" : "ALKAO";
@@ -1527,7 +1554,41 @@ function Campaigns({ api, base, prefix }) {
     <div><${NewsletterSettings} api=${api} base=${base} /></div>`;
 }
 
-function CampaignEditor({ api, base, prefix, campaignId }) {
+// ── Run 92: the writing assistant (a draft from the catalog; staff read, correct and save) ──
+const AssistantFailure = ({ error }) => (error instanceof ApiError && error.code === "assistant_draft_rejected" && Array.isArray(error.details)
+  ? html`<div class="alert bad" role="alert"><p>${ERRORS_FR.assistant_draft_rejected}</p><ul>${error.details.map((d) => html`<li>${d}</li>`)}</ul></div>`
+  : html`<${Failure} error=${error} />`);
+
+function AssistantCampaign({ api, base, channel, language, onDraft }) {
+  const [events] = useLoad(() => api(`${base}/events`), [base]);
+  const [eventId, setEventId] = useState("");
+  const [brief, setBrief] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const [done, setDone] = useState(false);
+  const run = async (e) => {
+    e.preventDefault(); setError(null); setDone(false); setBusy(true);
+    try {
+      const r = await api(`${base}/assistant/campaign`, { method: "POST", body: { channel, language, eventId: eventId || null, brief } });
+      onDraft(r.draft, eventId || null); setDone(true);
+    } catch (err) { setError(err); } finally { setBusy(false); }
+  };
+  const published = (events.data?.events ?? []).filter((ev) => ev.status === "published");
+  return html`<form class="card assistant-card" aria-label="Rédiger avec l'assistant" onSubmit=${run}>
+    <h3>Rédiger avec l’assistant</h3>
+    <p class="muted">Donnez le but en une phrase. L’assistant écrit ${channel === "sms" ? "le texto" : "l’objet, le titre, le texte et le bouton"} à partir de vos dates, lieux et tarifs. Il n’invente ni prix ni rabais, et rien ne part sans vous. N’y mettez aucun renseignement personnel sur vos clients.</p>
+    <div class="fields">
+      <label>Événement<select value=${eventId} onChange=${(e) => setEventId(e.target.value)}>
+        <option value="">Tout ce qui est en vente</option>${published.map((ev) => html`<option value=${ev.id}>${ev.title}</option>`)}</select></label>
+    </div>
+    <label>Consigne<textarea rows="2" required minlength="3" maxlength="600" placeholder="Ex. : rappeler aux familles qu’il reste deux samedis d’Halloween" value=${brief} onInput=${(e) => setBrief(e.target.value)}></textarea></label>
+    ${error && html`<${AssistantFailure} error=${error} />`}
+    ${done && html`<div class="alert ok" role="status">Brouillon inséré dans le formulaire ci-dessous. Relisez-le et corrigez-le avant d’enregistrer.</div>`}
+    <p class="row"><button type="submit" disabled=${busy}>${busy ? "Rédaction…" : "Rédiger le brouillon"}</button></p>
+  </form>`;
+}
+
+function CampaignEditor({ api, base, prefix, campaignId, assistant }) {
   const [state, reload] = useLoad(() => (campaignId ? api(`${base}/campaigns/${campaignId}`) : Promise.resolve({ campaign: null })), [base, campaignId]);
   const [f, setF] = useState(null);
   const [count, setCount] = useState(null);
@@ -1586,6 +1647,12 @@ function CampaignEditor({ api, base, prefix, campaignId }) {
     setMsg(active ? "Automatisation en marche : elle écrira après chaque visite qui se termine à partir d'aujourd'hui." : "Automatisation en pause.");
   });
   const field = (label, key, attrs = {}) => html`<label>${label}<input value=${c[key] ?? ""} disabled=${!draft} onInput=${(e) => set({ [key]: e.target.value })} ...${attrs} /></label>`;
+  // Run 92: the assistant's draft fills the text fields; the button leads to the event's shop.
+  const applyDraft = (d, eventId) => {
+    const [, , clientId, , brandId] = base.split("/").slice(2);
+    const url = c.ctaUrl || (eventId ? `${location.origin}/acheter/${clientId}/${brandId}/${eventId}` : "");
+    set({ ...d, name: c.name || (d.subject ?? d.body).slice(0, 120), ctaUrl: url, ...(sms ? {} : { ctaLabel: url ? d.ctaLabel : "" }) });
+  };
   return html`<h1>${loaded ? loaded.name : "Nouvelle campagne"}</h1>
     <p class="row"><a href=${`#${prefix}/campaigns`}>← Campagnes</a>${loaded && html`<${CampaignBadge} c=${loaded} />`}</p>
     ${error && html`<${Failure} error=${error} />`}${msg && html`<div class="alert ok" role="status">${msg}</div>`}
@@ -1599,6 +1666,7 @@ function CampaignEditor({ api, base, prefix, campaignId }) {
         <p>Vérifiez à qui elle s'adresse (une vieille liste rebondit beaucoup), puis reprenez ou arrêtez l'envoi.</p>
         <p class="row"><button onClick=${resume}>Reprendre l'envoi</button></p></div>`}
       ${(loaded.status === "sending" || (loaded.kind === "after_visit" && loaded.status === "draft")) && html`<p class="row"><button class="danger" onClick=${cancel}>${loaded.kind === "after_visit" ? "Arrêter pour de bon" : "Arrêter l'envoi"}</button></p>`}`}
+    ${assistant && draft && !automatic && html`<${AssistantCampaign} api=${api} base=${base} channel=${c.channel} language=${c.language} onDraft=${applyDraft} />`}
     <form class="card" aria-label="Contenu de la campagne" onSubmit=${save}>
       <div class="fields">
         ${field("Nom (pour l'équipe)", "name", { required: true, maxlength: 120 })}
@@ -1797,7 +1865,7 @@ function Shell({ api, route, email, me, testMode, onLogout }) {
   const body = disabled ? html`<div class="alert warn">${REASON_FR[status.data.ticketing.reason] ?? status.data.ticketing.reason}</div>`
     : page === "dashboard" ? html`<${Dashboard} api=${api} base=${base} prefix=${prefix} />`
     : page === "events" ? html`<${Events} api=${api} base=${base} prefix=${prefix} />`
-    : page === "event" ? html`<${EventDetail} api=${api} base=${base} eventId=${route.id} />`
+    : page === "event" ? html`<${EventDetail} api=${api} base=${base} eventId=${route.id} assistant=${status.data?.assistant} />`
     : page === "venues" ? html`<${Venues} api=${api} base=${base} />`
     : page === "orders" ? html`<${Orders} api=${api} base=${base} prefix=${prefix} />`
     : page === "order" ? html`<${OrderDetail} api=${api} base=${base} orderId=${route.id} role=${status.data?.role} me=${me} />`
@@ -1808,7 +1876,7 @@ function Shell({ api, route, email, me, testMode, onLogout }) {
     : page === "customers" ? html`<${Customers} api=${api} base=${base} prefix=${prefix} role=${status.data?.role} />`
     : page === "customer" ? html`<${CustomerDetail} api=${api} base=${base} customerId=${route.id} role=${status.data?.role} />`
     : page === "campaigns" ? html`<${Campaigns} api=${api} base=${base} prefix=${prefix} />`
-    : page === "campaign" ? html`<${CampaignEditor} key=${route.id ?? "new"} api=${api} base=${base} prefix=${prefix} campaignId=${route.id ?? null} />`
+    : page === "campaign" ? html`<${CampaignEditor} key=${route.id ?? "new"} api=${api} base=${base} prefix=${prefix} campaignId=${route.id ?? null} assistant=${status.data?.assistant} />`
     : html`<p>Page inconnue.</p>`;
   const links = [...TABS, ...(CUSTOMER_ROLES.includes(status.data?.role) ? [["customers", "Clients"]] : []), ...(CUSTOMER_FILE_ROLES.includes(status.data?.role) ? [["campaigns", "Campagnes"]] : []), ...(JOURNAL_ROLES.includes(status.data?.role) ? [["journal", "Journal"]] : [])]
     .map(([key, label]) => html`<a class=${tab === key ? "active" : ""} aria-current=${tab === key ? "page" : null} href=${`#${prefix}/${key}`}>${label}</a>`);
