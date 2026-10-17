@@ -143,3 +143,62 @@ describe("Run 73: public venue discovery", () => {
     expect((await (await app.request("/sitemap.xml")).text())).not.toContain(path);
   });
 });
+
+describe("Run 90: venue pages in the home's look", () => {
+  const h = () => seed.havana;
+  const photo = "https://cdn.example.test/events/hall.webp";
+  const path = () => `/salles/${h().clientId}/${h().brandId}/${h().venueId}`;
+  const setPhoto = (url: string | null) => db.pool.query("UPDATE public.ticketing_events SET image_url = $2 WHERE id = $1", [h().eventId, url]);
+
+  it("shows the event's own photo on the venue's card and as the venue page's hero, with the viewer", async () => {
+    await optIn();
+    await setPhoto(photo);
+    try {
+      const directory = await (await app.request("/salles")).text();
+      expect(directory).toContain(`<img src="${photo}" alt="" decoding="async" />`);
+      expect(directory).toContain("1 événement en vente");
+      expect(directory).toContain("Prochaine date : ");
+      expect(directory).toMatch(/<p class="price">À partir de 17,95\s\$ \+ taxes<\/p>/);
+      const html = await (await app.request(path())).text();
+      expect(html).toContain(`<div class="venue-hero-media"><img src="${photo}" alt="" fetchpriority="high" decoding="async" /></div>`);
+      expect(html).toContain('<h1 id="venue-title">Havana Resort</h1>');
+      expect(html).toContain("<li><strong>1</strong><span>événement en vente</span></li>");
+      expect(html).toMatch(/<li><strong>17,95\s\$<\/strong><span>Billets à partir de · avant taxes<\/span><\/li>/);
+      expect(html).toContain(`data-zoom="${photo}" data-zoom-alt="Havana Resort — Événements 2026-2027" data-zoom-group="hero"`);
+      // The same card as on the home, and the venue is not a link to itself.
+      expect(html).toContain('<p class="date-badge" aria-hidden="true">');
+      expect(html).not.toContain(`<a href="${path()}">Havana Resort`);
+      expect(html).toContain('id="dlg-preview"');
+      expect(html).toMatch(/<script src="\/assets\/home\/home\.js\?v=[0-9a-f]{10}" defer><\/script>/);
+      // One photo: no gallery.
+      expect(html).not.toContain('class="rail shots"');
+      const place = JSON.parse(html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/)![1]!);
+      expect(place.image).toEqual([photo]);
+    } finally {
+      await setPhoto(null);
+    }
+  });
+
+  it("uses ALKAO's stand-in photo without offering to enlarge it, and gives the script inert data only", async () => {
+    await optIn();
+    await db.pool.query("UPDATE public.ticketing_events SET title = $2 WHERE id = $1", [h().eventId, "</script><b>x</b>"]);
+    try {
+      const html = await (await app.request(path())).text();
+      expect(html).toMatch(/<div class="venue-hero-media"><img src="\/assets\/home\/img\/[a-z-]+\.webp\?v=[0-9a-f]{10}"/);
+      expect(html).not.toContain("data-zoom=");
+      const place = JSON.parse(html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/)![1]!);
+      expect(place.image).toBeUndefined();
+      const json = html.match(/<script type="application\/json" id="alkao-data">([\s\S]*?)<\/script>/)![1]!;
+      expect(json).not.toContain("<");
+      const data = JSON.parse(json);
+      expect(data.events).toHaveLength(1);
+      expect(data.events[0].title).toBe("</script><b>x</b>");
+      expect(data.events[0].photo).toBe(false);
+      expect(Object.keys(data.events[0]).sort()).toEqual(["accessibility", "address", "brand", "brandId", "categories", "city", "count", "dates", "description", "ends", "facts", "id", "image", "map", "next", "photo", "place", "price", "shop", "starts", "text", "title", "url"]);
+      expect(json).not.toMatch(/[\w.+-]+@[\w-]+\.[\w.]+/);
+      expect(html).not.toContain("<b>x</b>");
+    } finally {
+      await db.pool.query("UPDATE public.ticketing_events SET title = 'Havana Resort — Événements 2026-2027' WHERE id = $1", [h().eventId]);
+    }
+  });
+});

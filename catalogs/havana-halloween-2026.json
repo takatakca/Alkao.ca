@@ -1,0 +1,31 @@
+{
+  "_source": "Promo Havana's owner-approved catalog (takatakca/promohavanaca, src/lib/promo/catalog.ts): dates, hours, texts and the Halloween prices adult 25 $ and child (5 years and older) 12 $. Capacity is the operator's to give (--capacity). maxQuantity is the per-order limit, not a price.",
+  "venue": {
+    "name": "Havana Resort",
+    "addressLine1": "631, 7e Rang",
+    "city": "Maricourt",
+    "region": "QC",
+    "postalCode": "J0E 2L2",
+    "country": "CA",
+    "timezone": "America/Toronto",
+    "taxRegion": "CA-QC"
+  },
+  "event": {
+    "slug": "halloween-havana-2026",
+    "title": "Halloween Havana 2026",
+    "description": "Une sortie familiale au cœur de l’automne, entre décorations d’Halloween, lumières et animations. Entrez sous la citrouille géante, suivez les lumières et montez à bord du train hanté. Chaque samedi d’octobre, de 14 h à 22 h.\n\nVotre billet comprend uniquement l’entrée à l’événement Halloween du Havana Resort, le parcours lumineux et le train hanté. Les jeux gonflables et les spectacles sous le chapiteau sont offerts moyennant des frais supplémentaires et sont vendus séparément.",
+    "imageUrl": "https://www.promohavana.ca/photos/halloween-train.jpg",
+    "category": "famille"
+  },
+  "sessions": [
+    { "startsAt": "2026-10-03T14:00:00-04:00", "endsAt": "2026-10-03T22:00:00-04:00" },
+    { "startsAt": "2026-10-10T14:00:00-04:00", "endsAt": "2026-10-10T22:00:00-04:00" },
+    { "startsAt": "2026-10-17T14:00:00-04:00", "endsAt": "2026-10-17T22:00:00-04:00" },
+    { "startsAt": "2026-10-24T14:00:00-04:00", "endsAt": "2026-10-24T22:00:00-04:00" },
+    { "startsAt": "2026-10-31T14:00:00-04:00", "endsAt": "2026-10-31T22:00:00-04:00" }
+  ],
+  "ticketTypes": [
+    { "code": "ADULT", "name": "Adulte", "kind": "admission", "priceCents": 2500, "minQuantity": 0, "maxQuantity": 20, "countsAsAdult": true, "sortOrder": 1 },
+    { "code": "CHILD", "name": "Enfant (5 ans et plus)", "kind": "admission", "priceCents": 1200, "minQuantity": 0, "maxQuantity": 20, "sortOrder": 2 }
+  ]
+}

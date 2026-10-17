@@ -93,6 +93,8 @@ describe("buyer tickets page", () => {
     expect(csp).toContain("script-src 'self'");
     expect(csp).toContain("connect-src 'self'");
     expect(csp).toContain("frame-ancestors 'none'");
+    // Run 90b: the ALKAO fonts, from this origin only.
+    expect(csp).toContain("font-src 'self'");
     expect(res.headers.get("referrer-policy")).toBe("no-referrer");
     expect(res.headers.get("x-robots-tag")).toBe("noindex, nofollow");
   });
@@ -324,6 +326,166 @@ describe("buyer tickets page", () => {
       expect([left(roomy), left(full)]).toEqual([3, 1]);
     } finally {
       await db.pool.query(`UPDATE public.ticketing_ticket_types SET stock_per_session = NULL WHERE id = $1`, [flex]);
+    }
+  });
+
+  it("shows the tickets one at a time or as a list, and the gate keeps the screen awake (Run 90b)", async () => {
+    const f = seed.festi;
+    const o = await buy(f, { GENERAL: 3 });
+    // Without motion, each step waits on the page's state, never on a card still sliding into
+    // place (a busy CI runner can keep a smooth scroll moving under the click). The animated
+    // opening and closing have their own test below.
+    const context = await browser.newContext({ locale: "fr-CA", reducedMotion: "reduce" });
+    // A wake lock that records what the page asks of it (headless browsers may refuse a real one).
+    await context.addInitScript(() => {
+      const log: string[] = [];
+      (globalThis as any).wakeLog = log;
+      Object.defineProperty((globalThis as any).navigator, "wakeLock", {
+        configurable: true,
+        value: {
+          request: async (type: string) => {
+            log.push(`request:${type}`);
+            return { addEventListener: () => {}, release: async () => { log.push("release"); } };
+          },
+        },
+      });
+    });
+    const page = await context.newPage();
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    await page.goto(linkFor(f, o));
+    const wallet = page.getByRole("region", { name: "Vos billets" });
+    await wallet.getByText("1 / 3").waitFor();
+    expect(await wallet.getByRole("img", { name: /^Code QR du billet / }).count()).toBe(3);
+    expect(await page.getByRole("button", { name: "Billet précédent" }).isDisabled()).toBe(true);
+    await page.getByRole("button", { name: "Billet suivant" }).click();
+    await wallet.getByText("2 / 3").waitFor();
+    await page.getByRole("button", { name: "Afficher le billet 3" }).click();
+    await wallet.getByText("3 / 3").waitFor();
+    expect(await page.getByRole("button", { name: "Billet suivant" }).isDisabled()).toBe(true);
+    // The keyboard moves through the tickets too.
+    await page.getByRole("button", { name: "Afficher le billet 3" }).focus();
+    await page.keyboard.press("ArrowLeft");
+    await wallet.getByText("2 / 3").waitFor();
+
+    // The list: every ticket, no carousel controls.
+    await page.getByRole("button", { name: "Voir la liste" }).click();
+    await page.getByRole("button", { name: "Un à la fois" }).waitFor();
+    expect(await page.getByRole("button", { name: "Billet suivant" }).count()).toBe(0);
+    expect(await wallet.getByRole("img", { name: /^Code QR du billet / }).count()).toBe(3);
+    await page.getByRole("button", { name: "Un à la fois" }).click();
+    await page.getByRole("button", { name: "Billet suivant" }).waitFor();
+
+    // The gate view opens on the chosen ticket, keeps the screen awake and holds the focus.
+    await page.getByRole("button", { name: "Plein écran pour l'entrée" }).nth(1).click();
+    const gate = page.getByRole("dialog", { name: "Billet 2 sur 3" });
+    await gate.waitFor();
+    expect(await gate.getByText("Montez la luminosité de votre écran.").isVisible()).toBe(true);
+    await gate.getByText("L'écran reste allumé").waitFor();
+    expect(await page.evaluate(() => (globalThis as any).wakeLog)).toEqual(["request:screen"]);
+    // The page behind is out of reach while it is open.
+    expect(await page.getByRole("button", { name: "Voir la liste" }).count()).toBe(0);
+    for (let k = 0; k < 6; k++) {
+      await page.keyboard.press("Tab");
+      expect(await page.evaluate(() => Boolean((globalThis as any).document.activeElement?.closest("[role=dialog]")))).toBe(true);
+    }
+    await page.keyboard.press("ArrowRight");
+    await page.getByRole("dialog", { name: "Billet 3 sur 3" }).waitFor();
+    await page.keyboard.press("Escape");
+    await page.getByRole("dialog").waitFor({ state: "detached" });
+    expect(await page.evaluate(() => (globalThis as any).wakeLog)).toEqual(["request:screen", "release"]);
+    // Back on the page: the carousel shows the ticket seen last, and the focus is on its button.
+    await wallet.getByText("3 / 3").waitFor();
+    const focused = await page.evaluate(() => {
+      const el = (globalThis as any).document.activeElement;
+      return { text: el?.textContent, ticket: el?.closest("[data-ticket]")?.getAttribute("aria-label") };
+    });
+    expect(focused).toEqual({ text: "Plein écran pour l'entrée", ticket: "Billet 3 sur 3" });
+    await context.close();
+  });
+
+  it("opens the gate out of the ticket and closes it back, with its motion, then gives the focus back (Run 90b)", async () => {
+    const f = seed.festi;
+    const o = await buy(f, { GENERAL: 2 });
+    const context = await browser.newContext({ locale: "fr-CA", reducedMotion: "no-preference" });
+    const page = await context.newPage();
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    await page.goto(linkFor(f, o));
+    const wallet = page.getByRole("region", { name: "Vos billets" });
+    await wallet.getByText("1 / 2").waitFor();
+    await page.getByRole("button", { name: "Plein écran pour l'entrée" }).first().click();
+    const gate = page.getByRole("dialog", { name: "Billet 1 sur 2" });
+    await gate.waitFor();
+    expect(await gate.getByRole("img", { name: /^Code QR du billet / }).count()).toBe(1);
+    await page.keyboard.press("Escape");
+    await page.getByRole("dialog").waitFor({ state: "detached" });
+    const focused = await page.evaluate(() => {
+      const el = (globalThis as any).document.activeElement;
+      return { text: el?.textContent, ticket: el?.closest("[data-ticket]")?.getAttribute("aria-label") };
+    });
+    expect(focused).toEqual({ text: "Plein écran pour l'entrée", ticket: "Billet 1 sur 2" });
+    await context.close();
+  });
+
+  it("shows the way there and shares the event's public page, never the personal link (Run 90b)", async () => {
+    const f = seed.festi;
+    await db.pool.query(`UPDATE public.ticketing_events SET category = 'festivals' WHERE id = $1`, [f.eventId]);
+    try {
+      const o = await buy(f, { GENERAL: 1 });
+      const order = (await call(app, "GET", `${pub(f.clientId, f.brandId)}/orders/${o.orderId}`, { headers: { "x-alkao-order-token": o.token } })).body.order;
+      const context = await browser.newContext({ locale: "fr-CA" });
+      await context.addInitScript(() => {
+        Object.defineProperty((globalThis as any).navigator, "share", { configurable: true, value: async (data: unknown) => { (globalThis as any).shared = data; } });
+      });
+      const page = await context.newPage();
+      page.on("pageerror", (e) => pageErrors.push(e.message));
+      await page.goto(linkFor(f, o));
+      // No photo of its own: its category's photo, from ALKAO's own files, and the page's own fonts.
+      await page.locator("img.photo.is-loaded").waitFor();
+      expect(await page.locator("img.photo").getAttribute("src")).toBe("/assets/home/img/cat-festivals.webp");
+      expect(await page.evaluate(() => (globalThis as any).document.fonts.ready.then((fonts: any) => fonts.check("800 24px Montserrat") && fonts.check("400 16px Inter")))).toBe(true);
+
+      const directions = page.getByRole("link", { name: /^Itinéraire/ });
+      const href = new URL((await directions.getAttribute("href"))!);
+      expect(`${href.origin}${href.pathname}`).toBe("https://www.google.com/maps/search/");
+      expect(href.searchParams.get("api")).toBe("1");
+      expect(href.searchParams.get("query")).toBe([order.event.venue.name, order.event.venue.addressLine1, order.event.venue.city].filter(Boolean).join(", "));
+      expect(await directions.getAttribute("target")).toBe("_blank");
+      expect(await directions.getAttribute("rel")).toContain("noopener");
+
+      await page.getByRole("button", { name: "Partager l'événement" }).click();
+      const shared = await (await page.waitForFunction(() => (globalThis as any).shared)).jsonValue() as { url: string };
+      expect(shared.url).toBe(`${origin}/acheter/${f.clientId}/${f.brandId}/${order.event.id}`);
+      for (const secret of [o.token, o.orderId, order.reference, "/billets"]) expect(JSON.stringify(shared)).not.toContain(secret);
+      await context.close();
+    } finally {
+      await db.pool.query(`UPDATE public.ticketing_events SET category = NULL WHERE id = $1`, [f.eventId]);
+    }
+  });
+
+  it("opens the event's own photo full screen, and gives the focus back (Run 90b)", async () => {
+    const f = seed.festi;
+    await db.pool.query(`UPDATE public.ticketing_events SET image_url = 'https://cdn.example.com/festi.svg' WHERE id = $1`, [f.eventId]);
+    try {
+      const o = await buy(f, { GENERAL: 1 });
+      const context = await browser.newContext({ locale: "fr-CA" });
+      await context.route("https://cdn.example.com/**", (r) =>
+        r.fulfill({ contentType: "image/svg+xml", body: `<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900"><rect width="1600" height="900" fill="#345"/></svg>` }));
+      const page = await context.newPage();
+      page.on("pageerror", (e) => pageErrors.push(e.message));
+      await page.goto(linkFor(f, o));
+      const zoom = page.getByRole("button", { name: "Agrandir la photo de l'événement" });
+      await zoom.click();
+      const box = page.getByRole("dialog", { name: "Photo de l'événement" });
+      await box.waitFor();
+      expect(await box.getByRole("img").getAttribute("src")).toBe("https://cdn.example.com/festi.svg");
+      await box.getByRole("button", { name: "Zoom avant" }).click();
+      expect(await box.getByRole("img").evaluate((e) => (e as any).style.transform)).toContain("scale(1.5)");
+      await page.keyboard.press("Escape");
+      await box.waitFor({ state: "detached" });
+      expect(await zoom.evaluate((e) => e === (globalThis as any).document.activeElement)).toBe(true);
+      await context.close();
+    } finally {
+      await db.pool.query(`UPDATE public.ticketing_events SET image_url = NULL WHERE id = $1`, [f.eventId]);
     }
   });
 

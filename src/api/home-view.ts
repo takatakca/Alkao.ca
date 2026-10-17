@@ -140,6 +140,11 @@ const PATHS: Record<string, string> = {
   bell: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
   list: '<path d="M8 6h13M8 12h13M8 18h13"/><circle cx="3.5" cy="6" r="1"/><circle cx="3.5" cy="12" r="1"/><circle cx="3.5" cy="18" r="1"/>',
   grid: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
+  // Run 90: the photo viewer and the compact filters.
+  zoom: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5M11 8v6M8 11h6"/>',
+  unzoom: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5M8 11h6"/>',
+  expand: '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>',
+  down: '<path d="m6 9 6 6 6-6"/>',
   users: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8M18.5 20a6.5 6.5 0 0 0-3-5.5"/>',
 };
 export const icon = (name: string, cls = "i") =>
@@ -150,7 +155,7 @@ const logoMark = (id: string) =>
   `<svg class="mark" viewBox="0 0 40 40" aria-hidden="true" focusable="false"><defs><linearGradient id="${id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#29C3FF"/><stop offset="1" stop-color="#1565D8"/></linearGradient></defs><path fill="url(#${id})" d="M9 6h22a4 4 0 0 1 4 4v5.2a4.8 4.8 0 0 0 0 9.6V30a4 4 0 0 1-4 4H9a4 4 0 0 1-4-4v-5.2a4.8 4.8 0 0 0 0-9.6V10a4 4 0 0 1 4-4z"/><path d="M13.5 27 20 13l6.5 14" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M16.6 22.2h6.8" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/></svg>`;
 
 // ── Header and footer, on the home and on its other pages ──────────────────
-type Words = (typeof COPY)[Lang];
+export type Words = (typeof COPY)[Lang];
 
 /** Run 67: what the header and footer need. */
 export interface Frame {
@@ -217,7 +222,7 @@ export function siteFooter({ t, lang, base, home, here, otherHere, year }: Frame
 }
 
 // ── Events, as the page shows them ─────────────────────────────────────────
-interface Card {
+export interface Card {
   id: string;
   title: string;
   brand: string;
@@ -270,7 +275,7 @@ function priceLabel(lang: Lang, fromCents: number | null | undefined): string | 
   return `${t.from} ${money} ${t.plusTax}`;
 }
 
-function cardsOf(brands: HomeBrand[], lang: Lang, origin: string | null, asset: (name: string) => string): Card[] {
+export function cardsOf(brands: HomeBrand[], lang: Lang, origin: string | null, asset: (name: string) => string): Card[] {
   const t = COPY[lang];
   const locale = t.lang;
   const cards: Card[] = [];
@@ -374,6 +379,78 @@ function inWindow(s: Date, tz: string, when: When, now: Date): boolean {
   return when === "weekend" ? ["Fri", "Sat", "Sun"].includes(weekday(s, tz)) : true;
 }
 
+/** Run 90: one event card, the same on the home and on a venue's page (where the venue is not a link). */
+export function eventCard(t: Words, c: Card, { eager = false, venueLink = true } = {}): string {
+  return `<article class="card reveal" data-id="${esc(c.id)}">
+    <a class="card-media" href="${esc(c.shop)}" tabindex="-1" aria-hidden="true"><img src="${esc(c.image)}" alt="" ${eager ? "" : 'loading="lazy" '}decoding="async" /></a>
+    <p class="date-badge" aria-hidden="true"><span>${esc(c.day)}</span>${esc(c.month)}</p>
+    <button class="fav" type="button" data-fav="${esc(c.id)}" aria-pressed="false" aria-label="${esc(`${t.favorite} : ${c.title}`)}" hidden>${icon("heart")}</button>
+    <div class="card-body">
+      <p class="card-brand">${c.logo ? `<img src="${esc(c.logo)}" alt="" loading="lazy" decoding="async" />` : ""}${esc(c.brand)}</p>
+      <h3 class="card-title"><a href="${esc(c.shop)}">${esc(c.title)}</a></h3>
+      <p class="card-meta">${icon("clock")}<time datetime="${esc(c.next.toISOString())}">${esc(c.nextLabel)}</time></p>
+      ${c.place ? `<p class="card-meta">${icon("pin")}${venueLink ? `<a href="${esc(c.venuePath)}">${esc(c.place)}</a>` : `<span>${esc(c.place)}</span>`}</p>` : ""}
+      <div class="card-foot">
+        ${c.price ? `<p class="price">${esc(c.price)}</p>` : "<span></span>"}
+        <span class="pills">${c.minAge ? `<span class="pill pill-age" title="${esc(t.age(c.minAge))}">${esc(t.agePill(c.minAge))}</span>` : ""}${c.count > 1 ? `<span class="pill">${esc(t.dates(c.count))}</span>` : ""}</span>
+      </div>
+      <div class="card-actions">
+        <a class="btn btn-primary btn-sm" href="${esc(c.shop)}">${esc(t.buy)}</a>
+        <button class="btn btn-ghost btn-sm" type="button" data-preview="${esc(c.id)}" hidden>${esc(t.preview)}</button>
+      </div>
+    </div>
+  </article>`;
+}
+
+/** Run 90: the quick view, on the home and on a venue's page (filled by home-ui/home.js). */
+export function previewDialog(t: Words): string {
+  return `<dialog class="sheet sheet-wide" id="dlg-preview" aria-labelledby="dlg-preview-title">
+    <div class="preview-media"><img alt="" data-p-image /><button class="round preview-zoom" type="button" data-p-zoom aria-label="${esc(t.zoom.open)}" hidden>${icon("expand")}</button></div>
+    <div class="preview-body">
+      <div class="sheet-head"><div><p class="card-brand" data-p-brand></p><h2 id="dlg-preview-title" data-p-title></h2></div><button class="round" type="button" data-close aria-label="${esc(t.close)}">${icon("close")}</button></div>
+      <p class="card-meta">${icon("pin")}<span data-p-place></span></p>
+      <p class="price" data-p-price></p>
+      <ul class="facts" data-p-facts aria-label="${esc(t.facts)}" hidden></ul>
+      <p class="preview-text" data-p-text></p>
+      <div class="preview-access" data-p-access hidden><p class="preview-label">${esc(t.accessibilityTitle)}</p><p data-p-access-text></p></div>
+      <p class="preview-label">${esc(t.nextDate)}</p>
+      <ul class="preview-dates" data-p-dates></ul>
+      <div class="actions"><a class="btn btn-primary" data-p-shop href="/">${esc(t.buy)}${icon("arrow")}</a><button class="btn btn-ghost" type="button" data-p-share>${icon("share")}${esc(t.share)}</button><button class="btn btn-ghost" type="button" data-p-fav aria-pressed="false">${icon("heart")}<span>${esc(t.favorite)}</span></button></div>
+      <div class="actions actions-small"><button class="btn btn-ghost btn-sm" type="button" data-p-ics>${icon("calendar")}${esc(t.addToCalendar)}</button><a class="btn btn-ghost btn-sm" data-p-map href="/" target="_blank" rel="noopener noreferrer">${icon("pin")}<span>${esc(t.directions)}</span></a><button class="btn btn-ghost btn-sm" type="button" data-p-follow hidden>${icon("bell")}<span></span></button></div>
+    </div>
+  </dialog>`;
+}
+
+/** What home-ui/home.js needs to know about an event (quick view, favourites, calendar, search). */
+export function eventData(c: Card) {
+  return {
+    id: c.id, title: c.title, brand: c.brand, brandId: c.brandId.toLowerCase(), description: c.description, image: c.image, place: c.place, city: c.city,
+    shop: c.shop, url: c.url, price: c.price, next: c.nextLabel, dates: c.dates, count: c.count, categories: c.categories, text: c.text,
+    // Run 66: the shown dates as instants (for the calendar file) and a map search.
+    starts: c.sessions.slice(0, 6).map((d) => d.toISOString()),
+    ends: c.ends.slice(0, 6).map((d) => d?.toISOString() ?? null),
+    facts: c.facts,
+    accessibility: c.accessibility || null,
+    address: c.address,
+    map: c.address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(c.address)}` : null,
+    photo: c.photo,
+  };
+}
+
+/** The words home-ui/home.js shows. */
+export function clientWords(t: Words) {
+  return {
+    assistant: t.assistant, search: t.searchDialog, favorite: t.favorite, unfavorite: t.unfavorite, favorites: t.favorites,
+    share: t.share, copied: t.copied, buy: t.buy, close: t.close, nextDate: t.nextDate, otherDates: t.otherDates,
+    pause: t.pause, play: t.play, dates: t.dates(2).replace("2", "{n}"), slideOf: t.slideOf(9, 8).replace("9", "{i}").replace("8", "{n}"),
+    recent: t.recentTitle, addDate: t.addDateToCalendar("{d}"), directionsTo: t.directionsTo("{p}"),
+    accessibilityTitle: t.accessibilityTitle,
+    follow: t.follow("{b}"), followLead: t.followLead("{b}"), followNote: t.followNote("{b}"), followDone: t.followDone("{b}"),
+    followInvalid: t.followInvalid, followBusy: t.followBusy, followError: t.followError,
+    zoom: t.zoom,
+  };
+}
+
 // ── Page ───────────────────────────────────────────────────────────────────
 export interface RenderOptions {
   origin: string | null;
@@ -422,39 +499,23 @@ export function renderHome({ origin, lang, brands, query, now, asset }: RenderOp
   const bands = PRICES.filter((band) => band === query.price || all.some((c) => inBand(c, band)));
   const chip = (href: string, label: string, on: boolean, extra = "") =>
     `<a class="chip${on ? " is-current" : ""}" href="${esc(href)}"${on ? ' aria-current="true"' : ""}>${extra}${esc(label)}</a>`;
+  // Run 90: one compact row, a menu per filter (<details>: it works without JavaScript) and the view switch.
+  const menu = (id: string, label: string, value: string, set: boolean, items: string, note = "") =>
+    `<details class="dd${set ? " is-set" : ""}"><summary><span class="dd-label" id="${id}">${esc(label)}</span><span class="dd-value">${esc(value)}</span>${icon("down", "i dd-chev")}</summary>
+          <div class="dd-menu" role="group" aria-labelledby="${id}">${note ? `<p class="dd-note">${esc(note)}</p>` : ""}<div class="chips">${items}</div></div></details>`;
   const filterBar = all.length
-    ? `<div class="filters reveal">
-        <p class="filters-title">${esc(t.filters)}</p>
-        <div class="filter" role="group" aria-labelledby="f-view"><p class="filter-label" id="f-view">${esc(t.viewTitle)}</p>
-          <div class="chips">${chip(refine({ vue: "" }), t.viewOptions.grid, query.view !== "agenda", icon("grid"))}${chip(refine({ vue: "agenda" }), t.viewOptions.agenda, query.view === "agenda", icon("list"))}</div></div>
-        ${priced ? `<div class="filter" role="group" aria-labelledby="f-price"><p class="filter-label" id="f-price">${esc(t.priceTitle)} <small>${esc(t.priceNote)}</small></p>
-          <div class="chips">${chip(refine({ prix: "" }), t.priceOptions.all, !query.price)}${bands.map((band) => chip(refine({ prix: band }), t.priceOptions[band as Exclude<PriceBand, "">], query.price === band)).join("")}</div></div>
-        <div class="filter" role="group" aria-labelledby="f-sort"><p class="filter-label" id="f-sort">${esc(t.sortTitle)}</p>
-          <div class="chips">${chip(refine({ tri: "" }), t.sortOptions.date, query.sort !== "price")}${chip(refine({ tri: "prix" }), t.sortOptions.price, query.sort === "price")}</div></div>` : ""}
-        ${organizers.length > 1 || organizer ? `<div class="filter" role="group" aria-labelledby="f-org"><p class="filter-label" id="f-org">${esc(t.organizersTitle)}</p>
-          <div class="chips">${chip(refine({ organisateur: "" }), t.allOrganizers, !query.organizer)}${organizers.map((o) => chip(refine({ organisateur: o.id }), o.name, o.id === query.organizer, o.logo ? `<img src="${esc(o.logo)}" alt="" loading="lazy" decoding="async" />` : "")).join("")}</div></div>` : ""}
+    ? `<div class="filters reveal" role="group" aria-label="${esc(t.filters)}">
+        ${priced ? `${menu("f-price", t.priceTitle, query.price ? t.priceOptions[query.price] : t.priceOptions.all, Boolean(query.price),
+          `${chip(refine({ prix: "" }), t.priceOptions.all, !query.price)}${bands.map((band) => chip(refine({ prix: band }), t.priceOptions[band as Exclude<PriceBand, "">], query.price === band)).join("")}`, t.priceNote)}
+        ${menu("f-sort", t.sortTitle, query.sort === "price" ? t.sortOptions.price : t.sortOptions.date, query.sort === "price",
+          `${chip(refine({ tri: "" }), t.sortOptions.date, query.sort !== "price")}${chip(refine({ tri: "prix" }), t.sortOptions.price, query.sort === "price")}`)}` : ""}
+        ${organizers.length > 1 || organizer ? menu("f-org", t.organizersTitle, organizer?.name ?? t.allOrganizers, Boolean(organizer),
+          `${chip(refine({ organisateur: "" }), t.allOrganizers, !query.organizer)}${organizers.map((o) => chip(refine({ organisateur: o.id }), o.name, o.id === query.organizer, o.logo ? `<img src="${esc(o.logo)}" alt="" loading="lazy" decoding="async" />` : "")).join("")}`) : ""}
+        <div class="view-switch" role="group" aria-labelledby="f-view"><span class="sr-only" id="f-view">${esc(t.viewTitle)}</span>${chip(refine({ vue: "" }), t.viewOptions.grid, query.view !== "agenda", icon("grid"))}${chip(refine({ vue: "agenda" }), t.viewOptions.agenda, query.view === "agenda", icon("list"))}</div>
       </div>`
     : "";
 
-  const card = (c: Card, eager = false) => `<article class="card reveal" data-id="${esc(c.id)}">
-      <a class="card-media" href="${esc(c.shop)}" tabindex="-1" aria-hidden="true"><img src="${esc(c.image)}" alt="" ${eager ? "" : 'loading="lazy" '}decoding="async" /></a>
-      <p class="date-badge" aria-hidden="true"><span>${esc(c.day)}</span>${esc(c.month)}</p>
-      <button class="fav" type="button" data-fav="${esc(c.id)}" aria-pressed="false" aria-label="${esc(`${t.favorite} : ${c.title}`)}" hidden>${icon("heart")}</button>
-      <div class="card-body">
-        <p class="card-brand">${c.logo ? `<img src="${esc(c.logo)}" alt="" loading="lazy" decoding="async" />` : ""}${esc(c.brand)}</p>
-        <h3 class="card-title"><a href="${esc(c.shop)}">${esc(c.title)}</a></h3>
-        <p class="card-meta">${icon("clock")}<time datetime="${esc(c.next.toISOString())}">${esc(c.nextLabel)}</time></p>
-        ${c.place ? `<p class="card-meta">${icon("pin")}<a href="${esc(c.venuePath)}">${esc(c.place)}</a></p>` : ""}
-        <div class="card-foot">
-          ${c.price ? `<p class="price">${esc(c.price)}</p>` : "<span></span>"}
-          <span class="pills">${c.minAge ? `<span class="pill pill-age" title="${esc(t.age(c.minAge))}">${esc(t.agePill(c.minAge))}</span>` : ""}${c.count > 1 ? `<span class="pill">${esc(t.dates(c.count))}</span>` : ""}</span>
-        </div>
-        <div class="card-actions">
-          <a class="btn btn-primary btn-sm" href="${esc(c.shop)}">${esc(t.buy)}</a>
-          <button class="btn btn-ghost btn-sm" type="button" data-preview="${esc(c.id)}" hidden>${esc(t.preview)}</button>
-        </div>
-      </div>
-    </article>`;
+  const card = (c: Card, eager = false) => eventCard(t, c, { eager });
 
   const AGENDA_MAX = 120;
   const agendaRows = shown
@@ -517,31 +578,13 @@ export function renderHome({ origin, lang, brands, query, now, asset }: RenderOp
 
   const data = {
     lang,
-    events: all.map((c) => ({
-      id: c.id, title: c.title, brand: c.brand, brandId: c.brandId.toLowerCase(), description: c.description, image: c.image, place: c.place, city: c.city,
-      shop: c.shop, url: c.url, price: c.price, next: c.nextLabel, dates: c.dates, count: c.count, categories: c.categories, text: c.text,
-      // Run 66: the shown dates as instants (for the calendar file) and a map search.
-      starts: c.sessions.slice(0, 6).map((d) => d.toISOString()),
-      ends: c.ends.slice(0, 6).map((d) => d?.toISOString() ?? null),
-      facts: c.facts,
-      accessibility: c.accessibility || null,
-      address: c.address,
-      map: c.address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(c.address)}` : null,
-    })),
+    events: all.map(eventData),
     categories: CATEGORIES.map((c) => ({ id: c.id, label: c.label[lang], url: link({ categorie: c.id }), words: c.words })),
     organizers: organizers.map((o) => ({ id: o.id, name: o.name, follow: o.follow })),
     help: faq,
     otherUrl: otherHome,
     searchUrl: link({}),
-    t: {
-      assistant: t.assistant, search: t.searchDialog, favorite: t.favorite, unfavorite: t.unfavorite, favorites: t.favorites,
-      share: t.share, copied: t.copied, buy: t.buy, close: t.close, nextDate: t.nextDate, otherDates: t.otherDates,
-      pause: t.pause, play: t.play, dates: t.dates(2).replace("2", "{n}"), slideOf: t.slideOf(9, 8).replace("9", "{i}").replace("8", "{n}"),
-      recent: t.recentTitle, addDate: t.addDateToCalendar("{d}"), directionsTo: t.directionsTo("{p}"),
-      accessibilityTitle: t.accessibilityTitle,
-      follow: t.follow("{b}"), followLead: t.followLead("{b}"), followNote: t.followNote("{b}"), followDone: t.followDone("{b}"),
-      followInvalid: t.followInvalid, followBusy: t.followBusy, followError: t.followError,
-    },
+    t: clientWords(t),
   };
 
   // Run 66: one Event per date (the next ten of each), with the lowest price as its offer. The
@@ -761,21 +804,7 @@ ${siteFooter(frame)}
     <ol class="sheet-steps">${t.ticketsModal.steps.map((s) => `<li>${esc(s)}</li>`).join("")}</ol>
   </dialog>
 
-  <dialog class="sheet sheet-wide" id="dlg-preview" aria-labelledby="dlg-preview-title">
-    <div class="preview-media"><img alt="" data-p-image /></div>
-    <div class="preview-body">
-      <div class="sheet-head"><div><p class="card-brand" data-p-brand></p><h2 id="dlg-preview-title" data-p-title></h2></div><button class="round" type="button" data-close aria-label="${esc(t.close)}">${icon("close")}</button></div>
-      <p class="card-meta">${icon("pin")}<span data-p-place></span></p>
-      <p class="price" data-p-price></p>
-      <ul class="facts" data-p-facts aria-label="${esc(t.facts)}" hidden></ul>
-      <p class="preview-text" data-p-text></p>
-      <div class="preview-access" data-p-access hidden><p class="preview-label">${esc(t.accessibilityTitle)}</p><p data-p-access-text></p></div>
-      <p class="preview-label">${esc(t.nextDate)}</p>
-      <ul class="preview-dates" data-p-dates></ul>
-      <div class="actions"><a class="btn btn-primary" data-p-shop href="/">${esc(t.buy)}${icon("arrow")}</a><button class="btn btn-ghost" type="button" data-p-share>${icon("share")}${esc(t.share)}</button><button class="btn btn-ghost" type="button" data-p-fav aria-pressed="false">${icon("heart")}<span>${esc(t.favorite)}</span></button></div>
-      <div class="actions actions-small"><button class="btn btn-ghost btn-sm" type="button" data-p-ics>${icon("calendar")}${esc(t.addToCalendar)}</button><a class="btn btn-ghost btn-sm" data-p-map href="/" target="_blank" rel="noopener noreferrer">${icon("pin")}<span>${esc(t.directions)}</span></a><button class="btn btn-ghost btn-sm" type="button" data-p-follow hidden>${icon("bell")}<span></span></button></div>
-    </div>
-  </dialog>
+${previewDialog(t)}
 
   <dialog class="sheet" id="dlg-follow" aria-labelledby="dlg-follow-title">
     <div class="sheet-head"><h2 id="dlg-follow-title">${icon("bell")}<span data-f-title></span></h2><button class="round" type="button" data-close aria-label="${esc(t.close)}">${icon("close")}</button></div>

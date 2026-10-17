@@ -51,7 +51,8 @@ Previously imported entries can remain in third-party calendar apps.
 | `src/delivery`, `buyer-ui/` | Buyers' tickets email (outbox, Resend, worker) and the buyer's tickets page at `/billets` (Run 06) |
 | `shop-ui/` | Hosted ticket shop at `/acheter/<clientId>/<brandId>[/<eventId>]` (Run 08) |
 | `home-ui/` | The platform home's style, script, photos and fonts, served at `/assets/home/` (Run 64; the page itself is `src/api/home-view.ts`) |
-| `src/api/venue-view.ts` | Public FR/EN venue directory `/salles` and tenant-scoped venue details (Run 73); lists only events already approved for the ALKAO platform home |
+| `src/api/venue-view.ts` | Public FR/EN venue directory `/salles` and tenant-scoped venue details (Run 73), in the home's look with photo heroes and a gallery (Run 90); lists only events already approved for the ALKAO platform home |
+| `src/ops/events-import.ts`, `catalogs/` | `npm run events:import`: one Brand's event (venue, dates, ticket types) from a file, safe to re-run (Run 91). Havana's Halloween catalog and owner steps: [docs/HAVANA_SUR_ALKAO.md](docs/HAVANA_SUR_ALKAO.md) |
 | `src/credentials`, `src/scanner` | Ed25519 QR credentials (`ALK1`), derived per-Client keys, scanner manifest and gate scans |
 | `contracts/` | Published JSON Schema of `alkao.control.v1` (generated; drift-tested) |
 | `supabase/migrations` | Schema. Every `ticketing_*` table enables RLS in the migration that creates it |

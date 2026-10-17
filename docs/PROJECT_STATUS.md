@@ -1,5 +1,9 @@
 # ALKAO — Project status
 
+## Runs 90–91 — premium buyer pages; Havana's catalog ready to load (2026-10-17)
+
+The shop, the tickets wallet, the venues, the home filters and the e-mail landing pages share one premium look: photo heroes with zoom, sticky ticket panel, live totals, ticket cards with a full-screen gate view. `npm run events:import` loads Havana's owner-approved Halloween catalog in one command. Havana is still not provisioned in production ALKAO and the live service is still the old build, so alkao.ca shows no event until the operator steps in `docs/HAVANA_SUR_ALKAO.md` are done. PR #85.
+
 ## Run 89 — degraded local incident archive recovery (2026-10-16)
 
 Source commit `8b06cf8368d3a639f607d64a52610ff545fcc04f` ensures that an automatic expiry cleanup cannot crash a scanner view when the device's incident report storage is corrupted or at quota. The original local audit remains available with `incidentArchiveFailed`, staff receive a clear on-screen warning, and once archival storage recovers, old incidents can be preserved and the temporary audit retired normally. New regression in `test/ops/offline-incidents.test.ts`. Run 89 CI **SUCCESS** 38962087021 and Package **SUCCESS** 38962086850 on source `8b06cf83`; Coolify not verified and transfers OFF.

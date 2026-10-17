@@ -24,6 +24,8 @@ const HEADERS = (type: string) => ({
     "style-src 'self'",
     // Run 50: the Brand's logo and the event's photo are https addresses it sets in /ops.
     "img-src 'self' data: https:",
+    // Run 90: Montserrat and Inter, self-hosted with the platform home (/assets/home/fonts).
+    "font-src 'self'",
     "connect-src 'self'",
     "frame-ancestors 'none'",
     "base-uri 'none'",
