@@ -128,7 +128,6 @@ const PATHS: Record<string, string> = {
   share: '<circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="m8.2 10.8 7.6-4.4M8.2 13.2l7.6 4.4"/>',
   close: '<path d="M6 6l12 12M18 6 6 18"/>',
   chat: '<path d="M4 5h16v11H9l-5 4z"/><path d="M8 10h8M8 13h5"/>',
-  sparkle: '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8z"/>',
   globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',
   menu: '<path d="M4 7h16M4 12h16M4 17h16"/>',
   up: '<path d="m6 15 6-6 6 6"/>',
@@ -668,7 +667,7 @@ ${siteHeader(frame)}
       <div class="hero-shade" aria-hidden="true"></div>
       <div class="wrap hero-inner">
         <div class="hero-copy">
-          <p class="eyebrow">${icon("sparkle")}${esc(t.eyebrow)}</p>
+          <p class="eyebrow">${esc(t.eyebrow)}</p>
           <h1 id="hero-title">${esc(t.h1)}</h1>
           <p class="lead">${esc(t.lead)}</p>
           <form class="search-bar" action="/#evenements" method="get" role="search" aria-label="${esc(t.search)}">
@@ -838,7 +837,7 @@ ${previewDialog(t)}
   <button class="assistant-fab" type="button" data-open-assistant aria-label="${esc(t.assistant.open)}" aria-expanded="false" aria-controls="assistant" hidden>${icon("chat")}<span>${esc(t.assistant.title)}</span></button>
   <section class="assistant" id="assistant" aria-labelledby="assistant-title" hidden>
     <div class="assistant-head">
-      <span class="assistant-avatar" aria-hidden="true">${logoMark("lg-bot")}</span>
+      <span class="assistant-avatar" aria-hidden="true">${icon("chat")}</span>
       <div><h2 id="assistant-title">${esc(t.assistant.title)}</h2><p>${esc(t.assistant.subtitle)}</p></div>
       <button class="round" type="button" data-close-assistant aria-label="${esc(t.close)}">${icon("close")}</button>
     </div>

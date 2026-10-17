@@ -708,13 +708,8 @@
     if (/\b(bonjour|salut|allo|hello|hi|hey)\b/.test(q)) return [a.hello];
     return [a.fallback];
   };
-  const reply = (text) => {
-    const typing = say("bot", h("span", { class: "typing", "aria-label": "…" }, h("i"), h("i"), h("i")));
-    window.setTimeout(() => {
-      typing.remove();
-      say("bot", ...answer(text));
-    }, reduce ? 0 : 520);
-  };
+  // Run 92: the answer shows at once; nothing pretends to be typing.
+  const reply = (text) => say("bot", ...answer(text));
   const send = (text) => {
     const value = String(text || "").trim().slice(0, 200);
     if (!value) return;

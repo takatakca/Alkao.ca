@@ -59,7 +59,7 @@ describe("platform home in the browser", () => {
     expect(await slides.count()).toBe(4);
     await expect.poll(() => page.locator("[data-caption]:not([hidden]) .caption-title").textContent()).toBe(TITLE);
     await page.getByRole("button", { name: "Diapositive suivante" }).click();
-    await expect.poll(() => page.locator("[data-caption]:not([hidden]) .caption-title").textContent()).toBe("La scène, au premier rang.");
+    await expect.poll(() => page.locator("[data-caption]:not([hidden]) .caption-title").textContent()).toBe("Concerts");
     await page.getByRole("button", { name: "Mettre le carrousel en pause" }).click();
     await page.getByRole("button", { name: "Reprendre le carrousel" }).waitFor();
 
@@ -95,7 +95,7 @@ describe("platform home in the browser", () => {
     await page.getByRole("button", { name: "Ouvrir l’assistant ALKAO" }).click();
     const panel = page.getByRole("region", { name: "Assistant ALKAO" });
     const log = panel.getByRole("log");
-    await log.getByText(/Bonjour!/).waitFor({ timeout: 5000 });
+    await log.getByText(/^Bonjour\. Posez votre question/).waitFor({ timeout: 5000 });
     await panel.getByRole("textbox").fill("J'ai perdu mes billets");
     await panel.getByRole("button", { name: "Envoyer" }).click();
     await log.getByText(/Retrouver mes billets/).first().waitFor({ timeout: 5000 });
