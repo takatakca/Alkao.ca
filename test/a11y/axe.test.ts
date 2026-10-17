@@ -8,7 +8,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { call, pub, stopServer, testApp, tokenFor, type TestApp } from "../helpers/app.js";
 import { createTestDatabase, type TestDatabase } from "../helpers/db.js";
 import { FakeGateway } from "../helpers/fake-gateway.js";
-import { seedAfterSale, seedTwoTenants, TEST_CREDENTIAL_SECRET, type SeedResult } from "../helpers/seed.js";
+import { seedAfterSale, seedPaidOrder, seedTwoTenants, TEST_CREDENTIAL_SECRET, type SeedResult } from "../helpers/seed.js";
 
 /**
  * Accessibility (Run 17): axe-core (WCAG 2.1 A and AA rules) on every buyer and staff page,
@@ -23,6 +23,7 @@ let app: TestApp;
 let server: ServerType;
 let origin: string;
 let browser: Browser;
+let chartSeeded = false;
 
 beforeAll(async () => {
   db = await createTestDatabase();
@@ -213,7 +214,24 @@ describe.each(["light", "dark"] as const)("accessibility (%s)", (scheme) => {
       problems.push(...report(name, await audit(page)));
     };
     await visit("/", () => page.getByRole("heading", { name: "Choisir un espace" }).waitFor(), "workspaces");
-    await visit(`${prefix}/dashboard`, () => page.getByRole("heading", { name: "Tableau de bord" }).waitFor(), "dashboard");
+    // Run 92: the executive overview, its figures loaded, with sales on two days so the chart is
+    // drawn; then its tooltip shown from the keyboard and the chart's data table open.
+    if (!chartSeeded) {
+      await seedPaidOrder(db.pool, h, undefined, { GENERAL: 1 }, new Date(Date.now() - 2 * 86_400_000));
+      chartSeeded = true;
+    }
+    await visit(`${prefix}/dashboard`, async () => {
+      await page.getByRole("heading", { name: "Tableau de bord" }).waitFor();
+      await page.getByRole("region", { name: "Indicateurs clés" }).waitFor();
+      await page.getByRole("region", { name: "Prochaines séances" }).waitFor();
+      await page.locator(".plot svg .bar").first().waitFor();
+    }, "dashboard");
+    await page.locator(".plot").focus();
+    await page.keyboard.press("End");
+    await page.locator(".chart-tip").waitFor();
+    await page.getByText("Voir les données du graphique").click();
+    await page.locator(".chart-data table").waitFor();
+    problems.push(...report("dashboard, chart tooltip and data table", await audit(page)));
     await visit(`${prefix}/events`, () => page.getByRole("heading", { name: "Événements" }).waitFor(), "events");
     await visit(`${prefix}/event/${h.eventId}`, () => page.getByRole("heading", { name: "Vendre en ligne" }).waitFor(), "event");
     await visit(`${prefix}/venues`, () => page.getByRole("heading", { name: "Lieux" }).waitFor(), "venues");
