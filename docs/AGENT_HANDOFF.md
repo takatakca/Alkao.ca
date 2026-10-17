@@ -2,9 +2,15 @@
 
 ## Run 92 — executive pass: firm copy, /ops overview, writing assistant (2026-10-17)
 
-- Branch `claude/amazing-pascal-tppqd4`. Three parts:
+- Branch `claude/amazing-pascal-tppqd4` → PR #86. Three parts:
   - 92a, home: firmer, factual copy (FR/EN) and a calm design (no glows, gradient text, pulses or blobs). The "Assistant ALKAO" on the home stays, with no fake typing.
-  - 92b, /ops: executive overview on the dashboard.
+  - 92b, /ops: the dashboard as an executive overview (`ops-ui/app.js`). Front only. It shows:
+    - six KPI tiles, with a comparison to the period just before;
+    - a daily net sales chart (SVG, with a data table);
+    - the brut-to-net statement;
+    - the next sessions with sold / held / free bars;
+    - the ticket mix, by code: `/reports/sales` has no ticket type names.
+    - The tables and CSV exports are kept under "Détail des ventes".
   - 92c, /ops: writing assistant. It drafts a campaign (e-mail or text) or an event description from the Brand's catalog.
 - 92c, assistant:
   - `src/ai/writer.ts` calls Claude through `@anthropic-ai/sdk`, pinned at 0.131.0. Settings: structured output, effort `low`, `fallbacks: "default"`.
