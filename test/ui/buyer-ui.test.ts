@@ -332,7 +332,10 @@ describe("buyer tickets page", () => {
   it("shows the tickets one at a time or as a list, and the gate keeps the screen awake (Run 90b)", async () => {
     const f = seed.festi;
     const o = await buy(f, { GENERAL: 3 });
-    const context = await browser.newContext({ locale: "fr-CA" });
+    // Without motion, each step waits on the page's state, never on a card still sliding into
+    // place (a busy CI runner can keep a smooth scroll moving under the click). The animated
+    // opening and closing have their own test below.
+    const context = await browser.newContext({ locale: "fr-CA", reducedMotion: "reduce" });
     // A wake lock that records what the page asks of it (headless browsers may refuse a real one).
     await context.addInitScript(() => {
       const log: string[] = [];
@@ -397,6 +400,29 @@ describe("buyer tickets page", () => {
       return { text: el?.textContent, ticket: el?.closest("[data-ticket]")?.getAttribute("aria-label") };
     });
     expect(focused).toEqual({ text: "Plein écran pour l'entrée", ticket: "Billet 3 sur 3" });
+    await context.close();
+  });
+
+  it("opens the gate out of the ticket and closes it back, with its motion, then gives the focus back (Run 90b)", async () => {
+    const f = seed.festi;
+    const o = await buy(f, { GENERAL: 2 });
+    const context = await browser.newContext({ locale: "fr-CA", reducedMotion: "no-preference" });
+    const page = await context.newPage();
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    await page.goto(linkFor(f, o));
+    const wallet = page.getByRole("region", { name: "Vos billets" });
+    await wallet.getByText("1 / 2").waitFor();
+    await page.getByRole("button", { name: "Plein écran pour l'entrée" }).first().click();
+    const gate = page.getByRole("dialog", { name: "Billet 1 sur 2" });
+    await gate.waitFor();
+    expect(await gate.getByRole("img", { name: /^Code QR du billet / }).count()).toBe(1);
+    await page.keyboard.press("Escape");
+    await page.getByRole("dialog").waitFor({ state: "detached" });
+    const focused = await page.evaluate(() => {
+      const el = (globalThis as any).document.activeElement;
+      return { text: el?.textContent, ticket: el?.closest("[data-ticket]")?.getAttribute("aria-label") };
+    });
+    expect(focused).toEqual({ text: "Plein écran pour l'entrée", ticket: "Billet 1 sur 2" });
     await context.close();
   });
 
