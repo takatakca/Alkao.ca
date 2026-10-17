@@ -426,6 +426,54 @@ describe("buyer tickets page", () => {
     await context.close();
   });
 
+  it("closes the gate with an Escape pressed the moment it shows (Run 92)", async () => {
+    const f = seed.festi;
+    const o = await buy(f, { GENERAL: 2 });
+    const context = await browser.newContext({ locale: "fr-CA", reducedMotion: "reduce" });
+    const page = await context.newPage();
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    await page.goto(linkFor(f, o));
+    await page.getByRole("region", { name: "Vos billets" }).getByText("1 / 2").waitFor();
+    // Escape as soon as the gate is in the page, before the browser has even painted it.
+    await page.evaluate(() => {
+      const d = (globalThis as any).document;
+      new (globalThis as any).MutationObserver((_: unknown, obs: any) => {
+        if (!d.querySelector(".gate")) return;
+        obs.disconnect();
+        (globalThis as any).gateSeen = true;
+        d.dispatchEvent(new (globalThis as any).KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      }).observe(d.body, { childList: true, subtree: true });
+    });
+    await page.getByRole("button", { name: "Plein écran pour l'entrée" }).first().click();
+    await expect.poll(() => page.evaluate(() => (globalThis as any).gateSeen)).toBe(true);
+    await page.getByRole("dialog").waitFor({ state: "detached", timeout: 5_000 });
+    await context.close();
+  });
+
+  it("closes the gate on time even when its animation never ends (Run 92)", async () => {
+    const f = seed.festi;
+    const o = await buy(f, { GENERAL: 2 });
+    const context = await browser.newContext({ locale: "fr-CA", reducedMotion: "no-preference" });
+    // A browser that stops drawing frames (a hidden page, a phone saving power): every animation stays paused.
+    await context.addInitScript(() => {
+      const animate = (globalThis as any).Element.prototype.animate;
+      (globalThis as any).Element.prototype.animate = function (...args: unknown[]) {
+        const a = animate.apply(this, args);
+        a.pause();
+        return a;
+      };
+    });
+    const page = await context.newPage();
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    await page.goto(linkFor(f, o));
+    await page.getByRole("region", { name: "Vos billets" }).getByText("1 / 2").waitFor();
+    await page.getByRole("button", { name: "Plein écran pour l'entrée" }).first().click();
+    await page.getByRole("dialog", { name: "Billet 1 sur 2" }).waitFor();
+    await page.keyboard.press("Escape");
+    await page.getByRole("dialog").waitFor({ state: "detached", timeout: 5_000 });
+    await context.close();
+  });
+
   it("shows the way there and shares the event's public page, never the personal link (Run 90b)", async () => {
     const f = seed.festi;
     await db.pool.query(`UPDATE public.ticketing_events SET category = 'festivals' WHERE id = $1`, [f.eventId]);

@@ -515,7 +515,12 @@ function GateMode({ tickets, names, start, from, event, reveal, onClose }) {
       : el.animate([{ opacity: 1, transform: "none" }, { opacity: 0, transform: "scale(.98)" }], options);
     const code = qr.current;
     if (seen && code) code.animate([{ transform: "none" }, { transform: flip(r, code.getBoundingClientRect()) }], options);
-    anim.finished.then(done, done);
+    // The end of an animation is not guaranteed (a hidden page, a phone saving power, a stalled
+    // frame pause it): the gate closes on time anyway, once.
+    let ended = false;
+    const end = () => { if (!ended) { ended = true; done(); } };
+    anim.finished.then(end, end);
+    setTimeout(end, options.duration + 150);
   };
   const closeRef = useRef(close);
   closeRef.current = close;
@@ -530,7 +535,9 @@ function GateMode({ tickets, names, start, from, event, reveal, onClose }) {
     if (to?.width) qr.current.animate([{ transform: flip(from, to) }, { transform: "none" }], options);
   }, []);
 
-  useEffect(() => {
+  // Before the first paint (Run 92): a gate on screen always has its keys, its focus and its
+  // locked page, even when Escape comes at once (a passive effect may run 100 ms later).
+  useLayoutEffect(() => {
     // Each call is optional: older phones have no wake lock, iPhones no page full screen.
     const quietly = (fn) => { try { Promise.resolve(fn()).catch(() => {}); } catch {} };
     let lock = null;
@@ -668,7 +675,8 @@ function Lightbox({ src, title, onClose }) {
     const st = stage.current.getBoundingClientRect();
     return [st.left + st.width / 2, st.top + st.height / 2];
   };
-  useEffect(() => {
+  // Before the first paint, like the gate: Escape works from the moment the photo shows.
+  useLayoutEffect(() => {
     const overflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     closeButton.current?.focus({ preventScroll: true });
