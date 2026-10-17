@@ -1,115 +1,381 @@
 /*
  * The buyer's tickets page. Run 50: in the Brand's colours (--accent, --on-accent, set from
  * its appearance), with its logo and the event's photo; ALKAO's neutral look otherwise.
+ * Run 90b: a ticket wallet. Montserrat for display, Inter for text (self-hosted, same origin),
+ * a neutral premium palette, real ticket cards, and motion that switches off on request.
  */
+@font-face { font-family: "Montserrat"; src: url("/assets/home/fonts/montserrat-latin.woff2") format("woff2"); font-weight: 400 900; font-style: normal; font-display: swap; }
+@font-face { font-family: "Inter"; src: url("/assets/home/fonts/inter-latin.woff2") format("woff2"); font-weight: 400 700; font-style: normal; font-display: swap; }
+
 :root {
-  --bg: #f5f5f4; --panel: #fff; --ink: #1c1917; --muted: #57534e; --line: #e7e5e4;
-  --accent: #1c1917; --on-accent: #ffffff;
-  --ok: #0f7a3d; --ok-bg: #e5f5ec; --bad: #b42318; --bad-bg: #fdecea; --warn: #8a5a00; --warn-bg: #fff4dc; --radius: 16px;
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: var(--ink); background: var(--bg);
+  color-scheme: light;
+  --bg: #f5f6f9; --panel: #ffffff; --panel-2: #eef1f6; --ink: #0e1525; --muted: #5a6375; --line: #e4e7ee; --line-2: #d3d8e2;
+  --accent: #1565d8; --on-accent: #ffffff;
+  --ok: #0f7a3d; --ok-bg: #e7f5ed; --bad: #b42318; --bad-bg: #fdecea; --warn: #7a4f00; --warn-bg: #fff3d6;
+  --focus: #1565d8; --dot: #7d8698;
+  --r1: 12px; --r2: 18px; --r3: 28px;
+  --sh1: 0 1px 2px rgb(14 21 37 / 5%), 0 1px 3px rgb(14 21 37 / 4%);
+  --sh2: 0 1px 2px rgb(14 21 37 / 4%), 0 10px 28px -8px rgb(14 21 37 / 16%);
+  --ticket-shadow: drop-shadow(0 0 1px rgb(14 21 37 / 16%)) drop-shadow(0 10px 14px rgb(14 21 37 / 9%));
+  --ease: cubic-bezier(.2, .7, .2, 1);
+  --font: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --display: "Montserrat", "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+  font-family: var(--font); color: var(--ink); background: var(--bg);
+  -webkit-text-size-adjust: 100%; text-size-adjust: 100%;
 }
 @media (prefers-color-scheme: dark) {
-  :root { --bg: #0f0f0e; --panel: #1c1b1a; --ink: #f0efed; --muted: #a8a29e; --line: #2e2c2a; --ok-bg: #0f2c1c; --bad-bg: #3a1513; --warn-bg: #3a2c0c; --ok: #6fdc9b; --bad: #ff8b7e; --warn: #f3c969; }
+  :root {
+    color-scheme: dark;
+    --bg: #0a0f1c; --panel: #121a2b; --panel-2: #182238; --ink: #eef2f8; --muted: #a3aec2; --line: #24304a; --line-2: #313f5d;
+    --ok: #6fdc9b; --ok-bg: #0f2c1c; --bad: #ff8b7e; --bad-bg: #3a1513; --warn: #f3c969; --warn-bg: #3a2c0c;
+    --focus: #5aa9ff; --dot: #5b6782;
+    --sh1: 0 1px 2px rgb(0 0 0 / 30%);
+    --sh2: 0 1px 2px rgb(0 0 0 / 30%), 0 12px 32px -10px rgb(0 0 0 / 60%);
+    --ticket-shadow: drop-shadow(0 0 1px rgb(255 255 255 / 10%)) drop-shadow(0 10px 14px rgb(0 0 0 / 45%));
+  }
 }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
-body { margin: 0; }
-main { max-width: 560px; margin: 0 auto; padding: 1rem 16px 3rem; }
+body { margin: 0; min-height: 100vh; background: var(--bg); font-size: 16px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+h1, h2, h3 { font-family: var(--display); letter-spacing: -.01em; }
+.sr-only { position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.i { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.muted { color: var(--muted); }
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .boot { padding: 2rem 16px; color: var(--muted); }
+
+/* Buttons: the Brand's colour for the main action of each card, quiet outlines elsewhere. */
+button { font: inherit; font-weight: 600; padding: .65rem 1.1rem; border-radius: var(--r1); border: 0; background: var(--accent); color: var(--on-accent); cursor: pointer; min-height: 44px;
+  transition: transform 180ms var(--ease), box-shadow 180ms var(--ease), background-color 180ms var(--ease), border-color 180ms var(--ease); -webkit-tap-highlight-color: transparent; }
+button:active:not(:disabled) { transform: scale(.98); }
+button:disabled { opacity: .45; cursor: default; }
+button.ghost, button.secondary, .pill { background: var(--panel); color: var(--ink); border: 1px solid var(--line-2); }
+@media (hover: hover) { button.ghost:hover:not(:disabled), button.secondary:hover:not(:disabled), .pill:hover { border-color: var(--muted); } }
+button.link { background: none; color: var(--muted); padding: .25rem 0; text-decoration: underline; font-weight: 400; border: 0; min-height: 0; }
+a.button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; padding: .7rem 1.2rem; border-radius: var(--r1); background: var(--accent); color: var(--on-accent); font-weight: 600; text-decoration: none; }
+.pill { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 14px; border-radius: 999px; font-size: .875rem; white-space: nowrap; }
+.pill .i { width: 18px; height: 18px; }
+@media (prefers-color-scheme: dark) {
+  /* A dark Brand colour stays visible on dark panels. */
+  button:not(.ghost):not(.secondary):not(.pill):not(.link):not(.nav):not(.dot):not(.action):not(.hero-zoom), a.button { box-shadow: inset 0 0 0 1px rgb(255 255 255 / 14%); }
+}
 
 /* The Brand's band: its colour, its logo (or name), the language switch. */
 .top { background: var(--accent); color: var(--on-accent); }
-.top-row { max-width: 560px; margin: 0 auto; padding: .75rem 16px; display: flex; align-items: center; justify-content: space-between; gap: 1rem; min-height: 64px; }
-.top .logo { display: block; max-height: 44px; max-width: 60%; width: auto; height: auto; }
-.top .brand { margin: 0; font-weight: 800; font-size: 1.05rem; color: inherit; }
+.top-row { max-width: 1160px; margin: 0 auto; padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; gap: 1rem; min-height: 60px; }
+.top .logo { display: block; max-height: 40px; max-width: 60%; width: auto; height: auto; }
+.top .brand { margin: 0; font: 800 1.05rem/1.2 var(--display); letter-spacing: -.01em; color: inherit; }
 .top .lang { margin: 0; }
-.top button.link { color: inherit; opacity: .9; }
-.brand { color: var(--muted); font-size: .9rem; margin: .5rem 0 0; }
+.top button.link { color: inherit; text-decoration: none; font-size: .875rem; font-weight: 600; padding: 6px 14px; min-height: 36px; border-radius: 999px; border: 1px solid currentColor; border-color: color-mix(in srgb, currentColor 40%, transparent); }
+.top :focus-visible { outline-color: currentColor; }
+.lang { text-align: right; margin: 0; }
 
-.photo { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: var(--radius); margin: .25rem 0 1rem; background: var(--line); }
-h1 { font-size: 1.6rem; line-height: 1.15; margin: .5rem 0 .75rem; letter-spacing: -.01em; }
-h2 { font-size: 1.1rem; margin: 1.5rem 0 .6rem; }
-.muted { color: var(--muted); }
-.card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 1rem; margin-bottom: 1rem; }
-.event p { margin: .2rem 0; }
-.event .when { font-weight: 700; font-size: 1.05rem; }
-.present { color: var(--muted); margin: 1.25rem 0 .75rem; }
+/* Layout: one column on a phone; on a large screen the event on the left, the wallet on the right. */
+main.layout { max-width: 1160px; margin: 0 auto; padding: 0 16px 24px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; }
+.lead, .info { display: grid; gap: 16px; align-content: start; min-width: 0; }
+.lead > .alert { margin: 0; }
+@media (min-width: 960px) {
+  main.layout { grid-template-columns: minmax(0, 1fr) 400px; grid-template-areas: "lead wallet" "actions wallet" "info wallet"; grid-template-rows: auto auto 1fr; column-gap: 48px; row-gap: 20px; padding: 32px 24px 32px; align-items: start; }
+  .lead { grid-area: lead; }
+  .wallet { grid-area: wallet; }
+  .actions { grid-area: actions; }
+  .info { grid-area: info; }
+}
+@media (min-width: 960px) and (min-height: 860px) {
+  .wallet:not(.is-list) { position: sticky; top: 24px; }
+}
 
-/* A ticket: the Brand's band (type, "Ticket 1 of 3"), then the QR code on white. */
-.tickets { display: grid; gap: 1rem; }
-.ticket { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; break-inside: avoid; box-shadow: 0 10px 24px -18px rgb(0 0 0 / 45%); }
-.ticket-band { display: flex; justify-content: space-between; align-items: baseline; gap: .75rem; padding: .7rem 1rem; background: var(--accent); color: var(--on-accent); }
-.ticket .type { font-weight: 800; font-size: 1.05rem; }
-.ticket-count { font-size: .85rem; opacity: .9; white-space: nowrap; }
-.ticket-body { text-align: center; padding: .5rem 1rem 1rem; position: relative; }
-/* The stub's perforation, between the band and the code. */
-.ticket-body::before { content: ""; position: absolute; left: 12px; right: 12px; top: 0; border-top: 2px dashed var(--line); }
-.ticket.void .ticket-band { background: var(--line); color: var(--muted); }
-/* QR codes stay dark on white, in dark mode too: gate scanners need the contrast. */
-.qr { display: block; width: min(76vw, 300px); height: auto; margin: .9rem auto .5rem; background: #fff; padding: 10px; border-radius: 10px; image-rendering: pixelated; }
-.ticket code { display: block; font-size: .85rem; color: var(--muted); margin-bottom: .5rem; letter-spacing: .06em; }
+/* The event: its photo (slow Ken Burns), the title in Montserrat, date, hours and venue. */
+.hero { position: relative; isolation: isolate; overflow: hidden; margin: 0 -16px; min-height: 280px; display: flex; flex-direction: column; justify-content: flex-end; background: #0e1525; color: #ffffff; }
+.hero-media { position: absolute; inset: 0; z-index: -1; overflow: hidden; background: #0e1525; }
+.hero-media::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(180deg, rgb(8 12 22 / 0%) 18%, rgb(8 12 22 / 42%) 50%, rgb(8 12 22 / 90%) 100%); }
+.photo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity 420ms var(--ease); }
+.photo.is-loaded { opacity: 1; animation: kenburns 18s var(--ease) both; }
+@keyframes kenburns { from { scale: 1; } to { scale: 1.06; } }
+.hero-zoom { position: absolute; inset: 0; width: 100%; height: 100%; padding: 0; margin: 0; border: 0; border-radius: 0; background: none; cursor: zoom-in; min-height: 0; display: block; }
+.hero-zoom:active:not(:disabled) { transform: none; }
+.hero-zoom:focus-visible { outline-offset: -4px; outline-color: #ffffff; }
+.zoom-hint { position: absolute; top: 12px; right: 12px; z-index: 1; width: 40px; height: 40px; border-radius: 999px; display: grid; place-items: center; background: rgb(8 12 22 / 58%); color: #ffffff; border: 1px solid rgb(255 255 255 / 22%); transition: transform 180ms var(--ease); }
+@media (hover: hover) { .hero-zoom:hover .zoom-hint { transform: scale(1.06); } }
+.hero-body { position: relative; padding: 80px 16px 20px; pointer-events: none; }
+.hero h1 { margin: 0 0 14px; font-size: clamp(1.75rem, 7vw, 2.75rem); font-weight: 800; line-height: 1.06; letter-spacing: -.02em; color: #ffffff; text-wrap: balance; }
+.chips { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px 5px 8px; border-radius: 999px; background: rgb(10 15 28 / 62%); border: 1px solid rgb(255 255 255 / 20%); color: #ffffff; font-size: .8125rem; font-weight: 500; line-height: 1.3; }
+.chip .i { width: 15px; height: 15px; }
+.hero-ref { margin: 12px 0 0; font-size: .8125rem; color: #d5dbe6; }
+.hero-ref strong { font-family: var(--mono); font-weight: 600; letter-spacing: .06em; color: #ffffff; }
+@media (min-width: 640px) {
+  .hero { margin: 24px 0 0; border-radius: var(--r3); min-height: 340px; box-shadow: var(--sh2); }
+  .hero-body { padding: 140px 28px 26px; }
+  .chips { gap: 8px; }
+  .chip { gap: 6px; padding: 6px 12px 6px 10px; font-size: .875rem; }
+  .chip .i { width: 16px; height: 16px; }
+}
+@media (min-width: 960px) {
+  .hero { margin: 0; aspect-ratio: 16 / 9; min-height: 0; }
+  .hero-body { padding: 0 32px 28px; }
+}
 
-.badge { display: inline-block; padding: .15rem .55rem; border-radius: 999px; font-size: .8rem; font-weight: 600; background: var(--line); }
-.badge.ok { background: var(--ok-bg); color: var(--ok); }
-.badge.bad { background: var(--bad-bg); color: var(--bad); }
-.alert { padding: .75rem 1rem; border-radius: 10px; background: var(--warn-bg); color: var(--warn); margin-bottom: 1rem; }
+/* What to do with the event: tiles on a phone, a row of buttons on a large screen. */
+.actions { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 8px; }
+.action { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-height: 76px; padding: 12px 8px; border-radius: var(--r2);
+  background: var(--panel); color: var(--ink); border: 1px solid var(--line); box-shadow: var(--sh1); font: 600 .8125rem/1.25 var(--font); text-align: center; text-decoration: none; }
+.action .i { width: 22px; height: 22px; }
+@media (hover: hover) { .action:hover { border-color: var(--line-2); box-shadow: var(--sh2); transform: translateY(-1px); } }
+a.action { transition: transform 180ms var(--ease), box-shadow 180ms var(--ease), border-color 180ms var(--ease); }
+@media (min-width: 640px) {
+  .actions { display: flex; flex-wrap: wrap; }
+  .action { flex-direction: row; min-height: 48px; padding: 0 18px; border-radius: 999px; font-size: .9375rem; }
+  .action .i { width: 20px; height: 20px; }
+}
+
+/* Notices. */
+.alert { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border-radius: var(--r1); background: var(--warn-bg); color: var(--warn); font-size: .9375rem; line-height: 1.45; margin: 0 0 1rem; }
+.alert .i { margin-top: 1px; }
 .alert.bad { background: var(--bad-bg); color: var(--bad); }
 .alert.ok { background: var(--ok-bg); color: var(--ok); }
+.alert.thanks { font-weight: 600; font-size: .875rem; padding: 10px 12px; animation: rise 420ms var(--ease) both; }
+.badge { display: inline-flex; align-items: center; gap: 4px; padding: .2rem .6rem; border-radius: 999px; font-size: .8125rem; font-weight: 600; background: var(--line); white-space: nowrap; }
+.badge .i { width: 14px; height: 14px; stroke-width: 2.4; }
+.badge.ok { background: var(--ok-bg); color: var(--ok); }
+.badge.bad { background: var(--bad-bg); color: var(--bad); white-space: normal; text-align: right; }
 
-button { font: inherit; padding: .65rem 1rem; border-radius: 10px; border: 0; background: var(--accent); color: var(--on-accent); font-weight: 600; cursor: pointer; min-height: 44px; }
-button.ghost { background: transparent; color: var(--ink); border: 1px solid var(--line); }
-button:disabled { opacity: .5; cursor: default; }
-button:focus-visible, a:focus-visible { outline: 3px solid #f59e0b; outline-offset: 2px; }
-ul.sessions { list-style: none; padding: 0; margin: 0; }
-ul.sessions li { display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding: .6rem 0; border-bottom: 1px solid var(--line); }
-
-.contact { margin-top: 2rem; padding-top: 1rem; border-top: 1px solid var(--line); }
-.contact h2 { margin-top: 0; font-size: 1rem; }
-.contact p { margin: 0; color: var(--muted); line-height: 1.7; }
-.contact a { color: inherit; }
-footer { color: var(--muted); font-size: .8rem; text-align: center; margin-top: 2rem; }
-.lang { text-align: right; margin: 0; }
-button.link { background: none; color: var(--muted); padding: .25rem 0; text-decoration: underline; font-weight: 400; border: 0; min-height: 0; }
-/* Run 35: "Nouvelle vente à la porte", a link that looks like the page's buttons. */
-a.button { display: inline-block; padding: .65rem 1rem; border-radius: 10px; background: var(--accent); color: var(--on-accent); font-weight: 600; text-decoration: none; }
-
-/* Run 50: the gate view, white and full screen, one large QR code at a time. */
-.gate { position: fixed; inset: 0; z-index: 50; background: #ffffff; color: #111111; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .6rem; padding: 1rem; text-align: center; }
-.gate-count { margin: 0; font-weight: 800; font-size: 1.1rem; }
-.gate-qr { width: min(92vw, 72vh); height: auto; image-rendering: pixelated; }
-.gate code { color: #444; letter-spacing: .08em; }
-.gate-tip { margin: 0; color: #555; font-size: .9rem; }
-.gate-actions { display: flex; gap: .5rem; flex-wrap: wrap; justify-content: center; }
-.gate button.ghost { color: #111; border-color: #ccc; }
-.gate button:not(.ghost) { background: #111; color: #fff; }
-
-@media print {
-  button, .noprint, .top .lang { display: none; }
-  .top { background: none; color: var(--ink); }
-  .card, .ticket { break-inside: avoid; }
+/* The wallet: the heading, the tickets, the carousel's controls. */
+.wallet { min-width: 0; container-type: inline-size; }
+.wallet-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
+.wallet h2 { margin: 0; font-size: 1.375rem; font-weight: 800; line-height: 1.2; }
+.present { margin: 4px 0 0; color: var(--muted); font-size: .875rem; line-height: 1.4; }
+.kept { display: flex; width: fit-content; max-width: 100%; align-items: center; gap: 6px; margin: 14px auto 0; padding: 6px 12px 6px 8px; border-radius: 999px; background: var(--ok-bg); color: var(--ok); font-size: .8125rem; font-weight: 600; line-height: 1.35; }
+.kept .i { width: 18px; height: 18px; }
+.wallet-track {
+  --card: min(100cqi - 40px, 340px);
+  position: relative; display: flex; gap: 12px; overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x mandatory; scrollbar-width: none;
+  margin: 0 -16px; padding: 18px calc(16px + (100cqi - var(--card)) / 2) 34px;
 }
-@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
-/* Run 51: the tickets are kept on this device. */
-.kept { margin: -.4rem 0 .9rem; color: var(--ok); font-size: .9rem; }
-.kept::before { content: "✓ "; font-weight: 700; }
+.wallet-track::-webkit-scrollbar { display: none; }
+.slide { flex: 0 0 100%; min-width: 0; display: flex; flex-direction: column; scroll-snap-align: center; scroll-snap-stop: always; outline: none; border-radius: var(--r2); }
+.slide:focus-visible { outline: 3px solid var(--focus); outline-offset: 4px; }
+@media (min-width: 960px) {
+  .wallet-track { --card: 100cqi; gap: 48px; margin: 0 -24px; padding: 18px 24px 34px; }
+}
+.wallet-controls { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: -14px; }
+.nav { width: 44px; height: 44px; padding: 0; border-radius: 999px; display: grid; place-items: center; background: var(--panel); color: var(--ink); border: 1px solid var(--line-2); box-shadow: var(--sh1); }
+@media (hover: hover) { .nav:hover:not(:disabled) { border-color: var(--muted); } }
+.dots { display: flex; align-items: center; }
+.dot { width: 24px; height: 24px; min-height: 0; padding: 0; border-radius: 999px; background: none; display: grid; place-items: center; }
+.dot::before { content: ""; display: block; width: 8px; height: 8px; border-radius: 999px; background: var(--dot); transition: width 260ms var(--ease), background-color 260ms var(--ease); }
+.dot[aria-current="true"]::before { width: 20px; background: var(--ink); }
+.dot:active:not(:disabled) { transform: none; }
+.wallet-count { margin: 0; min-width: 3.25em; text-align: center; font-size: .875rem; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
+.list-actions { margin: 4px 0 0; text-align: center; }
+.wallet.is-list .wallet-track { display: grid; justify-items: center; gap: 18px; overflow: visible; scroll-snap-type: none; margin: 0; padding: 18px 0 8px; }
+.wallet.is-list .slide { width: 100%; max-width: 420px; }
+
+/* A ticket: the stub in the Brand's colour, a perforation with two notches, the code on white. */
+.ticket { --notch: 11px; position: relative; flex: 1; display: flex; flex-direction: column; min-width: 0; filter: var(--ticket-shadow); scale: .94;
+  transition: scale 340ms var(--ease), translate 340ms var(--ease); animation: card-in 600ms var(--ease) backwards; }
+.slide.is-current .ticket, .is-list .ticket { scale: 1; }
+.slide:nth-child(2) .ticket { animation-delay: 70ms; }
+.slide:nth-child(3) .ticket { animation-delay: 140ms; }
+.slide:nth-child(4) .ticket { animation-delay: 210ms; }
+.slide:nth-child(n+5) .ticket { animation-delay: 260ms; }
+.is-list .ticket { animation-name: card-rise; }
+@keyframes card-in { 0% { translate: 44px 0; } 72% { translate: -3px 0; } 100% { translate: 0 0; } }
+@keyframes card-rise { 0% { translate: 0 20px; } 100% { translate: 0 0; } }
+@media (hover: hover) { .slide.is-current .ticket:hover { translate: 0 -3px; } }
+.ticket-band { position: relative; padding: 16px 18px 20px; border-radius: var(--r2) var(--r2) 0 0; background: var(--accent); color: var(--on-accent);
+  -webkit-mask: radial-gradient(circle at 0 100%, #0000 var(--notch), #000 calc(var(--notch) + .5px)) left / 51% 100% no-repeat, radial-gradient(circle at 100% 100%, #0000 var(--notch), #000 calc(var(--notch) + .5px)) right / 51% 100% no-repeat;
+  mask: radial-gradient(circle at 0 100%, #0000 var(--notch), #000 calc(var(--notch) + .5px)) left / 51% 100% no-repeat, radial-gradient(circle at 100% 100%, #0000 var(--notch), #000 calc(var(--notch) + .5px)) right / 51% 100% no-repeat; }
+/* The tear line along the stub. */
+.ticket-band::after { content: ""; position: absolute; left: calc(var(--notch) + 8px); right: calc(var(--notch) + 8px); bottom: 0; border-bottom: 2px dashed var(--panel); }
+.ticket-count { display: block; font-size: .6875rem; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; }
+.ticket .type { display: block; margin-top: 4px; font: 700 1.125rem/1.25 var(--display); letter-spacing: -.005em; overflow-wrap: anywhere; }
+.stub-meta { display: flex; gap: 28px; margin: 12px 0 0; }
+.stub-meta dt { font-size: .6875rem; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
+.stub-meta dd { margin: 1px 0 0; font-size: .9375rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.ticket-body { position: relative; flex: 1; display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 20px 20px 18px; border-radius: 0 0 var(--r2) var(--r2); background: var(--panel);
+  -webkit-mask: radial-gradient(circle at 0 0, #0000 var(--notch), #000 calc(var(--notch) + .5px)) left / 51% 100% no-repeat, radial-gradient(circle at 100% 0, #0000 var(--notch), #000 calc(var(--notch) + .5px)) right / 51% 100% no-repeat;
+  mask: radial-gradient(circle at 0 0, #0000 var(--notch), #000 calc(var(--notch) + .5px)) left / 51% 100% no-repeat, radial-gradient(circle at 100% 0, #0000 var(--notch), #000 calc(var(--notch) + .5px)) right / 51% 100% no-repeat; }
+/* QR codes stay pure black on white, in dark mode too: gate scanners need the contrast. The white
+   padding and the code's own margin make a quiet zone of at least four modules. */
+.qr-field { width: 100%; max-width: 288px; padding: 14px; border-radius: 14px; background: #ffffff; box-shadow: inset 0 0 0 1px #e4e7ee; line-height: 0; cursor: zoom-in; }
+.qr { display: block; width: 100%; height: auto; image-rendering: pixelated; -webkit-user-drag: none; user-select: none; }
+.qr-field.is-empty { aspect-ratio: 1; display: grid; place-content: center; justify-items: center; gap: 10px; padding: 24px; background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--line); color: var(--muted); line-height: 1.4; text-align: center; cursor: default; }
+.qr-field.is-empty .i { width: 40px; height: 40px; stroke-width: 1.4; }
+.qr-field.is-empty p { margin: 0; font-size: .875rem; max-width: 18ch; }
+.ticket-meta { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.ticket-no { margin: 0; display: grid; gap: 1px; }
+.ticket-no span { font-size: .6875rem; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.ticket-no code { font: 600 1.0625rem/1.25 var(--mono); letter-spacing: .14em; color: var(--ink); }
+.gate-open { width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; border-radius: 14px; }
+.ticket.void .ticket-band { background: var(--line); color: var(--muted); }
+@media (prefers-color-scheme: dark) {
+  /* A dark Brand colour keeps a little light on a dark page. */
+  .ticket:not(.void) .ticket-band { background-image: linear-gradient(rgb(255 255 255 / 7%), rgb(255 255 255 / 7%)); }
+}
+.ticket.void .ticket-band::after { border-bottom-color: var(--panel); }
+
+/* Run 90b: the gate view. White and full screen, one large code at a time. */
+.gate { position: fixed; inset: 0; z-index: 50; overflow: auto; display: grid; grid-template-rows: auto 1fr auto; gap: 8px; background: #ffffff; color: #0e1525;
+  padding: max(12px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom)); }
+.gate :focus-visible { outline-color: #1565d8; }
+.gate-top { width: 100%; max-width: 760px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.gate-event { min-width: 0; }
+.gate-title { margin: 0; font: 700 .9375rem/1.3 var(--display); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gate-when { margin: 2px 0 0; font-size: .8125rem; color: #4a5468; }
+.gate-close { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 16px 0 12px; border-radius: 999px; background: #0e1525; color: #ffffff; flex: none; }
+.gate-stage { display: grid; place-items: center; min-height: 0; touch-action: pan-y; }
+.gate-ticket { display: flex; flex-direction: column; align-items: center; text-align: center; }
+.gate-ticket.from-next { animation: gate-next 300ms var(--ease) both; }
+.gate-ticket.from-prev { animation: gate-prev 300ms var(--ease) both; }
+@keyframes gate-next { from { translate: 56px 0; } to { translate: 0 0; } }
+@keyframes gate-prev { from { translate: -56px 0; } to { translate: 0 0; } }
+.gate-count { margin: 0; font-size: .75rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #4a5468; }
+.gate-type { margin: 4px 0 12px; font: 800 clamp(1.25rem, 5vw, 1.75rem)/1.15 var(--display); letter-spacing: -.01em; }
+.gate-qr-field { padding: 12px; background: #ffffff; line-height: 0; }
+.gate-qr { display: block; width: min(86vw, 56vh, 540px); height: auto; image-rendering: pixelated; -webkit-user-drag: none; user-select: none; }
+.gate-code { margin: 6px 0 0; }
+.gate-code code { font: 600 1.25rem/1.2 var(--mono); letter-spacing: .18em; color: #0e1525; }
+.gate-bottom { display: grid; justify-items: center; gap: 14px; }
+.gate-tip { margin: 0; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px 10px; font-size: .9375rem; color: #4a5468; text-align: center; }
+.gate-awake { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px 3px 6px; border-radius: 999px; background: #e7f5ed; color: #0f6a35; font-size: .8125rem; font-weight: 600; }
+.gate-awake .i { width: 16px; height: 16px; stroke-width: 2.4; }
+.gate-nav { display: flex; align-items: center; gap: 12px; }
+.gate-arrow { display: inline-flex; align-items: center; gap: 6px; min-height: 48px; padding: 0 18px; border-radius: 999px; background: #f1f3f7; color: #0e1525; border: 1px solid #d3d8e2; }
+.gate-arrow:first-child { padding-left: 12px; }
+.gate-arrow:last-child { padding-right: 12px; }
+.pips { display: flex; align-items: center; gap: 6px; }
+.pip { width: 8px; height: 8px; border-radius: 999px; background: #9aa2b1; transition: width 260ms var(--ease), background-color 260ms var(--ease); }
+.pip.is-on { width: 20px; background: #0e1525; }
+
+/* The event's photo, full screen, to zoom into. */
+.lightbox { position: fixed; inset: 0; z-index: 60; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto; background: #05080f; color: #ffffff; animation: fade 240ms var(--ease) both; }
+.lb-bar { display: flex; align-items: center; gap: 8px; padding: max(12px, env(safe-area-inset-top)) 16px 12px; }
+.lb-title { flex: 1; margin: 0; min-width: 0; font: 700 .9375rem/1.3 var(--display); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 479px) { .lb-title { visibility: hidden; } }
+.lb-btn, .lb-close { min-height: 44px; border-radius: 999px; background: rgb(255 255 255 / 12%); color: #ffffff; border: 1px solid rgb(255 255 255 / 22%); }
+.lb-btn { width: 44px; padding: 0; display: grid; place-items: center; }
+.lb-close { display: inline-flex; align-items: center; gap: 6px; padding: 0 16px 0 12px; }
+.lightbox :focus-visible { outline-color: #ffffff; }
+.lb-stage { position: relative; overflow: hidden; min-width: 0; min-height: 0; display: grid; grid-template: minmax(0, 1fr) / minmax(0, 1fr); place-items: center; padding: 8px 16px; touch-action: none; cursor: zoom-in; user-select: none; }
+.lb-stage.is-zoomed { cursor: grab; }
+.lb-stage.is-panning { cursor: grabbing; }
+.lb-img { display: block; max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 6px; transform-origin: center; transition: transform 220ms var(--ease); animation: zoom-in 320ms var(--ease) both; -webkit-user-drag: none; }
+.lb-img.is-direct { transition: none; }
+.lb-tip { margin: 0; padding: 10px 16px max(16px, env(safe-area-inset-bottom)); text-align: center; font-size: .8125rem; color: #c9d1de; }
+@keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes zoom-in { from { scale: .94; } to { scale: 1; } }
+@keyframes rise { from { translate: 0 8px; } to { translate: 0 0; } }
+
+/* Cards under the wallet: options, session change, transfer, contact. */
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r2); padding: 20px; box-shadow: var(--sh1); }
+.card h2 { margin: 0; font-size: 1.125rem; font-weight: 800; line-height: 1.25; }
+.card > .muted { margin: 8px 0 0; font-size: .9375rem; }
+.card > .alert { margin: 12px 0 0; }
+.card-head { display: flex; align-items: center; gap: 12px; }
+.card-icon { width: 40px; height: 40px; flex: none; display: grid; place-items: center; border-radius: var(--r1); background: var(--panel-2); color: var(--ink); }
+.card > button { margin-top: 14px; }
+.empty-note { margin: 12px 0 0; color: var(--muted); }
+
 /* Run 54: the options bought with the tickets (meals, activities…), which have no QR code. */
-.options h2 { margin: 0 0 .5rem; font-size: 1.05rem; }
-.options ul { list-style: none; margin: 0 0 .5rem; padding: 0; }
-.options li { display: flex; justify-content: space-between; gap: .75rem; padding: .45rem 0; border-bottom: 1px solid var(--line); }
+.options ul { list-style: none; margin: 12px 0 0; padding: 0; }
+.options li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line); }
 .options li:last-child { border-bottom: 0; }
-.options li small { display: block; font-size: .8rem; margin-top: .1rem; }
-.options p { margin: 0; font-size: .9rem; }
+.options li > span { font-weight: 600; min-width: 0; }
+.options li small { display: block; margin-top: 2px; font-size: .8125rem; font-weight: 400; }
+.options li strong { flex: none; min-width: 3em; text-align: center; padding: 4px 10px; border-radius: 999px; background: var(--panel-2); font-size: .9375rem; font-variant-numeric: tabular-nums; }
+.options > p { margin: 4px 0 0; font-size: .875rem; }
 
-/* Run 65: the exchange and refund policy keeps its line breaks. */
-.contact .policy { white-space: pre-line; }
-.contact h3 { font-size: 1rem; margin: 1rem 0 .25rem; }
+/* Run 35, Run 37: the other sessions. */
+ul.sessions { list-style: none; padding: 0; margin: 12px 0 0; }
+ul.sessions li { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+ul.sessions li:last-child { border-bottom: 0; }
+ul.sessions li > span:first-of-type { flex: 1; min-width: 0; }
+ul.sessions li > .i { color: var(--muted); }
+ul.sessions li > span::first-letter { text-transform: uppercase; }
+ul.sessions li button { flex: none; min-height: 40px; padding: .5rem 1rem; }
 
+/* Run 35: "Nouvelle vente à la porte". */
+.door { margin: 0; }
+.door .button { width: 100%; }
+
+/* Run 65: the organizer's contact and the exchange and refund policy. */
+.contact-list { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 10px; }
+.contact-list li { display: flex; align-items: center; gap: 10px; min-width: 0; color: var(--muted); }
+.contact-list li > .i { color: var(--muted); }
+.contact-list a { color: var(--ink); font-weight: 500; text-decoration: underline; text-decoration-color: var(--line-2); text-underline-offset: 3px; overflow-wrap: anywhere; }
+@media (hover: hover) { .contact-list a:hover { text-decoration-color: currentColor; } }
+.contact h3 { margin: 18px 0 4px; font-size: .9375rem; font-weight: 700; }
+.contact .policy { margin: 0; color: var(--muted); font-size: .9375rem; white-space: pre-line; }
 
 /* Run 80: transfer controls are shown only when both API and Brand allow it. */
-.transfer-list{list-style:none;margin:.65rem 0 0;padding:0;display:grid;gap:1rem}
-.transfer-list li{padding:.85rem;border:1px solid var(--line);border-radius:12px}
-.transfer-form{display:grid;gap:.45rem;margin-top:.6rem}
-.transfer-form label{font-size:.9rem;font-weight:700}
-.transfer-form input{font:inherit;width:100%;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--ink);min-height:46px;padding:.55rem .7rem}
-.transfer-form input:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
-.transfer-form button{min-height:46px}
+.transfer-list { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 12px; }
+.transfer-list li { padding: 14px; border: 1px solid var(--line); border-radius: var(--r1); background: var(--bg); }
+.transfer-ticket { margin: 0; display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; }
+.transfer-state { display: flex; align-items: center; gap: 6px; margin: 8px 0 10px; color: var(--warn); font-weight: 600; font-size: .9375rem; }
+.transfer-form { display: grid; gap: 6px; margin-top: 10px; }
+.transfer-form label { font-size: .875rem; font-weight: 600; }
+.transfer-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.transfer-form input { flex: 1 1 200px; font: inherit; min-width: 0; border-radius: var(--r1); border: 1px solid var(--line-2); background: var(--panel); color: var(--ink); min-height: 46px; padding: .55rem .8rem; }
+.transfer-form input:focus-visible { outline: 3px solid var(--focus); outline-offset: 1px; }
+.transfer-form button { min-height: 46px; flex: none; }
+
+/* The footer: this link is personal. */
+.foot { max-width: 1160px; margin: 0 auto; padding: 8px 16px 40px; }
+.foot p { margin: 0; color: var(--muted); font-size: .8125rem; text-align: center; text-wrap: balance; }
+.foot .i { display: inline-block; width: 15px; height: 15px; margin-right: 6px; vertical-align: -2px; }
+
+/* A short confirmation (copied link). */
+.toast-region { position: fixed; left: 0; right: 0; bottom: max(16px, env(safe-area-inset-bottom)); z-index: 70; display: flex; justify-content: center; pointer-events: none; padding: 0 16px; }
+.toast { margin: 0; padding: 12px 18px; border-radius: 999px; background: #0e1525; color: #ffffff; font-size: .9375rem; font-weight: 500; box-shadow: 0 12px 32px -8px rgb(0 0 0 / 40%); animation: rise 300ms var(--ease) both; }
+@media (prefers-color-scheme: dark) { .toast { background: #eef2f8; color: #0e1525; } }
+
+/* Payment confirming: the tickets come as soon as the server says so. */
+.wallet.pending { padding: 28px 20px; border-radius: var(--r2); background: var(--panel); border: 1px solid var(--line); box-shadow: var(--sh1); text-align: center; }
+.wallet.pending h2 { font-size: 1.25rem; }
+.wallet.pending p { margin: 8px auto 0; max-width: 36ch; }
+.spinner { display: block; width: 36px; height: 36px; margin: 0 auto 14px; border-radius: 999px; border: 3px solid var(--line); border-top-color: var(--ink); animation: spin 900ms linear infinite; }
+@keyframes spin { to { rotate: 1turn; } }
+
+/* Loading, and a link that does not work. */
+.boot-shell { max-width: 560px; margin: 0 auto; padding: 0 16px; display: grid; gap: 16px; }
+.sk { border-radius: var(--r2); background: var(--line); animation: pulse 1.4s ease-in-out infinite; }
+.sk-bar { height: 60px; margin: 0 -16px; border-radius: 0; }
+.sk-hero { height: 280px; }
+.sk-card { height: 420px; width: min(100%, 340px); margin: 0 auto; }
+@keyframes pulse { 50% { opacity: .55; } }
+main.empty { max-width: 560px; margin: 0 auto; padding: 40px 16px; }
+.empty-card { padding: 28px 22px; border-radius: var(--r2); background: var(--panel); border: 1px solid var(--line); box-shadow: var(--sh1); text-align: center; }
+.empty-card h1 { margin: 10px 0 16px; font-size: 1.5rem; font-weight: 800; }
+.empty-card .alert { margin: 0; text-align: left; }
+.empty-icon { width: 44px; height: 44px; color: var(--muted); stroke-width: 1.4; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+  .photo.is-loaded { scale: 1; }
+}
+
+/* Paper: every ticket in full, one under the other, never cut; no carousel, no buttons. */
+@media print {
+  :root { --bg: #ffffff; --panel: #ffffff; --ink: #000000; --muted: #333333; --line: #bbbbbb; }
+  body { background: #ffffff; }
+  button, .noprint, .top .lang, .actions, .gate, .lightbox, .toast-region, .foot { display: none !important; }
+  .top { background: none; color: #000000; border-bottom: 1px solid #bbbbbb; }
+  main.layout { display: block; padding: 0; max-width: none; }
+  .wallet { position: static !important; }
+  .alert.thanks { display: none; }
+  .hero { margin: 0 0 12px; min-height: 0; aspect-ratio: auto; background: none; color: #000000; box-shadow: none; border-radius: 0; }
+  .hero-media { display: none; }
+  .hero-body { padding: 12px 0; }
+  .hero h1, .hero-ref strong { color: #000000; }
+  .chip { background: none; border-color: #bbbbbb; color: #000000; }
+  .hero-ref { color: #333333; }
+  .wallet .wallet-track { display: block; overflow: visible; margin: 0; padding: 0; }
+  .slide { width: 100%; max-width: 420px; margin: 0 auto 18px; break-inside: avoid; page-break-inside: avoid; }
+  .ticket { scale: 1; translate: none; filter: none; animation: none; }
+  .ticket-band { -webkit-print-color-adjust: exact; print-color-adjust: exact; border: 1px solid #bbbbbb; border-bottom: 0; }
+  .ticket-body { border: 1px solid #bbbbbb; border-top: 0; }
+  .card, .ticket, .alert { break-inside: avoid; }
+  .card { box-shadow: none; margin-bottom: 12px; }
+}
