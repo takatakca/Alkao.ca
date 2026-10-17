@@ -684,8 +684,10 @@ describe("ALKAO Operations app", () => {
     await form.getByRole("button", { name: "Importer" }).click();
     await page.getByText("Import terminé.").waitFor();
     expect(await page.getByRole("status").filter({ hasText: "Import terminé." }).textContent()).toContain("6 réservations lues · 2 nouveaux clients");
-    // The comment (and the card number in it) never left the browser.
-    const { rows } = await db.pool.query(`SELECT count(*)::int AS n FROM public.ticketing_customer_bookings b JOIN public.ticketing_customers c ON c.id = b.customer_id WHERE row_to_json(b)::text LIKE '%4111%' OR row_to_json(c)::text LIKE '%4111%'`);
+    // The comment (and the card number in it) never left the browser. The card number itself
+    // is looked for: four digits alone also turn up in ids and timestamps (".584111").
+    const { rows } = await db.pool.query(`SELECT count(*)::int AS n FROM public.ticketing_customer_bookings b JOIN public.ticketing_customers c ON c.id = b.customer_id
+      WHERE row_to_json(b)::text ~ '4111[ -]?1111' OR row_to_json(c)::text ~ '4111[ -]?1111' OR row_to_json(b)::text LIKE '%carte%' OR row_to_json(c)::text LIKE '%carte%'`);
     expect(rows[0].n).toBe(0);
 
     const loyal = page.getByRole("button", { name: /Fidèle/ });
