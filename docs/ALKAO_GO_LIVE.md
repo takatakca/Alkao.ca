@@ -99,7 +99,8 @@ How it behaves:
 2. A Client owner opens `/ops`, then **Paiements**, then connects Stripe, and lists the
    Brand's website origins allowed after payment.
 3. Staff create the venue, event, sessions and ticket types, then put sessions on sale and
-   publish. In **Apparence**, they set the Brand's logo (a PNG on a transparent background),
+   publish (or load them from a file: `npm run events:import`, Run 91; Havana's steps are in
+   [HAVANA_SUR_ALKAO.md](HAVANA_SUR_ALKAO.md)). In **Apparence**, they set the Brand's logo (a PNG on a transparent background),
    its colour and its contact details, and give each event a photo (« Ajouter une photo »).
    The tickets page, the shop, the e-mails and the shared links use them (Runs 50–53). If the Brand wants its currently sellable events listed on the independent **alkao.ca** homepage, it explicitly enables **Afficher mes événements sur ALKAO**; this is OFF by default (Run 61);
    `check:golive` names a selling Brand without its look, an SVG logo, and events on sale

@@ -1,5 +1,16 @@
 # ALKAO — Agent handoff (mandatory)
 
+## Runs 90–91 — premium buyer pages and Havana's events on alkao.ca (2026-10-17)
+
+- Branch `claude/amazing-pascal-tppqd4` → PR #85. Front only for Run 90: no migration, no server logic, no new dependency.
+  - 90a `shop-ui/`: event page as a ticket center (photo hero with zoom, sticky ticket panel, live quote, total bar, other events rail), brand list, checkout, thanks and resume screens.
+  - 90b `buyer-ui/`: ticket wallet (carousel of ticket cards, full-screen gate view with Screen Wake Lock, print, offline cache v2).
+  - 90c: venue pages in the home's look, compact home filter menus, full-screen photo viewer (`home-ui/home.js`), e-mail landing pages restyled (`src/api/simple-page.ts`). The shop and tickets CSP gained `font-src 'self'`.
+- Run 91: `npm run events:import` (`src/ops/events-import.ts`, `scripts/events-import.ts`) loads one event from a file. `catalogs/havana-halloween-2026.json` holds Havana's owner-approved Halloween catalog (adult 25 $, child 5+ 12 $, Saturdays 14 h–22 h). Capacity is never guessed: `--capacity`. Owner steps in French: `docs/HAVANA_SUR_ALKAO.md`.
+- Why Havana is not on alkao.ca: the live service has no opted-in Brand, and Havana was never provisioned in production ALKAO. Promo Havana has no `ALKAO_CLIENT_ID`/`ALKAO_BRAND_ID`, and the public API answers 404. This needs the operator (Coolify #84, `control:apply`, Stripe), then one `events:import`.
+- Local QA: 88 files, 625 tests before Run 91, plus 6 for the import. `test/ui/offline-cross-tab.test.ts` needs `ALKAO_CHROMIUM_PATH=/opt/pw-browsers/chromium` in cloud containers.
+- NEXT EXACT ACTION: merge PR #85 when green; operator follows `docs/HAVANA_SUR_ALKAO.md`.
+
 ## Run 89 — degraded incident archive must not blank the scanner (2026-10-16)
 
 - Repo `takatakca/Alkao.ca`, branch `main`. Previous functional SHA `427668f7f2a5700e25b294976d0c011bc9aafe28` passed CI 38960997547 and Package 38960997727. Run 88 documentation commit `e9fe3e76a943cb1f78b9e48ed49556d24f87b8ff`; its CI was cancelled when Run 89 began, Package 38961620983 succeeded. Strict Verify deployment 38961326402 for Run 88 source **FAILURE**: live Coolify did not attest matching build SHA.

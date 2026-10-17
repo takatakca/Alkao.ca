@@ -1,5 +1,12 @@
 # ALKAO — Task queue (priority ordered)
 
+## Runs 90–91 — buyer pages and Havana on alkao.ca (2026-10-17)
+
+1. Merge PR #85 (Run 90 premium buyer pages, Run 91 `events:import`) when CI is green.
+2. Operator: Coolify #84 (`ALKAO_MIGRATE_ON_START=true`, redeploy, `/health/ready` `"schema":"current"`).
+3. Operator and owner: follow `docs/HAVANA_SUR_ALKAO.md` (provision Havana, Stripe, `events:import --capacity … --publish --list-on-alkao`, Apparence, `check:golive`, test purchase).
+4. Promo Havana: set `ALKAO_URL`, `ALKAO_CLIENT_ID`, `ALKAO_BRAND_ID` in its Coolify resource once Havana exists in ALKAO.
+
 ## Run 89 — local incident report storage failure (2026-10-16)
 
 Code `8b06cf83`: automatic post-close scanner cleanup gracefully retains original audit if incident archive storage is corrupt; accessible staff warning, and regression simulating recovery. CI 38962087021 **SUCCESS** and Package 38962086850 **SUCCESS** for code `8b06cf83`. New docs-only commit needs separate verification. Next P1: actual iOS/Android private mode/storage quota + CSV download acceptance, multi-physical-device attendance conflicts and operations remediation workflow. P0 unchanged: Coolify #84 SHA/DB/backup/migrations/key rotation/Resend/Stripe and transfer pilot, default-OFF global and Brand flags.
