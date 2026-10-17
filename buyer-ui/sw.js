@@ -1,14 +1,23 @@
 // Run 51: the tickets page opens without a network (a campground's weak signal at the gate).
 // Only the page's own files, network first: online, the newest version; offline, the last
 // one seen. The order itself is kept by the page on the device (app.js), never here.
-const CACHE = "alkao-billets-v1";
+// Run 90b: also the page's two fonts and the ALKAO photos it shows (same origin, kept when
+// seen), best effort: the page works without them, so they never block the install.
+const CACHE = "alkao-billets-v2";
 const FILES = [
   "/billets", "/billets/app.js", "/billets/styles.css", "/billets/i18n.js", "/billets/calendar.js",
   "/billets/vendor/htm-preact.js", "/billets/vendor/qrcode.mjs",
 ];
+const FONTS = ["/assets/home/fonts/inter-latin.woff2", "/assets/home/fonts/montserrat-latin.woff2"];
+const PHOTOS = /^\/assets\/home\/img\/[a-z0-9-]+\.webp$/;
+const kept = (path) => FILES.includes(path) || FONTS.includes(path) || PHOTOS.test(path);
 
 self.addEventListener("install", (event) => {
-  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(FILES)).then(() => self.skipWaiting()));
+  event.waitUntil(
+    caches.open(CACHE)
+      .then((cache) => cache.addAll(FILES).then(() => cache.addAll(FONTS).catch(() => {})))
+      .then(() => self.skipWaiting()),
+  );
 });
 
 self.addEventListener("activate", (event) => {
@@ -21,7 +30,7 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
-  if (event.request.method !== "GET" || url.origin !== self.location.origin || !FILES.includes(url.pathname)) return;
+  if (event.request.method !== "GET" || url.origin !== self.location.origin || !kept(url.pathname)) return;
   event.respondWith(
     fetch(event.request)
       .then((response) => {

@@ -29,6 +29,8 @@ const HEADERS = (type: string) => ({
     "style-src 'self'",
     // Run 50: the Brand's logo and the event's photo are https addresses it sets in /ops.
     "img-src 'self' data: https:",
+    // Run 90b: the ALKAO fonts (Montserrat, Inter), served from this origin.
+    "font-src 'self'",
     "connect-src 'self'",
     "frame-ancestors 'none'",
     "base-uri 'none'",
