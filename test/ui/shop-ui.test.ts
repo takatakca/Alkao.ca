@@ -100,6 +100,9 @@ describe("hosted ticket shop", () => {
       const page = await shop(f);
       const box = page.getByRole("region", { name: "Séance complète ? Inscrivez-vous à la liste d'attente" });
       await box.waitFor();
+      // Run 90: the form is folded under its title in the purchase panel.
+      expect(await box.getByLabel("Votre courriel").isVisible()).toBe(false);
+      await box.getByRole("button", { name: "Séance complète ? Inscrivez-vous à la liste d'attente" }).click();
       await box.getByLabel("Votre courriel").fill("attente@example.test");
       await box.getByRole("button", { name: "M'avertir" }).click();
       await box.getByText("C'est noté. Vous recevrez un courriel si des places se libèrent pour cette séance.").waitFor();
@@ -347,6 +350,9 @@ describe("hosted ticket shop", () => {
     await page.getByRole("button", { name: new RegExp(s.label) }).click();
     await plus(page, f.types.find((x) => x.code === "GENERAL")!.name).click();
     await page.getByRole("cell", { name: "Total" }).waitFor();
+    // Run 90: the field is folded behind a link until the buyer has a code.
+    expect(await page.getByLabel("Code promo").count()).toBe(0);
+    await page.getByRole("button", { name: "J'ai un code promo" }).click();
     await page.getByLabel("Code promo").fill("pasbon");
     await page.getByRole("button", { name: "Appliquer" }).click();
     await page.getByRole("alert").getByText("Ce code n'existe pas pour cet événement.").waitFor();
@@ -434,6 +440,8 @@ describe("hosted ticket shop", () => {
     const other = await shop(seed.festi);
     expect(await other.evaluate(accent)).not.toBe("#0f766e");
     expect(await other.locator("img.photo").count()).toBe(0);
+    // Run 90: without its own photo, the event shows a neutral one served by ALKAO.
+    expect(await other.locator("img.hero-img").getAttribute("src")).toMatch(/^\/assets\/home\/img\/(cat-[a-z]+|event-fallback)\.webp$/);
   });
 
   it("ran without script errors", () => {

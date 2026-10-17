@@ -3,7 +3,9 @@
 //   /acheter/<clientId>/<brandId>/<eventId>    choose a session and tickets, pay
 //   /acheter/merci/<clientId>/<brandId>/<holdId>  back from Stripe → the buyer's tickets
 // Every price comes from the server; the page only sends what the buyer picked.
-import { html, render, useEffect, useRef, useState } from "/shop/vendor/htm-preact.js";
+// Run 90: a full event page (photo with zoom, sticky purchase panel, date strip, live quote,
+// the Brand's other events), the same rules and calls underneath.
+import { html, render, useEffect, useLayoutEffect, useRef, useState } from "/shop/vendor/htm-preact.js";
 import { localeOf, pickLanguage, switchLanguage } from "/shop/i18n.js";
 
 // Run 16: French by default, English on request (?lang=en, the switch, or the browser).
@@ -31,6 +33,7 @@ const T = {
     generic: "Une erreur est survenue. Réessayez dans un instant.",
     promo: {
       label: "Code promo", apply: "Appliquer", remove: "Retirer le code", discount: (c) => `Rabais (${c})`,
+      toggle: "J'ai un code promo", applied: (c) => `Code ${c} appliqué`,
       unknown: "Ce code n'existe pas pour cet événement.", inactive: "Ce code n'est plus actif.",
       not_started: "Ce code n'est pas encore valide.", ended: "Ce code a expiré.", used_up: "Ce code a atteint sa limite d'utilisations.",
     },
@@ -48,14 +51,18 @@ const T = {
     notFinished: "Paiement non terminé. Vos places sont encore réservées quelques minutes.",
     resume: "Reprendre le paiement",
     release: "Libérer mes places",
-    step1: "1. Choisissez votre séance",
+    ticketsTitle: "Billets",
+    step1: "Choisissez votre séance",
     noSessions: "Aucune séance en vente pour le moment.",
     doorSale: "Vente à la porte",
     noSessionsToday: "Aucune séance à vendre aujourd'hui.",
     full: "Complet",
-    fewLeft: (n) => `Plus que ${n} places`,
+    fewLeft: (n) => `Plus que ${n} place${n > 1 ? "s" : ""}`,
     available: "Places disponibles",
-    step2: "2. Vos billets",
+    prevDates: "Dates précédentes",
+    nextDates: "Dates suivantes",
+    step2: "Vos billets",
+    pickDateFirst: "Choisissez une date pour voir les billets.",
     optionsTitle: "Ajoutez des options",
     optionsHint: "Repas, activités… Choisissez d'abord vos billets.",
     free: "Gratuit",
@@ -69,9 +76,20 @@ const T = {
     quantity: (n) => `Quantité ${n}`,
     add: (n) => `Ajouter ${n}`,
     gst: "TPS", qst: "TVQ",
+    beforeTax: "Avant taxes",
+    priceDetail: "Détail du prix, calculé par la billetterie",
     total: "Total",
+    taxesNote: "Taxes incluses dans le total. Aucuns frais ajoutés.",
+    taxesIn: "taxes incluses",
+    tickets: (n) => `${n} billet${n > 1 ? "s" : ""}`,
+    pickDate: "Choisissez une date",
+    pickTickets: "Choisissez vos billets",
+    seeTickets: "Voir les billets",
     next: "Continuer",
-    step3: "3. Vos coordonnées",
+    step3: "Vos coordonnées",
+    stepsLabel: "Étapes de l'achat",
+    stepTickets: "Billets", stepDetails: "Coordonnées", stepPay: "Paiement",
+    summaryTitle: "Votre commande",
     heldFor: "Places réservées pendant ",
     email: "Courriel (vos billets y seront envoyés)",
     name: "Nom complet",
@@ -89,6 +107,31 @@ const T = {
     languages: { fr: "En français", en: "En anglais", "fr-en": "En français et en anglais", none: "Sans paroles" },
     accessibilityTitle: "Accessibilité",
     policyNone: (brand) => `Les échanges et remboursements suivent la politique de ${brand || "l'organisateur"}. Pour la connaître avant de payer, écrivez-lui :`,
+    // Run 90: the event page.
+    about: "À propos",
+    readMore: "Lire la suite",
+    readLess: "Réduire",
+    venueTitle: "Lieu",
+    directions: "Itinéraire",
+    newTab: " (Google Maps, nouvel onglet)",
+    organizerTitle: "Organisateur",
+    organizedBy: "Organisé par",
+    website: "Site web",
+    from: "À partir de",
+    plusTax: "+ taxes",
+    moreDates: (n) => `+ ${n} autre${n > 1 ? "s" : ""} date${n > 1 ? "s" : ""}`,
+    share: "Partager",
+    linkCopied: "Lien copié",
+    copyFailed: "Impossible de copier le lien.",
+    zoom: "Agrandir la photo",
+    photoOf: (t) => `Photo : ${t}`,
+    zoomIn: "Zoom avant", zoomOut: "Zoom arrière", zoomFit: "Ajuster à l'écran", close: "Fermer",
+    zoomHint: "Molette, pincement ou double-clic pour zoomer",
+    otherEvents: (b) => (b ? `Autres événements de ${b}` : "Autres événements"),
+    prevEvents: "Événements précédents",
+    nextEvents: "Événements suivants",
+    noDate: "Aucune date en vente",
+    onSale: (n) => (n === 0 ? "" : `${n} événement${n > 1 ? "s" : ""} à l'affiche`),
     footer: "Billetterie ALKAO",
     shop: "Billetterie",
     noEvents: "Aucun événement en vente pour le moment.",
@@ -113,6 +156,7 @@ const T = {
     waitDone: "C'est noté. Vous recevrez un courriel si des places se libèrent pour cette séance.",
     waitFree: "Des places viennent de se libérer : choisissez la séance ci-dessus.",
     findTitle: "Vous avez déjà acheté ? Retrouvez vos billets",
+    findLead: "Nous les renvoyons à l'adresse utilisée pour l'achat.",
     findEmail: "Le courriel utilisé pour l'achat",
     findSend: "Renvoyer mes billets",
     findSent: "Si une commande à venir correspond à cette adresse, vos billets viennent de vous être renvoyés. Vérifiez aussi vos courriels indésirables.",
@@ -139,6 +183,7 @@ const T = {
     generic: "Something went wrong. Please try again in a moment.",
     promo: {
       label: "Promo code", apply: "Apply", remove: "Remove the code", discount: (c) => `Discount (${c})`,
+      toggle: "I have a promo code", applied: (c) => `Code ${c} applied`,
       unknown: "This code does not exist for this event.", inactive: "This code is no longer active.",
       not_started: "This code is not valid yet.", ended: "This code has expired.", used_up: "This code has reached its limit.",
     },
@@ -156,14 +201,18 @@ const T = {
     notFinished: "Payment not completed. Your seats are still held for a few minutes.",
     resume: "Resume payment",
     release: "Release my seats",
-    step1: "1. Choose your session",
+    ticketsTitle: "Tickets",
+    step1: "Choose your session",
     noSessions: "No session on sale right now.",
     doorSale: "Door sale",
     noSessionsToday: "No session to sell today.",
     full: "Sold out",
-    fewLeft: (n) => `Only ${n} seats left`,
+    fewLeft: (n) => `Only ${n} seat${n > 1 ? "s" : ""} left`,
     available: "Seats available",
-    step2: "2. Your tickets",
+    prevDates: "Earlier dates",
+    nextDates: "Later dates",
+    step2: "Your tickets",
+    pickDateFirst: "Choose a date to see the tickets.",
     optionsTitle: "Add options",
     optionsHint: "Meals, activities… Choose your tickets first.",
     free: "Free",
@@ -177,9 +226,20 @@ const T = {
     quantity: (n) => `Quantity ${n}`,
     add: (n) => `Add ${n}`,
     gst: "GST", qst: "QST",
+    beforeTax: "Before taxes",
+    priceDetail: "Price details, calculated by the box office",
     total: "Total",
+    taxesNote: "Taxes included in the total. No added fees.",
+    taxesIn: "taxes included",
+    tickets: (n) => `${n} ticket${n > 1 ? "s" : ""}`,
+    pickDate: "Choose a date",
+    pickTickets: "Choose your tickets",
+    seeTickets: "See tickets",
     next: "Continue",
-    step3: "3. Your details",
+    step3: "Your details",
+    stepsLabel: "Purchase steps",
+    stepTickets: "Tickets", stepDetails: "Details", stepPay: "Payment",
+    summaryTitle: "Your order",
     heldFor: "Seats held for ",
     email: "Email (your tickets will be sent there)",
     name: "Full name",
@@ -196,6 +256,30 @@ const T = {
     languages: { fr: "In French", en: "In English", "fr-en": "In French and English", none: "No spoken words" },
     accessibilityTitle: "Accessibility",
     policyNone: (brand) => `Exchanges and refunds follow ${brand || "the organizer"}'s policy. To read it before paying, write to them:`,
+    about: "About",
+    readMore: "Read more",
+    readLess: "Show less",
+    venueTitle: "Venue",
+    directions: "Directions",
+    newTab: " (Google Maps, new tab)",
+    organizerTitle: "Organizer",
+    organizedBy: "Organized by",
+    website: "Website",
+    from: "From",
+    plusTax: "+ taxes",
+    moreDates: (n) => `+ ${n} more date${n > 1 ? "s" : ""}`,
+    share: "Share",
+    linkCopied: "Link copied",
+    copyFailed: "The link could not be copied.",
+    zoom: "Enlarge the photo",
+    photoOf: (t) => `Photo: ${t}`,
+    zoomIn: "Zoom in", zoomOut: "Zoom out", zoomFit: "Fit to screen", close: "Close",
+    zoomHint: "Scroll, pinch or double-click to zoom",
+    otherEvents: (b) => (b ? `More events by ${b}` : "More events"),
+    prevEvents: "Previous events",
+    nextEvents: "Next events",
+    noDate: "No date on sale",
+    onSale: (n) => (n === 0 ? "" : `${n} event${n > 1 ? "s" : ""} on sale`),
     footer: "ALKAO Ticketing",
     shop: "Tickets",
     noEvents: "No event on sale right now.",
@@ -218,13 +302,50 @@ const T = {
     waitDone: "Got it. You will receive an email if seats open up for this session.",
     waitFree: "Seats have just opened up: choose the session above.",
     findTitle: "Already bought? Find your tickets",
+    findLead: "We send them again to the address used for the purchase.",
     findEmail: "The email used for the purchase",
     findSend: "Send my tickets again",
     findSent: "If an upcoming order matches this address, your tickets have just been sent again. Also check your spam folder.",
     other: "Français",
   },
 }[LANG];
-const switcher = html`<p class="lang"><button class="link" onClick=${() => switchLanguage(LANG === "en" ? "fr" : "en")}>${T.other}</button></p>`;
+
+// ── Icons (24 px strokes, decorative: the text next to them says it) ────────
+const PATHS = {
+  calendar: "M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z",
+  pin: "M12 21.5s7-6.1 7-11.5a7 7 0 1 0-14 0c0 5.4 7 11.5 7 11.5zM12 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z",
+  clock: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 7v5l3 2",
+  share: "M4 13v6a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-6M16 7l-4-4-4 4M12 3v13",
+  expand: "M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7",
+  zoomIn: "M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM20 20l-4-4M11 8v6M8 11h6",
+  zoomOut: "M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM20 20l-4-4M8 11h6",
+  fit: "M4 9V5a1 1 0 0 1 1-1h4M15 4h4a1 1 0 0 1 1 1v4M20 15v4a1 1 0 0 1-1 1h-4M9 20H5a1 1 0 0 1-1-1v-4",
+  close: "M18 6 6 18M6 6l12 12",
+  left: "M15 18l-6-6 6-6",
+  right: "M9 18l6-6-6-6",
+  arrow: "M5 12h14M13 6l6 6-6 6",
+  plus: "M12 5v14M5 12h14",
+  minus: "M5 12h14",
+  lock: "M7 11V8a5 5 0 0 1 10 0v3M6 11h12a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-8a1 1 0 0 1 1-1z",
+  check: "M20 6 9 17l-5-5",
+  tag: "M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8zM7.5 7.5h.01",
+  mail: "M4 5h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zM21 7l-9 6-9-6",
+  phone: "M21 16.5v3a2 2 0 0 1-2.2 2 19.5 19.5 0 0 1-8.5-3 19.2 19.2 0 0 1-6-6 19.5 19.5 0 0 1-3-8.6A2 2 0 0 1 3.3 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.4 2.1L7.3 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.5 1.6z",
+  globe: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM3 12h18M12 3a14 14 0 0 1 3.6 9A14 14 0 0 1 12 21a14 14 0 0 1-3.6-9A14 14 0 0 1 12 3z",
+  external: "M18 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h5M15 3h6v6M10 14 21 3",
+  route: "M3 11 21 3l-8 18-2-8-8-2z",
+  users: "M16 20v-1.5a3.5 3.5 0 0 0-3.5-3.5h-5A3.5 3.5 0 0 0 4 18.5V20M10 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM20 20v-1.5a3.5 3.5 0 0 0-2.5-3.4M15.5 4.2a3.5 3.5 0 0 1 0 6.6",
+  door: "M5 21V4a1 1 0 0 1 1-1h9l4 2v16M3 21h18M14 12h.01",
+  speech: "M20 15a2 2 0 0 1-2 2H8l-4 4V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2z",
+  access: "M12 6a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM9 9h6M12 9v5l4 5M12 14l-4 5",
+  info: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 16v-5M12 8h.01",
+  ticket: "M3 8a2 2 0 0 0 2-2h14a2 2 0 0 0 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 0-2 2H5a2 2 0 0 0-2-2v-2a2 2 0 0 0 0-4zM14 6v12",
+};
+const Icon = ({ n, cls = "i" }) => html`<svg class=${cls} viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d=${PATHS[n]} /></svg>`;
+const stepNo = (n) => html`<span class="step-n" aria-hidden="true">${n}</span><span class="sr-only">${n}. </span>`;
+const reduced = () => { try { return matchMedia("(prefers-reduced-motion: reduce)").matches; } catch { return false; } };
+
+const switcher = html`<p class="lang"><button class="lang-btn" lang=${LANG === "en" ? "fr" : "en"} onClick=${() => switchLanguage(LANG === "en" ? "fr" : "en")}><${Icon} n="globe" />${T.other}</button></p>`;
 
 const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
 // Run 35: door sales. The same shop and the same Stripe payment (so the same commission),
@@ -249,24 +370,33 @@ const https = (u) => (typeof u === "string" && /^https:\/\/[^\s"'<>\\]+$/.test(u
 function applyLook(brand) {
   const hex = /^#[0-9a-f]{6}$/i;
   if (hex.test(brand?.accentColor ?? "") && hex.test(brand?.onAccentColor ?? "")) {
-    document.documentElement.style.setProperty("--accent", brand.accentColor);
-    document.documentElement.style.setProperty("--accent-ink", brand.onAccentColor);
+    const s = document.documentElement.style;
+    s.setProperty("--accent", brand.accentColor);
+    s.setProperty("--accent-ink", brand.onAccentColor);
+    // The top bar wears the Brand's colour too, in light and dark.
+    s.setProperty("--top", brand.accentColor);
+    s.setProperty("--top-ink", brand.onAccentColor);
   }
 }
+// Run 90: without the organizer's photo, the category's photo (Run 69), else a neutral one.
+const CATEGORY_PHOTO = { concerts: "cat-concerts", festivals: "cat-festivals", sports: "cat-sports", famille: "cat-family", "plein-air": "cat-camping", spectacles: "cat-shows", soirees: "cat-nightlife", experiences: "cat-live" };
+const fallbackPhoto = (category) => `/assets/home/img/${CATEGORY_PHOTO[category] ?? "event-fallback"}.webp`;
+
 /** The logo, or the Brand's name when the image cannot be shown. */
 function Logo({ src, name }) {
   const [failed, setFailed] = useState(false);
-  return failed ? name : html`<img class="logo" src=${src} alt=${name} onError=${() => setFailed(true)} />`;
+  return failed ? html`<span class="brand-name">${name}</span>` : html`<img class="logo" src=${src} alt=${name} height="36" onError=${() => setFailed(true)} />`;
 }
 const hideBroken = (e) => { e.currentTarget.hidden = true; };
 /** The Brand's band: its colour, its logo (or name), the language switch. */
 const Top = ({ brand, extra }) => {
   const logo = https(brand?.logoUrl);
-  return html`<header class="top"><div class="top-row">
-    <p class="brand">${logo ? html`<${Logo} src=${logo} name=${brand.name} />` : brand?.name ?? ""}${extra ?? ""}</p>
+  return html`<header class="top"><div class="wrap top-row">
+    <p class="brand">${logo ? html`<${Logo} src=${logo} name=${brand.name} />` : html`<span class="brand-name">${brand?.name ?? ""}</span>`}${extra ?? ""}</p>
     ${switcher}
   </div></header>`;
 };
+const Footer = () => html`<footer class="foot"><div class="wrap foot-row"><p>${T.footer}</p><p class="foot-secure"><${Icon} n="lock" />${T.stripe}</p></div></footer>`;
 const STORE = (holdId) => `alkao.checkout.${holdId}`;
 const SCOPE_TEXT = (t) => (t.addOnScope === "per_order" ? T.perOrder : t.addOnScope === "up_to_admissions" ? T.upToAdmissions : T.perAdmission);
 
@@ -287,6 +417,26 @@ const save = (holdId, value) => { try { sessionStorage.setItem(STORE(holdId), JS
 
 const money = (cents) => (Number(cents ?? 0) / 100).toLocaleString(localeOf(LANG), { style: "currency", currency: "CAD" });
 const whenFr = (iso, tz) => new Intl.DateTimeFormat(localeOf(LANG), { dateStyle: "full", timeStyle: "short", timeZone: tz || "America/Toronto" }).format(new Date(iso));
+const fmt = (iso, tz, o) => new Intl.DateTimeFormat(localeOf(LANG), { timeZone: tz || "America/Toronto", ...o }).format(new Date(iso));
+/** The pieces of a date card: weekday, day, month, (year when not this one), time. */
+function dateParts(iso, tz) {
+  const year = fmt(iso, tz, { year: "numeric" });
+  return {
+    wd: fmt(iso, tz, { weekday: "short" }),
+    day: fmt(iso, tz, { day: "numeric" }),
+    mon: fmt(iso, tz, { month: "short" }),
+    year: year === fmt(Date.now(), tz, { year: "numeric" }) ? null : year,
+    time: fmt(iso, tz, { hour: "numeric", minute: "2-digit" }),
+  };
+}
+const shortDate = (iso, tz) => fmt(iso, tz, { weekday: "short", day: "numeric", month: "short" });
+/** "From": the lowest paid admission before taxes (as the platform home shows it), or free. */
+function priceFrom(types) {
+  const admissions = (types ?? []).filter((t) => t.kind === "admission");
+  if (admissions.length === 0) return null;
+  const paid = admissions.map((t) => t.priceCents).filter((c) => c > 0);
+  return paid.length ? { cents: Math.min(...paid) } : { free: true };
+}
 
 class ApiError extends Error {
   constructor(status, code, details) { super(code); this.status = status; this.code = code; this.details = details; }
@@ -321,15 +471,406 @@ function violationText(v, types) {
   }
 }
 
-function Countdown({ until, onExpire }) {
+// Run 90: what another event of the Brand shows on a card: its next date and its "from" price,
+// read from the same public event the shop sells. Once per event and page.
+const summaries = new Map();
+function summary(id) {
+  if (!summaries.has(id)) {
+    summaries.set(id, call(`/events/${id}`).then((d) => {
+      const next = d.sessions.find((s) => s.available > 0) ?? d.sessions[0] ?? null;
+      return { next: next?.startsAt ?? null, count: d.sessions.length, tz: d.event.venue?.timezone, from: priceFrom(d.ticketTypes) };
+    }, () => null));
+  }
+  return summaries.get(id);
+}
+function useSummaries(ids) {
+  const [map, setMap] = useState(null);
+  useEffect(() => {
+    let live = true;
+    Promise.all(ids.map((id) => summary(id).then((s) => [id, s]))).then((pairs) => { if (live) setMap(Object.fromEntries(pairs)); });
+    return () => { live = false; };
+  }, [ids.join(",")]);
+  return map;
+}
+/** Soonest first; events without a date on sale last. */
+const byNextDate = (events, sums) => [...events].sort((a, b) => {
+  const x = sums?.[a.id]?.next, y = sums?.[b.id]?.next;
+  return x && y ? Date.parse(x) - Date.parse(y) : x ? -1 : y ? 1 : 0;
+});
+
+/** A short message at the bottom of the screen ("Lien copié"), read by screen readers. */
+function useToast() {
+  const [msg, setMsg] = useState(null);
+  const timer = useRef(0);
+  const show = (m) => { setMsg(m); clearTimeout(timer.current); timer.current = setTimeout(() => setMsg(null), 2600); };
+  return [msg, show];
+}
+const Toast = ({ msg }) => html`<div class="toast-zone" role="status">${msg && html`<p class="toast"><${Icon} n="check" />${msg}</p>`}</div>`;
+
+/** A number that slides up or down when it changes (stepper). */
+function Num({ value }) {
+  const prev = useRef(value);
+  const dir = value > prev.current ? "up" : value < prev.current ? "down" : "";
+  useEffect(() => { prev.current = value; }, [value]);
+  return html`<span key=${value} class=${`qty-num ${dir}`}>${value}</span>`;
+}
+
+/** An amount that counts to its new value (the total); screen readers get the final value. */
+function Money({ cents }) {
+  const [shown, setShown] = useState(cents);
+  const cur = useRef(cents);
+  useEffect(() => {
+    const from = cur.current;
+    if (from === cents || reduced()) { cur.current = cents; setShown(cents); return; }
+    const t0 = performance.now();
+    let raf = 0;
+    const step = (t) => {
+      const k = Math.min(1, (t - t0) / 360);
+      cur.current = Math.round(from + (cents - from) * (1 - Math.pow(1 - k, 3)));
+      setShown(cur.current);
+      if (k < 1) raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [cents]);
+  return html`<span aria-hidden="true">${money(shown)}</span><span class="sr-only">${money(cents)}</span>`;
+}
+
+/** Run 90: the hold's real expiry, as a clock and a bar that empties. */
+function HoldTimer({ until, start, onExpire }) {
   const [left, setLeft] = useState(Math.max(0, until - Date.now()));
   useEffect(() => {
     const t = setInterval(() => { const l = Math.max(0, until - Date.now()); setLeft(l); if (l === 0) { clearInterval(t); onExpire(); } }, 1000);
     return () => clearInterval(t);
   }, [until]);
   const s = Math.ceil(left / 1000);
-  return html`<span class="timer">${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}</span>`;
+  const share = Math.max(0, Math.min(1, left / Math.max(1, until - start)));
+  return html`<div class=${`hold${s <= 120 ? " low" : ""}`}>
+    <${Icon} n="clock" />
+    <p>${T.heldFor}<span class="timer" role="timer">${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}</span>.</p>
+    <span class="hold-bar" aria-hidden="true"><span style=${{ transform: `scaleX(${share})` }}></span></span>
+  </div>`;
 }
+
+// ── Zoomable photo (Run 90): wheel, pinch, double-click, drag; Escape or the button closes ──
+const MAX_ZOOM = 5;
+function Lightbox({ src, alt, onClose }) {
+  const dialog = useRef(null);
+  const stage = useRef(null);
+  const img = useRef(null);
+  const view = useRef({ s: 1, x: 0, y: 0 });
+  const pointers = useRef(new Map());
+  const pinch = useRef(null);
+  const [scale, setScale] = useState(1);
+
+  const paint = (animate) => {
+    const el = img.current;
+    if (!el) return;
+    const { s, x, y } = view.current;
+    el.classList.toggle("anim", !!animate && !reduced());
+    el.style.transform = `translate3d(${x}px, ${y}px, 0) scale(${s})`;
+    setScale(s);
+  };
+  const clamp = () => {
+    const el = img.current, box = stage.current;
+    const v = view.current;
+    const mx = Math.max(0, (el.offsetWidth * v.s - box.clientWidth) / 2);
+    const my = Math.max(0, (el.offsetHeight * v.s - box.clientHeight) / 2);
+    v.x = Math.min(mx, Math.max(-mx, v.x));
+    v.y = Math.min(my, Math.max(-my, v.y));
+  };
+  // A point of the screen, from the photo's centre (as laid out, before zoom).
+  const fromCentre = (clientX, clientY) => {
+    const r = stage.current.getBoundingClientRect(), el = img.current;
+    return [clientX - r.left - el.offsetLeft - el.offsetWidth / 2, clientY - r.top - el.offsetTop - el.offsetHeight / 2];
+  };
+  const zoomTo = (next, cx = 0, cy = 0, animate = false) => {
+    const v = view.current;
+    const s = Math.min(MAX_ZOOM, Math.max(1, next));
+    const k = s / v.s;
+    view.current = s === 1 ? { s, x: 0, y: 0 } : { s, x: cx - k * (cx - v.x), y: cy - k * (cy - v.y) };
+    clamp();
+    paint(animate);
+  };
+
+  useEffect(() => {
+    const d = dialog.current;
+    document.documentElement.classList.add("lb-open");
+    d.showModal();
+    const wheel = (e) => { e.preventDefault(); const [cx, cy] = fromCentre(e.clientX, e.clientY); zoomTo(view.current.s * Math.exp(-e.deltaY * 0.0018), cx, cy); };
+    const box = stage.current;
+    box.addEventListener("wheel", wheel, { passive: false });
+    return () => { box.removeEventListener("wheel", wheel); document.documentElement.classList.remove("lb-open"); };
+  }, []);
+
+  const down = (e) => {
+    stage.current.setPointerCapture?.(e.pointerId);
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pointers.current.size === 2) {
+      const [a, b] = [...pointers.current.values()];
+      pinch.current = { d: Math.hypot(a.x - b.x, a.y - b.y), mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2 };
+    }
+  };
+  const move = (e) => {
+    const p = pointers.current.get(e.pointerId);
+    if (!p) return;
+    const dx = e.clientX - p.x, dy = e.clientY - p.y;
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pointers.current.size === 2 && pinch.current) {
+      const [a, b] = [...pointers.current.values()];
+      const d = Math.hypot(a.x - b.x, a.y - b.y), mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+      const [cx, cy] = fromCentre(mx, my);
+      view.current.x += mx - pinch.current.mx;
+      view.current.y += my - pinch.current.my;
+      zoomTo(view.current.s * (d / Math.max(1, pinch.current.d)), cx, cy);
+      pinch.current = { d, mx, my };
+    } else if (view.current.s > 1) {
+      view.current.x += dx;
+      view.current.y += dy;
+      clamp();
+      paint(false);
+    }
+  };
+  const up = (e) => { pointers.current.delete(e.pointerId); if (pointers.current.size < 2) pinch.current = null; };
+  const dbl = (e) => { const [cx, cy] = fromCentre(e.clientX, e.clientY); zoomTo(view.current.s > 1.05 ? 1 : 2.5, cx, cy, true); };
+  const key = (e) => {
+    const v = view.current;
+    if (e.key === "+" || e.key === "=") zoomTo(v.s * 1.4, 0, 0, true);
+    else if (e.key === "-" || e.key === "_") zoomTo(v.s / 1.4, 0, 0, true);
+    else if (e.key === "0") zoomTo(1, 0, 0, true);
+    else if (v.s > 1 && e.key.startsWith("Arrow")) {
+      const step = 60;
+      if (e.key === "ArrowLeft") v.x += step; else if (e.key === "ArrowRight") v.x -= step;
+      else if (e.key === "ArrowUp") v.y += step; else v.y -= step;
+      e.preventDefault(); clamp(); paint(true);
+    } else return;
+  };
+  return html`<dialog class="lightbox" ref=${dialog} aria-label=${T.photoOf(alt)} onClose=${onClose} onKeyDown=${key}>
+    <div class="lb-bar">
+      <p class="lb-hint">${T.zoomHint}</p>
+      <div class="lb-tools">
+        <button type="button" class="lb-btn" aria-label=${T.zoomOut} disabled=${scale <= 1} onClick=${() => zoomTo(view.current.s / 1.5, 0, 0, true)}><${Icon} n="zoomOut" /></button>
+        <span class="lb-pct" aria-hidden="true">${Math.round(scale * 100)} %</span>
+        <button type="button" class="lb-btn" aria-label=${T.zoomIn} disabled=${scale >= MAX_ZOOM} onClick=${() => zoomTo(view.current.s * 1.5, 0, 0, true)}><${Icon} n="zoomIn" /></button>
+        <button type="button" class="lb-btn" aria-label=${T.zoomFit} disabled=${scale <= 1} onClick=${() => zoomTo(1, 0, 0, true)}><${Icon} n="fit" /></button>
+        <button type="button" class="lb-btn lb-close" aria-label=${T.close} autofocus onClick=${() => dialog.current.close()}><${Icon} n="close" /></button>
+      </div>
+    </div>
+    <div class=${`lb-stage${scale > 1 ? " zoomed" : ""}`} ref=${stage} onPointerDown=${down} onPointerMove=${move} onPointerUp=${up} onPointerCancel=${up} onDblClick=${dbl}>
+      <img ref=${img} src=${src} alt=${alt} draggable="false" />
+    </div>
+  </dialog>`;
+}
+
+// ── Horizontal rails: dates in the panel, events below (scroll-snap, arrows, swipe) ──
+function useEdges(ref, deps) {
+  const [edges, setEdges] = useState({ start: false, end: false, index: 1, count: 0 });
+  const update = () => {
+    const el = ref.current;
+    if (!el) return;
+    const first = el.firstElementChild;
+    const step = first ? first.getBoundingClientRect().width + parseFloat(getComputedStyle(el).columnGap || "0") : 1;
+    const count = el.children.length;
+    const visible = Math.max(1, Math.round(el.clientWidth / Math.max(1, step)));
+    const index = Math.min(count, Math.round(el.scrollLeft / Math.max(1, step)) + 1);
+    setEdges({ start: el.scrollLeft > 4, end: el.scrollLeft + el.clientWidth < el.scrollWidth - 4, index, count, last: Math.min(count, index + visible - 1) });
+  };
+  useEffect(() => {
+    update();
+    if (!ref.current || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(update);
+    ro.observe(ref.current);
+    return () => ro.disconnect();
+  }, deps);
+  const by = (dir) => ref.current?.scrollBy({ left: dir * ref.current.clientWidth * 0.85, behavior: reduced() ? "auto" : "smooth" });
+  return [edges, update, by];
+}
+
+function DateStrip({ sessions, tz, value, onPick }) {
+  const ref = useRef(null);
+  const [edges, update, by] = useEdges(ref, [sessions.length]);
+  return html`<div class="strip">
+    <button type="button" class="strip-arrow prev" aria-label=${T.prevDates} hidden=${!edges.start} onClick=${() => by(-1)}><${Icon} n="left" /></button>
+    <div class="dates" ref=${ref} onScroll=${update}>
+      ${sessions.map((s) => {
+        const p = dateParts(s.startsAt, tz);
+        const few = s.available > 0 && s.available <= 20;
+        return html`<button type="button" class="session date-card" aria-pressed=${s.id === value ? "true" : "false"} disabled=${s.available === 0} onClick=${() => onPick(s.id)}>
+          <span class="sr-only">${whenFr(s.startsAt, tz)}, </span>
+          <span class="dc-wd" aria-hidden="true">${p.wd}</span>
+          <span class="dc-day" aria-hidden="true">${p.day}</span>
+          <span class="dc-mon" aria-hidden="true">${p.mon}${p.year ? ` ${p.year}` : ""}</span>
+          <span class="dc-time" aria-hidden="true">${p.time}</span>
+          <span class=${`dc-avail${few ? " few" : ""}`}>${s.available === 0 ? T.full : few ? T.fewLeft(s.available) : T.available}</span>
+          <${Icon} n="check" cls="i dc-check" />
+        </button>`;
+      })}
+    </div>
+    <button type="button" class="strip-arrow next" aria-label=${T.nextDates} hidden=${!edges.end} onClick=${() => by(1)}><${Icon} n="right" /></button>
+  </div>`;
+}
+
+/** An event of the Brand as a card: photo, date badge, title, place, "from". */
+function EventCard({ e, sum, level = 3 }) {
+  const own = https(e.imageUrl);
+  const [src, setSrc] = useState(own ?? fallbackPhoto(e.category));
+  const tz = sum?.tz ?? e.venueTimezone;
+  const p = sum?.next ? dateParts(sum.next, tz) : null;
+  const place = [e.venueName, e.venueCity].filter(Boolean).join(" · ");
+  const broken = (ev) => { if (own && src === own) setSrc(fallbackPhoto(e.category)); else hideBroken(ev); };
+  return html`<a class="ev-card" href=${`/acheter/${route.c}/${route.b}/${e.id}`}>
+    <span class="ev-media">
+      <img src=${src} alt="" width="640" height="400" loading="lazy" decoding="async" onError=${broken} />
+      ${p && html`<span class="date-badge" aria-hidden="true"><b>${p.day}</b>${p.mon}</span>`}
+    </span>
+    <span class="ev-body">
+      ${level === 2 ? html`<h2 class="ev-title">${e.title}</h2>` : html`<h3 class="ev-title">${e.title}</h3>`}
+      <span class="ev-when">${p ? `${shortDate(sum.next, tz)} · ${p.time}${sum.count > 1 ? ` · ${T.moreDates(sum.count - 1)}` : ""}` : sum ? T.noDate : ""}</span>
+      ${place && html`<span class="ev-place">${place}</span>`}
+      <span class="ev-from">${sum?.from ? (sum.from.free ? T.free : html`${T.from} <strong>${money(sum.from.cents)}</strong>`) : ""}</span>
+    </span>
+  </a>`;
+}
+
+/** Run 90: "Autres événements de <Brand>": the Brand's other events with a date on sale. */
+function OtherEvents({ brandName, events }) {
+  const list = events.slice(0, 12);
+  const sums = useSummaries(list.map((e) => e.id));
+  const ref = useRef(null);
+  const shown = sums ? byNextDate(list.filter((e) => sums[e.id]?.next), sums) : [];
+  const [edges, update, by] = useEdges(ref, [shown.length]);
+  if (!sums || shown.length === 0) return null;
+  return html`<section class="rail-sec" aria-labelledby="rail-title">
+    <div class="rail-head">
+      <h2 id="rail-title">${T.otherEvents(brandName)}</h2>
+      ${(edges.start || edges.end) && html`<div class="rail-nav">
+        <span class="rail-count" aria-hidden="true">${edges.index}–${edges.last} / ${edges.count}</span>
+        <button type="button" class="round" aria-label=${T.prevEvents} disabled=${!edges.start} onClick=${() => by(-1)}><${Icon} n="left" /></button>
+        <button type="button" class="round" aria-label=${T.nextEvents} disabled=${!edges.end} onClick=${() => by(1)}><${Icon} n="right" /></button>
+      </div>`}
+    </div>
+    <ul class="rail" ref=${ref} onScroll=${update}>${shown.map((e) => html`<li><${EventCard} e=${e} sum=${sums[e.id]} /></li>`)}</ul>
+  </section>`;
+}
+
+// ── Event page blocks ───────────────────────────────────────────────────────
+function Hero({ ev, src, own, onBroken, next, more, from, compact, zoomRef, onZoom, onShare }) {
+  const tz = ev.venue?.timezone;
+  const place = [ev.venue?.name, ev.venue?.city].filter(Boolean).join(", ");
+  return html`<section class=${`hero${compact ? " compact" : ""}`} aria-labelledby="event-title">
+    <div class="hero-media" onClick=${onZoom}>
+      <img class=${own ? "hero-img photo" : "hero-img"} src=${src} alt="" width="1600" height="900" fetchpriority="high" decoding="async" onError=${onBroken} />
+    </div>
+    <div class="hero-shade" aria-hidden="true"></div>
+    <button type="button" class="hero-zoom" ref=${zoomRef} aria-label=${T.zoom} onClick=${onZoom}><${Icon} n="expand" /></button>
+    <div class="wrap hero-inner">
+      <div class="hero-text">
+        ${T.categories[ev.category] && html`<p class="eyebrow">${T.categories[ev.category]}</p>`}
+        <h1 id="event-title">${ev.title}</h1>
+        <ul class="hero-meta">
+          ${next && html`<li><${Icon} n="calendar" /><span>${shortDate(next, tz)} · ${dateParts(next, tz).time}${more > 0 ? html` <span class="more">${T.moreDates(more)}</span>` : ""}</span></li>`}
+          ${place && html`<li><${Icon} n="pin" /><span>${place}</span></li>`}
+        </ul>
+        <div class="hero-actions">
+          ${from && html`<p class="hero-from">${from.free ? html`<strong>${T.free}</strong>` : html`${T.from} <strong>${money(from.cents)}</strong> <span>${T.plusTax}</span>`}</p>`}
+          ${!DOOR && html`<button type="button" class="btn-glass" onClick=${onShare}><${Icon} n="share" />${T.share}</button>`}
+        </div>
+      </div>
+    </div>
+  </section>`;
+}
+
+/** The organizer's description, clamped with "Lire la suite". */
+function About({ text }) {
+  const ref = useRef(null);
+  const [long, setLong] = useState(false);
+  const [open, setOpen] = useState(false);
+  useLayoutEffect(() => { const el = ref.current; if (el) setLong(el.scrollHeight > el.clientHeight + 4); }, [text]);
+  if (!text?.trim()) return null;
+  return html`<section class="block about" aria-labelledby="about-title">
+    <h2 id="about-title">${T.about}</h2>
+    <div id="about-text" ref=${ref} class=${`about-text${open ? "" : " clamped"}`}>${text.trim()}</div>
+    ${(long || open) && html`<button type="button" class="link-btn more-btn" aria-expanded=${open ? "true" : "false"} aria-controls="about-text" onClick=${() => setOpen(!open)}>${open ? T.readLess : T.readMore}</button>`}
+  </section>`;
+}
+
+// ── Run 69: category, age, doors, language and accessibility, as the organizer set them ──
+const span = (m) => (m < 60 ? `${m} min` : `${Math.floor(m / 60)} h${m % 60 ? ` ${String(m % 60).padStart(2, "0")}` : ""}`);
+function Facts({ ev }) {
+  const items = [
+    T.categories[ev.category] && ["tag", T.categories[ev.category]],
+    Number.isInteger(ev.minAge) && ["users", T.age(ev.minAge)],
+    Number.isInteger(ev.doorsOpenMinutes) && ev.doorsOpenMinutes > 0 && ["door", T.doors(span(ev.doorsOpenMinutes))],
+    T.languages[ev.language] && ["speech", T.languages[ev.language]],
+  ].filter(Boolean);
+  const access = String(ev.accessibility ?? "").trim();
+  if (!items.length && !access) return null;
+  return html`<section class="block facts" aria-labelledby="facts-title">
+    <h2 id="facts-title">${T.factsTitle}</h2>
+    ${items.length > 0 && html`<ul class="chips">${items.map(([icon, text]) => html`<li><${Icon} n=${icon} /><span>${text}</span></li>`)}</ul>`}
+    ${access && html`<div class="access"><${Icon} n="access" /><div><h3>${T.accessibilityTitle}</h3><p>${access}</p></div></div>`}
+  </section>`;
+}
+
+/** Run 90: where it is, with directions in Google Maps. */
+function Venue({ venue, address }) {
+  if (!venue?.name) return null;
+  const line = [address, venue.city].filter(Boolean).join(", ");
+  const href = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent([venue.name, address, venue.city].filter(Boolean).join(", "))}`;
+  return html`<section class="block venue" aria-labelledby="venue-title">
+    <h2 id="venue-title">${T.venueTitle}</h2>
+    <div class="card venue-card">
+      <span class="tile" aria-hidden="true"><${Icon} n="pin" /></span>
+      <div class="venue-text"><p class="venue-name">${venue.name}</p>${line && html`<p class="muted">${line}</p>`}</div>
+      <a class="btn-ghost" href=${href} target="_blank" rel="noopener"><${Icon} n="route" />${T.directions}<span class="sr-only">${T.newTab}</span></a>
+    </div>
+  </section>`;
+}
+
+// ── Run 65: the organizer's exchange and refund policy, before payment (OPC) ──
+function Policy({ brand, id = "policy-title", level = 3 }) {
+  const text = String(brand?.refundPolicy ?? "").trim();
+  const contact = [brand?.supportEmail, brand?.supportPhone].filter(Boolean).join(" · ");
+  const title = level === 2 ? html`<h2 id=${id}>${T.policyTitle}</h2>` : html`<h3 id=${id}>${T.policyTitle}</h3>`;
+  return html`<section class=${`policy${level === 2 ? " block" : ""}`} aria-labelledby=${id}>
+    ${title}
+    <div class="policy-body">
+      ${text ? html`<p>${text}</p>` : html`<p>${T.policyNone(brand?.name ?? "")}${contact ? html` <strong>${contact}</strong>` : ""}</p>`}
+    </div>
+  </section>`;
+}
+
+/** Run 90: who organizes it and how to reach them. */
+function Organizer({ brand }) {
+  if (!brand?.name) return null;
+  const site = https(brand.websiteUrl);
+  const initials = brand.name.replace(/[^\p{L}\p{N} ]/gu, " ").split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
+  const links = [
+    site && html`<li><a href=${site} target="_blank" rel="noopener"><${Icon} n="external" />${T.website}</a></li>`,
+    brand.supportEmail && html`<li><a href=${`mailto:${brand.supportEmail}`}><${Icon} n="mail" />${brand.supportEmail}</a></li>`,
+    brand.supportPhone && html`<li><a href=${`tel:${brand.supportPhone.replace(/[^\d+]/g, "")}`}><${Icon} n="phone" />${brand.supportPhone}</a></li>`,
+  ].filter(Boolean);
+  return html`<section class="block organizer" aria-labelledby="org-title">
+    <h2 id="org-title">${T.organizerTitle}</h2>
+    <div class="card org-card">
+      <span class="org-avatar" aria-hidden="true">${initials || "•"}</span>
+      <div class="org-text">
+        <p class="org-name"><span class="org-label">${T.organizedBy}</span> ${brand.name}</p>
+        ${brand.addressLine && html`<p class="muted">${brand.addressLine}</p>`}
+        ${links.length > 0 && html`<ul class="org-links">${links}</ul>`}
+      </div>
+    </div>
+  </section>`;
+}
+
+const EventSkeleton = () => html`<main class="event-main" aria-busy="true">
+  <p class="boot sr-only" role="status">${T.loading}</p>
+  <div class="hero sk-hero" aria-hidden="true"></div>
+  <div class="wrap layout" aria-hidden="true">
+    <div class="side"><div class="panel sk-panel"><span class="sk w40"></span><span class="sk tall"></span><span class="sk"></span><span class="sk w60"></span></div></div>
+    <div class="content"><div class="sk-block"><span class="sk w40"></span><span class="sk"></span><span class="sk"></span><span class="sk w60"></span></div></div>
+  </div>
+</main>`;
 
 // ── Event: choose, quote, hold, buyer, pay ──────────────────────────────────
 function EventShop({ config }) {
@@ -347,19 +888,38 @@ function EventShop({ config }) {
   const [promoInput, setPromoInput] = useState("");
   const [promo, setPromo] = useState(null);
   const [promoError, setPromoError] = useState(null);
+  const [promoOpen, setPromoOpen] = useState(false);
   // Run 72: a presale code that opens the sale before the public opening ({ code, opensAt }).
   const [presale, setPresale] = useState(null);
+  // Run 90: the Brand's list (other events, this one's address), the photo, the zoom.
+  const [listing, setListing] = useState(null);
+  const [photoBroken, setPhotoBroken] = useState(false);
+  const [zoom, setZoom] = useState(false);
+  const [toast, showToast] = useToast();
+  const zoomButton = useRef(null);
+  const promoField = useRef(null);
   const seq = useRef(0);
 
   const load = () => call(`/events/${route.eventId}`).then(setData, setError);
   useEffect(() => {
     load();
+    if (!DOOR) call(`/events`).then(setListing, () => setListing(null));
     // Back from Stripe without paying: offer to resume, or free the seats.
     const cancelled = /^#annule=([0-9a-f-]{36})$/.exec(location.hash)?.[1];
     const s = cancelled && saved(cancelled);
     if (s) setNotice({ holdId: cancelled, ...s });
     if (cancelled) history.replaceState(null, "", location.pathname);
   }, []);
+
+  // With a single date on sale, it is already chosen.
+  useEffect(() => {
+    if (!data || sessionId) return;
+    const tz = data.event.venue?.timezone;
+    const today = dayIn(new Date(), tz);
+    const list = DOOR ? data.sessions.filter((s) => dayIn(new Date(s.startsAt), tz) === today) : data.sessions;
+    if (list.length === 1 && list[0].available > 0) setSessionId(list[0].id);
+  }, [data]);
+  useEffect(() => { if (promoOpen) promoField.current?.focus(); }, [promoOpen]);
 
   const items = (data?.ticketTypes ?? []).filter((t) => (qty[t.id] ?? 0) > 0).map((t) => ({ ticketTypeId: t.id, quantity: qty[t.id] }));
   useEffect(() => {
@@ -376,8 +936,8 @@ function EventShop({ config }) {
     return () => clearTimeout(t);
   }, [JSON.stringify(items), promo]);
 
-  if (error && !data) return html`<main><div class="alert bad" role="alert">${errText(error)}</div></main>`;
-  if (!data) return html`<main><p class="boot">${T.loading}</p></main>`;
+  if (error && !data) return html`<main class="wrap narrow state-page"><div class="card state"><span class="state-ico bad" aria-hidden="true"><${Icon} n="info" /></span><div class="alert bad" role="alert">${errText(error)}</div></div></main>`;
+  if (!data) return html`<${EventSkeleton} />`;
   const ev = data.event;
   applyLook(ev.brand);
   const tz = ev.venue?.timezone;
@@ -391,23 +951,39 @@ function EventShop({ config }) {
   const nowMs = Date.now();
   const closed = !DOOR && ev.salesCloseAt && nowMs >= Date.parse(ev.salesCloseAt);
   const early = !DOOR && ev.salesOpenAt && nowMs < Date.parse(ev.salesOpenAt) && !(presale && nowMs >= Date.parse(presale.opensAt));
+  const canBuy = !closed && !early;
   const set = (id, n) => setQty((q) => ({ ...q, [id]: Math.max(0, n) }));
   // Run 49: what is left of an add-on with a stock, for the chosen session (null: no limit).
   const left = (t) => (t.kind === "add_on" && session?.addOnsAvailable && t.id in session.addOnsAvailable ? session.addOnsAvailable[t.id] : null);
+  const tooMany = !!session && wanted > session.available;
+  const from = priceFrom(data.ticketTypes);
+  const own = https(ev.imageUrl);
+  const photo = own && !photoBroken ? own : fallbackPhoto(ev.category);
+  const nextSession = sessions.find((s) => s.available > 0) ?? sessions[0];
+  const others = (listing?.events ?? []).filter((e) => e.id !== route.eventId);
+  const address = listing?.events?.find((e) => e.id === route.eventId)?.venueAddress ?? null;
+  const doorBadge = DOOR ? html` <span class="badge">${T.doorSale}</span>` : "";
+
   // Run 60: one row per ticket type; options (add-ons) in their own card, once tickets are chosen.
-  const typeRow = (t) => html`<div class="type">
-    <div><div class="name">${t.name}</div><div class="muted">${t.priceCents === 0 ? T.free : money(t.priceCents)}${t.kind === "add_on" ? SCOPE_TEXT(t) : ""}${t.openDate ? T.openDate : ""}${t.minQuantity > 1 ? T.minimum(t.minQuantity) : ""}${left(t) !== null ? T.addOnLeft(left(t)) : ""}</div></div>
-    <div class="stepper">
-      <button class="secondary" aria-label=${T.remove(t.name)} disabled=${!(qty[t.id] > 0)} onClick=${() => set(t.id, (qty[t.id] ?? 0) - 1)}>−</button>
-      <output aria-label=${T.quantity(t.name)}>${qty[t.id] ?? 0}</output>
-      <button class="secondary" aria-label=${T.add(t.name)} disabled=${(t.kind === "add_on" && wanted === 0) || (qty[t.id] ?? 0) >= Math.min(t.maxQuantity, left(t) ?? Infinity)} onClick=${() => set(t.id, (qty[t.id] ?? 0) + 1)}>+</button>
-    </div></div>`;
+  const typeRow = (t) => {
+    const q = qty[t.id] ?? 0;
+    const meta = `${t.kind === "add_on" ? SCOPE_TEXT(t) : ""}${t.openDate ? T.openDate : ""}${t.minQuantity > 1 ? T.minimum(t.minQuantity) : ""}${left(t) !== null ? T.addOnLeft(left(t)) : ""}`.replace(/^ · /, "");
+    return html`<div class=${`type${q > 0 ? " is-on" : ""}`}>
+      <div class="type-info"><div class="name">${t.name}</div>
+        <div class="type-price"><span class="price">${t.priceCents === 0 ? T.free : money(t.priceCents)}</span>${meta && html`<span class="meta"> · ${meta}</span>`}</div></div>
+      <div class="stepper">
+        <button type="button" class="step-btn" aria-label=${T.remove(t.name)} disabled=${!(q > 0)} onClick=${() => set(t.id, q - 1)}><${Icon} n="minus" /></button>
+        <output aria-label=${T.quantity(t.name)}><${Num} value=${q} /></output>
+        <button type="button" class="step-btn plus" aria-label=${T.add(t.name)} disabled=${(t.kind === "add_on" && wanted === 0) || q >= Math.min(t.maxQuantity, left(t) ?? Infinity)} onClick=${() => set(t.id, q + 1)}><${Icon} n="plus" /></button>
+      </div></div>`;
+  };
 
   const reserve = async () => {
     setBusy(true); setError(null);
     try {
       const r = await call(`/holds`, { method: "POST", body: { sessionId, items, ...(promo ? { promoCode: promo } : {}), ...(presale ? { presaleCode: presale.code } : {}) } });
-      setHold({ ...r.hold, expiresAtMs: Date.parse(r.hold.expiresAt) });
+      setHold({ ...r.hold, expiresAtMs: Date.parse(r.hold.expiresAt), startedAtMs: Date.now() });
+      scrollTo({ top: 0, behavior: reduced() ? "auto" : "smooth" });
     } catch (e) {
       if (e.code === "promo_code_invalid") { setPromoError(e.details?.reason ?? "unknown"); setPromo(null); }
       else setError(e);
@@ -439,114 +1015,171 @@ function EventShop({ config }) {
     e.preventDefault(); setBusy(true); setError(null);
     try { await checkout(hold, buyer); } catch (err) { setError(err); setBusy(false); }
   };
+  // Run 90: share the page (never the door-sale or campaign address).
+  const share = async () => {
+    const url = `${config.publicUrl ?? location.origin}${location.pathname}`;
+    if (navigator.share) {
+      try { await navigator.share({ title: ev.title, url }); return; } catch (e) { if (e?.name === "AbortError") return; }
+    }
+    try { await navigator.clipboard.writeText(url); showToast(T.linkCopied); } catch { showToast(T.copyFailed); }
+  };
+  const closeZoom = () => { setZoom(false); requestAnimationFrame(() => zoomButton.current?.focus()); };
 
   if (notice) {
     const resume = async () => { setBusy(true); try { await checkout({ id: notice.holdId, token: notice.holdToken }, notice.buyer); } catch (e) { setError(e); setNotice(null); setBusy(false); } };
     const drop = async () => { setBusy(true); await release({ id: notice.holdId, token: notice.holdToken }); sessionStorage.removeItem(STORE(notice.holdId)); setNotice(null); setBusy(false); load(); };
-    return html`<${Top} brand=${ev.brand} /><main>
-      <h1>${ev.title}</h1>
-      <div class="alert" role="status">${T.notFinished}</div>
-      ${error && html`<div class="alert bad" role="alert">${errText(error)}</div>`}
-      <div class="actions"><button disabled=${busy} onClick=${resume}>${T.resume}</button>
-        <button class="secondary" disabled=${busy} onClick=${drop}>${T.release}</button></div>
-    </main>`;
+    return html`<${Top} brand=${ev.brand} /><main class="wrap narrow state-page">
+      <div class="card state">
+        <span class="state-ico" aria-hidden="true"><${Icon} n="clock" /></span>
+        <h1>${ev.title}</h1>
+        <div class="alert" role="status">${T.notFinished}</div>
+        ${error && html`<div class="alert bad" role="alert">${errText(error)}</div>`}
+        <div class="actions"><button type="button" class="cta" disabled=${busy} onClick=${resume}>${T.resume}</button>
+          <button type="button" class="btn-ghost" disabled=${busy} onClick=${drop}>${T.release}</button></div>
+      </div>
+    </main><${Footer} />`;
   }
 
-  return html`<${Top} brand=${ev.brand} extra=${DOOR ? html` <span class="badge">${T.doorSale}</span>` : ""} />
-  <main>
-    ${https(ev.imageUrl) && html`<img class="photo" src=${https(ev.imageUrl)} alt="" onError=${hideBroken} />`}
-    <h1>${ev.title}</h1>
-    ${ev.venue && html`<p class="muted">${ev.venue.name}${ev.venue.city ? `, ${ev.venue.city}` : ""}</p>`}
-    ${ev.description && html`<p>${ev.description}</p>`}
-    <${Facts} ev=${ev} />
-    ${error && html`<div class="alert bad" role="alert">${errText(error)}</div>`}
-
-    ${!hold && (closed || early) && html`<${SaleWindow} closed=${closed} opensAt=${ev.salesOpenAt} tz=${tz} eventId=${route.eventId} presale=${presale} onPresale=${setPresale} />`}
-    ${!hold && !closed && !early && presale && html`<div class="alert ok" role="status">${T.presaleOpenNow}</div>`}
-    ${!hold && !closed && !early && html`
-      <h2>${T.step1}</h2>
-      ${sessions.length === 0 ? html`<p class="muted">${DOOR ? T.noSessionsToday : T.noSessions}</p>` : html`<div class="sessions">
-        ${sessions.map((s) => html`<button class="session" aria-pressed=${s.id === sessionId ? "true" : "false"} disabled=${s.available === 0} onClick=${() => setSessionId(s.id)}>
-          <span>${whenFr(s.startsAt, tz)}</span>
-          <span class="muted">${s.available === 0 ? T.full : s.available <= 20 ? T.fewLeft(s.available) : T.available}</span></button>`)}
-      </div>`}
-      ${!DOOR && sessions.some((s) => s.available === 0) && html`<${Waitlist} sessions=${sessions.filter((s) => s.available === 0)} tz=${tz} onFree=${load} />`}
-
-      ${sessionId && html`
-        <h2>${T.step2}</h2>
-        <div class="card">${admissions.map(typeRow)}</div>
-        ${addOns.length > 0 && html`<section class="card options" aria-labelledby="options-title">
-          <h3 id="options-title">${T.optionsTitle}</h3>
-          ${wanted === 0 && html`<p class="muted">${T.optionsHint}</p>`}
-          ${addOns.map(typeRow)}
-        </section>`}
-        ${violations.length > 0 && html`<div class="alert" role="alert"><ul class="violations">${violations.map((v) => html`<li>${violationText(v, data.ticketTypes)}</li>`)}</ul></div>`}
-        <form class="card promo" onSubmit=${applyPromo}>
-          <label>${T.promo.label}<input value=${promoInput} autocomplete="off" autocapitalize="characters" onInput=${(e) => setPromoInput(e.target.value)} /></label>
-          <div class="actions">
-            <button type="submit" class="secondary">${T.promo.apply}</button>
-            ${promo && html`<button type="button" class="secondary" onClick=${() => { setPromo(null); setPromoInput(""); setPromoError(null); }}>${T.promo.remove}</button>`}
+  // Checkout: the buyer's details next to the order, with the hold's real countdown.
+  if (hold) {
+    const q = hold.quote;
+    return html`<${Top} brand=${ev.brand} extra=${doorBadge} />
+    <main class="wrap checkout">
+      <div class="co-head">
+        <ol class="progress" aria-label=${T.stepsLabel}>
+          <li class="done"><${Icon} n="check" />${T.stepTickets}</li>
+          <li aria-current="step"><span class="dot" aria-hidden="true"></span>${T.stepDetails}</li>
+          <li><span class="dot" aria-hidden="true"></span>${T.stepPay}</li>
+        </ol>
+        <h1 class="co-title">${ev.title}</h1>
+      </div>
+      <div class="co-grid">
+        <section class="card co-form" aria-labelledby="step3-title">
+          <h2 id="step3-title" class="step-title">${stepNo(3)}${T.step3}</h2>
+          <${HoldTimer} until=${hold.expiresAtMs} start=${hold.startedAtMs} onExpire=${() => { setHold(null); setError(new ApiError(409, "hold_not_active")); load(); }} />
+          ${error && html`<div class="alert bad" role="alert">${errText(error)}</div>`}
+          <form class="buyer-form" onSubmit=${pay}>
+            <label>${T.email}<input type="email" required autocomplete="email" value=${buyer.email} onInput=${(e) => setBuyer({ ...buyer, email: e.target.value })} /></label>
+            <div class="two">
+              <label>${T.name}<input required autocomplete="name" value=${buyer.fullName} onInput=${(e) => setBuyer({ ...buyer, fullName: e.target.value })} /></label>
+              <label>${T.phone}<input type="tel" autocomplete="tel" value=${buyer.phone} onInput=${(e) => setBuyer({ ...buyer, phone: e.target.value })} /></label>
+            </div>
+            <${Policy} brand=${ev.brand} id="policy-title" />
+            <button type="submit" class="cta wide" disabled=${busy}>${busy && html`<span class="spin" aria-hidden="true"></span>`}${q.totalCents === 0 ? T.getFree : T.pay(money(q.totalCents))}</button>
+            ${q.totalCents > 0 && html`<p class="secure"><${Icon} n="lock" />${T.stripe}</p>`}
+            <button type="button" class="link-btn change" disabled=${busy} onClick=${async () => { await release(hold); setHold(null); load(); }}><${Icon} n="left" />${T.change}</button>
+          </form>
+        </section>
+        <aside class="card co-sum" aria-labelledby="sum-title">
+          <h2 id="sum-title">${T.summaryTitle}</h2>
+          <div class="sum-ev">
+            <img class="sum-thumb" src=${photo} alt="" width="88" height="66" onError=${hideBroken} />
+            <div>
+              <p class="sum-name">${ev.title}</p>
+              <p class="sum-line"><${Icon} n="calendar" />${whenFr(session?.startsAt ?? hold.quote?.startsAt ?? Date.now(), tz)}</p>
+              ${ev.venue?.name && html`<p class="sum-line"><${Icon} n="pin" />${[ev.venue.name, ev.venue.city].filter(Boolean).join(", ")}</p>`}
+            </div>
           </div>
-          ${promoError && html`<div class="alert" role="alert">${T.promo[promoError] ?? T.promo.unknown}</div>`}
-        </form>
-        ${quote && html`<div class="card"><table class="quote"><tbody>
-          ${quote.lines.map((l) => html`<tr><td>${l.quantity} × ${l.name}</td><td class="num">${money(l.lineTotalCents)}</td></tr>`)}
-          ${quote.discountCents > 0 && html`<tr><td>${T.promo.discount(quote.promoCode)}</td><td class="num">−${money(quote.discountCents)}</td></tr>`}
-          ${quote.taxes.map((t) => html`<tr><td class="muted">${t.code === "GST" ? T.gst : t.code === "QST" ? T.qst : t.labelFr}</td><td class="num muted">${money(t.amountCents)}</td></tr>`)}
-          <tr class="total"><td>${T.total}</td><td class="num">${money(quote.totalCents)}</td></tr>
-        </tbody></table></div>`}
-        <div class="actions"><button disabled=${busy || !quote || violations.length > 0 || (session && wanted > session.available)} onClick=${reserve}>${T.next}</button></div>`}`}
+          <table class="quote"><caption class="sr-only">${T.priceDetail}</caption><tbody>
+            ${q.lines.map((l) => html`<tr><td>${l.quantity} × ${l.name}</td><td class="num">${money(l.lineTotalCents)}</td></tr>`)}
+            ${q.discountCents > 0 && html`<tr class="discount"><td>${T.promo.discount(q.promoCode)}</td><td class="num">−${money(q.discountCents)}</td></tr>`}
+            ${(q.taxes ?? []).map((t) => html`<tr class="tax"><td>${t.code === "GST" ? T.gst : t.code === "QST" ? T.qst : t.labelFr}</td><td class="num">${money(t.amountCents)}</td></tr>`)}
+            <tr class="total"><td>${T.total}</td><td class="num">${money(q.totalCents)}</td></tr></tbody></table>
+          <p class="fine">${T.taxesNote}</p>
+        </aside>
+      </div>
+    </main><${Footer} />`;
+  }
 
-    ${hold && html`
-      <h2>${T.step3}</h2>
-      <div class="alert" role="status">${T.heldFor}<${Countdown} until=${hold.expiresAtMs} onExpire=${() => { setHold(null); setError(new ApiError(409, "hold_not_active")); load(); }} />.</div>
-      <div class="card"><table class="quote"><tbody>
-        <tr><td colspan="2"><strong>${whenFr(session?.startsAt ?? hold.quote?.startsAt ?? Date.now(), tz)}</strong></td></tr>
-        ${hold.quote.lines.map((l) => html`<tr><td>${l.quantity} × ${l.name}</td><td class="num">${money(l.lineTotalCents)}</td></tr>`)}
-        ${hold.quote.discountCents > 0 && html`<tr><td>${T.promo.discount(hold.quote.promoCode)}</td><td class="num">−${money(hold.quote.discountCents)}</td></tr>`}
-        <tr class="total"><td>${T.total}</td><td class="num">${money(hold.quote.totalCents)}</td></tr></tbody></table></div>
-      <form class="card" onSubmit=${pay}>
-        <label>${T.email}<input type="email" required autocomplete="email" value=${buyer.email} onInput=${(e) => setBuyer({ ...buyer, email: e.target.value })} /></label>
-        <label>${T.name}<input required autocomplete="name" value=${buyer.fullName} onInput=${(e) => setBuyer({ ...buyer, fullName: e.target.value })} /></label>
-        <label>${T.phone}<input type="tel" autocomplete="tel" value=${buyer.phone} onInput=${(e) => setBuyer({ ...buyer, phone: e.target.value })} /></label>
-        <${Policy} brand=${ev.brand} />
-        <div class="actions">
-          <button type="submit" disabled=${busy}>${hold.quote.totalCents === 0 ? T.getFree : T.pay(money(hold.quote.totalCents))}</button>
-          <button type="button" class="secondary" disabled=${busy} onClick=${async () => { await release(hold); setHold(null); load(); }}>${T.change}</button>
+  const promoBlock = html`<div class="promo">
+    ${!(promoOpen || promo || promoError) ? html`<button type="button" class="link-btn" aria-expanded="false" onClick=${() => setPromoOpen(true)}><${Icon} n="tag" />${T.promo.toggle}</button>` : html`
+      <form class="promo-form" onSubmit=${applyPromo}>
+        <label for="promo-code">${T.promo.label}</label>
+        <div class="promo-row">
+          <input id="promo-code" ref=${promoField} value=${promoInput} autocomplete="off" autocapitalize="characters" spellcheck="false" onInput=${(e) => setPromoInput(e.target.value)} />
+          <button type="submit" class="btn-ghost">${T.promo.apply}</button>
         </div>
-        ${hold.quote.totalCents > 0 && html`<p class="muted">${T.stripe}</p>`}
+        ${promo && html`<p class="promo-ok"><${Icon} n="check" /><span>${T.promo.applied(promo)}</span>
+          <button type="button" class="link-btn" onClick=${() => { setPromo(null); setPromoInput(""); setPromoError(null); }}>${T.promo.remove}</button></p>`}
+        ${promoError && html`<div class="alert" role="alert">${T.promo[promoError] ?? T.promo.unknown}</div>`}
       </form>`}
-    ${!hold && !DOOR && html`<${FindTickets} />`}
-    <footer>${T.footer}</footer>
-  </main>`;
-}
+  </div>`;
 
-// ── Run 69: category, age, doors, language and accessibility, as the organizer set them ──
-const span = (m) => (m < 60 ? `${m} min` : `${Math.floor(m / 60)} h${m % 60 ? ` ${String(m % 60).padStart(2, "0")}` : ""}`);
-function Facts({ ev }) {
-  const items = [
-    T.categories[ev.category],
-    Number.isInteger(ev.minAge) ? T.age(ev.minAge) : null,
-    Number.isInteger(ev.doorsOpenMinutes) && ev.doorsOpenMinutes > 0 ? T.doors(span(ev.doorsOpenMinutes)) : null,
-    T.languages[ev.language],
-  ].filter(Boolean);
-  const access = String(ev.accessibility ?? "").trim();
-  if (!items.length && !access) return null;
-  return html`<section class="facts" aria-labelledby="facts-title">
-    <h3 id="facts-title">${T.factsTitle}</h3>
-    ${items.length > 0 && html`<ul>${items.map((i) => html`<li>${i}</li>`)}</ul>`}
-    ${access && html`<p><strong>${T.accessibilityTitle} : </strong>${access}</p>`}
-  </section>`;
-}
+  const quoteBox = html`<div class="quote-box" aria-live="polite">${quote && html`
+    <table class="quote"><caption class="sr-only">${T.priceDetail}</caption><tbody>
+      ${quote.lines.map((l) => html`<tr><td>${l.quantity} × ${l.name}</td><td class="num">${money(l.lineTotalCents)}</td></tr>`)}
+      ${quote.discountCents > 0 && html`<tr class="discount"><td>${T.promo.discount(quote.promoCode)}</td><td class="num">−${money(quote.discountCents)}</td></tr>`}
+      ${quote.taxes.length > 0 && html`<tr class="sub"><td>${T.beforeTax}</td><td class="num">${money(quote.subtotalCents - quote.discountCents)}</td></tr>`}
+      ${quote.taxes.map((t) => html`<tr class="tax"><td>${t.code === "GST" ? T.gst : t.code === "QST" ? T.qst : t.labelFr}</td><td class="num">${money(t.amountCents)}</td></tr>`)}
+      <tr class="total"><td>${T.total}</td><td class="num">${money(quote.totalCents)}</td></tr>
+    </tbody></table>
+    <p class="fine">${T.taxesNote}</p>`}</div>`;
 
-// ── Run 65: the organizer's exchange and refund policy, before payment (OPC) ──
-function Policy({ brand }) {
-  const text = String(brand?.refundPolicy ?? "").trim();
-  const contact = [brand?.supportEmail, brand?.supportPhone].filter(Boolean).join(" · ");
-  return html`<section class="policy" aria-labelledby="policy-title">
-    <h3 id="policy-title">${T.policyTitle}</h3>
-    ${text ? html`<p>${text}</p>` : html`<p>${T.policyNone(brand?.name ?? "")}${contact ? html` <strong>${contact}</strong>` : ""}</p>`}
-  </section>`;
+  const ready = !busy && !!quote && violations.length === 0 && !tooMany;
+  const buybar = html`<div class="buybar">
+    <div class="bar-sum">
+      ${quote ? html`<span class="bar-label">${T.total}</span><span class="bar-amt"><${Money} cents=${quote.totalCents} /></span><span class="bar-note">${T.tickets(wanted)} · ${T.taxesIn}</span>`
+        : html`<span class="bar-label">${from ? T.from : T.ticketsTitle}</span><span class="bar-amt">${from ? (from.free ? T.free : money(from.cents)) : ""}</span><span class="bar-note">${sessionId ? T.pickTickets : T.pickDate}</span>`}
+    </div>
+    ${!sessionId && html`<a class="cta only-narrow" href="#billets">${T.seeTickets}</a>`}
+    <button type="button" class=${`cta${sessionId ? "" : " only-wide"}`} disabled=${!ready} onClick=${reserve}>${busy && html`<span class="spin" aria-hidden="true"></span>`}${T.next}<${Icon} n="arrow" /></button>
+  </div>`;
+
+  const panel = html`<div class="panel">
+    <div class="panel-head">
+      <h2 id="panel-title">${T.ticketsTitle}</h2>
+      ${from && html`<p class="panel-from">${from.free ? T.free : html`${T.from} <strong>${money(from.cents)}</strong>`}</p>`}
+    </div>
+    <div class="panel-body">
+      ${error && html`<div class="alert bad" role="alert">${errText(error)}</div>`}
+      ${(closed || early) && html`<${SaleWindow} closed=${closed} opensAt=${ev.salesOpenAt} tz=${tz} eventId=${route.eventId} presale=${presale} onPresale=${setPresale} />`}
+      ${canBuy && presale && html`<div class="alert ok" role="status">${T.presaleOpenNow}</div>`}
+      ${canBuy && html`
+        <div class="step">
+          <h3 class="step-title">${stepNo(1)}${T.step1}</h3>
+          ${sessions.length === 0 ? html`<p class="step-hint">${DOOR ? T.noSessionsToday : T.noSessions}</p>` : html`<${DateStrip} sessions=${sessions} tz=${tz} value=${sessionId} onPick=${setSessionId} />`}
+          ${!DOOR && sessions.some((s) => s.available === 0) && html`<${Waitlist} sessions=${sessions.filter((s) => s.available === 0)} tz=${tz} onFree=${load} />`}
+        </div>
+        ${sessions.length > 0 && html`<div class=${`step${sessionId ? "" : " is-idle"}`}>
+          <h3 class="step-title">${stepNo(2)}${T.step2}</h3>
+          ${!sessionId ? html`<p class="step-hint">${T.pickDateFirst}</p>` : html`<div class="step-in" key=${sessionId}>
+            <div class="types">${admissions.map(typeRow)}</div>
+            ${addOns.length > 0 && html`<section class="options" aria-labelledby="options-title">
+              <h4 id="options-title">${T.optionsTitle}</h4>
+              ${wanted === 0 && html`<p class="muted">${T.optionsHint}</p>`}
+              <div class="types">${addOns.map(typeRow)}</div>
+            </section>`}
+            ${violations.length > 0 && html`<div class="alert" role="alert"><ul class="violations">${violations.map((v) => html`<li>${violationText(v, data.ticketTypes)}</li>`)}</ul></div>`}
+            ${tooMany && html`<div class="alert" role="alert">${T.errors.sold_out}</div>`}
+            ${promoBlock}
+            ${quoteBox}
+          </div>`}
+        </div>`}`}
+    </div>
+    ${canBuy && sessions.length > 0 && buybar}
+  </div>`;
+
+  return html`<${Top} brand=${ev.brand} extra=${doorBadge} />
+  <main class=${`event-main${canBuy && sessions.length > 0 ? " with-bar" : ""}`}>
+    <${Hero} ev=${ev} src=${photo} own=${photo === own} onBroken=${(e) => (photo === own ? setPhotoBroken(true) : hideBroken(e))}
+      next=${nextSession?.startsAt} more=${Math.max(0, sessions.length - 1)} from=${from} compact=${DOOR}
+      zoomRef=${zoomButton} onZoom=${() => setZoom(true)} onShare=${share} />
+    <div class="wrap layout">
+      <section class="side" id="billets" aria-labelledby="panel-title">${panel}</section>
+      <div class="content">
+        <${About} text=${ev.description} />
+        <${Facts} ev=${ev} />
+        <${Venue} venue=${ev.venue} address=${address} />
+        <${Policy} brand=${ev.brand} id="policy-event" level=${2} />
+        <${Organizer} brand=${ev.brand} />
+      </div>
+    </div>
+    ${!DOOR && others.length > 0 && html`<div class="wrap"><${OtherEvents} brandName=${listing?.brand?.name ?? ev.brand?.name} events=${others} /></div>`}
+    ${!DOOR && html`<div class="wrap"><${FindTickets} /></div>`}
+  </main>
+  <${Footer} />
+  ${zoom && html`<${Lightbox} src=${photo} alt=${ev.title} onClose=${closeZoom} />`}
+  <${Toast} msg=${toast} />`;
 }
 
 // ── Run 72: before the public sale: when it opens, and a presale code ──
@@ -562,14 +1195,14 @@ function SaleWindow({ closed, opensAt, tz, eventId, presale, onPresale }) {
       onPresale({ code: code.trim(), opensAt: r.presale.opensAt });
     } catch (err) { setState({ error: err }); }
   };
-  if (closed) return html`<div class="alert" role="status">${T.salesClosed}</div>`;
-  return html`<section class="card sale-window" aria-labelledby="sale-title">
-    <h2 id="sale-title">${T.salesOpen(whenFr(opensAt, tz))}</h2>
+  if (closed) return html`<div class="notice-box" role="status"><span class="tile" aria-hidden="true"><${Icon} n="info" /></span><p>${T.salesClosed}</p></div>`;
+  return html`<section class="sale-window" aria-labelledby="sale-title">
+    <div class="notice-box"><span class="tile" aria-hidden="true"><${Icon} n="calendar" /></span><h3 id="sale-title">${T.salesOpen(whenFr(opensAt, tz))}</h3></div>
     ${presale ? html`<div class="alert ok" role="status">${T.presaleLater(whenFr(presale.opensAt, tz))}</div>` : html`
       <form class="presale" onSubmit=${check}>
-        <h3>${T.presaleTitle}</h3>
+        <h4>${T.presaleTitle}</h4>
         <label>${T.presaleCode}<input required maxlength="40" autocomplete="off" autocapitalize="characters" value=${code} onInput=${(e) => setCode(e.target.value)} /></label>
-        <div class="actions"><button type="submit" class="secondary" disabled=${state === "busy"}>${T.presaleCheck}</button></div>
+        <button type="submit" class="btn-ghost" disabled=${state === "busy"}>${T.presaleCheck}</button>
       </form>`}
     ${state?.error && html`<div class="alert bad" role="alert">${errText(state.error)}</div>`}
   </section>`;
@@ -580,6 +1213,7 @@ function Waitlist({ sessions, tz, onFree }) {
   const [sessionId, setSessionId] = useState(sessions[0]?.id ?? "");
   const [email, setEmail] = useState("");
   const [state, setState] = useState(null);
+  const [open, setOpen] = useState(false);
   const submit = async (e) => {
     e.preventDefault();
     setState("busy");
@@ -590,16 +1224,19 @@ function Waitlist({ sessions, tz, onFree }) {
       if (err.code === "session_not_full") { setState("free"); onFree(); } else setState({ error: err });
     }
   };
-  return html`<section class="card waitlist" aria-labelledby="wait-title">
-    <h3 id="wait-title">${T.waitTitle}</h3>
+  // Run 90: folded under its title until the buyer asks for it.
+  return html`<section class=${`waitlist${open ? " open" : ""}`} aria-labelledby="wait-title">
+    <h4 id="wait-title"><button type="button" class="wait-toggle" aria-expanded=${open ? "true" : "false"} aria-controls="wait-body" onClick=${() => setOpen(!open)}>${T.waitTitle}<${Icon} n="right" cls="i chev" /></button></h4>
+    <div id="wait-body" class="wait-body" hidden=${!open}>
     ${state === "sent" ? html`<div class="alert ok" role="status">${T.waitDone}</div>` : html`
       <p class="muted">${T.waitLead}</p>
       <form onSubmit=${submit}>
         ${sessions.length > 1 && html`<label>${T.waitSession}<select value=${sessionId} onChange=${(e) => setSessionId(e.target.value)}>
           ${sessions.map((s) => html`<option value=${s.id}>${whenFr(s.startsAt, tz)}</option>`)}</select></label>`}
         <label>${T.waitEmail}<input type="email" required autocomplete="email" value=${email} onInput=${(e) => setEmail(e.target.value)} /></label>
-        <div class="actions"><button type="submit" class="secondary" disabled=${state === "busy"}>${T.waitSend}</button></div>
+        <button type="submit" class="btn-ghost" disabled=${state === "busy"}>${T.waitSend}</button>
       </form>`}
+    </div>
     ${state === "free" && html`<div class="alert" role="status">${T.waitFree}</div>`}
     ${state?.error && html`<div class="alert bad" role="alert">${errText(state.error)}</div>`}
   </section>`;
@@ -615,12 +1252,13 @@ function FindTickets() {
     try { await call(`/tickets/resend`, { method: "POST", body: { email: email.trim() } }); setState("sent"); }
     catch (err) { setState({ error: err }); }
   };
-  return html`<section class="card find" aria-labelledby="find-title">
-    <h2 id="find-title">${T.findTitle}</h2>
+  return html`<section class="find" aria-labelledby="find-title">
+    <span class="tile" aria-hidden="true"><${Icon} n="ticket" /></span>
+    <div class="find-text"><h2 id="find-title">${T.findTitle}</h2><p class="muted">${T.findLead}</p></div>
     ${state === "sent" ? html`<div class="alert ok" role="status">${T.findSent}</div>` : html`
-      <form onSubmit=${submit}>
+      <form class="find-form" onSubmit=${submit}>
         <label>${T.findEmail}<input type="email" required autocomplete="email" value=${email} onInput=${(e) => setEmail(e.target.value)} /></label>
-        <div class="actions"><button type="submit" class="secondary" disabled=${state === "busy"}>${T.findSend}</button></div>
+        <button type="submit" class="btn-ghost" disabled=${state === "busy"}>${T.findSend}</button>
       </form>`}
     ${state?.error && html`<div class="alert bad" role="alert">${errText(state.error)}</div>`}
   </section>`;
@@ -629,15 +1267,28 @@ function FindTickets() {
 // ── Brand: published events ─────────────────────────────────────────────────
 function EventList() {
   const [state, setState] = useState(null);
-  useEffect(() => { call(`/events`).then((d) => { applyLook(d.brand); setState({ events: d.events, brand: d.brand }); }, (e) => setState({ error: e })); }, []);
-  if (!state) return html`<main><p class="boot">${T.loading}</p></main>`;
-  if (state.error) return html`<main><div class="alert bad" role="alert">${errText(state.error)}</div></main>`;
-  return html`<${Top} brand=${state.brand} /><main><h1>${T.shop}</h1>
-    ${state.events.length === 0 ? html`<p class="muted">${T.noEvents}</p>`
-      : html`<ul class="events card">${state.events.map((e) => html`<li><a href=${`/acheter/${route.c}/${route.b}/${e.id}`}>
-          ${https(e.imageUrl) && html`<img class="thumb" src=${https(e.imageUrl)} alt="" onError=${hideBroken} />`}<span>${e.title}</span></a></li>`)}</ul>`}
+  useEffect(() => {
+    call(`/events`).then(async (d) => {
+      applyLook(d.brand);
+      const ids = d.events.slice(0, 48).map((e) => e.id);
+      const sums = Object.fromEntries(await Promise.all(ids.map((id) => summary(id).then((s) => [id, s]))));
+      setState({ events: byNextDate(d.events, sums), brand: d.brand, sums });
+    }, (e) => setState({ error: e }));
+  }, []);
+  if (!state) return html`<main class="wrap list-main" aria-busy="true"><p class="boot sr-only" role="status">${T.loading}</p>
+    <ul class="grid" aria-hidden="true">${[0, 1, 2].map(() => html`<li><span class="ev-card sk-card"><span class="ev-media sk"></span><span class="ev-body"><span class="sk w60"></span><span class="sk w40"></span></span></span></li>`)}</ul></main>`;
+  if (state.error) return html`<main class="wrap narrow state-page"><div class="card state"><div class="alert bad" role="alert">${errText(state.error)}</div></div></main>`;
+  const n = state.events.length;
+  return html`<${Top} brand=${state.brand} /><main class="wrap list-main">
+    <header class="list-head">
+      <p class="eyebrow">${T.shop}</p>
+      <h1>${state.brand?.name ?? T.shop}</h1>
+      ${n > 0 && html`<p class="muted">${T.onSale(n)}</p>`}
+    </header>
+    ${n === 0 ? html`<div class="card state"><span class="state-ico" aria-hidden="true"><${Icon} n="calendar" /></span><p>${T.noEvents}</p></div>`
+      : html`<ul class="grid">${state.events.map((e) => html`<li><${EventCard} e=${e} sum=${state.sums[e.id]} level=${2} /></li>`)}</ul>`}
     <${FindTickets} />
-    <footer>${T.footer}</footer></main>`;
+  </main><${Footer} />`;
 }
 
 // ── Back from Stripe ────────────────────────────────────────────────────────
@@ -646,14 +1297,18 @@ function Thanks() {
   useEffect(() => {
     if (s) location.replace(`/billets#${new URLSearchParams({ c: route.c, b: route.b, o: s.orderId, k: s.token, ...(s.door ? { porte: "1" } : {}) })}`);
   }, []);
-  if (s) return html`<main><p class="boot">${T.opening}</p></main>`;
-  return html`<main><h1>${T.thanks}</h1><div class="alert ok" role="status">${T.confirming}</div></main>`;
+  if (s) return html`<main class="wrap narrow state-page"><div class="card state"><span class="spin big" aria-hidden="true"></span><p class="boot">${T.opening}</p></div></main>`;
+  return html`<main class="wrap narrow state-page"><div class="card state">
+    <span class="state-ico ok" aria-hidden="true"><${Icon} n="check" /></span>
+    <h1>${T.thanks}</h1>
+    <div class="alert ok" role="status">${T.confirming}</div>
+  </div></main>`;
 }
 
 function App() {
   const [config, setConfig] = useState(null);
   useEffect(() => { fetch("/shop/config.json").then((r) => r.json()).then(setConfig, () => setConfig({})); }, []);
-  if (!route) return html`<main><div class="alert bad" role="alert">${T.badAddress}</div></main>`;
+  if (!route) return html`<main class="wrap narrow state-page"><div class="card state"><div class="alert bad" role="alert">${T.badAddress}</div></div></main>`;
   if (!config) return html`<main><p class="boot">${T.loading}</p></main>`;
   // Run 32: with Stripe test keys, buyers are told that nothing will be charged.
   const testMode = config.paymentsMode === "test" && html`<header class="testmode"><p role="status">${T.testMode}</p></header>`;
