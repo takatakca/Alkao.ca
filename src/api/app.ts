@@ -1489,6 +1489,8 @@ export function createApp(deps: AppDeps) {
 
   app.post(`${ADMIN}/assistant/campaign`, ...admin, manageCampaigns, async (c) => {
     const body = drafts.CampaignDraftRequest.parse(await readJson(c));
+    // The event first: another Client's event is not found, whether the assistant is on or off.
+    if (body.eventId) await catalog.getEvent(deps.db, c.get("scope"), body.eventId);
     return assist(c, { type: body.eventId ? "event" : "brand", id: body.eventId ?? c.get("scope").brandId }, `campaign_${body.channel}`,
       (w) => drafts.draftCampaign(deps.db, w, c.get("scope"), body, now()));
   });
@@ -1497,6 +1499,7 @@ export function createApp(deps: AppDeps) {
     const eventId = param(c, "eventId");
     if (!eventId) return fail(c, 404, "event_not_found");
     const body = drafts.DescriptionDraftRequest.parse(await readJson(c));
+    await catalog.getEvent(deps.db, c.get("scope"), eventId);
     return assist(c, { type: "event", id: eventId }, "event_description", (w) => drafts.draftEventDescription(deps.db, w, c.get("scope"), eventId, body, now()));
   });
 
