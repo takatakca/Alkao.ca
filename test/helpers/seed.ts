@@ -122,12 +122,16 @@ export async function seedTenant(db: Db, clientName: string, brandName: string, 
   }).then(async (base) => ({ ...base, ...(await seedPaidOrder(db, base)) }));
 }
 
-/** GENERAL ×2 + CHILD ×2 + FLEX ×4 (or the cart given, by code), held, ordered and paid. */
+/**
+ * GENERAL ×2 + CHILD ×2 + FLEX ×4 (or the cart given, by code), held, ordered and paid
+ * (now, or on the day given: Run 92's dashboard tests spread sales over several days).
+ */
 export async function seedPaidOrder(
   db: Db,
   t: Pick<TenantFixture, "clientId" | "brandId" | "eventId" | "sessionId" | "types">,
   email = `buyer-${randomUUID().slice(0, 8)}@example.com`,
   cart: Record<string, number> = { GENERAL: 2, CHILD: 2, FLEX_WEATHER: 4 },
+  paidAt: Date = new Date(),
 ) {
   const id = (code: string) => t.types.find((x) => x.code === code)!.id;
   const result = buildQuote(
@@ -149,7 +153,7 @@ export async function seedPaidOrder(
     });
     const commission = computeCommission({ rateBps: 500, fixedCentsPerPaidAdmission: 50 }, quote);
     const order = await createOrderFromHold(tx, { ...scope, holdId: hold.id, buyer: { email, fullName: "Test Buyer" }, quote, commissionCents: commission });
-    const ticketIds = await recordOrderPaid(tx, scope, order.id, new Date());
+    const ticketIds = await recordOrderPaid(tx, scope, order.id, paidAt);
     await tx.query(
       `INSERT INTO public.ticketing_access_tokens (token_hash, client_id, brand_id, subject_type, subject_id)
        VALUES (sha256(convert_to($1, 'UTF8')), $2, $3, 'order', $4)`,

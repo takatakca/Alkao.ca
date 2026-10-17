@@ -5,6 +5,7 @@ import { createApp } from "./api/app.js";
 import { buildId, loadConfig } from "./config.js";
 import { createPool } from "./db/pool.js";
 import { StripeGateway } from "./payments/stripe-gateway.js";
+import { claudeWriter } from "./ai/writer.js";
 
 const config = loadConfig();
 // Run 62: which release answers /health: the image's commit (Coolify), else a MochaHost release's BUILD_ID file.
@@ -30,12 +31,14 @@ const app = createApp({
   metricsToken: config.metricsToken,
   twilioAuthToken: config.twilio?.authToken ?? null,
   resendWebhookSecret: config.resendWebhookSecret,
+  writer: config.assistant ? claudeWriter(config.assistant) : null,
+  assistantDailyLimit: config.assistant?.dailyLimit,
   buildId: release,
   logRequests: process.env.ALKAO_LOG_REQUESTS !== "false",
 });
 
 serve({ fetch: app.fetch, port: config.port }, (info) => {
   console.log(
-    `alkao listening on :${info.port} — operational API ${config.operationalApiEnabled ? "ENABLED" : "disabled (default)"}, payments ${config.stripe ? `configured (Stripe ${config.stripe.mode.toUpperCase()} mode)` : "not configured"}`,
+    `alkao listening on :${info.port} — operational API ${config.operationalApiEnabled ? "ENABLED" : "disabled (default)"}, payments ${config.stripe ? `configured (Stripe ${config.stripe.mode.toUpperCase()} mode)` : "not configured"}, writing assistant ${config.assistant ? `on (${config.assistant.model})` : "off (default)"}`,
   );
 });

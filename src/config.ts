@@ -52,6 +52,11 @@ export const EnvSchema = z.object({
   TWILIO_FROM_NUMBER: z.string().regex(/^\+[1-9][0-9]{7,14}$/).optional(),
   /** Run 48: signing secret of the Resend webhook (bounces, spam complaints). */
   RESEND_WEBHOOK_SECRET: z.string().regex(/^whsec_[A-Za-z0-9+/=]{16,}$/).optional(),
+  /** Run 92: the writing assistant in /ops (Claude, paid per use). Off by default, and off without a key. */
+  ALKAO_ASSISTANT_ENABLED: boolFlag,
+  ANTHROPIC_API_KEY: z.preprocess((v) => (v === "" ? undefined : v), z.string().regex(/^sk-ant-[A-Za-z0-9_-]{20,}$/).optional()),
+  ALKAO_ASSISTANT_MODEL: z.preprocess((v) => (v === "" ? undefined : v), z.string().regex(/^claude-[a-z0-9-]{2,60}$/).default("claude-opus-5-5")),
+  ALKAO_ASSISTANT_DAILY_LIMIT: z.coerce.number().int().min(1).max(1000).default(30),
   /** Run 62: the release's commit, shown by /health (the Docker image sets it from SOURCE_COMMIT). */
   ALKAO_BUILD_ID: z.string().optional().transform((v) => buildId(v)),
   PORT: z.coerce.number().int().min(1).max(65535).default(8787),
@@ -79,6 +84,8 @@ export interface Config {
   twilio: { accountSid: string; authToken: string; sender: { messagingServiceSid: string } | { from: string } } | null;
   /** Run 48: null until the Resend webhook is set up. */
   resendWebhookSecret: string | null;
+  /** Run 92: null unless ALKAO_ASSISTANT_ENABLED and a key are both set. */
+  assistant: { apiKey: string; model: string; dailyLimit: number } | null;
   buildId: string | null;
   port: number;
 }
@@ -146,6 +153,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
         }
       : null,
     resendWebhookSecret: e.RESEND_WEBHOOK_SECRET ?? null,
+    assistant: e.ALKAO_ASSISTANT_ENABLED && e.ANTHROPIC_API_KEY
+      ? { apiKey: e.ANTHROPIC_API_KEY, model: e.ALKAO_ASSISTANT_MODEL, dailyLimit: e.ALKAO_ASSISTANT_DAILY_LIMIT }
+      : null,
     buildId: e.ALKAO_BUILD_ID,
     port: e.PORT,
   };

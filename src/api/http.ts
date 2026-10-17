@@ -105,7 +105,7 @@ const STATUS_BY_CODE: Record<string, ContentfulStatusCode> = {
 };
 
 /** Domain error details safe to return to callers (never constraint or column names). */
-const DETAILS_ALLOWED = new Set(["refund_provider_error", "refund_exceeds_paid", "too_many_sessions", "promo_code_invalid", "audience_changed", "appearance_low_contrast"]);
+const DETAILS_ALLOWED = new Set(["refund_provider_error", "refund_exceeds_paid", "too_many_sessions", "promo_code_invalid", "audience_changed", "appearance_low_contrast", "assistant_draft_rejected"]);
 
 /** Map any thrown error to a stable JSON error. Unknown errors never leak details. */
 export function errorResponse(c: Context, error: unknown) {

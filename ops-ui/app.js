@@ -1,7 +1,7 @@
 // ALKAO Operations — standalone web app (Run 04, step 1).
 // Plain ES modules, no build step. Every call goes to the gated ALKAO admin API with the
 // signed-in user's Supabase access token; the app itself holds no data.
-import { html, render, useEffect, useState, useCallback, useRef } from "/ops/vendor/htm-preact.js";
+import { html, render, useEffect, useState, useCallback, useRef, useMemo } from "/ops/vendor/htm-preact.js";
 import { loadOffline, newOfflineStore, offlineScan, saveOffline, syncOffline, createOfflineCoordinator, withOfflineSessionLock, loadIncidentReport, archiveOfflineIncidents, incidentReportCsv } from "/ops/offline.js";
 import { parseReservationsReport } from "/ops/reservations-csv.js";
 
@@ -184,6 +184,13 @@ const ERRORS_FR = {
   audience_empty: "Aucun client ne peut recevoir cette campagne.",
   audience_changed: "Le nombre de destinataires a changé : vérifiez-le, puis envoyez de nouveau.",
   campaign_not_held: "Cette campagne n'est pas suspendue.",
+  assistant_disabled: "L'assistant de rédaction n'est pas activé sur ce déploiement.",
+  assistant_daily_limit: "Limite quotidienne de brouillons atteinte pour cette marque : réessayez demain.",
+  assistant_draft_rejected: "L'assistant n'a pas respecté les règles (prix, rabais ou lien inventé). Précisez la consigne ou rédigez vous-même :",
+  assistant_refused: "L'assistant a refusé cette demande : reformulez la consigne.",
+  assistant_unparsed: "L'assistant a répondu dans un format inattendu : réessayez.",
+  assistant_unavailable: "L'assistant ne répond pas pour le moment : réessayez dans quelques minutes.",
+  assistant_rate_limited: "L'assistant est très sollicité : réessayez dans une minute.",
 };
 const errText = (e) => (e instanceof ApiError ? ERRORS_FR[e.code] ?? `Erreur : ${e.code}` : String(e?.message ?? e));
 
@@ -265,75 +272,420 @@ function Workspaces({ api }) {
 // ── Dashboard ───────────────────────────────────────────────────────────────
 // Run 26: the period the dashboard reports on, in the staff member's local time.
 const PERIODS = [["all", "Depuis le début"], ["today", "Aujourd'hui"], ["7d", "7 derniers jours"], ["month", "Ce mois-ci"], ["lastMonth", "Le mois dernier"]];
-function reportQuery(period, eventId) {
-  const now = new Date();
-  const day = (y, m, d) => new Date(y, m, d).toISOString();
+function periodRange(period, now = new Date()) {
+  const day = (y, m, d) => new Date(y, m, d);
   const [y, m, d] = [now.getFullYear(), now.getMonth(), now.getDate()];
-  const range = {
+  return {
     today: [day(y, m, d), day(y, m, d + 1)],
     "7d": [day(y, m, d - 6), day(y, m, d + 1)],
     month: [day(y, m, 1), day(y, m + 1, 1)],
     lastMonth: [day(y, m - 1, 1), day(y, m, 1)],
-  }[period];
+  }[period] ?? null;
+}
+function rangeQuery(range, eventId) {
   const q = new URLSearchParams();
-  if (range) { q.set("from", range[0]); q.set("to", range[1]); }
+  if (range) { q.set("from", range[0].toISOString()); q.set("to", range[1].toISOString()); }
   if (eventId) q.set("eventId", eventId);
   const text = q.toString();
   return text ? `?${text}` : "";
 }
 
+// Run 92: the same stretch of time just before, cut at the same hour, so that a period in
+// progress is compared with as much of the previous one. "Depuis le début" has none.
+const PREVIOUS_FR = { today: "hier à la même heure", "7d": "les 7 jours précédents", month: "le mois dernier à pareille date", lastMonth: "le mois précédent" };
+function previousRange(period, now) {
+  const [y, m, d] = [now.getFullYear(), now.getMonth(), now.getDate()];
+  const at = (yy, mm, dd) => new Date(yy, mm, dd, now.getHours(), now.getMinutes(), now.getSeconds());
+  if (period === "today") return [new Date(y, m, d - 1), at(y, m, d - 1)];
+  if (period === "7d") return [new Date(y, m, d - 13), at(y, m, d - 7)];
+  if (period === "month") {
+    const end = at(y, m - 1, d); // past the end of a shorter month, the whole month
+    const cap = new Date(y, m, 1);
+    return [new Date(y, m - 1, 1), end < cap ? end : cap];
+  }
+  if (period === "lastMonth") return [new Date(y, m - 2, 1), new Date(y, m - 1, 1)];
+  return null;
+}
+
+const num = (n) => Number(n ?? 0).toLocaleString("fr-CA");
+const word = (n, one, other) => (Number(n) > 1 ? other : one);
+const many = (n, one, other) => `${num(n)} ${word(n, one, other)}`;
+// Rounded down: a session one seat short of full never reads 100 %.
+const percent = (part, whole) => `${num(Math.floor((part / whole) * 100))} %`;
+const minus = (cents) => `− ${money(cents)}`;
+const sum = (list, key) => list.reduce((n, x) => n + Number(x[key] ?? 0), 0);
+const admissionsSold = (types) => sum(types.filter((t) => t.kind === "admission"), "quantity");
+const optionsSold = (types) => sum(types.filter((t) => t.kind === "add_on"), "quantity");
+
+// Calendar days as the daily report writes them (YYYY-MM-DD).
+const isoDay = (dt) => `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+const parseDay = (s) => { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d); };
+const shortDay = (s) => parseDay(s).toLocaleDateString("fr-CA", { day: "numeric", month: "short" });
+const mediumDay = (s) => parseDay(s).toLocaleDateString("fr-CA", { dateStyle: "medium" });
+const longDay = (s) => parseDay(s).toLocaleDateString("fr-CA", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+
+/** Sessions that take place in the period (all of them for "Depuis le début"), cancelled ones aside. */
+function sessionFigures(sessions, range, now) {
+  const kept = sessions.filter((s) => s.status !== "cancelled" && (!range || (new Date(s.startsAt) >= range[0] && new Date(s.startsAt) < range[1])));
+  const started = kept.filter((s) => new Date(s.startsAt) <= now);
+  return {
+    count: kept.length, capacity: sum(kept, "capacity"), sold: sum(kept, "sold"),
+    started: started.length, startedSold: sum(started, "sold"), admitted: sum(started, "admitted"),
+  };
+}
+
+function Delta({ cur, prev, format, label }) {
+  if (prev === null || prev === undefined) return null;
+  if (prev > 0) {
+    const change = Math.round(((cur - prev) / prev) * 100);
+    const text = change > 0 ? `+${num(change)} %` : change < 0 ? `−${num(-change)} %` : "0 %";
+    return html`<div class="delta"><strong>${text}</strong> vs ${label}</div>`;
+  }
+  return html`<div class="delta">vs ${format(prev)} ${label}</div>`;
+}
+
+function Meter({ ratio, high }) {
+  return html`<div class=${high ? "meter high" : "meter"} aria-hidden="true"><span style=${{ width: `${Math.min(100, Math.max(0, ratio * 100))}%` }}></span></div>`;
+}
+
+function Stat({ label, value, flag, meter, context, delta }) {
+  return html`<div class="stat">
+    <div class="label">${label}${flag}</div>
+    <div class="value">${value}</div>
+    ${meter}
+    ${context && html`<div class="context">${context}</div>`}
+    ${delta}
+  </div>`;
+}
+
+function KpiBand({ totals, types, prev, prevLabel, seats }) {
+  const p = prev ? { totals: prev.totals, admissions: admissionsSold(prev.ticketTypes) } : null;
+  const delta = (cur, before, format) => p && html`<${Delta} cur=${cur} prev=${before} format=${format} label=${prevLabel} />`;
+  const admissions = admissionsSold(types);
+  const options = optionsSold(types);
+  const fill = seats.capacity > 0 ? seats.sold / seats.capacity : null;
+  const entries = seats.startedSold > 0 ? seats.admitted / seats.startedSold : null;
+  const fillFlag = fill !== null && fill >= 0.9 && html` <span class="badge warn">${seats.sold >= seats.capacity ? "Complet" : "Presque complet"}</span>`;
+  return html`<section class="kpis" aria-label="Indicateurs clés">
+    <${Stat} label="Net client" value=${money(totals.netToClientCents)} context="Avant frais Stripe"
+      delta=${delta(totals.netToClientCents, p?.totals.netToClientCents, money)} />
+    <${Stat} label="Ventes brutes" value=${money(totals.grossCents)} context="Taxes comprises"
+      delta=${delta(totals.grossCents, p?.totals.grossCents, money)} />
+    <${Stat} label="Commandes" value=${num(totals.orders)}
+      context=${totals.orders > 0 ? `Panier moyen ${money(Math.round(totals.grossCents / totals.orders))}` : "Aucune commande payée"}
+      delta=${delta(totals.orders, p?.totals.orders, num)} />
+    <${Stat} label="Billets vendus" value=${num(admissions)} context=${options > 0 ? `Et ${many(options, "option", "options")}` : "Billets d'entrée"}
+      delta=${delta(admissions, p?.admissions, num)} />
+    <${Stat} label="Taux de remplissage" value=${fill === null ? "—" : percent(seats.sold, seats.capacity)} flag=${fillFlag}
+      meter=${fill !== null && html`<${Meter} ratio=${fill} high=${fill >= 0.9} />`}
+      context=${fill === null ? "Aucune séance sur la période" : `${num(seats.sold)} sur ${num(seats.capacity)} places · ${many(seats.count, "séance", "séances")}`} />
+    <${Stat} label="Entrées" value=${entries === null ? "—" : percent(seats.admitted, seats.startedSold)}
+      meter=${entries !== null && html`<${Meter} ratio=${entries} />`}
+      context=${seats.started === 0 ? "Aucune séance commencée" : entries === null ? "Aucun billet pour les séances commencées"
+        : `${num(seats.admitted)} sur ${many(seats.startedSold, "billet", "billets")} des séances commencées`} />
+  </section>`;
+}
+
+// What the buyers paid, down to what the Client keeps (the old money tiles, as one statement).
+function Ledger({ totals }) {
+  const commission = totals.commissionCents - totals.commissionRefundedCents;
+  const refunded = Number(totals.refundedCents);
+  const discount = Number(totals.discountCents ?? 0);
+  return html`<section class="card ledger" aria-labelledby="ledger-title">
+    <div class="card-head"><h2 id="ledger-title">Du brut au net</h2></div>
+    <dl>
+      <div class="ledger-row"><dt>Payé par les acheteurs</dt><dd>${money(totals.grossCents)}</dd></div>
+      <div class="ledger-row sub"><dt>dont taxes (TPS + TVQ)</dt><dd>${money(totals.taxCents)}</dd></div>
+      ${discount > 0 && html`<div class="ledger-row sub"><dt>Rabais (codes promo), déjà déduits</dt><dd>${money(discount)}</dd></div>`}
+      <div class="ledger-row"><dt>Remboursé</dt><dd class=${refunded > 0 ? "neg" : ""}>${refunded > 0 ? minus(refunded) : money(0)}</dd></div>
+      <div class="ledger-row"><dt>Commission TAKATAK</dt><dd>${commission !== 0 ? minus(commission) : money(0)}</dd></div>
+      <div class="ledger-row total"><dt>Net client (avant frais Stripe)</dt><dd>${money(totals.netToClientCents)}</dd></div>
+    </dl>
+    <p class="note">Stripe retient ses frais de traitement sur chaque paiement ; ils ne sont pas déduits ici.</p>
+  </section>`;
+}
+
+function useWidth() {
+  const ref = useRef(null);
+  const [width, setWidth] = useState(0);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return undefined;
+    setWidth(Math.floor(el.getBoundingClientRect().width));
+    const ro = new ResizeObserver(([entry]) => setWidth(Math.floor(entry.contentRect.width)));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return [ref, width];
+}
+
+/** Every calendar day of the period up to today, with the report's row when it has one. */
+function chartDays(rows, range, now) {
+  if (rows.length < 2) return null;
+  let start = range ? isoDay(range[0]) : rows[0].day;
+  let end = isoDay(range ? new Date(Math.min(range[1].getTime() - 1, now.getTime())) : now);
+  if (rows[0].day < start) start = rows[0].day;
+  if (rows[rows.length - 1].day > end) end = rows[rows.length - 1].day;
+  const byDay = new Map(rows.map((r) => [r.day, r]));
+  const out = [];
+  for (let dt = parseDay(start); out.length < 4000; dt = new Date(dt.getFullYear(), dt.getMonth(), dt.getDate() + 1)) {
+    const day = isoDay(dt);
+    if (day > end) break;
+    out.push({ day, row: byDay.get(day) ?? null });
+  }
+  return out;
+}
+
+function niceStep(raw) {
+  const p = 10 ** Math.floor(Math.log10(raw));
+  const f = raw / p;
+  return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10) * p;
+}
+function yScale(min, max) {
+  const step = Math.max(1, niceStep((max - min || 100) / 4));
+  const lo = Math.floor(min / step) * step;
+  const hi = Math.max(lo + step, Math.ceil(max / step) * step);
+  const ticks = [];
+  for (let v = lo; v <= hi + step / 2; v += step) ticks.push(Math.round(v));
+  return { lo, hi, step, ticks };
+}
+const axisMoney = (cents, step) => (cents / 100).toLocaleString("fr-CA", {
+  style: "currency", currency: "CAD", minimumFractionDigits: 0, maximumFractionDigits: step < 100 ? 2 : 0,
+  ...(Math.abs(cents) >= 10_000_000 ? { notation: "compact" } : {}),
+});
+// A column with a 4 px rounded end, square on the zero line.
+function barPath(x, w, base, end) {
+  const r = Math.min(4, w / 2, Math.abs(base - end));
+  const s = end <= base ? 1 : -1;
+  return `M${x},${base}V${end + s * r}Q${x},${end} ${x + r},${end}H${x + w - r}Q${x + w},${end} ${x + w},${end + s * r}V${base}Z`;
+}
+
+const CHART_H = 248;
+function SalesTrend({ report, range, now }) {
+  const [box, width] = useWidth();
+  const [active, setActive] = useState(null);
+  const [spoken, setSpoken] = useState("");
+  const series = useMemo(() => (report ? chartDays(report.days, range, now) : null), [report, range, now]);
+  const withData = report?.days ?? [];
+  let body;
+  if (!report) body = html`<div class="chart-empty"><p class="muted">Chargement…</p></div>`;
+  else if (!series) {
+    body = html`<div class="chart-empty">
+      <p class="chart-empty-title">${withData.length === 0 ? "Aucune vente sur cette période." : `Une seule journée de ventes : le ${longDay(withData[0].day)}, ${money(withData[0].netToClientCents)} net client.`}</p>
+      <p class="muted">Le graphique jour par jour apparaît dès que deux journées ont des ventes.</p>
+    </div>`;
+  } else if (width > 0) {
+    const n = series.length;
+    const values = series.map((d) => Number(d.row?.netToClientCents ?? 0));
+    const { lo, hi, step, ticks } = yScale(Math.min(0, ...values), Math.max(0, ...values));
+    const labels = ticks.map((t) => axisMoney(t, step));
+    const left = Math.ceil(Math.max(...labels.map((l) => l.length)) * 6.6) + 12;
+    const top = 22, bottom = CHART_H - 28, plotH = bottom - top;
+    const plotW = Math.max(40, width - left - 4);
+    const band = plotW / n;
+    const barW = Math.min(24, Math.max(1, band - Math.max(2, band * 0.3)));
+    const y = (v) => top + ((hi - v) / (hi - lo)) * plotH;
+    const zero = y(0);
+    const center = (i) => left + (i + 0.5) * band;
+    const anchor = (x) => (x - 26 < left ? "start" : x + 26 > width ? "end" : "middle");
+    const every = Math.ceil(n / Math.max(2, Math.floor(plotW / 76)));
+    const xTicks = [];
+    for (let i = n - 1; i >= 0; i -= every) xTicks.push(i);
+    let peak = 0;
+    values.forEach((v, i) => { if (v > values[peak]) peak = i; });
+    const describe = (d) => `${longDay(d.day)} : ${d.row ? `${money(d.row.netToClientCents)} net client, ${many(d.row.orders, "commande", "commandes")}` : "aucune vente"}`;
+    const indexAt = (e) => {
+      const i = Math.floor((e.clientX - e.currentTarget.getBoundingClientRect().left - left) / band);
+      return i >= 0 && i < n ? i : null;
+    };
+    const onKey = (e) => {
+      const moves = { ArrowRight: 1, ArrowLeft: -1 };
+      if (e.key === "Escape") { setActive(null); return; }
+      if (!(e.key in moves) && e.key !== "Home" && e.key !== "End") return;
+      e.preventDefault();
+      const from = active ?? n - 1;
+      const next = e.key === "Home" ? 0 : e.key === "End" ? n - 1 : Math.min(n - 1, Math.max(0, from + moves[e.key]));
+      setActive(next);
+      setSpoken(describe(series[next]));
+    };
+    const a = active !== null ? series[active] : null;
+    const tipStyle = active === null ? null : center(active) > width / 2
+      ? { right: `${Math.round(width - (left + active * band) + 8)}px` }
+      : { left: `${Math.round(left + (active + 1) * band + 8)}px` };
+    const days = withData.length;
+    const summary = `Ventes nettes par jour, du ${shortDay(series[0].day)} au ${shortDay(series[n - 1].day)} : ${many(days, "jour", "jours")} avec des ventes ou des remboursements`
+      + (values[peak] > 0 ? `, meilleur jour le ${longDay(series[peak].day)} avec ${money(values[peak])}` : "")
+      + ". Flèches gauche et droite pour lire chaque jour ; le tableau des données suit.";
+    body = html`<div class="plot" tabindex="0" role="group" aria-label=${summary}
+        onKeyDown=${onKey} onFocus=${() => setActive((i) => i ?? n - 1)} onBlur=${() => setActive(null)}>
+      <svg width=${width} height=${CHART_H} viewBox=${`0 0 ${width} ${CHART_H}`} aria-hidden="true"
+        onPointerMove=${(e) => setActive(indexAt(e))} onPointerDown=${(e) => setActive(indexAt(e))}
+        onPointerLeave=${(e) => { if (e.pointerType !== "touch") setActive(null); }}>
+        ${active !== null && html`<rect class="hover-band" x=${left + active * band} y=${top} width=${band} height=${plotH} />`}
+        ${ticks.map((t, i) => html`<line class=${t === 0 ? "axis" : "grid"} x1=${left} x2=${width} y1=${Math.round(y(t)) + 0.5} y2=${Math.round(y(t)) + 0.5} />
+          <text class="tick" x=${left - 8} y=${y(t)} text-anchor="end" dominant-baseline="middle">${labels[i]}</text>`)}
+        ${series.map((d, i) => d.row && html`<path class=${active === i ? "bar is-active" : "bar"} data-day=${d.day}
+          d=${barPath(left + i * band + (band - barW) / 2, barW, zero, y(values[i]))} />`)}
+        ${values[peak] > 0 && html`<text class="peak" x=${center(peak)} y=${y(values[peak]) - 7} text-anchor=${anchor(center(peak))}>${money(values[peak])}</text>`}
+        ${xTicks.map((i) => html`<text class="tick" x=${center(i)} y=${bottom + 18} text-anchor=${anchor(center(i))}>${shortDay(series[i].day)}</text>`)}
+      </svg>
+      ${a && html`<div class="chart-tip" aria-hidden="true" style=${tipStyle}>
+        <div class="tip-day">${longDay(a.day)}</div>
+        ${a.row ? html`<div class="tip-value">${money(a.row.netToClientCents)}</div><div class="tip-key">Net client</div>
+          <dl class="tip-rows">
+            <div><dt>Brut</dt><dd>${money(a.row.grossCents)}</dd></div>
+            <div><dt>Commandes</dt><dd>${num(a.row.orders)}</dd></div>
+            ${a.row.refundedCents > 0 && html`<div><dt>Remboursé</dt><dd class="neg">${minus(a.row.refundedCents)}</dd></div>`}
+          </dl>` : html`<div class="tip-key">Aucune vente ni remboursement</div>`}
+      </div>`}
+      <p class="sr-only" aria-live="polite">${spoken}</p>
+    </div>
+    <details class="chart-data">
+      <summary>Voir les données du graphique</summary>
+      <table><thead><tr><th>Jour</th><th class="num">Net client</th><th class="num">Commandes</th><th class="num">Remboursé</th></tr></thead>
+        <tbody>${withData.map((r) => html`<tr><td>${mediumDay(r.day)}</td><td class="num">${money(r.netToClientCents)}</td><td class="num">${num(r.orders)}</td><td class="num">${money(r.refundedCents)}</td></tr>`)}</tbody></table>
+    </details>`;
+  } else body = html`<div class="chart-empty"></div>`;
+  return html`<section class="card trend" aria-labelledby="trend-title">
+    <div class="card-head"><div><h2 id="trend-title">Ventes nettes</h2>
+      <p class="sub">Net client de chaque jour${report ? ` (heure de ${report.timeZone})` : ""}</p></div></div>
+    <div class="trend-body" ref=${box}>${body}</div>
+  </section>`;
+}
+
+function sessionDay(iso, now) {
+  const dt = new Date(iso);
+  const days = Math.round((new Date(dt.getFullYear(), dt.getMonth(), dt.getDate()) - new Date(now.getFullYear(), now.getMonth(), now.getDate())) / 86_400_000);
+  const day = days === 0 ? "Aujourd'hui" : days === 1 ? "Demain" : dt.toLocaleDateString("fr-CA", { weekday: "short", day: "numeric", month: "short" });
+  return { today: days === 0, text: `${day} · ${dt.toLocaleTimeString("fr-CA", { hour: "2-digit", minute: "2-digit" })}` };
+}
+
+function UpcomingSessions({ sessions, titles, prefix, now }) {
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const ahead = sessions.filter((s) => s.status !== "cancelled" && new Date(s.startsAt) >= startOfToday);
+  const list = ahead.slice(0, 5);
+  const share = (n, s) => `${s.capacity > 0 ? Math.min(100, (n / s.capacity) * 100) : 0}%`;
+  return html`<section class="card upcoming" aria-labelledby="upcoming-title">
+    <div class="card-head">
+      <div><h2 id="upcoming-title">Prochaines séances</h2>
+        <p class="sub">${ahead.length > list.length ? `Les ${list.length} prochaines sur ${num(ahead.length)}` : many(ahead.length, "séance à venir", "séances à venir")}</p></div>
+      ${list.length > 0 && html`<ul class="legend" aria-label="Légende">
+        <li><span class="key key-sold"></span>Vendus</li><li><span class="key key-held"></span>Réservés</li><li><span class="key key-free"></span>Libres</li></ul>`}
+    </div>
+    ${list.length === 0 ? html`<p class="muted">Aucune séance à venir. <a href=${`#${prefix}/events`}>Ajouter des séances à un événement</a></p>` : html`
+    <ul class="sessions">${list.map((s) => {
+      const when = sessionDay(s.startsAt, now);
+      const ratio = s.capacity > 0 ? s.sold / s.capacity : 0;
+      const flag = s.capacity > 0 && (s.available === 0 ? "Complet" : ratio >= 0.9 ? "Presque complet" : null);
+      return html`<li class="session">
+        <div class="session-top">
+          <div class="session-when"><strong>${when.text}</strong>
+            ${titles.has(s.eventId) ? html`<a href=${`#${prefix}/event/${s.eventId}`}>${titles.get(s.eventId)}</a>` : null}</div>
+          <div class="session-tags">${flag && html`<span class="badge warn">${flag}</span>`}<${Badge} status=${s.status} /></div>
+        </div>
+        <div class="fill" aria-hidden="true">
+          ${s.sold > 0 && html`<span class="fill-sold" style=${{ width: share(s.sold, s) }}></span>`}
+          ${s.held > 0 && html`<span class="fill-held" style=${{ width: share(s.held, s) }}></span>`}
+          <span class="fill-free"></span>
+        </div>
+        <div class="session-nums">
+          <span><strong>${num(s.sold)}</strong> ${word(s.sold, "vendu", "vendus")}</span><span>${many(s.held, "réservé", "réservés")}</span><span>${many(s.available, "libre", "libres")}</span>
+          <span class="muted">sur ${num(s.capacity)}${s.capacity > 0 ? ` · ${percent(s.sold, s.capacity)}` : ""}</span>
+          ${when.today && html`<span class="entries">Entrés <strong>${num(s.admitted)}</strong></span>`}
+        </div>
+      </li>`;
+    })}</ul>`}
+  </section>`;
+}
+
+function TicketMix({ types }) {
+  const total = sum(types, "revenueCents");
+  const max = Math.max(1, ...types.map((t) => Number(t.revenueCents)));
+  const byRevenue = (a, b) => Number(b.revenueCents) - Number(a.revenueCents) || b.quantity - a.quantity;
+  const group = (title, rows) => rows.length > 0 && html`<li class="mix-group"><span class="mix-title">${title}</span>
+    <ul>${rows.sort(byRevenue).map((t) => html`<li class="mix-row">
+      <div class="mix-line"><span class="mix-name">${t.code}</span><span class="mix-value">${money(t.revenueCents)}</span></div>
+      <div class="mix-bar" aria-hidden="true"><span style=${{ width: `${(Number(t.revenueCents) / max) * 100}%` }}></span></div>
+      <div class="mix-meta">${many(t.quantity, "vendu", "vendus")}${total > 0 ? ` · ${percent(Number(t.revenueCents), total)} du revenu` : ""}</div>
+    </li>`)}</ul></li>`;
+  return html`<section class="card mix" aria-labelledby="mix-title">
+    <div class="card-head"><div><h2 id="mix-title">Billets et options</h2><p class="sub">Revenu avant taxes et rabais</p></div></div>
+    ${types.length === 0 ? html`<p class="muted">Aucun billet vendu sur cette période.</p>`
+      : html`<ul class="mix-list">${group("Billets", types.filter((t) => t.kind === "admission"))}${group("Options", types.filter((t) => t.kind !== "admission"))}</ul>`}
+  </section>`;
+}
+
 function Dashboard({ api, base, prefix }) {
   const [period, setPeriod] = useState("all");
   const [eventId, setEventId] = useState("");
-  const query = reportQuery(period, eventId);
+  // The moment the figures are taken, fixed per choice so the queries do not change between renders.
+  const asOf = useMemo(() => new Date(), [period, eventId]);
+  const range = useMemo(() => periodRange(period, asOf), [period, asOf]);
+  const query = rangeQuery(range, eventId);
+  const before = useMemo(() => previousRange(period, asOf), [period, asOf]);
+  const beforeQuery = before ? rangeQuery(before, eventId) : null;
   const [events] = useLoad(() => api(`${base}/events`), [base]);
   const [state] = useLoad(() => api(`${base}/reports/sales${query}`), [base, query]);
   const [daily] = useLoad(() => api(`${base}/reports/daily${query}`), [base, query]);
+  const [previous] = useLoad(() => (beforeQuery ? api(`${base}/reports/sales${beforeQuery}`) : Promise.resolve(null)), [base, beforeQuery]);
   const [campaigns] = useLoad(() => api(`${base}/reports/campaigns${query}`), [base, query]);
   const [todo] = useLoad(() => api(`${base}/attention`), [base]);
-  const filters = html`<div class="inline card row" role="group" aria-label="Filtres du rapport">
-      <label>Période<select value=${period} onChange=${(e) => setPeriod(e.target.value)}>
-        ${PERIODS.map(([key, label]) => html`<option value=${key}>${label}</option>`)}</select></label>
-      <label>Événement<select value=${eventId} onChange=${(e) => setEventId(e.target.value)}>
-        <option value="">Tous</option>${(events.data?.events ?? []).map((ev) => html`<option value=${ev.id}>${ev.title}</option>`)}</select></label>
-    </div>`;
-  const head = html`<h1>Tableau de bord</h1>
-    ${todo.data?.attention.total > 0 && html`<${Attention} a=${todo.data.attention} prefix=${prefix} />`}
-    ${filters}`;
+  const eventList = events.data?.events ?? [];
+  const head = html`<div class="dash-head">
+      <h1>Tableau de bord</h1>
+      <div class="dash-filters" role="group" aria-label="Filtres du rapport">
+        <label>Période<select value=${period} onChange=${(e) => setPeriod(e.target.value)}>
+          ${PERIODS.map(([key, label]) => html`<option value=${key}>${label}</option>`)}</select></label>
+        <label>Événement<select value=${eventId} onChange=${(e) => setEventId(e.target.value)}>
+          <option value="">Tous</option>${eventList.map((ev) => html`<option value=${ev.id}>${ev.title}</option>`)}</select></label>
+      </div>
+    </div>
+    ${todo.data?.attention.total > 0 && html`<${Attention} a=${todo.data.attention} prefix=${prefix} />`}`;
   if (state.error) return html`${head}<${Failure} error=${state.error} />`;
   if (!state.data) return html`${head}<${Loading} />`;
   const { totals, sessions, ticketTypes } = state.data.report;
   const days = daily.data?.report;
+  const prev = before && !previous.loading ? previous.data?.report ?? null : null;
+  const titles = new Map(eventList.map((ev) => [ev.id, ev.title]));
+  // Figures of the previous choice stay on screen, dimmed, while the new ones load (not on first load).
+  const refreshing = state.loading || Boolean(daily.loading && daily.data);
   return html`
     ${head}
-    <div class="grid">
-      ${[["Commandes", totals.orders, false], ["Ventes brutes", totals.grossCents, true], ["Taxes (TPS + TVQ)", totals.taxCents, true],
-         ["Remboursé", totals.refundedCents, true], ["Commission TAKATAK", totals.commissionCents - totals.commissionRefundedCents, true],
-         ["Net client (avant frais Stripe)", totals.netToClientCents, true],
-         // Run 36: shown once a promo code has been used in the period.
-         ...(Number(totals.discountCents) > 0 ? [["Rabais (codes promo)", totals.discountCents, true]] : [])]
-        .map(([label, v, isMoney]) => html`<div class="kpi"><div class="label">${label}</div><div class="value">${isMoney ? money(v) : v}</div></div>`)}
+    <div class=${refreshing ? "dash is-refreshing" : "dash"}>
+      <${KpiBand} totals=${totals} types=${ticketTypes} prev=${prev} prevLabel=${PREVIOUS_FR[period]} seats=${sessionFigures(sessions, range, asOf)} />
+      <p class="footnote">Montants : commandes payées sur la période, taxes comprises. Remplissage et entrées : séances qui ont lieu sur la période.</p>
+      <div class="overview">
+        <${SalesTrend} report=${days} range=${range} now=${asOf} />
+        <${Ledger} totals=${totals} />
+        <${UpcomingSessions} sessions=${sessions} titles=${titles} prefix=${prefix} now=${asOf} />
+        <${TicketMix} types=${ticketTypes} />
+      </div>
+      <section class="details" aria-labelledby="details-title">
+        <div class="section-head">
+          <h2 id="details-title">Détail des ventes</h2>
+          <div class="row">
+            <button class="secondary" onClick=${() => download(api, `${base}/reports/orders.csv${query}`, "alkao-commandes.csv")}>Exporter les commandes (CSV)</button>
+            <button class="secondary" onClick=${() => download(api, `${base}/reports/daily.csv${query}`, "alkao-ventes-par-jour.csv")}>Exporter par jour (CSV)</button>
+          </div>
+        </div>
+        <h3>Séances</h3>
+        <div class="table-scroll" role="region" aria-label="Séances" tabindex="0"><table><thead><tr><th>Début</th><th>Statut</th><th class="num">Capacité</th><th class="num">Vendus</th><th class="num">Réservés</th><th class="num">Disponibles</th><th class="num">Entrés</th></tr></thead>
+          <tbody>${sessions.map((s) => html`<tr><td>${when(s.startsAt)}</td><td><${Badge} status=${s.status} /></td><td class="num">${s.capacity}</td><td class="num">${s.sold}</td><td class="num">${s.held}</td><td class="num">${s.available}</td><td class="num">${s.admitted}</td></tr>`)}</tbody></table></div>
+        <h3>Par type de billet</h3>
+        <table><thead><tr><th>Code</th><th class="num">Quantité</th><th class="num">Revenu</th></tr></thead>
+          <tbody>${ticketTypes.map((t) => html`<tr><td>${t.code}</td><td class="num">${t.quantity}</td><td class="num">${money(t.revenueCents)}</td></tr>`)}</tbody></table>
+        ${days && html`<h3>Par jour</h3>
+          <p class="muted">Ventes au jour du paiement, remboursements au jour où Stripe les a faits (heure de ${days.timeZone}).</p>
+          ${days.days.length === 0 ? html`<p class="muted">Aucune vente ni aucun remboursement sur cette période.</p>` : html`
+          <div class="table-scroll" role="region" aria-label="Ventes par jour" tabindex="0"><table><thead><tr><th>Jour</th><th class="num">Commandes</th><th class="num">Avant taxes</th><th class="num">TPS</th><th class="num">TVQ</th><th class="num">Brut</th><th class="num">Remboursé</th><th class="num">Commission nette</th><th class="num">Net client</th></tr></thead>
+            <tbody>${days.days.map((r) => html`<tr><td>${r.day}</td><td class="num">${r.orders}</td><td class="num">${money(r.subtotalCents)}</td><td class="num">${money(r.gstCents)}</td><td class="num">${money(r.qstCents)}</td><td class="num">${money(r.grossCents)}</td><td class="num">${money(r.refundedCents)}</td><td class="num">${money(r.commissionCents - r.commissionRefundedCents)}</td><td class="num">${money(r.netToClientCents)}</td></tr>`)}
+              <tr><th>Total</th><th class="num">${days.totals.orders}</th><th class="num">${money(days.totals.subtotalCents)}</th><th class="num">${money(days.totals.gstCents)}</th><th class="num">${money(days.totals.qstCents)}</th><th class="num">${money(days.totals.grossCents)}</th><th class="num">${money(days.totals.refundedCents)}</th><th class="num">${money(days.totals.commissionCents - days.totals.commissionRefundedCents)}</th><th class="num">${money(days.totals.netToClientCents)}</th></tr></tbody></table></div>`}`}
+        ${campaigns.data?.report.rows.some((r) => r.source || r.campaign) && html`<h3>Par provenance (publicités)</h3>
+          <p class="muted">Selon les étiquettes UTM des liens. « Direct » : sans étiquette. Net = payé moins remboursé, taxes comprises.</p>
+          <div class="table-scroll" role="region" aria-label="Ventes par provenance" tabindex="0"><table><thead><tr><th>Source</th><th>Support</th><th>Campagne</th><th class="num">Commandes</th><th class="num">Entrées</th><th class="num">Options</th><th class="num">Net</th></tr></thead>
+            <tbody>${campaigns.data.report.rows.map((r) => html`<tr><td>${r.source || "Direct"}</td><td>${r.medium || "—"}</td><td>${r.campaign || "—"}</td><td class="num">${r.orders}</td><td class="num">${r.admissions}</td><td class="num">${money(r.addOnCents)}</td><td class="num">${money(r.netCents)}</td></tr>`)}</tbody></table></div>`}
+      </section>
     </div>
-    <h2>Séances</h2>
-    <table><thead><tr><th>Début</th><th>Statut</th><th class="num">Capacité</th><th class="num">Vendus</th><th class="num">Réservés</th><th class="num">Disponibles</th><th class="num">Entrés</th></tr></thead>
-      <tbody>${sessions.map((s) => html`<tr><td>${when(s.startsAt)}</td><td><${Badge} status=${s.status} /></td><td class="num">${s.capacity}</td><td class="num">${s.sold}</td><td class="num">${s.held}</td><td class="num">${s.available}</td><td class="num">${s.admitted}</td></tr>`)}</tbody></table>
-    <h2>Par type de billet</h2>
-    <table><thead><tr><th>Code</th><th class="num">Quantité</th><th class="num">Revenu</th></tr></thead>
-      <tbody>${ticketTypes.map((t) => html`<tr><td>${t.code}</td><td class="num">${t.quantity}</td><td class="num">${money(t.revenueCents)}</td></tr>`)}</tbody></table>
-    ${days && html`<h2>Par jour</h2>
-      <p class="muted">Ventes au jour du paiement, remboursements au jour où Stripe les a faits (heure de ${days.timeZone}).</p>
-      ${days.days.length === 0 ? html`<p class="muted">Aucune vente ni aucun remboursement sur cette période.</p>` : html`
-      <table><thead><tr><th>Jour</th><th class="num">Commandes</th><th class="num">Avant taxes</th><th class="num">TPS</th><th class="num">TVQ</th><th class="num">Brut</th><th class="num">Remboursé</th><th class="num">Commission nette</th><th class="num">Net client</th></tr></thead>
-        <tbody>${days.days.map((r) => html`<tr><td>${r.day}</td><td class="num">${r.orders}</td><td class="num">${money(r.subtotalCents)}</td><td class="num">${money(r.gstCents)}</td><td class="num">${money(r.qstCents)}</td><td class="num">${money(r.grossCents)}</td><td class="num">${money(r.refundedCents)}</td><td class="num">${money(r.commissionCents - r.commissionRefundedCents)}</td><td class="num">${money(r.netToClientCents)}</td></tr>`)}
-          <tr><th>Total</th><th class="num">${days.totals.orders}</th><th class="num">${money(days.totals.subtotalCents)}</th><th class="num">${money(days.totals.gstCents)}</th><th class="num">${money(days.totals.qstCents)}</th><th class="num">${money(days.totals.grossCents)}</th><th class="num">${money(days.totals.refundedCents)}</th><th class="num">${money(days.totals.commissionCents - days.totals.commissionRefundedCents)}</th><th class="num">${money(days.totals.netToClientCents)}</th></tr></tbody></table>`}`}
-    ${campaigns.data?.report.rows.some((r) => r.source || r.campaign) && html`<h2>Par provenance (publicités)</h2>
-      <p class="muted">Selon les étiquettes UTM des liens. « Direct » : sans étiquette. Net = payé moins remboursé, taxes comprises.</p>
-      <div class="table-scroll" role="region" aria-label="Ventes par provenance" tabindex="0"><table><thead><tr><th>Source</th><th>Support</th><th>Campagne</th><th class="num">Commandes</th><th class="num">Entrées</th><th class="num">Options</th><th class="num">Net</th></tr></thead>
-        <tbody>${campaigns.data.report.rows.map((r) => html`<tr><td>${r.source || "Direct"}</td><td>${r.medium || "—"}</td><td>${r.campaign || "—"}</td><td class="num">${r.orders}</td><td class="num">${r.admissions}</td><td class="num">${money(r.addOnCents)}</td><td class="num">${money(r.netCents)}</td></tr>`)}</tbody></table></div>`}
-    <p class="row">
-      <button class="secondary" onClick=${() => download(api, `${base}/reports/orders.csv${query}`, "alkao-commandes.csv")}>Exporter les commandes (CSV)</button>
-      <button class="secondary" onClick=${() => download(api, `${base}/reports/daily.csv${query}`, "alkao-ventes-par-jour.csv")}>Exporter par jour (CSV)</button>
-    </p>
     <${Reminders} api=${api} base=${base} />
     <${TransferSettings} api=${api} base=${base} />`;
 }
@@ -576,21 +928,34 @@ function PromoCodes({ api, base, eventId }) {
 const CATEGORY_LABELS = { concerts: "Concerts", festivals: "Festivals", sports: "Sports", famille: "Famille", "plein-air": "Plein air et camping", spectacles: "Théâtre et humour", soirees: "Soirées", experiences: "Expériences" };
 const LANGUAGE_LABELS = { fr: "Français", en: "Anglais", "fr-en": "Français et anglais", none: "Sans paroles (musique, cirque…)" };
 const AGE_CHOICES = [["", "Non précisé"], ["0", "Pour tous"], ["6", "6 ans et plus"], ["12", "12 ans et plus"], ["14", "14 ans et plus"], ["16", "16 ans et plus"], ["18", "18 ans et plus"]];
-function EventFacts({ api, base, eventId, event }) {
+function EventFacts({ api, base, eventId, event, assistant }) {
   const initial = () => ({
+    description: event.description ?? "",
     category: event.category ?? "", minAge: event.minAge == null ? "" : String(event.minAge),
     doors: event.doorsOpenMinutes == null ? "" : String(event.doorsOpenMinutes), language: event.language ?? "", accessibility: event.accessibility ?? "",
   });
   const [f, setF] = useState(initial);
   const [msg, setMsg] = useState(null);
   const [error, setError] = useState(null);
+  const [notes, setNotes] = useState("");
+  const [busy, setBusy] = useState(false);
   const set = (patch) => { setMsg(null); setF({ ...f, ...patch }); };
+  // Run 92: a description drafted from the event's own facts and the notes typed here.
+  const draft = async () => {
+    setError(null); setMsg(null); setBusy(true);
+    try {
+      const r = await api(`${base}/events/${eventId}/assistant/description`, { method: "POST", body: { notes } });
+      setF({ ...f, description: r.draft.description });
+      setMsg("Brouillon de l’assistant inséré : relisez-le, puis enregistrez la fiche.");
+    } catch (err) { setError(err); } finally { setBusy(false); }
+  };
   const save = async (e) => {
     e.preventDefault(); setError(null); setMsg(null);
     const doors = String(f.doors).trim();
     try {
       if (doors !== "" && !(Number.isInteger(Number(doors)) && Number(doors) >= 0 && Number(doors) <= 600)) throw new Error("Ouverture des portes : un nombre de minutes entre 0 et 600.");
       await api(`${base}/events/${eventId}`, { method: "PATCH", body: {
+        description: String(f.description).trim() || null,
         category: f.category || null, minAge: f.minAge === "" ? null : Number(f.minAge),
         doorsOpenMinutes: doors === "" ? null : Number(doors), language: f.language || null,
         accessibility: String(f.accessibility).trim() || null,
@@ -601,6 +966,12 @@ function EventFacts({ api, base, eventId, event }) {
   };
   return html`<form class="card facts-form" onSubmit=${save}>
     <p class="muted">Facultatif : ce qui n’est pas rempli n’est pas affiché. Montré dans la billetterie, sur l’accueil ALKAO et aux moteurs de recherche.</p>
+    <label>Description<textarea rows="6" maxlength="5000" placeholder="Ce qu’on y vit, pour qui, ce qui est inclus." value=${f.description}
+      onInput=${(e) => set({ description: e.target.value })}></textarea></label>
+    ${assistant && html`<div class="assistant-row">
+      <label>Notes pour l’assistant (facultatif)<input maxlength="1000" placeholder="Tour de train, maquillage pour enfants, chocolat chaud…" value=${notes} onInput=${(e) => setNotes(e.target.value)} /></label>
+      <button type="button" class="secondary" disabled=${busy} onClick=${draft}>${busy ? "Rédaction…" : "Rédiger avec l’assistant"}</button>
+    </div>`}
     <div class="inline">
       <label>Catégorie<select value=${f.category} onChange=${(e) => set({ category: e.target.value })}>
         <option value="">Non précisée</option>${Object.entries(CATEGORY_LABELS).map(([k, l]) => html`<option value=${k}>${l}</option>`)}</select></label>
@@ -612,12 +983,12 @@ function EventFacts({ api, base, eventId, event }) {
     </div>
     <label>Accessibilité<textarea rows="3" maxlength="1000" placeholder="Accès en fauteuil roulant, places pour accompagnateur, carte CAL acceptée, sous-titres…" value=${f.accessibility}
       onInput=${(e) => set({ accessibility: e.target.value })}></textarea></label>
-    ${error && html`<${Failure} error=${error} />`}
+    ${error && html`<${AssistantFailure} error=${error} />`}
     <div class="row"><button type="submit">Enregistrer la fiche</button>${msg && html`<span class="badge ok" role="status">${msg}</span>`}</div>
   </form>`;
 }
 
-function EventDetail({ api, base, eventId }) {
+function EventDetail({ api, base, eventId, assistant }) {
   const [ev, reloadEvent] = useLoad(() => api(`${base}/events/${eventId}`), [base, eventId]);
   const [sessions, reloadSessions] = useLoad(() => api(`${base}/events/${eventId}/sessions`), [base, eventId]);
   const [types, reloadTypes] = useLoad(() => api(`${base}/events/${eventId}/ticket-types`), [base, eventId]);
@@ -721,7 +1092,7 @@ function EventDetail({ api, base, eventId }) {
     </div>
 
     <h2>Fiche de l’événement</h2>
-    <${EventFacts} api=${api} base=${base} eventId=${eventId} event=${event} />
+    <${EventFacts} api=${api} base=${base} eventId=${eventId} event=${event} assistant=${assistant} />
 
     <h2>Vendre en ligne</h2>
     <div class="card">
@@ -934,10 +1305,11 @@ const ACTION_FR = {
   "credentials.key_rotated": "Clé des codes QR remplacée", "credentials.reissued": "Code QR réémis", "scan.manual_admission": "Entrée sans code QR",
   "reports.daily_exported": "Rapport par jour exporté", "reports.attendees_exported": "Liste des participants exportée", "reports.orders_exported": "Commandes exportées",
   "settings.reminders_updated": "Courriels de rappel modifiés",
+  "assistant.drafted": "Brouillon demandé à l'assistant de rédaction",
 };
 const ROLE_FR = { owner: "propriétaire", admin: "administrateur", manager: "gestionnaire", editor: "éditeur", staff: "personnel", viewer: "lecteur" };
 const FAMILIES = [["", "Tout"], ["order", "Commandes"], ["refund", "Remboursements"], ["payment", "Paiements Stripe"], ["tickets", "Billets annulés"],
-  ["buyer", "Données personnelles"], ["session", "Séances"], ["event", "Événements"], ["reports", "Exports"], ["control", "Synchronisation TAKATAK"]];
+  ["buyer", "Données personnelles"], ["session", "Séances"], ["event", "Événements"], ["reports", "Exports"], ["assistant", "Assistant de rédaction"], ["control", "Synchronisation TAKATAK"]];
 const actionText = (a) => ACTION_FR[a] ?? (a.startsWith("control.") ? `Synchronisation TAKATAK (${a.slice(8)})` : a);
 const actorText = (e, me) => e.actorType === "user" ? `${e.actorId === me ? "Vous" : "Personnel"}${e.actorRole ? ` (${ROLE_FR[e.actorRole] ?? e.actorRole})` : ""}`
   : e.actorType === "public" ? "Acheteur" : e.actorType === "control" ? "TAKATAK" : "ALKAO";
@@ -1527,7 +1899,41 @@ function Campaigns({ api, base, prefix }) {
     <div><${NewsletterSettings} api=${api} base=${base} /></div>`;
 }
 
-function CampaignEditor({ api, base, prefix, campaignId }) {
+// ── Run 92: the writing assistant (a draft from the catalog; staff read, correct and save) ──
+const AssistantFailure = ({ error }) => (error instanceof ApiError && error.code === "assistant_draft_rejected" && Array.isArray(error.details)
+  ? html`<div class="alert bad" role="alert"><p>${ERRORS_FR.assistant_draft_rejected}</p><ul>${error.details.map((d) => html`<li>${d}</li>`)}</ul></div>`
+  : html`<${Failure} error=${error} />`);
+
+function AssistantCampaign({ api, base, channel, language, onDraft }) {
+  const [events] = useLoad(() => api(`${base}/events`), [base]);
+  const [eventId, setEventId] = useState("");
+  const [brief, setBrief] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const [done, setDone] = useState(false);
+  const run = async (e) => {
+    e.preventDefault(); setError(null); setDone(false); setBusy(true);
+    try {
+      const r = await api(`${base}/assistant/campaign`, { method: "POST", body: { channel, language, eventId: eventId || null, brief } });
+      onDraft(r.draft, eventId || null); setDone(true);
+    } catch (err) { setError(err); } finally { setBusy(false); }
+  };
+  const published = (events.data?.events ?? []).filter((ev) => ev.status === "published");
+  return html`<form class="card assistant-card" aria-label="Rédiger avec l'assistant" onSubmit=${run}>
+    <h3>Rédiger avec l’assistant</h3>
+    <p class="muted">Donnez le but en une phrase. L’assistant écrit ${channel === "sms" ? "le texto" : "l’objet, le titre, le texte et le bouton"} à partir de vos dates, lieux et tarifs. Il n’invente ni prix ni rabais, et rien ne part sans vous. N’y mettez aucun renseignement personnel sur vos clients.</p>
+    <div class="fields">
+      <label>Événement<select value=${eventId} onChange=${(e) => setEventId(e.target.value)}>
+        <option value="">Tout ce qui est en vente</option>${published.map((ev) => html`<option value=${ev.id}>${ev.title}</option>`)}</select></label>
+    </div>
+    <label>Consigne<textarea rows="2" required minlength="3" maxlength="600" placeholder="Ex. : rappeler aux familles qu’il reste deux samedis d’Halloween" value=${brief} onInput=${(e) => setBrief(e.target.value)}></textarea></label>
+    ${error && html`<${AssistantFailure} error=${error} />`}
+    ${done && html`<div class="alert ok" role="status">Brouillon inséré dans le formulaire ci-dessous. Relisez-le et corrigez-le avant d’enregistrer.</div>`}
+    <p class="row"><button type="submit" disabled=${busy}>${busy ? "Rédaction…" : "Rédiger le brouillon"}</button></p>
+  </form>`;
+}
+
+function CampaignEditor({ api, base, prefix, campaignId, assistant }) {
   const [state, reload] = useLoad(() => (campaignId ? api(`${base}/campaigns/${campaignId}`) : Promise.resolve({ campaign: null })), [base, campaignId]);
   const [f, setF] = useState(null);
   const [count, setCount] = useState(null);
@@ -1586,6 +1992,12 @@ function CampaignEditor({ api, base, prefix, campaignId }) {
     setMsg(active ? "Automatisation en marche : elle écrira après chaque visite qui se termine à partir d'aujourd'hui." : "Automatisation en pause.");
   });
   const field = (label, key, attrs = {}) => html`<label>${label}<input value=${c[key] ?? ""} disabled=${!draft} onInput=${(e) => set({ [key]: e.target.value })} ...${attrs} /></label>`;
+  // Run 92: the assistant's draft fills the text fields; the button leads to the event's shop.
+  const applyDraft = (d, eventId) => {
+    const [, , clientId, , brandId] = base.split("/").slice(2);
+    const url = c.ctaUrl || (eventId ? `${location.origin}/acheter/${clientId}/${brandId}/${eventId}` : "");
+    set({ ...d, name: c.name || (d.subject ?? d.body).slice(0, 120), ctaUrl: url, ...(sms ? {} : { ctaLabel: url ? d.ctaLabel : "" }) });
+  };
   return html`<h1>${loaded ? loaded.name : "Nouvelle campagne"}</h1>
     <p class="row"><a href=${`#${prefix}/campaigns`}>← Campagnes</a>${loaded && html`<${CampaignBadge} c=${loaded} />`}</p>
     ${error && html`<${Failure} error=${error} />`}${msg && html`<div class="alert ok" role="status">${msg}</div>`}
@@ -1599,6 +2011,7 @@ function CampaignEditor({ api, base, prefix, campaignId }) {
         <p>Vérifiez à qui elle s'adresse (une vieille liste rebondit beaucoup), puis reprenez ou arrêtez l'envoi.</p>
         <p class="row"><button onClick=${resume}>Reprendre l'envoi</button></p></div>`}
       ${(loaded.status === "sending" || (loaded.kind === "after_visit" && loaded.status === "draft")) && html`<p class="row"><button class="danger" onClick=${cancel}>${loaded.kind === "after_visit" ? "Arrêter pour de bon" : "Arrêter l'envoi"}</button></p>`}`}
+    ${assistant && draft && !automatic && html`<${AssistantCampaign} api=${api} base=${base} channel=${c.channel} language=${c.language} onDraft=${applyDraft} />`}
     <form class="card" aria-label="Contenu de la campagne" onSubmit=${save}>
       <div class="fields">
         ${field("Nom (pour l'équipe)", "name", { required: true, maxlength: 120 })}
@@ -1797,7 +2210,7 @@ function Shell({ api, route, email, me, testMode, onLogout }) {
   const body = disabled ? html`<div class="alert warn">${REASON_FR[status.data.ticketing.reason] ?? status.data.ticketing.reason}</div>`
     : page === "dashboard" ? html`<${Dashboard} api=${api} base=${base} prefix=${prefix} />`
     : page === "events" ? html`<${Events} api=${api} base=${base} prefix=${prefix} />`
-    : page === "event" ? html`<${EventDetail} api=${api} base=${base} eventId=${route.id} />`
+    : page === "event" ? html`<${EventDetail} api=${api} base=${base} eventId=${route.id} assistant=${status.data?.assistant} />`
     : page === "venues" ? html`<${Venues} api=${api} base=${base} />`
     : page === "orders" ? html`<${Orders} api=${api} base=${base} prefix=${prefix} />`
     : page === "order" ? html`<${OrderDetail} api=${api} base=${base} orderId=${route.id} role=${status.data?.role} me=${me} />`
@@ -1808,7 +2221,7 @@ function Shell({ api, route, email, me, testMode, onLogout }) {
     : page === "customers" ? html`<${Customers} api=${api} base=${base} prefix=${prefix} role=${status.data?.role} />`
     : page === "customer" ? html`<${CustomerDetail} api=${api} base=${base} customerId=${route.id} role=${status.data?.role} />`
     : page === "campaigns" ? html`<${Campaigns} api=${api} base=${base} prefix=${prefix} />`
-    : page === "campaign" ? html`<${CampaignEditor} key=${route.id ?? "new"} api=${api} base=${base} prefix=${prefix} campaignId=${route.id ?? null} />`
+    : page === "campaign" ? html`<${CampaignEditor} key=${route.id ?? "new"} api=${api} base=${base} prefix=${prefix} campaignId=${route.id ?? null} assistant=${status.data?.assistant} />`
     : html`<p>Page inconnue.</p>`;
   const links = [...TABS, ...(CUSTOMER_ROLES.includes(status.data?.role) ? [["customers", "Clients"]] : []), ...(CUSTOMER_FILE_ROLES.includes(status.data?.role) ? [["campaigns", "Campagnes"]] : []), ...(JOURNAL_ROLES.includes(status.data?.role) ? [["journal", "Journal"]] : [])]
     .map(([key, label]) => html`<a class=${tab === key ? "active" : ""} aria-current=${tab === key ? "page" : null} href=${`#${prefix}/${key}`}>${label}</a>`);

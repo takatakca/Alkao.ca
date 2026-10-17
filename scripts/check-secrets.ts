@@ -19,6 +19,7 @@ const PATTERNS: [string, RegExp][] = [
   ["Supabase secret key", /\bsb_secret_[A-Za-z0-9_-]{10,}/],
   ["Resend API key", /\bre_[A-Za-z0-9]{6,}_[A-Za-z0-9]{12,}/],
   ["Twilio API key", /\bSK[0-9a-f]{32}\b/],
+  ["Anthropic API key", /\bsk-ant-[a-z]+\d*-[A-Za-z0-9_-]{20,}/],
   ["Private key", /-----BEGIN (RSA |EC |OPENSSH |)PRIVATE KEY-----/],
 ];
 

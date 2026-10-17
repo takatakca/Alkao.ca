@@ -1,5 +1,11 @@
 # ALKAO — Project status
 
+## Run 92 — executive pass (2026-10-17)
+
+- **Home copy:** firm and factual, with a calm design. The ALKAO assistant on the home stays.
+- **/ops dashboard:** an executive overview.
+- **/ops writing assistant:** drafts campaigns and event descriptions from the Brand's own catalog. The code refuses any invented price, discount, code or link. It is off by default because it is paid per use: about 0,04 $ CA per draft with Claude Opus 5.5, capped per Brand per day (`docs/ASSISTANT_REDACTION.md`). Nothing is deployed until Coolify #84.
+
 ## Runs 90–91 — premium buyer pages; Havana's catalog ready to load (2026-10-17)
 
 The shop, the tickets wallet, the venues, the home filters and the e-mail landing pages share one premium look: photo heroes with zoom, sticky ticket panel, live totals, ticket cards with a full-screen gate view. `npm run events:import` loads Havana's owner-approved Halloween catalog in one command. Havana is still not provisioned in production ALKAO and the live service is still the old build, so alkao.ca shows no event until the operator steps in `docs/HAVANA_SUR_ALKAO.md` are done. PR #85.

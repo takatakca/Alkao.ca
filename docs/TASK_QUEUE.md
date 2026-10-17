@@ -1,5 +1,14 @@
 # ALKAO — Task queue (priority ordered)
 
+## Run 92 — executive pass (2026-10-17)
+
+1. Merge the Run 92 PR (home copy, /ops overview, writing assistant) when CI is green.
+2. Owner decision: turn the writing assistant on (Anthropic key, budget, model choice; `docs/ASSISTANT_REDACTION.md`). It stays off until then.
+3. Next AI steps, each needing the owner's go-ahead (paid):
+   - the public home assistant answering with Claude, grounded in the FAQ and the live catalog, with a separate flag and rate limit;
+   - a weekly sales summary in plain words for the owner.
+4. Still P0: Coolify #84, then `docs/HAVANA_SUR_ALKAO.md`.
+
 ## Runs 90–91 — buyer pages and Havana on alkao.ca (2026-10-17)
 
 1. Merge PR #85 (Run 90 premium buyer pages, Run 91 `events:import`) when CI is green.

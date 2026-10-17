@@ -1,5 +1,28 @@
 # ALKAO — Agent handoff (mandatory)
 
+## Run 92 — executive pass: firm copy, /ops overview, writing assistant (2026-10-17)
+
+- Branch `claude/amazing-pascal-tppqd4` → PR #86. Three parts:
+  - 92a, home: firmer, factual copy (FR/EN) and a calm design (no glows, gradient text, pulses or blobs). The "Assistant ALKAO" on the home stays, with no fake typing.
+  - 92b, /ops: the dashboard as an executive overview (`ops-ui/app.js`). Front only. It shows:
+    - six KPI tiles, with a comparison to the period just before;
+    - a daily net sales chart (SVG, with a data table);
+    - the brut-to-net statement;
+    - the next sessions with sold / held / free bars;
+    - the ticket mix, by code: `/reports/sales` has no ticket type names.
+    - The tables and CSV exports are kept under "Détail des ventes".
+  - 92c, /ops: writing assistant. It drafts a campaign (e-mail or text) or an event description from the Brand's catalog.
+- 92c, assistant:
+  - `src/ai/writer.ts` calls Claude through `@anthropic-ai/sdk`, pinned at 0.131.0. Settings: structured output, effort `low`, `fallbacks: "default"`.
+  - `src/ai/drafts.ts` builds the facts from the catalog, holds the rules, and checks every answer in code. A draft is refused for a price, a percentage, a discount or a code absent from the catalog or the brief, for a link, or for an unknown placeholder. After a refusal there is one retry, then staff get the reasons (422 `assistant_draft_rejected`).
+  - No buyer or customer data is sent.
+  - Routes: `POST …/assistant/campaign` and `POST …/events/:id/assistant/description`.
+  - Daily ceiling per Brand: `ALKAO_ASSISTANT_DAILY_LIMIT`, counted from Journal rows `assistant.drafted`.
+  - `GET …/status` returns `assistant: true|false`.
+- Assistant flags: OFF by default. It needs `ALKAO_ASSISTANT_ENABLED=true` and `ANTHROPIC_API_KEY` on the server (the owner types the key). The service is paid per use; the cost table is in `docs/ASSISTANT_REDACTION.md`. `check:secrets` now also catches Anthropic keys.
+- Tests: `test/ai/assistant.test.ts` and `test/ui/assistant-ui.test.ts`. They use a fake model (`test/helpers/writer.ts`) and never reach the network.
+- NEXT EXACT ACTION: merge the Run 92 PR when green. Then the owner decides whether to turn the assistant on (`docs/ASSISTANT_REDACTION.md`). Coolify #84 still blocks every deploy.
+
 ## Runs 90–91 — premium buyer pages and Havana's events on alkao.ca (2026-10-17)
 
 - Branch `claude/amazing-pascal-tppqd4` → PR #85. Front only for Run 90: no migration, no server logic, no new dependency.

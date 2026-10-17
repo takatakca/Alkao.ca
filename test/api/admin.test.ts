@@ -149,6 +149,6 @@ describe("admin permissions", () => {
   it("reports the gate state to members", async () => {
     const token = await tokenFor(seed.users.havanaStaff);
     const res = await call(app, "GET", `${havana()}/status`, { token });
-    expect(res.body).toEqual({ role: "staff", ticketing: { active: true } });
+    expect(res.body).toEqual({ role: "staff", ticketing: { active: true }, assistant: false });
   });
 });
