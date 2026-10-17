@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -7,7 +8,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { adm, call, pub, stopServer, testApp, tokenFor, type TestApp } from "../helpers/app.js";
 import { createTestDatabase, type TestDatabase } from "../helpers/db.js";
 import { line, report } from "../helpers/reservations.js";
-import { seedAfterSale, seedPaidOrder, withMeal, seedTwoTenants, TEST_CREDENTIAL_SECRET, type SeedResult } from "../helpers/seed.js";
+import { seedAfterSale, seedPaidOrder, seedTenant, withMeal, seedTwoTenants, TEST_CREDENTIAL_SECRET, type SeedResult } from "../helpers/seed.js";
+import { insertScan } from "../../src/db/credentials.js";
 
 /**
  * End-to-end: the real server, a real Chromium, the Operations app driven like a staff member.
@@ -849,6 +851,117 @@ describe("ALKAO Operations app", () => {
     await page.getByRole("button", { name: "Ajouter une photo" }).click();
     await page.getByRole("button", { name: "Changer la photo" }).waitFor();
     expect(await page.locator("img.event-photo").getAttribute("src")).toBe("https://cdn.example.com/photo.svg");
+  });
+
+  // Run 92: a Brand of its own (one order, 80 seats in 30 days), so its figures are exactly the seeded ones.
+  async function dashboardTenant() {
+    const t = await seedTenant(db.pool, "Run 92 Resort", `Tableau ${randomUUID().slice(0, 6)}`, 80);
+    const owner = randomUUID();
+    await db.pool.query(`INSERT INTO public.ticketing_memberships (client_id, user_id, role, status) VALUES ($1, $2, 'owner', 'active')`, [t.clientId, owner]);
+    return { t, owner, token: await tokenFor(owner) };
+  }
+  const digits = (s: string | null) => (s ?? "").replace(/\D/g, "");
+  const stat = (page: Page, label: string) => page.locator(".stat").filter({ has: page.locator(".label", { hasText: new RegExp(`^${label}`) }) });
+
+  it("Run 92: leads the dashboard with the server's figures, sold over capacity and no made-up comparison", async () => {
+    const { t, owner, token } = await dashboardTenant();
+    // Tonight's session started a minute ago: 2 tickets sold, 1 already in.
+    const { rows } = await db.pool.query<{ id: string }>(
+      `INSERT INTO public.ticketing_sessions (client_id, brand_id, event_id, starts_at, capacity, status)
+       VALUES ($1, $2, $3, now() - interval '1 minute', 20, 'on_sale') RETURNING id`,
+      [t.clientId, t.brandId, t.eventId],
+    );
+    const tonight = rows[0]!.id;
+    const order = await seedPaidOrder(db.pool, { ...t, sessionId: tonight }, "ce-soir@example.com", { GENERAL: 2 });
+    const { rows: cred } = await db.pool.query<{ id: string }>(`SELECT id FROM public.ticketing_credentials WHERE ticket_id = $1`, [order.ticketIds[0]]);
+    await insertScan(db.pool, {
+      clientId: t.clientId, brandId: t.brandId, eventId: t.eventId, sessionId: tonight, credentialId: cred[0]!.id, ticketId: order.ticketIds[0]!,
+      result: "admitted", deviceId: "porte-1", scannedBy: owner, scannedAt: new Date(), offline: false,
+    });
+    const { report: sales } = (await call(app, "GET", `${adm(t.clientId, t.brandId)}/reports/sales`, { token })).body;
+    const sold = sales.sessions.reduce((n: number, s: { sold: number }) => n + s.sold, 0);
+    const capacity = sales.sessions.reduce((n: number, s: { capacity: number }) => n + s.capacity, 0);
+    expect([sold, capacity]).toEqual([6, 100]);
+
+    const page = await signedIn(owner);
+    await page.goto(`${origin}/ops#/c/${t.clientId}/b/${t.brandId}/dashboard`);
+    const kpis = page.getByRole("region", { name: "Indicateurs clés" });
+    await kpis.waitFor();
+    const value = (label: string) => stat(page, label).locator(".value").textContent();
+    const context = (label: string) => stat(page, label).locator(".context").textContent();
+    expect(digits(await value("Net client"))).toBe(String(sales.totals.netToClientCents));
+    expect(digits(await value("Ventes brutes"))).toBe(String(sales.totals.grossCents));
+    expect(await value("Commandes")).toBe(String(sales.totals.orders));
+    expect(sales.totals.orders).toBe(2);
+    expect(await value("Billets vendus")).toBe("6");
+    expect(await context("Billets vendus")).toBe("Et 4 options");
+    // Sold over the capacity of the sessions in the filter: 6 of 100 seats.
+    expect(await value("Taux de remplissage")).toBe(`${Math.floor((sold / capacity) * 100)} %`);
+    expect(await context("Taux de remplissage")).toBe("6 sur 100 places · 2 séances");
+    // Admitted over sold, for the sessions that have started: 1 of tonight's 2.
+    expect(await value("Entrées")).toBe("50 %");
+    expect(await context("Entrées")).toBe("1 sur 2 billets des séances commencées");
+    // "Depuis le début" has no period before it: no comparison at all.
+    expect(await kpis.locator(".delta").count()).toBe(0);
+
+    // The next sessions, with tonight's entries; the ticket mix, from the same report.
+    const upcoming = page.getByRole("region", { name: "Prochaines séances" });
+    const rowsShown = upcoming.locator("li.session");
+    expect(await rowsShown.count()).toBe(2);
+    expect(await rowsShown.first().textContent()).toContain("Entrés 1");
+    expect(await rowsShown.nth(1).locator(".session-nums > span").allTextContents()).toEqual(["4 vendus", "0 réservé", "76 libres", "sur 80 · 5 %"]);
+    const general = sales.ticketTypes.find((x: { code: string }) => x.code === "GENERAL");
+    const mix = page.getByRole("region", { name: "Billets et options" }).locator(".mix-row").filter({ hasText: "GENERAL" });
+    expect(digits(await mix.locator(".mix-value").textContent())).toBe(String(general.revenueCents));
+    expect(await mix.locator(".mix-meta").textContent()).toContain(`${general.quantity} vendus`);
+
+    // Seven days, against the seven before them (nothing was sold then); the fill rate now
+    // counts only tonight's session, the one that takes place in those days.
+    await page.getByLabel("Période").selectOption("7d");
+    await stat(page, "Commandes").locator(".delta").waitFor();
+    expect(await stat(page, "Commandes").locator(".delta").textContent()).toBe("vs 0 les 7 jours précédents");
+    expect(await value("Taux de remplissage")).toBe("10 %");
+    expect(await context("Taux de remplissage")).toBe("2 sur 20 places · 1 séance");
+  });
+
+  it("Run 92: draws one column per day with sales, readable without the chart, and a calm empty state", async () => {
+    const { t, owner, token } = await dashboardTenant();
+    const page = await signedIn(owner);
+    await page.goto(`${origin}/ops#/c/${t.clientId}/b/${t.brandId}/dashboard`);
+    const trend = page.getByRole("region", { name: "Ventes nettes", exact: true });
+    // A single day of sales: nothing to draw yet.
+    await trend.getByText("Une seule journée de ventes", { exact: false }).waitFor();
+    expect(await trend.locator("svg").count()).toBe(0);
+    // No sale at all in the period.
+    await page.getByLabel("Période").selectOption("lastMonth");
+    await trend.getByText("Aucune vente sur cette période.").waitFor();
+    expect(await trend.locator("svg").count()).toBe(0);
+    expect(digits(await stat(page, "Net client").locator(".value").textContent())).toBe("000");
+
+    // A second day of sales, three days ago.
+    await seedPaidOrder(db.pool, t, "avant@example.com", { GENERAL: 1 }, new Date(Date.now() - 3 * 86_400_000));
+    const { report: daily } = (await call(app, "GET", `${adm(t.clientId, t.brandId)}/reports/daily`, { token })).body;
+    expect(daily.days.length).toBe(2);
+    await page.reload();
+    const bars = trend.locator("svg .bar");
+    await bars.first().waitFor();
+    expect(await bars.count()).toBe(2);
+    expect(await bars.evaluateAll((els) => els.map((e) => e.getAttribute("data-day")))).toEqual(daily.days.map((d: { day: string }) => d.day));
+    // The bigger day draws the taller column.
+    const heights = await bars.evaluateAll((els) => els.map((e) => (e as any).getBBox().height as number));
+    expect(heights[0]! < heights[1]!).toBe(daily.days[0].netToClientCents < daily.days[1].netToClientCents);
+
+    // Keyboard: the same details as on hover, also said aloud.
+    const plot = trend.getByRole("group", { name: /^Ventes nettes par jour, .* 2 jours avec des ventes/ });
+    await plot.focus();
+    await page.keyboard.press("Home");
+    expect(digits(await trend.locator(".chart-tip .tip-value").textContent())).toBe(String(daily.days[0].netToClientCents));
+    expect(await trend.locator("[aria-live]").textContent()).toContain("1 commande");
+
+    // And the table behind the chart.
+    await trend.getByText("Voir les données du graphique").click();
+    const cells = await trend.locator(".chart-data tbody tr").evaluateAll((trs) => trs.map((tr) => tr.children[1]!.textContent));
+    expect(cells.map(digits)).toEqual(daily.days.map((d: { netToClientCents: number }) => String(d.netToClientCents)));
   });
 
   it("hides money from gate staff", async () => {
