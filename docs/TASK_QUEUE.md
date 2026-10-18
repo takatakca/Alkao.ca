@@ -1,5 +1,11 @@
 # ALKAO — Task queue (priority ordered)
 
+## Run 93 — the event page in full (2026-10-18)
+
+1. Merge the Run 93 PR when CI is green.
+2. Owner: fill Havana's event page in /ops → Événements → Page de l'événement. It needs photos (https), highlights, Le jour J, the FAQ and the ticket descriptions. The assistant can draft the texts once it is turned on.
+3. Later: buyer reviews, collected after the visit (Run 45 e-mail), before any star is shown on the page.
+
 ## Run 92 — executive pass (2026-10-17)
 
 1. Merge the Run 92 PR (home copy, /ops overview, writing assistant) when CI is green.

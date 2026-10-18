@@ -131,6 +131,35 @@ describe("Run 92: the writing assistant", () => {
     expect(writer.asked[0]!.prompt).toContain("maquillage pour enfants");
   });
 
+  it("drafts the event page's sections from its facts, and refuses an invented price there too (Run 93)", async () => {
+    await db.pool.query(`UPDATE public.ticketing_events SET duration_minutes = 120, format = 'Parcours extérieur' WHERE id = $1`, [halloweenId]);
+    await db.pool.query(`INSERT INTO public.ticketing_brand_settings (client_id, brand_id, refund_policy) VALUES ($1, $2, 'Échange de date sans frais jusqu''à 48 h avant.')
+      ON CONFLICT (client_id, brand_id) DO UPDATE SET refund_policy = EXCLUDED.refund_policy`, [seed.havana.clientId, seed.havana.brandId]);
+    const PAGE = {
+      summary: "Train hanté, village décoré et spectacle pour enfants",
+      highlights: [{ title: "Le train de l'Halloween", text: "Un tour du site à bord du petit train." }],
+      steps: [{ title: "Arrivée", text: "Présentez votre billet à l'entrée." }, { title: "Le tour", text: "Environ deux heures sur le site." }],
+      faq: [{ question: "Puis-je changer de date ?", answer: "Oui, sans frais jusqu'à 48 h avant." }, { question: "Combien coûte l'entrée enfant ?", answer: "12 $ + taxes." }],
+    };
+    const writer = new FakeWriter([PAGE]);
+    const r = await call(appWith(writer), "POST", `${base()}/events/${halloweenId}/assistant/page`, { token: await owner(), body: { notes: "Train, village hanté, spectacle Robin des bois" } });
+    expect(r.status).toBe(200);
+    expect(r.body.draft).toEqual(PAGE);
+    expect(writer.asked[0]!.prompt).toContain("Échange de date sans frais");
+    expect(writer.asked[0]!.prompt).toContain("Parcours extérieur");
+    expect(writer.asked[0]!.prompt).toContain("2 h");
+    expect(writer.asked[0]!.prompt).not.toContain("octobre 2026");
+    expect(writer.asked[0]!.system).toMatch(/que si les faits ou les notes en donnent la réponse/);
+
+    const invented = { ...PAGE, faq: [{ question: "Combien coûte l'entrée ?", answer: "Seulement 9 $." }] };
+    const bad = await call(appWith(new FakeWriter([invented])), "POST", `${base()}/events/${halloweenId}/assistant/page`, { token: await owner(), body: {} });
+    expect(bad.status).toBe(422);
+    expect(bad.body.error.details.join(" ")).toMatch(/La réponse 1 cite un prix \(9 \$\)/);
+    const tooMany = { ...PAGE, highlights: Array.from({ length: 8 }, (_, i) => ({ title: `Point ${i + 1}`, text: "Un détail." })) };
+    const many = await call(appWith(new FakeWriter([tooMany])), "POST", `${base()}/events/${halloweenId}/assistant/page`, { token: await owner(), body: {} });
+    expect(many.body.error.details[0]).toMatch(/Les points forts : 6 au plus/);
+  });
+
   it("stops at the daily ceiling for the Brand", async () => {
     const before = (await db.pool.query(`SELECT count(*)::int AS n FROM public.ticketing_audit_log WHERE action = 'assistant.drafted'`)).rows[0].n;
     const app = appWith(new FakeWriter([GOOD_EMAIL]), { assistantDailyLimit: before + 1 });
@@ -160,7 +189,7 @@ describe("Run 92: the writing assistant", () => {
 });
 
 describe("Run 92: the checks on a draft", () => {
-  const facts = { marque: "Promo Havana", siteWeb: null, evenements: [], priceCents: new Set([2500, 1250]), hasFree: false };
+  const facts = { marque: "Promo Havana", siteWeb: null, politique: null, evenements: [], priceCents: new Set([2500, 1250]), hasFree: false };
   const check = (text: string, brief = "") => checkText(text, facts, brief, 500, "Le texte");
 
   it("knows a price written the French or the English way", () => {

@@ -100,6 +100,60 @@ describe("Run 92: the writing assistant in /ops", () => {
     expect(await page.getByLabel("Objet du courriel").inputValue()).toBe("");
   });
 
+  it("edits the event page by hand, and the assistant writes its sections, saved with the form (Run 93)", async () => {
+    const page = await signedIn();
+    await page.goto(`${origin}/ops#${brandPath()}/event/${eventId}`);
+    const form = page.getByRole("form", { name: "Page de l’événement" });
+    await form.waitFor();
+    await form.getByLabel("Durée (minutes)").fill("120");
+    await form.getByLabel("Format").fill("Parcours extérieur");
+    await form.getByLabel("Résumé (une ligne sous le titre)").fill("Train hanté et village décoré");
+    await form.getByRole("button", { name: "Ajouter : Galerie" }).click();
+    await form.getByRole("group", { name: "Galerie" }).getByLabel("Photo (lien https)").fill("https://photos.alkao.test/train.webp");
+    await form.getByRole("button", { name: "Ajouter : FAQ" }).click();
+    await form.getByRole("group", { name: "FAQ" }).getByLabel("Question").fill("Y a-t-il du stationnement ?");
+    await form.getByRole("group", { name: "FAQ" }).getByLabel("Réponse").fill("Oui, sur le site.");
+
+    (writer as unknown as { answers: unknown[] }).answers = [{
+      summary: "Train hanté, village décoré et spectacle",
+      highlights: [{ title: "Le train de l'Halloween", text: "Un tour du site à bord du petit train." }, { title: "Le village hanté", text: "Des décors à parcourir à pied." }],
+      steps: [{ title: "Arrivée", text: "Présentez votre billet à l'entrée." }],
+      faq: [{ question: "Faut-il réserver ?", answer: "Oui, les places sont par soirée." }],
+    }];
+    await form.getByLabel("Notes pour rédiger la page (facultatif)").fill("Train, village hanté");
+    await form.getByRole("button", { name: "Rédiger la page avec l’assistant" }).click();
+    await form.getByRole("status").filter({ hasText: "Brouillon de l’assistant inséré" }).waitFor();
+    await expect.poll(() => form.getByLabel("Résumé (une ligne sous le titre)").inputValue()).toBe("Train hanté, village décoré et spectacle");
+    expect(await form.getByRole("group", { name: "Points forts" }).getByLabel("Titre").count()).toBe(2);
+    // The gallery the organizer chose is not touched by the assistant.
+    expect(await form.getByRole("group", { name: "Galerie" }).getByLabel("Photo (lien https)").inputValue()).toBe("https://photos.alkao.test/train.webp");
+    if (shots) await page.screenshot({ path: `${shots}/event-page-editor.png`, fullPage: true });
+    // Nothing is saved until staff save.
+    expect((await db.pool.query(`SELECT page FROM public.ticketing_events WHERE id = $1`, [eventId])).rows[0].page).toEqual({});
+
+    await form.getByRole("button", { name: "Enregistrer la page" }).click();
+    await form.getByRole("status").filter({ hasText: "Enregistré." }).waitFor();
+    const { rows } = await db.pool.query(`SELECT duration_minutes, format, page FROM public.ticketing_events WHERE id = $1`, [eventId]);
+    expect(rows[0]).toMatchObject({ duration_minutes: 120, format: "Parcours extérieur" });
+    expect(rows[0].page).toMatchObject({
+      summary: "Train hanté, village décoré et spectacle",
+      highlights: [{ title: "Le train de l'Halloween", text: "Un tour du site à bord du petit train.", imageUrl: null }, { title: "Le village hanté", text: "Des décors à parcourir à pied.", imageUrl: null }],
+      gallery: [{ url: "https://photos.alkao.test/train.webp", alt: null }],
+      steps: [{ title: "Arrivée", text: "Présentez votre billet à l'entrée.", imageUrl: null }],
+      faq: [{ question: "Faut-il réserver ?", answer: "Oui, les places sont par soirée." }],
+    });
+  });
+
+  it("says what a ticket includes, shown under « Plus d'infos » in the shop (Run 93)", async () => {
+    const page = await signedIn();
+    await page.goto(`${origin}/ops#${brandPath()}/event/${eventId}`);
+    page.once("dialog", (d) => d.accept("Accès au site, au train et au spectacle."));
+    await page.getByRole("row", { name: /^ADULT/ }).getByRole("button", { name: "Dire ce qui est inclus" }).click();
+    await page.getByRole("row", { name: /^ADULT/ }).getByRole("button", { name: "Modifier ce qui est inclus" }).waitFor();
+    const { rows } = await db.pool.query(`SELECT description FROM public.ticketing_ticket_types WHERE event_id = $1 AND code = 'ADULT'`, [eventId]);
+    expect(rows[0].description).toBe("Accès au site, au train et au spectacle.");
+  });
+
   it("drafts the event description, saved only with the form", async () => {
     (writer as unknown as { answers: unknown[] }).answers = [{ description: "Un parcours en train dans le site décoré pour l'Halloween, avec maquillage pour les enfants." }];
     const page = await signedIn();

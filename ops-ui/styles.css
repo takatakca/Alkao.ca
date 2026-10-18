@@ -340,3 +340,18 @@ ul.mix-list, ul.mix-list ul { margin: 0; padding: 0; list-style: none; }
   .dash-filters label { flex-direction: column; align-items: stretch; gap: .25rem; font-size: 12px; }
   .dash-filters select { min-width: 0; max-width: none; width: 100%; }
 }
+
+/* Run 93: the event page's sections, as lists the organizer fills in. */
+.page-form { display: grid; gap: .9rem; }
+.page-form > label input, .page-form > label textarea { width: 100%; }
+.page-form .inline { display: flex; flex-wrap: wrap; gap: .6rem; align-items: end; }
+.page-form .inline label:last-child { flex: 1 1 18rem; }
+.page-list { display: grid; gap: .6rem; margin: 0; padding: .8rem 1rem 1rem; border: 1px solid var(--line); border-radius: 12px; }
+.page-list legend { padding: 0 .4rem; font-weight: 700; }
+.page-list > p.muted { margin: 0; font-size: .9rem; }
+.page-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .8rem; align-items: start; padding: .7rem; border-radius: 10px; background: var(--soft); }
+.page-fields { display: grid; gap: .5rem; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); }
+.page-fields label input, .page-fields label textarea { width: 100%; }
+.page-tools { display: flex; gap: .35rem; align-items: center; padding-top: 1.4rem; }
+.page-tools button.secondary { min-width: 2.2rem; padding-inline: .5rem; }
+@media (max-width: 640px) { .page-row { grid-template-columns: 1fr; } .page-tools { padding-top: 0; } }

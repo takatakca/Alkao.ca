@@ -988,6 +988,96 @@ function EventFacts({ api, base, eventId, event, assistant }) {
   </form>`;
 }
 
+// ── Run 93: the event page's sections (hero facts, highlights, gallery, "Le jour J", FAQ) ──
+const PAGE_LISTS = {
+  highlights: { title: "Points forts", hint: "Une photo, un titre et quelques mots. Montrés en rangée sous le titre de la page.", max: 10, blank: { title: "", text: "", imageUrl: "" },
+    fields: [["title", "Titre", 80], ["text", "Texte (facultatif)", 400, true], ["imageUrl", "Photo (lien https, facultatif)", 500]] },
+  gallery: { title: "Galerie", hint: "Des photos du lieu ou des éditions passées. Elles s'ouvrent en grand dans la page.", max: 24, blank: { url: "", alt: "" },
+    fields: [["url", "Photo (lien https)", 500], ["alt", "Ce qu'on y voit (facultatif)", 150]] },
+  steps: { title: "Le jour J", hint: "Le déroulement de la visite, dans l'ordre.", max: 10, blank: { title: "", text: "", imageUrl: "" },
+    fields: [["title", "Étape", 80], ["text", "Texte (facultatif)", 400, true], ["imageUrl", "Photo (lien https, facultatif)", 500]] },
+  faq: { title: "FAQ", hint: "Vos questions et réponses. La page ajoute d'elle-même celles qu'elle connaît déjà : âge, durée, langue, accessibilité, remboursement, réception des billets.", max: 20, blank: { question: "", answer: "" },
+    fields: [["question", "Question", 200], ["answer", "Réponse", 1500, true]] },
+};
+const clean = (v) => { const t = String(v ?? "").trim(); return t === "" ? null : t; };
+
+function EventPageEditor({ api, base, eventId, event, assistant }) {
+  const initial = () => {
+    const p = event.page ?? {};
+    const rows = (key) => (p[key] ?? []).map((r) => Object.fromEntries(Object.keys(PAGE_LISTS[key].blank).map((k) => [k, r[k] ?? ""])));
+    return { duration: event.durationMinutes == null ? "" : String(event.durationMinutes), format: event.format ?? "", summary: p.summary ?? "", notice: p.notice ?? "",
+      highlights: rows("highlights"), gallery: rows("gallery"), steps: rows("steps"), faq: rows("faq") };
+  };
+  const [f, setF] = useState(initial);
+  const [msg, setMsg] = useState(null);
+  const [error, setError] = useState(null);
+  const [notes, setNotes] = useState("");
+  const [busy, setBusy] = useState(false);
+  const set = (patch) => { setMsg(null); setF((x) => ({ ...x, ...patch })); };
+  const edit = (key, i, field, value) => set({ [key]: f[key].map((r, k) => (k === i ? { ...r, [field]: value } : r)) });
+  const move = (key, i, d) => { const list = [...f[key]]; const j = i + d; if (j < 0 || j >= list.length) return; [list[i], list[j]] = [list[j], list[i]]; set({ [key]: list }); };
+  const drop = (key, i) => set({ [key]: f[key].filter((_, k) => k !== i) });
+  const add = (key) => set({ [key]: [...f[key], { ...PAGE_LISTS[key].blank }] });
+  const save = async (e) => {
+    e.preventDefault(); setError(null); setMsg(null);
+    const d = String(f.duration).trim();
+    try {
+      if (d !== "" && !(Number.isInteger(Number(d)) && Number(d) >= 5 && Number(d) <= 1440)) throw new Error("Durée : un nombre de minutes entre 5 et 1440.");
+      const list = (key, required) => f[key].filter((r) => clean(r[required])).map((r) => Object.fromEntries(Object.entries(r).map(([k, v]) => [k, clean(v)])));
+      await api(`${base}/events/${eventId}`, { method: "PATCH", body: {
+        durationMinutes: d === "" ? null : Number(d), format: clean(f.format),
+        page: { summary: clean(f.summary), notice: clean(f.notice), highlights: list("highlights", "title"), gallery: list("gallery", "url"), steps: list("steps", "title"), faq: list("faq", "question") },
+      } });
+      setMsg("Enregistré. La page de l’événement est à jour.");
+    } catch (err) { setError(err); }
+  };
+  // The assistant writes the texts; the photos already chosen stay where they are.
+  const draft = async () => {
+    setError(null); setMsg(null); setBusy(true);
+    try {
+      const { draft: d } = await api(`${base}/events/${eventId}/assistant/page`, { method: "POST", body: { notes } });
+      const keepPhotos = (key, items) => items.map((r, i) => ({ ...PAGE_LISTS[key].blank, ...r, imageUrl: f[key][i]?.imageUrl ?? "" }));
+      setF((x) => ({ ...x, summary: d.summary, highlights: keepPhotos("highlights", d.highlights), steps: keepPhotos("steps", d.steps), faq: d.faq }));
+      setMsg("Brouillon de l’assistant inséré : relisez-le, ajoutez vos photos, puis enregistrez la page.");
+    } catch (err) { setError(err); } finally { setBusy(false); }
+  };
+  const [, , clientId, , brandId] = base.split("/").slice(2);
+  const section = (key) => {
+    const L = PAGE_LISTS[key];
+    return html`<fieldset class="page-list" aria-label=${L.title}>
+      <legend>${L.title} <span class="muted">(${f[key].length}/${L.max})</span></legend>
+      <p class="muted">${L.hint}</p>
+      ${f[key].map((r, i) => html`<div class="page-row">
+        <div class="page-fields">${L.fields.map(([k, label, max, long]) => long
+          ? html`<label>${label}<textarea rows="2" maxlength=${max} value=${r[k]} onInput=${(e) => edit(key, i, k, e.target.value)}></textarea></label>`
+          : html`<label>${label}<input maxlength=${max} type=${k === "url" || k === "imageUrl" ? "url" : "text"} value=${r[k]} onInput=${(e) => edit(key, i, k, e.target.value)} /></label>`)}</div>
+        <div class="page-tools">
+          <button type="button" class="secondary" aria-label=${`Monter : ${L.title} ${i + 1}`} disabled=${i === 0} onClick=${() => move(key, i, -1)}>↑</button>
+          <button type="button" class="secondary" aria-label=${`Descendre : ${L.title} ${i + 1}`} disabled=${i === f[key].length - 1} onClick=${() => move(key, i, 1)}>↓</button>
+          <button type="button" class="link" aria-label=${`Retirer : ${L.title} ${i + 1}`} onClick=${() => drop(key, i)}>Retirer</button>
+        </div>
+      </div>`)}
+      ${f[key].length < L.max && html`<button type="button" class="secondary" onClick=${() => add(key)}>Ajouter : ${L.title}</button>`}
+    </fieldset>`;
+  };
+  return html`<form class="card page-form" aria-label="Page de l’événement" onSubmit=${save}>
+    <p class="muted">Ce qui est rempli s’affiche sur la page de l’événement (<a href=${`/acheter/${clientId}/${brandId}/${eventId}`} target="_blank" rel="noopener">voir la page</a>). Rien n’est inventé : les dates, les prix et les places viennent de la billetterie.</p>
+    <div class="inline">
+      <label>Durée (minutes)<input type="number" min="5" max="1440" step="5" placeholder="ex. 90" value=${f.duration} onInput=${(e) => set({ duration: e.target.value })} /></label>
+      <label>Format<input maxlength="80" placeholder="Exposition intérieure, spectacle en plein air…" value=${f.format} onInput=${(e) => set({ format: e.target.value })} /></label>
+    </div>
+    <label>Résumé (une ligne sous le titre)<input maxlength="120" placeholder="18 tableaux · 20 étapes · réalité virtuelle en option" value=${f.summary} onInput=${(e) => set({ summary: e.target.value })} /></label>
+    <label>À savoir avant de réserver (facultatif)<textarea rows="2" maxlength="600" placeholder="Contenu qui peut choquer, parcours dans le noir, renonciation à signer…" value=${f.notice} onInput=${(e) => set({ notice: e.target.value })}></textarea></label>
+    ${assistant && html`<div class="assistant-row">
+      <label>Notes pour rédiger la page (facultatif)<input maxlength="1000" placeholder="Ce qu’on y vit, ce qui est inclus, le déroulement…" value=${notes} onInput=${(e) => setNotes(e.target.value)} /></label>
+      <button type="button" class="secondary" disabled=${busy} onClick=${draft}>${busy ? "Rédaction…" : "Rédiger la page avec l’assistant"}</button>
+    </div>`}
+    ${section("highlights")}${section("gallery")}${section("steps")}${section("faq")}
+    ${error && html`<${AssistantFailure} error=${error} />`}
+    <div class="row"><button type="submit">Enregistrer la page</button>${msg && html`<span class="badge ok" role="status">${msg}</span>`}</div>
+  </form>`;
+}
+
 function EventDetail({ api, base, eventId, assistant }) {
   const [ev, reloadEvent] = useLoad(() => api(`${base}/events/${eventId}`), [base, eventId]);
   const [sessions, reloadSessions] = useLoad(() => api(`${base}/events/${eventId}/sessions`), [base, eventId]);
@@ -1053,6 +1143,10 @@ function EventDetail({ api, base, eventId, assistant }) {
       const cents = Math.round(Number(v.replace(",", ".")) * 100);
       if (!Number.isInteger(cents) || cents < 0) throw new Error("Prix invalide.");
       body = { priceCents: cents };
+    } else if (field === "description") {
+      // Run 93: shown under "Plus d'infos" on the event page.
+      const v = prompt(`Ce que comprend ${t.name} (montré sous « Plus d'infos » dans la billetterie ; vide = rien)`, t.description ?? ""); if (v === null) return;
+      body = { description: v.trim() === "" ? null : v.trim() };
     } else if (field === "stock") {
       const v = prompt(`Stock de ${t.name} par séance (vide = sans limite)`, t.stockPerSession ?? ""); if (v === null) return;
       body = { stockPerSession: v.trim() === "" ? null : Number(v.trim()) };
@@ -1093,6 +1187,9 @@ function EventDetail({ api, base, eventId, assistant }) {
 
     <h2>Fiche de l’événement</h2>
     <${EventFacts} api=${api} base=${base} eventId=${eventId} event=${event} assistant=${assistant} />
+
+    <h2>Page de l’événement</h2>
+    <${EventPageEditor} api=${api} base=${base} eventId=${eventId} event=${event} assistant=${assistant} />
 
     <h2>Vendre en ligne</h2>
     <div class="card">
@@ -1152,7 +1249,8 @@ function EventDetail({ api, base, eventId, assistant }) {
       <button type="submit">Ajouter</button>
     </form>
     ${types.loading ? html`<${Loading} />` : html`<div class="table-scroll" role="region" aria-label="Types de billets" tabindex="0"><table><thead><tr><th>Code</th><th>Nom</th><th class="num">Prix</th><th class="num">Min–Max</th><th>Genre</th><th class="num">Stock / séance</th><th>Vente</th></tr></thead>
-      <tbody>${(types.data?.ticketTypes ?? []).map((t) => html`<tr><td>${t.code}</td><td>${t.name}</td>
+      <tbody>${(types.data?.ticketTypes ?? []).map((t) => html`<tr><td>${t.code}</td><td>${t.name}<br />
+        <button class="link" title=${t.description ?? ""} onClick=${editType(t, "description")}>${t.description ? "Modifier ce qui est inclus" : "Dire ce qui est inclus"}</button></td>
         <td class="num"><button class="link" onClick=${editType(t, "price")}>${money(t.priceCents)}</button></td><td class="num">${t.minQuantity}–${t.maxQuantity}</td>
         <td>${t.kind === "add_on" ? `${t.grantsSessionChange ? "Option (Flex)" : "Option"} · ${ADD_ON_SCOPE_FR[t.addOnScope] ?? ""}` : t.countsAsAdult ? "Admission adulte" : "Admission"}${t.openDate ? " · billet ouvert" : ""}</td>
         <td class="num">${t.kind === "add_on" ? html`<button class="link" onClick=${editType(t, "stock")}>${t.stockPerSession ?? "sans limite"}</button>` : "—"}</td>

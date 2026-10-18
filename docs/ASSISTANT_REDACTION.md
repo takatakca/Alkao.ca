@@ -3,7 +3,9 @@
 L'assistant rédige des **brouillons** à partir du catalogue de la marque : ses événements, dates, lieux et tarifs. Il en fait deux :
 
 - **Campagnes** : l'objet, l'aperçu, le titre, le texte et le bouton d'un courriel, ou le texte d'un texto. Le personnel donne le but en une phrase, par exemple « rappeler aux familles qu'il reste deux samedis ».
-- **Événements** : la description affichée dans la billetterie et sur alkao.ca, à partir de la fiche de l'événement et de quelques notes.
+- **Événements** :
+  - la description affichée dans la billetterie et sur alkao.ca, à partir de la fiche de l'événement et de quelques notes ;
+  - depuis le Run 93, les sections de la page : le résumé, les points forts, « Le jour J » et la FAQ. Une question de FAQ n'est écrite que si les faits ou vos notes en donnent la réponse. Les photos déjà choisies restent en place.
 
 Le brouillon s'insère dans le formulaire. Le personnel le relit et le corrige, puis l'enregistre. L'assistant n'envoie, n'enregistre et ne publie rien lui-même.
 
@@ -72,7 +74,7 @@ Pour couper l'assistant, mettez `ALKAO_ASSISTANT_ENABLED=false` ou retirez la cl
 - `src/ai/drafts.ts` : le catalogue envoyé, les règles et les vérifications.
 - Routes :
   - `POST /v1/admin/clients/:c/brands/:b/assistant/campaign`, avec la permission `ticketing.campaigns.manage` ;
-  - `POST …/events/:id/assistant/description`, avec la permission `ticketing.catalog.write`.
+  - `POST …/events/:id/assistant/description` et `POST …/events/:id/assistant/page` (Run 93), avec la permission `ticketing.catalog.write`.
 - Tests :
   - `test/ai/assistant.test.ts` et `test/ui/assistant-ui.test.ts` ;
   - un faux modèle (`test/helpers/writer.ts`) remplace Claude : les tests n'appellent jamais le réseau et ne coûtent rien.

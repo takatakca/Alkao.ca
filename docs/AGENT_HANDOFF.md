@@ -1,5 +1,40 @@
 # ALKAO — Agent handoff (mandatory)
 
+## Run 93 — the event page in full, on the model of the big ticketing sites (2026-10-18)
+
+- Branch `claude/amazing-pascal-tppqd4`. The owner sent the Fever page of a Montréal exhibition as the reference. ALKAO keeps its own look and invents nothing: no stars or reviews, no booking fees, no discount badges, and urgency only when true.
+- 93a, data:
+  - Migration `20261110000100_alkao_event_page.sql` adds to `ticketing_events`:
+    - `duration_minutes`;
+    - `format`;
+    - `page jsonb`, holding summary, notice, highlights, gallery, steps and faq.
+  - The API checks it with `EventPage` in `src/contracts/api-v1.ts`: plain text, https photos, counted lists. The database checks it too: bounds, an object, 64 KB.
+  - It is public with the event, kept by a duplicate, and accepted by `events:import`.
+  - The public event now gives each ticket type's `description`.
+- 93b, /ops: "Page de l'événement", under the event's Fiche.
+  - Duration, format, summary and notice.
+  - The highlights, gallery, steps and FAQ lists, each item with move up, move down and remove.
+  - With the assistant on: "Rédiger la page avec l'assistant", via `POST …/events/:id/assistant/page`.
+    - It writes the summary, highlights, steps and FAQ from the facts, including the refund policy.
+    - It keeps the photos already chosen.
+    - The same checks in code apply, plus a ceiling on the number of items.
+  - The ticket types table gets "Dire ce qui est inclus", shown under "Plus d'infos".
+- 93c, shop (`shop-ui/`):
+  - Hero: dates as a range, the address, the facts (duration, format, summary, age, language), and a "Réserver" price card.
+  - Section tabs that stay in view and follow the reading.
+  - Points forts as a rail; Galerie as a mosaic opening the viewer, now with previous and next; Le jour J as a timeline; the notice under the description.
+  - The venue with its Google map, loaded only when the buyer asks: `frame-src https://www.google.com` on the shop only.
+  - The FAQ: the organizer's questions, then answers from the page's own facts.
+  - A calendar replaces the date strip: months, days, then the hours of the day. Door sales keep the hours of the day.
+  - The Continue button shows the total.
+  - The Brand's rail is now "Vous aimerez aussi".
+- Tests:
+  - `test/api/event-page.test.ts`;
+  - the Run 93 test in `test/ui/shop-ui.test.ts`, whose `pick()` helper goes month, then day, then hour;
+  - in `test/ai/assistant.test.ts` and `test/ui/assistant-ui.test.ts`, the page editor and its draft;
+  - axe covers the calendar.
+- NEXT EXACT ACTION: merge the Run 93 PR when green. The owner fills Havana's page in /ops (photos, highlights, FAQ). Coolify #84 still blocks every deploy.
+
 ## Run 92 — executive pass: firm copy, /ops overview, writing assistant (2026-10-17)
 
 - Branch `claude/amazing-pascal-tppqd4` → PR #86. Three parts:

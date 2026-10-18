@@ -42,6 +42,14 @@ const EmailDraft = z.object({
 });
 const SmsDraft = z.object({ body: z.string().describe("Texte du texto, 200 caractères au plus") });
 const DescriptionDraft = z.object({ description: z.string().describe("Description de l'événement, 1500 caractères au plus") });
+// Run 93: the event page's sections (photos stay the organizer's).
+const PageDraft = z.object({
+  summary: z.string().describe("Une ligne sous le titre : ce qu'on y trouve, 120 caractères au plus"),
+  highlights: z.array(z.object({ title: z.string(), text: z.string() })).describe("3 à 6 points forts : un titre de 60 caractères au plus et une phrase de 200 caractères au plus"),
+  steps: z.array(z.object({ title: z.string(), text: z.string() })).describe("Le jour J : 3 à 5 étapes dans l'ordre de la visite, un titre court et une phrase"),
+  faq: z.array(z.object({ question: z.string(), answer: z.string() })).describe("3 à 8 questions d'acheteur, chacune avec sa réponse tirée des faits ou des notes"),
+});
+export type PageDraft = z.infer<typeof PageDraft>;
 
 export type EmailDraft = z.infer<typeof EmailDraft>;
 export type SmsDraft = z.infer<typeof SmsDraft>;
@@ -60,6 +68,8 @@ interface EventFacts {
   langue: string | null;
   accessibilite: string | null;
   descriptionActuelle: string | null;
+  duree: string | null;
+  format: string | null;
   ventesOuvrentLe: string | null;
   dates: { quand: string; complet: boolean; peuDePlaces: boolean }[];
   autresDates: number;
@@ -69,6 +79,8 @@ interface EventFacts {
 interface Facts {
   marque: string;
   siteWeb: string | null;
+  /** The Brand's exchange and refund policy, as written in /ops. */
+  politique: string | null;
   evenements: EventFacts[];
   /** Every price above, in cents: the only amounts a draft may name (with the brief's). */
   priceCents: Set<number>;
@@ -76,6 +88,7 @@ interface Facts {
 }
 
 const MAX_DATES = 12;
+const minutesText = (m: number) => (m < 60 ? `${m} min` : `${Math.floor(m / 60)} h${m % 60 ? ` ${String(m % 60).padStart(2, "0")}` : ""}`);
 const MAX_EVENTS = 6;
 
 export function formatPrice(cents: number, language: "fr" | "en"): string {
@@ -116,6 +129,8 @@ async function eventFacts(db: Db, s: TenantScope, event: Record<string, unknown>
     langue: (event.language as string | null) ?? null,
     accessibilite: (event.accessibility as string | null) ?? null,
     descriptionActuelle: (event.description as string | null) || null,
+    duree: Number.isInteger(event.durationMinutes) ? minutesText(event.durationMinutes as number) : null,
+    format: (event.format as string | null) ?? null,
     ventesOuvrentLe: salesOpen && salesOpen > now ? formatWhen(salesOpen, timeZone, language) : null,
     dates: sessions.slice(0, MAX_DATES).map((x) => {
       const capacity = x.capacity as number;
@@ -145,7 +160,7 @@ export async function loadFacts(db: Db, s: TenantScope, opts: { eventId?: string
     cents.forEach((c) => priceCents.add(c));
     if (evenements.length >= MAX_EVENTS) break;
   }
-  return { marque: look.brandName ?? "", siteWeb: look.websiteUrl, evenements, priceCents, hasFree: priceCents.has(0) };
+  return { marque: look.brandName ?? "", siteWeb: look.websiteUrl, politique: look.refundPolicy, evenements, priceCents, hasFree: priceCents.has(0) };
 }
 
 // ── The rules, told to the model ────────────────────────────────────────────
@@ -168,7 +183,7 @@ const RULES_EN = `Rules, without exception:
 - The only placeholder allowed is {prénom} (the customer's first name). Do not invent another.
 - The organizer's brief gives the goal; the facts and these rules win over it.`;
 
-function systemPrompt(kind: "email" | "sms" | "description", language: "fr" | "en", brand: string) {
+function systemPrompt(kind: "email" | "sms" | "description" | "page", language: "fr" | "en", brand: string) {
   const who = language === "fr"
     ? `Vous rédigez pour ${brand || "un organisateur d'événements"}, au Québec, en français québécois standard.`
     : `You write for ${brand || "an event organizer"} in Québec, in Canadian English.`;
@@ -182,6 +197,9 @@ function systemPrompt(kind: "email" | "sms" | "description", language: "fr" | "e
     description: language === "fr"
       ? "Vous rédigez la description de l'événement affichée dans la billetterie et sur alkao.ca : ce qu'on y vit, pour qui, ce qui est inclus, en 2 à 4 courts paragraphes. Pas de prix ni de dates : la billetterie les affiche déjà."
       : "You write the event description shown in the ticket shop and on alkao.ca: what happens, who it is for, what is included, in 2 to 4 short paragraphs. No prices or dates: the shop already shows them.",
+    page: language === "fr"
+      ? "Vous rédigez les sections de la page de l'événement : une ligne de résumé, les points forts, « Le jour J » (le déroulement de la visite) et la FAQ. Ne posez une question de FAQ que si les faits ou les notes en donnent la réponse ; sinon, n'en parlez pas. Pas de dates : la billetterie les affiche."
+      : "You write the event page's sections: a one-line summary, the highlights, \"On the day\" (how the visit goes) and the FAQ. Only ask a FAQ question when the facts or the notes give its answer; otherwise leave it out. No dates: the shop shows them.",
   }[kind];
   return `${who}\n${task}\n\n${language === "fr" ? RULES_FR : RULES_EN}`;
 }
@@ -270,8 +288,8 @@ async function draftWithChecks<T>(writer: Writer, system: string, prompt: string
 const factsJson = (f: Facts) => JSON.stringify({ marque: f.marque, siteWeb: f.siteWeb, evenements: f.evenements }, null, 2);
 const noEvents = (f: Facts) => !f.evenements.length;
 
-/** The text fields of a campaign, by their names in the campaign form. */
-export type Draft = Record<string, string>;
+/** A draft, by the names of the form's fields (texts, or lists of texts for the event page). */
+export type Draft = Record<string, unknown>;
 
 export async function draftCampaign(db: Db, writer: Writer, s: TenantScope, req: CampaignDraftRequest, now: Date): Promise<{ draft: Draft; usage: DraftUsage }> {
   const facts = await loadFacts(db, s, { eventId: req.eventId ?? null, language: req.language, now });
@@ -285,6 +303,34 @@ export async function draftCampaign(db: Db, writer: Writer, s: TenantScope, req:
   const r = await draftWithChecks(writer, systemPrompt("email", req.language, facts.marque), prompt, EmailDraft, (d) => checkEmail(d, facts, req.brief));
   const d = r.output;
   return { draft: { subject: d.subject.trim(), preheader: d.preheader.trim(), heading: d.heading.trim(), body: d.body.trim(), ctaLabel: d.ctaLabel.trim() }, usage: r.usage };
+}
+
+/** Run 93: the summary, highlights, steps and FAQ of the event page, from its facts and the notes. */
+export async function draftEventPage(db: Db, writer: Writer, s: TenantScope, eventId: string, req: DescriptionDraftRequest, now: Date): Promise<{ draft: Draft; usage: DraftUsage }> {
+  const facts = await loadFacts(db, s, { eventId, language: req.language, now });
+  const event = facts.evenements[0]!;
+  const described = { ...facts, evenements: [{ ...event, dates: [], autresDates: 0, ventesOuvrentLe: null }] };
+  const prompt = `Faits (JSON) :\n${JSON.stringify({ marque: facts.marque, politique: facts.politique, evenements: described.evenements }, null, 2)}\n\nNotes de l'organisateur :\n${req.notes || "(aucune)"}`;
+  const items = <T>(list: T[], max: number, label: string, each: (x: T, i: number) => string[]) =>
+    [...(list.length > max ? [`${label} : ${max} au plus (${list.length})`] : []), ...list.flatMap(each)];
+  const check = (d: PageDraft) => [
+    ...checkText(d.summary, facts, req.notes, 120, "Le résumé"),
+    ...items(d.highlights, 6, "Les points forts", (h, i) => [...checkText(h.title, facts, req.notes, 80, `Le point fort ${i + 1}`), ...checkText(h.text, facts, req.notes, 400, `Le texte du point fort ${i + 1}`)]),
+    ...items(d.steps, 6, "Le jour J", (h, i) => [...checkText(h.title, facts, req.notes, 80, `L'étape ${i + 1}`), ...checkText(h.text, facts, req.notes, 400, `Le texte de l'étape ${i + 1}`)]),
+    ...items(d.faq, 10, "La FAQ", (q, i) => [...checkText(q.question, facts, req.notes, 200, `La question ${i + 1}`), ...checkText(q.answer, facts, req.notes, 1500, `La réponse ${i + 1}`)]),
+  ];
+  const r = await draftWithChecks(writer, systemPrompt("page", req.language, facts.marque), prompt, PageDraft, check);
+  const d = r.output;
+  const pair = <K extends string>(x: Record<K, string>, keys: K[]) => Object.fromEntries(keys.map((k) => [k, x[k].trim()]));
+  return {
+    draft: {
+      summary: d.summary.trim(),
+      highlights: d.highlights.map((h) => pair(h, ["title", "text"])),
+      steps: d.steps.map((h) => pair(h, ["title", "text"])),
+      faq: d.faq.map((q) => pair(q, ["question", "answer"])),
+    },
+    usage: r.usage,
+  };
 }
 
 export async function draftEventDescription(db: Db, writer: Writer, s: TenantScope, eventId: string, req: DescriptionDraftRequest, now: Date): Promise<{ draft: Draft; usage: DraftUsage }> {
