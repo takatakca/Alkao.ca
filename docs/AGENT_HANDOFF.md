@@ -1,5 +1,25 @@
 # ALKAO — Agent handoff (mandatory)
 
+## Run 94 — Havana's Halloween page, ready to load, and the owner's go-live list (2026-10-18)
+
+- Branch `claude/amazing-pascal-tppqd4`. The owner wants Havana live on alkao.ca tonight.
+- `catalogs/havana-halloween-2026.json` now carries the full Run 93 page, taken only from promohavana.ca and havanaresort.ca:
+  - format, summary and the notice;
+  - 5 highlights, 6 gallery photos (`https://www.promohavana.ca/photos/…`), 4 steps;
+  - 6 FAQ answers;
+  - what each ticket includes.
+  No price, date, capacity or refund policy was invented: capacity is still `--capacity`, and the policy is the owner's to write in Apparence.
+- `events:import --update-page` (`src/ops/events-import.ts`): on an event already there, it takes the texts, photo, facts, page and ticket descriptions from the file, with audit rows. It never touches dates, prices or status. Without the flag, a kept event is left as /ops made it.
+- `docs/CE_SOIR_HAVANA.md`: the owner's checklist (who, where, exact values):
+  - the decision: Weezevent keeps selling with a separate ALKAO quota (A), or everything moves to ALKAO (B);
+  - Coolify env and redeploy, the Stripe Connect webhook, `control:apply`;
+  - Havana's Stripe, the import, Apparence, `check:golive` and a real test purchase.
+  `docs/HAVANA_SUR_ALKAO.md` points to it.
+- Live check on 2026-10-18 (`check:golive`): alkao.ca answers on an old build, Stripe is not configured, and Havana is not provisioned. promohavana.ca still sells with Weezevent.
+- Test: the Run 94 test in `test/ops/events-import.test.ts`.
+- NEXT EXACT ACTION: merge the Run 94 PR when green. The owner and the Coolify operator follow `docs/CE_SOIR_HAVANA.md`. Nobody without server access can make it live.
+
+
 ## Run 93 — the event page in full, on the model of the big ticketing sites (2026-10-18)
 
 - Branch `claude/amazing-pascal-tppqd4`. The owner sent the Fever page of a Montréal exhibition as the reference. ALKAO keeps its own look and invents nothing: no stars or reviews, no booking fees, no discount badges, and urgency only when true.

@@ -1,5 +1,14 @@
 # ALKAO — Project status
 
+## Run 94 — Havana's Halloween page, ready to load (2026-10-18)
+
+Havana's Halloween page is complete in its catalog file, from the resort's own public sites: highlights, photos, Le jour J, FAQ and what each ticket includes. One import puts it on sale on alkao.ca. Going live still needs the server side, all listed in `docs/CE_SOIR_HAVANA.md`:
+- the Coolify redeploy (#84);
+- Stripe platform keys and webhook;
+- Havana provisioned and its Stripe connected;
+- the capacity per evening and the refund policy.
+
+
 ## Run 93 — the event page in full (2026-10-18)
 
 The event page now follows the structure of the big ticketing sites:

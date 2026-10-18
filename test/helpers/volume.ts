@@ -56,6 +56,8 @@ export async function seedVolume(db: Db, t: TenantFixture, o: VolumeOptions): Pr
 
   // Buyers, then pending orders (one per buyer) with their admission line, in one
   // transaction so the deferred total checks see both.
+  // Sessions are numbered in creation order, past ones first: the quantity of an order follows
+  // its session's number, so a random order would change how many tickets the past holds.
   await withTransaction(db, async (tx) => {
     await tx.query(
       `INSERT INTO public.ticketing_buyers (client_id, brand_id, email, full_name, language)
@@ -69,7 +71,7 @@ export async function seedVolume(db: Db, t: TenantFixture, o: VolumeOptions): Pr
          SELECT id, row_number() OVER (ORDER BY created_at, id) AS n
          FROM public.ticketing_buyers WHERE client_id = $1 AND brand_id = $2 AND email LIKE $3 || '-%@volume.example'
        ), s AS (
-         SELECT id, row_number() OVER (ORDER BY id) - 1 AS k FROM unnest($4::uuid[]) id
+         SELECT id, k - 1 AS k FROM unnest($4::uuid[]) WITH ORDINALITY AS u(id, k)
        )
        INSERT INTO public.ticketing_orders
          (client_id, brand_id, event_id, session_id, buyer_id, reference, subtotal_cents, tax_cents, total_cents, created_at)

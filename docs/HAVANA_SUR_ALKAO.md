@@ -1,4 +1,6 @@
-# Havana Resort sur alkao.ca (Run 91)
+# Havana Resort sur alkao.ca (Run 91, mis à jour au Run 94)
+
+**Pour une mise en ligne ce soir, suivez plutôt `docs/CE_SOIR_HAVANA.md` :** la même procédure, en liste à cocher, avec qui fait quoi et la décision Weezevent ou ALKAO.
 
 Pourquoi les événements de Havana ne sont pas sur alkao.ca aujourd'hui :
 
@@ -37,7 +39,11 @@ Le fichier `catalogs/havana-halloween-2026.json` reprend le catalogue déjà app
 
 - « Halloween Havana 2026 », chaque samedi d'octobre, de 14 h à 22 h, au 631, 7e Rang, Maricourt ;
 - Adulte 25 $, Enfant (5 ans et plus) 12 $ ;
-- la photo du train, la catégorie Famille et l'avis « ce que le billet ne comprend pas ».
+- la photo du train, la catégorie Famille et l'avis « ce que le billet ne comprend pas » ;
+- depuis le Run 94, **la page complète**, tirée de promohavana.ca et havanaresort.ca :
+  - le résumé, le format et ce que comprend chaque billet ;
+  - 5 points forts, 6 photos et les 4 étapes « Le jour J » ;
+  - 6 questions de FAQ : l'adresse, manger, dormir, familial, le contact.
 
 La **capacité par soirée** n'est écrite nulle part : c'est à vous de la donner (`--capacity`).
 
@@ -56,6 +62,11 @@ Comment l'import se comporte :
 - **On peut le relancer sans risque.** La salle, l'événement, les tarifs et les dates qui existent déjà sont gardés tels quels, sans doublon.
 - **`--list-on-alkao` est le consentement de la Brand** : c'est le même interrupteur que « Afficher mes événements sur ALKAO » dans **Apparence**.
 - **Chaque création est notée dans le Journal** (`source: events:import`).
+- **`--update-page` rafraîchit la page d'un événement déjà créé** à partir du fichier :
+  - la description, la photo, le format, la page et ce que comprend chaque billet ;
+  - jamais les prix, les dates ni la capacité ;
+  - chaque changement est noté dans le Journal.
+  Sans cette option, un événement déjà créé est gardé tel quel, avec les changements faits dans /ops.
 
 ## 5. Apparence (le propriétaire, 2 minutes)
 

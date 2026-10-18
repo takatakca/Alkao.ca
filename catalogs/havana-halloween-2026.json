@@ -1,5 +1,5 @@
 {
-  "_source": "Promo Havana's owner-approved catalog (takatakca/promohavanaca, src/lib/promo/catalog.ts): dates, hours, texts and the Halloween prices adult 25 $ and child (5 years and older) 12 $. Capacity is the operator's to give (--capacity). maxQuantity is the per-order limit, not a price.",
+  "_source": "Promo Havana's owner-approved catalog (takatakca/promohavanaca, src/lib/promo/catalog.ts): dates, hours, texts and the Halloween prices adult 25 $ and child (5 years and older) 12 $. Run 94 (2026-10-18): the event page (summary, notice, highlights, gallery, steps, FAQ) and the ticket descriptions are taken from the public pages of promohavana.ca and havanaresort.ca, with their photos; nothing else is added. Capacity is the operator's to give (--capacity). maxQuantity is the per-order limit, not a price.",
   "venue": {
     "name": "Havana Resort",
     "addressLine1": "631, 7e Rang",
@@ -15,17 +15,158 @@
     "title": "Halloween Havana 2026",
     "description": "Une sortie familiale au cœur de l’automne, entre décorations d’Halloween, lumières et animations. Entrez sous la citrouille géante, suivez les lumières et montez à bord du train hanté. Chaque samedi d’octobre, de 14 h à 22 h.\n\nVotre billet comprend uniquement l’entrée à l’événement Halloween du Havana Resort, le parcours lumineux et le train hanté. Les jeux gonflables et les spectacles sous le chapiteau sont offerts moyennant des frais supplémentaires et sont vendus séparément.",
     "imageUrl": "https://www.promohavana.ca/photos/halloween-train.jpg",
-    "category": "famille"
+    "category": "famille",
+    "format": "Événement extérieur",
+    "language": "fr",
+    "page": {
+      "summary": "Train hanté · parcours lumineux · citrouille géante",
+      "notice": "Le billet comprend l’entrée, le parcours lumineux et le train hanté. Les jeux gonflables et les spectacles sous le chapiteau sont offerts moyennant des frais supplémentaires et vendus séparément.",
+      "highlights": [
+        {
+          "title": "Le train hanté",
+          "text": "Montez à bord et traversez la zone zombie jusqu’aux maisons effrayantes. Compris dans le billet.",
+          "imageUrl": "https://www.promohavana.ca/photos/haunted-train.jpg"
+        },
+        {
+          "title": "Le parcours lumineux",
+          "text": "Fleurs géantes, cygnes et boisé illuminé : un décor à photographier. Compris dans le billet.",
+          "imageUrl": "https://www.promohavana.ca/photos/fleurs-lumineuses.webp"
+        },
+        {
+          "title": "La citrouille géante",
+          "text": "Entrez sous l’arche citrouille, le portail de la soirée.",
+          "imageUrl": "https://www.promohavana.ca/photos/pumpkin-entrance.jpg"
+        },
+        {
+          "title": "Les allées illuminées",
+          "text": "Guirlandes, voitures d’époque et ambiance de village cubain.",
+          "imageUrl": "https://www.promohavana.ca/photos/rue-lumieres.webp"
+        },
+        {
+          "title": "Le bar et la terrasse",
+          "text": "Chaises longues et cocktails sous les guirlandes.",
+          "imageUrl": "https://www.promohavana.ca/photos/mojito-bar.webp"
+        }
+      ],
+      "gallery": [
+        {
+          "url": "https://www.promohavana.ca/photos/halloween-train.jpg",
+          "alt": "Le train illuminé et l’arche citrouille"
+        },
+        {
+          "url": "https://www.promohavana.ca/photos/haunted-train.jpg",
+          "alt": "Le train hanté"
+        },
+        {
+          "url": "https://www.promohavana.ca/photos/pumpkin-entrance.jpg",
+          "alt": "L’arche citrouille géante"
+        },
+        {
+          "url": "https://www.promohavana.ca/photos/rue-lumieres.webp",
+          "alt": "Les allées illuminées sous les guirlandes"
+        },
+        {
+          "url": "https://www.promohavana.ca/photos/fleurs-lumineuses.webp",
+          "alt": "Une fleur géante illuminée dans le boisé"
+        },
+        {
+          "url": "https://www.promohavana.ca/photos/mojito-bar.webp",
+          "alt": "Le bar et la terrasse sous les guirlandes"
+        }
+      ],
+      "steps": [
+        {
+          "title": "L’arrivée",
+          "text": "Présentez votre billet sur votre téléphone à l’entrée du site, entre 14 h et 22 h.",
+          "imageUrl": "https://www.promohavana.ca/photos/enseigne.webp"
+        },
+        {
+          "title": "Le train hanté",
+          "text": "Montez à bord pour traverser la zone zombie jusqu’aux maisons effrayantes.",
+          "imageUrl": "https://www.promohavana.ca/photos/haunted-train.jpg"
+        },
+        {
+          "title": "Le parcours lumineux",
+          "text": "Suivez les lumières dans le boisé, puis passez sous l’arche citrouille.",
+          "imageUrl": "https://www.promohavana.ca/photos/fleurs-lumineuses.webp"
+        },
+        {
+          "title": "Les allées et la terrasse",
+          "text": "Finissez la soirée dans les allées illuminées, au bar et sur la terrasse.",
+          "imageUrl": "https://www.promohavana.ca/photos/mojito-bar.webp"
+        }
+      ],
+      "faq": [
+        {
+          "question": "Qu’est-ce qui est compris dans le billet ?",
+          "answer": "L’entrée à l’événement Halloween du Havana Resort, le parcours lumineux et le train hanté. Les jeux gonflables et les spectacles sous le chapiteau sont offerts moyennant des frais supplémentaires et vendus séparément."
+        },
+        {
+          "question": "Où est-ce ?",
+          "answer": "Au Havana Resort, 631, 7e Rang, Maricourt (Québec) J0E 2L2, à environ 1 h 15 de Montréal et 35 minutes de Sherbrooke."
+        },
+        {
+          "question": "Peut-on manger sur place ?",
+          "answer": "Oui : la cantine cubaine, le café Cubano, et le bar avec sa terrasse."
+        },
+        {
+          "question": "Peut-on dormir sur place ?",
+          "answer": "Oui : chalets, Coolbox, cabanas, condos-hôtel, tentes en bois, villas et terrains de camping. L’hébergement se réserve à part, par téléphone au 514 774-7979 ou par courriel à info@havanaresort.ca."
+        },
+        {
+          "question": "Le Havana est-il un endroit familial ?",
+          "answer": "Oui. Le Havana est à vocation familiale, et le respect d’autrui y est une priorité."
+        },
+        {
+          "question": "Comment joindre le Havana Resort ?",
+          "answer": "Par téléphone au 514 774-7979 ou par courriel à info@havanaresort.ca."
+        }
+      ]
+    }
   },
   "sessions": [
-    { "startsAt": "2026-10-03T14:00:00-04:00", "endsAt": "2026-10-03T22:00:00-04:00" },
-    { "startsAt": "2026-10-10T14:00:00-04:00", "endsAt": "2026-10-10T22:00:00-04:00" },
-    { "startsAt": "2026-10-17T14:00:00-04:00", "endsAt": "2026-10-17T22:00:00-04:00" },
-    { "startsAt": "2026-10-24T14:00:00-04:00", "endsAt": "2026-10-24T22:00:00-04:00" },
-    { "startsAt": "2026-10-31T14:00:00-04:00", "endsAt": "2026-10-31T22:00:00-04:00" }
+    {
+      "startsAt": "2026-10-03T14:00:00-04:00",
+      "endsAt": "2026-10-03T22:00:00-04:00"
+    },
+    {
+      "startsAt": "2026-10-10T14:00:00-04:00",
+      "endsAt": "2026-10-10T22:00:00-04:00"
+    },
+    {
+      "startsAt": "2026-10-17T14:00:00-04:00",
+      "endsAt": "2026-10-17T22:00:00-04:00"
+    },
+    {
+      "startsAt": "2026-10-24T14:00:00-04:00",
+      "endsAt": "2026-10-24T22:00:00-04:00"
+    },
+    {
+      "startsAt": "2026-10-31T14:00:00-04:00",
+      "endsAt": "2026-10-31T22:00:00-04:00"
+    }
   ],
   "ticketTypes": [
-    { "code": "ADULT", "name": "Adulte", "kind": "admission", "priceCents": 2500, "minQuantity": 0, "maxQuantity": 20, "countsAsAdult": true, "sortOrder": 1 },
-    { "code": "CHILD", "name": "Enfant (5 ans et plus)", "kind": "admission", "priceCents": 1200, "minQuantity": 0, "maxQuantity": 20, "sortOrder": 2 }
+    {
+      "code": "ADULT",
+      "name": "Adulte",
+      "kind": "admission",
+      "priceCents": 2500,
+      "minQuantity": 0,
+      "maxQuantity": 20,
+      "countsAsAdult": true,
+      "sortOrder": 1,
+      "description": "L’entrée à l’événement, le parcours lumineux et le train hanté. Les jeux gonflables et les spectacles sous le chapiteau sont en sus."
+    },
+    {
+      "code": "CHILD",
+      "name": "Enfant (5 ans et plus)",
+      "kind": "admission",
+      "priceCents": 1200,
+      "minQuantity": 0,
+      "maxQuantity": 20,
+      "sortOrder": 2,
+      "description": "L’entrée à l’événement, le parcours lumineux et le train hanté. Les jeux gonflables et les spectacles sous le chapiteau sont en sus."
+    }
   ]
 }

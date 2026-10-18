@@ -6,10 +6,12 @@ import { EventFile, importEvent } from "../src/ops/events-import.js";
 // Run 91: put one Brand's event on ALKAO from a file (venue, event, dates, ticket types), in
 // one transaction. Safe to run again; past dates are skipped. Prints what it did, nothing else.
 //
-// Usage: npm run events:import -- --client <uuid> --brand <uuid> <event.json> [--capacity <n>] [--publish] [--list-on-alkao] [--dry-run]
+// Usage: npm run events:import -- --client <uuid> --brand <uuid> <event.json> [--capacity <n>] [--publish] [--list-on-alkao] [--update-page] [--dry-run]
 //   --capacity       seats per date, for every date the file leaves without one
 //   --publish        put the new dates on sale and publish the event
 //   --list-on-alkao  the Brand's consent to list its events on alkao.ca ("Afficher mes événements sur ALKAO")
+//   --update-page    on an event already there, take its page from the file (texts, photo, sections,
+//                    what each ticket includes); never its dates, prices or status (Run 94)
 //   --dry-run        do everything, then roll back
 // Env: DATABASE_URL.
 const args = process.argv.slice(2);
@@ -24,7 +26,7 @@ const capacityArg = flag("--capacity");
 const file = args.find((a, i) => !a.startsWith("--") && !valued.has(args[i - 1] ?? ""));
 const capacity = capacityArg === undefined ? null : Number(capacityArg);
 if (!isUuid(clientId) || !isUuid(brandId) || !file || (capacity !== null && (!Number.isInteger(capacity) || capacity < 0))) {
-  console.error("usage: npm run events:import -- --client <uuid> --brand <uuid> <event.json> [--capacity <n>] [--publish] [--list-on-alkao] [--dry-run]");
+  console.error("usage: npm run events:import -- --client <uuid> --brand <uuid> <event.json> [--capacity <n>] [--publish] [--list-on-alkao] [--update-page] [--dry-run]");
   process.exit(2);
 }
 const url = process.env.DATABASE_URL;
@@ -42,7 +44,7 @@ try {
   try {
     await withTransaction(db, async (tx) => {
       result = await importEvent(tx, { clientId, brandId }, plan, {
-        capacity, publish: args.includes("--publish"), listOnAlkao: args.includes("--list-on-alkao"), now: new Date(),
+        capacity, publish: args.includes("--publish"), listOnAlkao: args.includes("--list-on-alkao"), updatePage: args.includes("--update-page"), now: new Date(),
       });
       if (dryRun) throw ROLLBACK;
     });
