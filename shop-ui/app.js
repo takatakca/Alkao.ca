@@ -161,6 +161,44 @@ const T = {
     findSend: "Renvoyer mes billets",
     findSent: "Si une commande à venir correspond à cette adresse, vos billets viennent de vous être renvoyés. Vérifiez aussi vos courriels indésirables.",
     other: "English",
+    // Run 93: the event page in full.
+    sectionsLabel: "Sections de la page",
+    tabs: { highlights: "Points forts", gallery: "Galerie", steps: "Le jour J", about: "Description", venue: "Lieu", faq: "FAQ" },
+    duration: "Durée", format: "Format", experience: "Expérience", ageReq: "Âge requis", language: "Langue",
+    book: "Réserver",
+    hlEyebrow: "Points forts", hlTitle: "L'expérience",
+    prevItems: "Précédents", nextItems: "Suivants",
+    galEyebrow: "Galerie", galTitle: "En photos",
+    viewPhoto: (i, n, alt) => `Voir la photo ${i} sur ${n}${alt ? ` : ${alt}` : ""}`,
+    prevPhoto: "Photo précédente", nextPhoto: "Photo suivante",
+    stepsEyebrow: "Le jour J", stepsTitle: "Comment ça se passe",
+    aboutEyebrow: "En bref",
+    noticeTitle: "À savoir avant de réserver",
+    venueEyebrow: "À propos du lieu",
+    showMap: "Afficher la carte",
+    mapNote: "Carte fournie par Google Maps. Elle se charge seulement si vous la demandez.",
+    mapTitle: (n) => `Carte : ${n}`,
+    faqEyebrow: "FAQ", faqTitle: "Questions fréquentes",
+    faqMore: (n) => `Voir les ${n} questions`, faqLess: "Voir moins",
+    faqAuto: {
+      age: ["Quel est l'âge minimum ?", (a) => (a === 0 ? "C'est pour tous les âges." : `${a} ans et plus.`)],
+      duration: ["Combien de temps ça dure ?", (d) => `Environ ${d}.`],
+      language: ["Dans quelle langue ?", (l) => `${l}.`],
+      doors: ["Quand les portes ouvrent-elles ?", (d) => `${d} avant le début de chaque séance.`],
+      access: "Le lieu est-il accessible ?",
+      refund: "Puis-je échanger ou me faire rembourser ?",
+      tickets: ["Comment vais-je recevoir mes billets ?", "Par courriel, juste après le paiement. Ils s'ouvrent aussi sur votre téléphone, même sans réseau, et se présentent à l'entrée."],
+      fees: ["Y a-t-il des frais ajoutés ?", "Non. Vous payez le prix affiché, plus les taxes, sans frais ajoutés."],
+      pick: ["Où choisir ma date et mon heure ?", "Dans le panneau Billets : choisissez le mois, le jour, puis l'heure."],
+    },
+    monthsLabel: "Mois",
+    weekdays: ["D", "L", "M", "M", "J", "V", "S"],
+    weekdaysLong: ["dimanche", "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi"],
+    sessionsCount: (n) => `${n} séance${n > 1 ? "s" : ""}`,
+    pickTime: "Choisissez l'heure",
+    moreInfo: "Plus d'infos", lessInfo: "Moins d'infos",
+    recEyebrow: "Du même organisateur", recTitle: "Vous aimerez aussi",
+    continueWith: (m) => `${m} · Continuer`,
   },
   en: {
     errors: {
@@ -307,6 +345,43 @@ const T = {
     findSend: "Send my tickets again",
     findSent: "If an upcoming order matches this address, your tickets have just been sent again. Also check your spam folder.",
     other: "Français",
+    sectionsLabel: "Page sections",
+    tabs: { highlights: "Highlights", gallery: "Gallery", steps: "On the day", about: "Description", venue: "Venue", faq: "FAQ" },
+    duration: "Duration", format: "Format", experience: "Experience", ageReq: "Age", language: "Language",
+    book: "Book",
+    hlEyebrow: "Highlights", hlTitle: "The experience",
+    prevItems: "Previous", nextItems: "Next",
+    galEyebrow: "Gallery", galTitle: "In pictures",
+    viewPhoto: (i, n, alt) => `View photo ${i} of ${n}${alt ? `: ${alt}` : ""}`,
+    prevPhoto: "Previous photo", nextPhoto: "Next photo",
+    stepsEyebrow: "On the day", stepsTitle: "How it works",
+    aboutEyebrow: "In short",
+    noticeTitle: "Good to know before booking",
+    venueEyebrow: "About the venue",
+    showMap: "Show the map",
+    mapNote: "Map by Google Maps. It loads only if you ask for it.",
+    mapTitle: (n) => `Map: ${n}`,
+    faqEyebrow: "FAQ", faqTitle: "Frequently asked questions",
+    faqMore: (n) => `See all ${n} questions`, faqLess: "See less",
+    faqAuto: {
+      age: ["What is the minimum age?", (a) => (a === 0 ? "It is for all ages." : `Ages ${a} and over.`)],
+      duration: ["How long does it last?", (d) => `About ${d}.`],
+      language: ["In which language?", (l) => `${l}.`],
+      doors: ["When do the doors open?", (d) => `${d} before each session starts.`],
+      access: "Is the venue accessible?",
+      refund: "Can I exchange or get a refund?",
+      tickets: ["How will I get my tickets?", "By email, right after payment. They also open on your phone, even without a network, and are shown at the entrance."],
+      fees: ["Are there added fees?", "No. You pay the price shown, plus taxes, with no added fees."],
+      pick: ["Where do I choose my date and time?", "In the Tickets panel: choose the month, the day, then the time."],
+    },
+    monthsLabel: "Months",
+    weekdays: ["S", "M", "T", "W", "T", "F", "S"],
+    weekdaysLong: ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
+    sessionsCount: (n) => `${n} session${n > 1 ? "s" : ""}`,
+    pickTime: "Choose the time",
+    moreInfo: "More info", lessInfo: "Less info",
+    recEyebrow: "From the same organizer", recTitle: "You may also like",
+    continueWith: (m) => `${m} · Continue`,
   },
 }[LANG];
 
@@ -340,6 +415,11 @@ const PATHS = {
   access: "M12 6a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM9 9h6M12 9v5l4 5M12 14l-4 5",
   info: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 16v-5M12 8h.01",
   ticket: "M3 8a2 2 0 0 0 2-2h14a2 2 0 0 0 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 0-2 2H5a2 2 0 0 0-2-2v-2a2 2 0 0 0 0-4zM14 6v12",
+  grid: "M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z",
+  spark: "M12 3v4M12 17v4M3 12h4M17 12h4M6.3 6.3l2.8 2.8M14.9 14.9l2.8 2.8M6.3 17.7l2.8-2.8M14.9 9.1l2.8-2.8",
+  down: "M6 9l6 6 6-6",
+  alert: "M12 3 2 20h20L12 3zM12 10v4M12 17h.01",
+  map: "M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2zM9 4v14M15 6v14",
 };
 const Icon = ({ n, cls = "i" }) => html`<svg class=${cls} viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d=${PATHS[n]} /></svg>`;
 const stepNo = (n) => html`<span class="step-n" aria-hidden="true">${n}</span><span class="sr-only">${n}. </span>`;
@@ -478,7 +558,7 @@ function summary(id) {
   if (!summaries.has(id)) {
     summaries.set(id, call(`/events/${id}`).then((d) => {
       const next = d.sessions.find((s) => s.available > 0) ?? d.sessions[0] ?? null;
-      return { next: next?.startsAt ?? null, count: d.sessions.length, tz: d.event.venue?.timezone, from: priceFrom(d.ticketTypes) };
+      return { next: next?.startsAt ?? null, last: d.sessions[d.sessions.length - 1]?.startsAt ?? null, count: d.sessions.length, tz: d.event.venue?.timezone, from: priceFrom(d.ticketTypes) };
     }, () => null));
   }
   return summaries.get(id);
@@ -554,7 +634,11 @@ function HoldTimer({ until, start, onExpire }) {
 
 // ── Zoomable photo (Run 90): wheel, pinch, double-click, drag; Escape or the button closes ──
 const MAX_ZOOM = 5;
-function Lightbox({ src, alt, onClose }) {
+function Lightbox({ photos, start = 0, onClose }) {
+  // Run 93: one photo, or the gallery with previous and next.
+  const [at, setAt] = useState(start);
+  const { src, alt } = photos[at];
+  const many = photos.length > 1;
   const dialog = useRef(null);
   const stage = useRef(null);
   const img = useRef(null);
@@ -632,12 +716,19 @@ function Lightbox({ src, alt, onClose }) {
     }
   };
   const up = (e) => { pointers.current.delete(e.pointerId); if (pointers.current.size < 2) pinch.current = null; };
+  const go = (d) => {
+    if (!many) return;
+    view.current = { s: 1, x: 0, y: 0 };
+    paint(false);
+    setAt((n) => (n + d + photos.length) % photos.length);
+  };
   const dbl = (e) => { const [cx, cy] = fromCentre(e.clientX, e.clientY); zoomTo(view.current.s > 1.05 ? 1 : 2.5, cx, cy, true); };
   const key = (e) => {
     const v = view.current;
     if (e.key === "+" || e.key === "=") zoomTo(v.s * 1.4, 0, 0, true);
     else if (e.key === "-" || e.key === "_") zoomTo(v.s / 1.4, 0, 0, true);
     else if (e.key === "0") zoomTo(1, 0, 0, true);
+    else if (many && v.s <= 1 && (e.key === "ArrowLeft" || e.key === "ArrowRight")) { e.preventDefault(); go(e.key === "ArrowLeft" ? -1 : 1); }
     else if (v.s > 1 && e.key.startsWith("Arrow")) {
       const step = 60;
       if (e.key === "ArrowLeft") v.x += step; else if (e.key === "ArrowRight") v.x -= step;
@@ -647,7 +738,7 @@ function Lightbox({ src, alt, onClose }) {
   };
   return html`<dialog class="lightbox" ref=${dialog} aria-label=${T.photoOf(alt)} onClose=${onClose} onKeyDown=${key}>
     <div class="lb-bar">
-      <p class="lb-hint">${T.zoomHint}</p>
+      ${many ? html`<p class="lb-count" aria-live="polite">${at + 1} / ${photos.length}</p>` : html`<p class="lb-hint">${T.zoomHint}</p>`}
       <div class="lb-tools">
         <button type="button" class="lb-btn" aria-label=${T.zoomOut} disabled=${scale <= 1} onClick=${() => zoomTo(view.current.s / 1.5, 0, 0, true)}><${Icon} n="zoomOut" /></button>
         <span class="lb-pct" aria-hidden="true">${Math.round(scale * 100)} %</span>
@@ -659,6 +750,8 @@ function Lightbox({ src, alt, onClose }) {
     <div class=${`lb-stage${scale > 1 ? " zoomed" : ""}`} ref=${stage} onPointerDown=${down} onPointerMove=${move} onPointerUp=${up} onPointerCancel=${up} onDblClick=${dbl}>
       <img ref=${img} src=${src} alt=${alt} draggable="false" />
     </div>
+    ${many && html`<button type="button" class="lb-btn lb-side prev" aria-label=${T.prevPhoto} onClick=${() => go(-1)}><${Icon} n="left" /></button>
+      <button type="button" class="lb-btn lb-side next" aria-label=${T.nextPhoto} onClick=${() => go(1)}><${Icon} n="right" /></button>`}
   </dialog>`;
 }
 
@@ -686,30 +779,6 @@ function useEdges(ref, deps) {
   return [edges, update, by];
 }
 
-function DateStrip({ sessions, tz, value, onPick }) {
-  const ref = useRef(null);
-  const [edges, update, by] = useEdges(ref, [sessions.length]);
-  return html`<div class="strip">
-    <button type="button" class="strip-arrow prev" aria-label=${T.prevDates} hidden=${!edges.start} onClick=${() => by(-1)}><${Icon} n="left" /></button>
-    <div class="dates" ref=${ref} onScroll=${update}>
-      ${sessions.map((s) => {
-        const p = dateParts(s.startsAt, tz);
-        const few = s.available > 0 && s.available <= 20;
-        return html`<button type="button" class="session date-card" aria-pressed=${s.id === value ? "true" : "false"} disabled=${s.available === 0} onClick=${() => onPick(s.id)}>
-          <span class="sr-only">${whenFr(s.startsAt, tz)}, </span>
-          <span class="dc-wd" aria-hidden="true">${p.wd}</span>
-          <span class="dc-day" aria-hidden="true">${p.day}</span>
-          <span class="dc-mon" aria-hidden="true">${p.mon}${p.year ? ` ${p.year}` : ""}</span>
-          <span class="dc-time" aria-hidden="true">${p.time}</span>
-          <span class=${`dc-avail${few ? " few" : ""}`}>${s.available === 0 ? T.full : few ? T.fewLeft(s.available) : T.available}</span>
-          <${Icon} n="check" cls="i dc-check" />
-        </button>`;
-      })}
-    </div>
-    <button type="button" class="strip-arrow next" aria-label=${T.nextDates} hidden=${!edges.end} onClick=${() => by(1)}><${Icon} n="right" /></button>
-  </div>`;
-}
-
 /** An event of the Brand as a card: photo, date badge, title, place, "from". */
 function EventCard({ e, sum, level = 3 }) {
   const own = https(e.imageUrl);
@@ -718,14 +787,18 @@ function EventCard({ e, sum, level = 3 }) {
   const p = sum?.next ? dateParts(sum.next, tz) : null;
   const place = [e.venueName, e.venueCity].filter(Boolean).join(" · ");
   const broken = (ev) => { if (own && src === own) setSrc(fallbackPhoto(e.category)); else hideBroken(ev); };
+  // Run 93: several dates read as a range, as on the event page.
+  const range = sum?.next && sum.count > 1 && sum.last && dayIn(new Date(sum.next), tz) !== dayIn(new Date(sum.last), tz)
+    ? `${dayMonth(sum.next, tz)} – ${dayMonth(sum.last, tz)}` : null;
   return html`<a class="ev-card" href=${`/acheter/${route.c}/${route.b}/${e.id}`}>
     <span class="ev-media">
       <img src=${src} alt="" width="640" height="400" loading="lazy" decoding="async" onError=${broken} />
       ${p && html`<span class="date-badge" aria-hidden="true"><b>${p.day}</b>${p.mon}</span>`}
+      ${e.venueName && html`<span class="ev-chip"><${Icon} n="pin" />${e.venueName}</span>`}
     </span>
     <span class="ev-body">
       ${level === 2 ? html`<h2 class="ev-title">${e.title}</h2>` : html`<h3 class="ev-title">${e.title}</h3>`}
-      <span class="ev-when">${p ? `${shortDate(sum.next, tz)} · ${p.time}${sum.count > 1 ? ` · ${T.moreDates(sum.count - 1)}` : ""}` : sum ? T.noDate : ""}</span>
+      <span class="ev-when">${range ?? (p ? `${shortDate(sum.next, tz)} · ${p.time}${sum.count > 1 ? ` · ${T.moreDates(sum.count - 1)}` : ""}` : sum ? T.noDate : "")}</span>
       ${place && html`<span class="ev-place">${place}</span>`}
       <span class="ev-from">${sum?.from ? (sum.from.free ? T.free : html`${T.from} <strong>${money(sum.from.cents)}</strong>`) : ""}</span>
     </span>
@@ -742,7 +815,7 @@ function OtherEvents({ brandName, events }) {
   if (!sums || shown.length === 0) return null;
   return html`<section class="rail-sec" aria-labelledby="rail-title">
     <div class="rail-head">
-      <h2 id="rail-title">${T.otherEvents(brandName)}</h2>
+      <div><p class="sec-eyebrow">${brandName ? T.otherEvents(brandName) : T.recEyebrow}</p><h2 id="rail-title">${T.recTitle}</h2></div>
       ${(edges.start || edges.end) && html`<div class="rail-nav">
         <span class="rail-count" aria-hidden="true">${edges.index}–${edges.last} / ${edges.count}</span>
         <button type="button" class="round" aria-label=${T.prevEvents} disabled=${!edges.start} onClick=${() => by(-1)}><${Icon} n="left" /></button>
@@ -754,9 +827,28 @@ function OtherEvents({ brandName, events }) {
 }
 
 // ── Event page blocks ───────────────────────────────────────────────────────
-function Hero({ ev, src, own, onBroken, next, more, from, compact, zoomRef, onZoom, onShare }) {
+const span = (m) => (m < 60 ? `${m} min` : `${Math.floor(m / 60)} h${m % 60 ? ` ${String(m % 60).padStart(2, "0")}` : ""}`);
+const dayMonth = (iso, tz) => fmt(iso, tz, { day: "numeric", month: "short" });
+/** "18 oct. – 31 janv.", or the one date and its time. */
+function dateRange(sessions, tz) {
+  if (!sessions.length) return null;
+  const first = sessions[0].startsAt, last = sessions[sessions.length - 1].startsAt;
+  if (sessions.length === 1 || dayIn(new Date(first), tz) === dayIn(new Date(last), tz)) return `${shortDate(first, tz)} · ${dateParts(first, tz).time}`;
+  return `${dayMonth(first, tz)} – ${dayMonth(last, tz)}`;
+}
+
+/** Run 93: the hero as the organizer describes the outing, with the price and a way to the tickets. */
+function Hero({ ev, src, own, onBroken, sessions, address, from, compact, zoomRef, onZoom, onBook }) {
   const tz = ev.venue?.timezone;
-  const place = [ev.venue?.name, ev.venue?.city].filter(Boolean).join(", ");
+  const when = dateRange(sessions, tz);
+  const place = [address || ev.venue?.name, ev.venue?.city].filter(Boolean).join(", ");
+  const facts = [
+    Number.isInteger(ev.durationMinutes) && ["clock", T.duration, span(ev.durationMinutes)],
+    ev.format && ["grid", T.format, ev.format],
+    ev.page?.summary && ["spark", T.experience, ev.page.summary],
+    Number.isInteger(ev.minAge) && ["users", T.ageReq, T.age(ev.minAge)],
+    T.languages[ev.language] && ["speech", T.language, T.languages[ev.language]],
+  ].filter(Boolean);
   return html`<section class=${`hero${compact ? " compact" : ""}`} aria-labelledby="event-title">
     <div class="hero-media" onClick=${onZoom}>
       <img class=${own ? "hero-img photo" : "hero-img"} src=${src} alt="" width="1600" height="900" fetchpriority="high" decoding="async" onError=${onBroken} />
@@ -767,35 +859,115 @@ function Hero({ ev, src, own, onBroken, next, more, from, compact, zoomRef, onZo
       <div class="hero-text">
         ${T.categories[ev.category] && html`<p class="eyebrow">${T.categories[ev.category]}</p>`}
         <h1 id="event-title">${ev.title}</h1>
-        <ul class="hero-meta">
-          ${next && html`<li><${Icon} n="calendar" /><span>${shortDate(next, tz)} · ${dateParts(next, tz).time}${more > 0 ? html` <span class="more">${T.moreDates(more)}</span>` : ""}</span></li>`}
-          ${place && html`<li><${Icon} n="pin" /><span>${place}</span></li>`}
-        </ul>
-        <div class="hero-actions">
-          ${from && html`<p class="hero-from">${from.free ? html`<strong>${T.free}</strong>` : html`${T.from} <strong>${money(from.cents)}</strong> <span>${T.plusTax}</span>`}</p>`}
-          ${!DOOR && html`<button type="button" class="btn-glass" onClick=${onShare}><${Icon} n="share" />${T.share}</button>`}
-        </div>
+        ${(when || place) && html`<div class="hero-where">
+          ${when && html`<p><${Icon} n="calendar" /><span>${when}${sessions.length > 1 ? html` <span class="more">· ${T.sessionsCount(sessions.length)}</span>` : ""}</span></p>`}
+          ${place && html`<p><${Icon} n="pin" /><span>${place}</span></p>`}
+        </div>`}
+        ${facts.length > 0 && !compact && html`<ul class="hero-facts">${facts.map(([icon, label, value]) => html`<li>
+          <${Icon} n=${icon} /><span><span class="hf-label">${label}</span><span class="hf-value">${value}</span></span></li>`)}</ul>`}
       </div>
+      ${from && !compact && html`<div class="hero-book">
+        <p class="hb-from"><span class="hb-label">${from.free ? T.ticketsTitle : T.from}</span>
+          <span class="hb-price">${from.free ? T.free : money(from.cents)}</span>${!from.free && html`<span class="hb-tax">${T.plusTax}</span>`}</p>
+        <button type="button" class="hb-btn" onClick=${onBook}>${T.book}</button>
+      </div>`}
     </div>
   </section>`;
 }
 
-/** The organizer's description, clamped with "Lire la suite". */
-function About({ text }) {
+/** Run 93: the page's sections as tabs that stay in view and follow the reading. */
+function SectionTabs({ items, onShare }) {
+  const [active, setActive] = useState(items[0]?.[0] ?? null);
+  const ids = items.map(([id]) => id).join(",");
+  useEffect(() => {
+    if (typeof IntersectionObserver === "undefined") return;
+    const els = items.map(([id]) => document.getElementById(id)).filter(Boolean);
+    const io = new IntersectionObserver((entries) => {
+      const seen = entries.filter((e) => e.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
+      if (seen) setActive(seen.target.id);
+    }, { rootMargin: "-96px 0px -55% 0px" });
+    els.forEach((el) => io.observe(el));
+    return () => io.disconnect();
+  }, [ids]);
+  if (items.length < 2) return null;
+  return html`<nav class="tabs" aria-label=${T.sectionsLabel}>
+    <ul class="tabs-list">${items.map(([id, label]) => html`<li><a href=${`#${id}`} aria-current=${active === id ? "true" : undefined} onClick=${() => setActive(id)}>${label}</a></li>`)}</ul>
+    ${onShare && html`<button type="button" class="tabs-share" aria-label=${T.share} onClick=${onShare}><${Icon} n="share" /></button>`}
+  </nav>`;
+}
+
+const SecHead = ({ eyebrow, id, title, children }) => html`<div class="sec-head">
+  <div><p class="sec-eyebrow">${eyebrow}</p><h2 id=${id}>${title}</h2></div>${children ?? ""}
+</div>`;
+
+/** Points forts: a rail of photo cards with a title and a few words. */
+function Highlights({ items }) {
+  const ref = useRef(null);
+  const [edges, update, by] = useEdges(ref, [items.length]);
+  if (!items.length) return null;
+  return html`<section class="block hl" id="points-forts" aria-labelledby="hl-title">
+    <${SecHead} eyebrow=${T.hlEyebrow} id="hl-title" title=${T.hlTitle}>
+      ${(edges.start || edges.end) && html`<div class="rail-nav">
+        <button type="button" class="round" aria-label=${T.prevItems} disabled=${!edges.start} onClick=${() => by(-1)}><${Icon} n="left" /></button>
+        <button type="button" class="round" aria-label=${T.nextItems} disabled=${!edges.end} onClick=${() => by(1)}><${Icon} n="right" /></button>
+      </div>`}
+    <//>
+    <ul class="hl-rail" ref=${ref} onScroll=${update}>${items.map((h, i) => {
+      const img = https(h.imageUrl);
+      return html`<li class=${`hl-card${img ? "" : " no-img"}`}>
+        ${img ? html`<img src=${img} alt="" width="600" height="450" loading="lazy" decoding="async" onError=${hideBroken} />`
+          : html`<span class="hl-num" aria-hidden="true">${String(i + 1).padStart(2, "0")}</span>`}
+        <div class="hl-text"><h3>${h.title}</h3>${h.text && html`<p>${h.text}</p>`}</div>
+      </li>`;
+    })}</ul>
+  </section>`;
+}
+
+/** Galerie: a mosaic; each photo opens the viewer with previous and next. */
+function Gallery({ photos, onOpen }) {
+  if (!photos.length) return null;
+  const shown = photos.slice(0, 5);
+  return html`<section class="block gallery" id="galerie" aria-labelledby="gal-title">
+    <${SecHead} eyebrow=${T.galEyebrow} id="gal-title" title=${T.galTitle} />
+    <ul class=${`mosaic n${shown.length}`}>${shown.map((p, i) => html`<li>
+      <button type="button" class="mosaic-btn" aria-label=${T.viewPhoto(i + 1, photos.length, p.alt)} onClick=${(e) => onOpen(i, e.currentTarget)}>
+        <img src=${p.url} alt="" loading="lazy" decoding="async" onError=${hideBroken} />
+        ${i === shown.length - 1 && photos.length > shown.length && html`<span class="mosaic-more" aria-hidden="true">+${photos.length - shown.length}</span>`}
+      </button></li>`)}</ul>
+  </section>`;
+}
+
+/** Le jour J: how the visit goes, step by step. */
+function Steps({ steps }) {
+  if (!steps.length) return null;
+  return html`<section class="block steps" id="le-jour-j" aria-labelledby="steps-title">
+    <${SecHead} eyebrow=${T.stepsEyebrow} id="steps-title" title=${T.stepsTitle} />
+    <ol class="timeline">${steps.map((st, i) => {
+      const img = https(st.imageUrl);
+      return html`<li>
+        <span class="tl-media" aria-hidden="true">${img ? html`<img src=${img} alt="" width="96" height="96" loading="lazy" decoding="async" onError=${hideBroken} />` : html`<span class="tl-num">${i + 1}</span>`}</span>
+        <div class="tl-text"><h3>${st.title}</h3>${st.text && html`<p>${st.text}</p>`}</div>
+      </li>`;
+    })}</ol>
+  </section>`;
+}
+
+/** The organizer's description, clamped with "Lire la suite", and the notice before booking. */
+function About({ text, notice }) {
   const ref = useRef(null);
   const [long, setLong] = useState(false);
   const [open, setOpen] = useState(false);
   useLayoutEffect(() => { const el = ref.current; if (el) setLong(el.scrollHeight > el.clientHeight + 4); }, [text]);
-  if (!text?.trim()) return null;
-  return html`<section class="block about" aria-labelledby="about-title">
-    <h2 id="about-title">${T.about}</h2>
-    <div id="about-text" ref=${ref} class=${`about-text${open ? "" : " clamped"}`}>${text.trim()}</div>
-    ${(long || open) && html`<button type="button" class="link-btn more-btn" aria-expanded=${open ? "true" : "false"} aria-controls="about-text" onClick=${() => setOpen(!open)}>${open ? T.readLess : T.readMore}</button>`}
+  if (!text?.trim() && !notice) return null;
+  return html`<section class="block about" id="description" aria-labelledby="about-title">
+    <${SecHead} eyebrow=${T.aboutEyebrow} id="about-title" title=${T.tabs.about} />
+    ${text?.trim() && html`<div id="about-text" ref=${ref} class=${`about-text${open ? "" : " clamped"}`}>${text.trim()}</div>
+      ${(long || open) && html`<button type="button" class="link-btn more-btn" aria-expanded=${open ? "true" : "false"} aria-controls="about-text" onClick=${() => setOpen(!open)}>${open ? T.readLess : T.readMore}<${Icon} n="down" cls=${`i chev${open ? " up" : ""}`} /></button>`}`}
+    ${notice && html`<div class="notice"><${Icon} n="alert" /><div><h3>${T.noticeTitle}</h3><p>${notice}</p></div></div>`}
   </section>`;
 }
 
 // ── Run 69: category, age, doors, language and accessibility, as the organizer set them ──
-const span = (m) => (m < 60 ? `${m} min` : `${Math.floor(m / 60)} h${m % 60 ? ` ${String(m % 60).padStart(2, "0")}` : ""}`);
 function Facts({ ev }) {
   const items = [
     T.categories[ev.category] && ["tag", T.categories[ev.category]],
@@ -812,19 +984,117 @@ function Facts({ ev }) {
   </section>`;
 }
 
-/** Run 90: where it is, with directions in Google Maps. */
+/** Run 93: where it is: the address, directions, and the map once the buyer asks for it. */
 function Venue({ venue, address }) {
+  const [map, setMap] = useState(false);
   if (!venue?.name) return null;
   const line = [address, venue.city].filter(Boolean).join(", ");
-  const href = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent([venue.name, address, venue.city].filter(Boolean).join(", "))}`;
-  return html`<section class="block venue" aria-labelledby="venue-title">
-    <h2 id="venue-title">${T.venueTitle}</h2>
+  const query = [venue.name, address, venue.city].filter(Boolean).join(", ");
+  const href = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(query)}`;
+  return html`<section class="block venue" id="lieu" aria-labelledby="venue-title">
+    <${SecHead} eyebrow=${T.venueEyebrow} id="venue-title" title=${venue.name} />
     <div class="card venue-card">
-      <span class="tile" aria-hidden="true"><${Icon} n="pin" /></span>
-      <div class="venue-text"><p class="venue-name">${venue.name}</p>${line && html`<p class="muted">${line}</p>`}</div>
-      <a class="btn-ghost" href=${href} target="_blank" rel="noopener"><${Icon} n="route" />${T.directions}<span class="sr-only">${T.newTab}</span></a>
+      <div class="venue-row">
+        <span class="tile" aria-hidden="true"><${Icon} n="pin" /></span>
+        <div class="venue-text"><p class="venue-name">${venue.name}</p>${line && html`<p class="muted">${line}</p>`}</div>
+        <a class="btn-ghost" href=${href} target="_blank" rel="noopener"><${Icon} n="route" />${T.directions}<span class="sr-only">${T.newTab}</span></a>
+      </div>
+      <div class="map">${map
+        ? html`<iframe title=${T.mapTitle(venue.name)} src=${`https://www.google.com/maps?q=${encodeURIComponent(query)}&output=embed`} loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>`
+        : html`<button type="button" class="map-load" onClick=${() => setMap(true)}><${Icon} n="map" /><span>${T.showMap}</span></button><p class="map-note">${T.mapNote}</p>`}</div>
     </div>
   </section>`;
+}
+
+/** Run 93: the organizer's questions, then the ones the page can answer from its own facts. */
+function Faq({ ev }) {
+  const [open, setOpen] = useState(false);
+  const A = T.faqAuto;
+  const own = (ev.page?.faq ?? []).map((f) => [f.question, f.answer]);
+  const policy = String(ev.brand?.refundPolicy ?? "").trim();
+  const access = String(ev.accessibility ?? "").trim();
+  const derived = [
+    Number.isInteger(ev.minAge) && [A.age[0], A.age[1](ev.minAge)],
+    Number.isInteger(ev.durationMinutes) && [A.duration[0], A.duration[1](span(ev.durationMinutes))],
+    T.languages[ev.language] && [A.language[0], A.language[1](T.languages[ev.language])],
+    Number.isInteger(ev.doorsOpenMinutes) && ev.doorsOpenMinutes > 0 && [A.doors[0], A.doors[1](span(ev.doorsOpenMinutes))],
+    access && [A.access, access],
+    policy && [A.refund, policy],
+    A.tickets, A.fees, !DOOR && A.pick,
+  ].filter(Boolean);
+  const all = [...own, ...derived];
+  const shown = open ? all : all.slice(0, 5);
+  return html`<section class="block faq" id="faq" aria-labelledby="faq-title">
+    <${SecHead} eyebrow=${T.faqEyebrow} id="faq-title" title=${T.faqTitle} />
+    <div class="faq-list">${shown.map(([q, a]) => html`<details class="faq-item">
+      <summary><span>${q}</span><${Icon} n="down" cls="i chev" /></summary>
+      <p>${a}</p>
+    </details>`)}</div>
+    ${all.length > 5 && html`<button type="button" class="link-btn" aria-expanded=${open ? "true" : "false"} onClick=${() => setOpen(!open)}>${open ? T.faqLess : T.faqMore(all.length)}</button>`}
+  </section>`;
+}
+
+/**
+ * Run 93: the dates as a calendar: the months with a session, the days with one, then the
+ * hours of the chosen day. A day with one session chooses it at once.
+ */
+function SessionCalendar({ sessions, tz, value, onPick }) {
+  const days = new Map();
+  for (const x of sessions) {
+    const d = dayIn(new Date(x.startsAt), tz);
+    if (!days.has(d)) days.set(d, []);
+    days.get(d).push(x);
+  }
+  const months = [...new Set([...days.keys()].map((d) => d.slice(0, 7)))].sort();
+  const chosen = sessions.find((x) => x.id === value);
+  const firstOpen = sessions.find((x) => x.available > 0) ?? sessions[0];
+  const [month, setMonth] = useState(() => dayIn(new Date((chosen ?? firstOpen).startsAt), tz).slice(0, 7));
+  const [day, setDay] = useState(() => (chosen ? dayIn(new Date(chosen.startsAt), tz) : null));
+  const [y, m] = month.split("-").map(Number);
+  const lead = new Date(Date.UTC(y, m - 1, 1)).getUTCDay();
+  const count = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const today = dayIn(new Date(), tz);
+  const avail = (x) => (x.available === 0 ? T.full : x.available <= 20 ? T.fewLeft(x.available) : T.available);
+  const monthName = (ym, style) => new Intl.DateTimeFormat(localeOf(LANG), { month: style, year: "numeric", timeZone: "UTC" }).format(new Date(`${ym}-15T12:00:00Z`));
+  const pickDay = (key, list) => {
+    setDay(key);
+    if (list.length === 1) onPick(list[0].id);
+    else if (!list.some((x) => x.id === value)) onPick(null);
+  };
+  const slots = day ? days.get(day) ?? [] : [];
+  return html`<div class="cal">
+    ${months.length > 1 && html`<div class="cal-months" role="group" aria-label=${T.monthsLabel}>${months.map((ym) => html`<button type="button" class="cal-month"
+      aria-pressed=${ym === month ? "true" : "false"} aria-label=${monthName(ym, "long")} onClick=${() => setMonth(ym)}>${monthName(ym, "short")}</button>`)}</div>`}
+    ${months.length === 1 && html`<p class="cal-title">${monthName(month, "long")}</p>`}
+    <div class="cal-grid">
+      ${T.weekdays.map((w, i) => html`<span class="cal-wd" aria-hidden="true" title=${T.weekdaysLong[i]}>${w}</span>`)}
+      ${Array.from({ length: lead }, (_, i) => html`<span class="cal-blank" key=${`b${i}`} aria-hidden="true"></span>`)}
+      ${Array.from({ length: count }, (_, i) => {
+        const key = `${month}-${String(i + 1).padStart(2, "0")}`;
+        const list = days.get(key);
+        if (!list) return html`<span class=${`cal-day off${key === today ? " today" : ""}`} key=${key} aria-hidden="true">${i + 1}</span>`;
+        const open = list.some((x) => x.available > 0);
+        const name = list.length === 1 ? `${whenFr(list[0].startsAt, tz)}, ${avail(list[0])}` : `${fmt(list[0].startsAt, tz, { dateStyle: "full" })}, ${T.sessionsCount(list.length)}`;
+        const few = open && list.every((x) => x.available === 0 || x.available <= 20);
+        return html`<button type="button" key=${key} class=${`cal-day on${few ? " few" : ""}${key === today ? " today" : ""}`} aria-pressed=${key === day ? "true" : "false"}
+          aria-label=${name} disabled=${!open} onClick=${() => pickDay(key, list)}>${i + 1}</button>`;
+      })}
+    </div>
+    ${slots.length > 0 && html`<div class="slots" role="group" aria-label=${T.pickTime}>
+      <p class="slots-title">${fmt(slots[0].startsAt, tz, { weekday: "long", day: "numeric", month: "long" })}</p>
+      <div class="slots-row">${slots.map((x) => html`<button type="button" class=${`slot${x.available > 0 && x.available <= 20 ? " few" : ""}`} aria-pressed=${x.id === value ? "true" : "false"}
+        disabled=${x.available === 0} aria-label=${slots.length > 1 ? `${whenFr(x.startsAt, tz)}, ${avail(x)}` : `${dateParts(x.startsAt, tz).time}, ${avail(x)}`} onClick=${() => onPick(x.id)}>
+        <span class="slot-time">${dateParts(x.startsAt, tz).time}</span><span class="slot-avail">${avail(x)}</span></button>`)}</div>
+    </div>`}
+  </div>`;
+}
+
+/** Door sales: today's sessions only, as hours. */
+function TimeSlots({ sessions, tz, value, onPick }) {
+  const avail = (x) => (x.available === 0 ? T.full : x.available <= 20 ? T.fewLeft(x.available) : T.available);
+  return html`<div class="slots"><div class="slots-row">${sessions.map((x) => html`<button type="button" class=${`slot${x.available > 0 && x.available <= 20 ? " few" : ""}`}
+    aria-pressed=${x.id === value ? "true" : "false"} disabled=${x.available === 0} aria-label=${`${whenFr(x.startsAt, tz)}, ${avail(x)}`} onClick=${() => onPick(x.id)}>
+    <span class="slot-time">${dateParts(x.startsAt, tz).time}</span><span class="slot-avail">${avail(x)}</span></button>`)}</div></div>`;
 }
 
 // ── Run 65: the organizer's exchange and refund policy, before payment (OPC) ──
@@ -959,7 +1229,6 @@ function EventShop({ config }) {
   const from = priceFrom(data.ticketTypes);
   const own = https(ev.imageUrl);
   const photo = own && !photoBroken ? own : fallbackPhoto(ev.category);
-  const nextSession = sessions.find((s) => s.available > 0) ?? sessions[0];
   const others = (listing?.events ?? []).filter((e) => e.id !== route.eventId);
   const address = listing?.events?.find((e) => e.id === route.eventId)?.venueAddress ?? null;
   const doorBadge = DOOR ? html` <span class="badge">${T.doorSale}</span>` : "";
@@ -967,10 +1236,12 @@ function EventShop({ config }) {
   // Run 60: one row per ticket type; options (add-ons) in their own card, once tickets are chosen.
   const typeRow = (t) => {
     const q = qty[t.id] ?? 0;
+    const about = String(t.description ?? "").trim();
     const meta = `${t.kind === "add_on" ? SCOPE_TEXT(t) : ""}${t.openDate ? T.openDate : ""}${t.minQuantity > 1 ? T.minimum(t.minQuantity) : ""}${left(t) !== null ? T.addOnLeft(left(t)) : ""}`.replace(/^ · /, "");
     return html`<div class=${`type${q > 0 ? " is-on" : ""}`}>
       <div class="type-info"><div class="name">${t.name}</div>
-        <div class="type-price"><span class="price">${t.priceCents === 0 ? T.free : money(t.priceCents)}</span>${meta && html`<span class="meta"> · ${meta}</span>`}</div></div>
+        <div class="type-price"><span class="price">${t.priceCents === 0 ? T.free : money(t.priceCents)}</span>${meta && html`<span class="meta"> · ${meta}</span>`}</div>
+        ${about && html`<details class="type-more"><summary>${T.moreInfo}</summary><p>${about}</p></details>`}</div>
       <div class="stepper">
         <button type="button" class="step-btn" aria-label=${T.remove(t.name)} disabled=${!(q > 0)} onClick=${() => set(t.id, q - 1)}><${Icon} n="minus" /></button>
         <output aria-label=${T.quantity(t.name)}><${Num} value=${q} /></output>
@@ -1023,7 +1294,14 @@ function EventShop({ config }) {
     }
     try { await navigator.clipboard.writeText(url); showToast(T.linkCopied); } catch { showToast(T.copyFailed); }
   };
-  const closeZoom = () => { setZoom(false); requestAnimationFrame(() => zoomButton.current?.focus()); };
+  const closeZoom = () => { const back = zoom?.back ?? zoomButton.current; setZoom(false); requestAnimationFrame(() => back?.focus()); };
+  // Run 93: the hero's photo alone, or the gallery from the photo chosen.
+  const gallery = (ev.page?.gallery ?? []).filter((g) => https(g.url)).map((g) => ({ url: g.url, alt: g.alt ?? "" }));
+  const openGallery = (i, el) => setZoom({ photos: gallery.map((g) => ({ src: g.url, alt: g.alt || ev.title })), start: i, back: el });
+  const book = () => {
+    document.getElementById("billets")?.scrollIntoView({ behavior: reduced() ? "auto" : "smooth", block: "start" });
+    document.getElementById("panel-title")?.focus({ preventScroll: true });
+  };
 
   if (notice) {
     const resume = async () => { setBusy(true); try { await checkout({ id: notice.holdId, token: notice.holdToken }, notice.buyer); } catch (e) { setError(e); setNotice(null); setBusy(false); } };
@@ -1122,12 +1400,12 @@ function EventShop({ config }) {
         : html`<span class="bar-label">${from ? T.from : T.ticketsTitle}</span><span class="bar-amt">${from ? (from.free ? T.free : money(from.cents)) : ""}</span><span class="bar-note">${sessionId ? T.pickTickets : T.pickDate}</span>`}
     </div>
     ${!sessionId && html`<a class="cta only-narrow" href="#billets">${T.seeTickets}</a>`}
-    <button type="button" class=${`cta${sessionId ? "" : " only-wide"}`} disabled=${!ready} onClick=${reserve}>${busy && html`<span class="spin" aria-hidden="true"></span>`}${T.next}<${Icon} n="arrow" /></button>
+    <button type="button" class=${`cta${sessionId ? "" : " only-wide"}`} disabled=${!ready} onClick=${reserve}>${busy && html`<span class="spin" aria-hidden="true"></span>`}${quote ? T.continueWith(money(quote.totalCents)) : T.next}<${Icon} n="arrow" /></button>
   </div>`;
 
   const panel = html`<div class="panel">
     <div class="panel-head">
-      <h2 id="panel-title">${T.ticketsTitle}</h2>
+      <h2 id="panel-title" tabindex="-1">${T.ticketsTitle}</h2>
       ${from && html`<p class="panel-from">${from.free ? T.free : html`${T.from} <strong>${money(from.cents)}</strong>`}</p>`}
     </div>
     <div class="panel-body">
@@ -1137,7 +1415,9 @@ function EventShop({ config }) {
       ${canBuy && html`
         <div class="step">
           <h3 class="step-title">${stepNo(1)}${T.step1}</h3>
-          ${sessions.length === 0 ? html`<p class="step-hint">${DOOR ? T.noSessionsToday : T.noSessions}</p>` : html`<${DateStrip} sessions=${sessions} tz=${tz} value=${sessionId} onPick=${setSessionId} />`}
+          ${sessions.length === 0 ? html`<p class="step-hint">${DOOR ? T.noSessionsToday : T.noSessions}</p>`
+            : DOOR ? html`<${TimeSlots} sessions=${sessions} tz=${tz} value=${sessionId} onPick=${setSessionId} />`
+            : html`<${SessionCalendar} sessions=${sessions} tz=${tz} value=${sessionId} onPick=${setSessionId} />`}
           ${!DOOR && sessions.some((s) => s.available === 0) && html`<${Waitlist} sessions=${sessions.filter((s) => s.available === 0)} tz=${tz} onFree=${load} />`}
         </div>
         ${sessions.length > 0 && html`<div class=${`step${sessionId ? "" : " is-idle"}`}>
@@ -1159,17 +1439,31 @@ function EventShop({ config }) {
     ${canBuy && sessions.length > 0 && buybar}
   </div>`;
 
+  // Run 93: a tab for each section the page has.
+  const tabs = [
+    (ev.page?.highlights ?? []).length > 0 && ["points-forts", T.tabs.highlights],
+    gallery.length > 0 && ["galerie", T.tabs.gallery],
+    (ev.page?.steps ?? []).length > 0 && ["le-jour-j", T.tabs.steps],
+    (ev.description?.trim() || ev.page?.notice) && ["description", T.tabs.about],
+    ev.venue?.name && ["lieu", T.tabs.venue],
+    ["faq", T.tabs.faq],
+  ].filter(Boolean);
   return html`<${Top} brand=${ev.brand} extra=${doorBadge} />
   <main class=${`event-main${canBuy && sessions.length > 0 ? " with-bar" : ""}`}>
     <${Hero} ev=${ev} src=${photo} own=${photo === own} onBroken=${(e) => (photo === own ? setPhotoBroken(true) : hideBroken(e))}
-      next=${nextSession?.startsAt} more=${Math.max(0, sessions.length - 1)} from=${from} compact=${DOOR}
-      zoomRef=${zoomButton} onZoom=${() => setZoom(true)} onShare=${share} />
+      sessions=${sessions} address=${address} from=${from} compact=${DOOR}
+      zoomRef=${zoomButton} onZoom=${() => setZoom({ photos: [{ src: photo, alt: ev.title }], start: 0 })} onBook=${book} />
     <div class="wrap layout">
       <section class="side" id="billets" aria-labelledby="panel-title">${panel}</section>
       <div class="content">
-        <${About} text=${ev.description} />
+        ${!DOOR && html`<${SectionTabs} items=${tabs} onShare=${share} />`}
+        ${!DOOR && html`<${Highlights} items=${ev.page?.highlights ?? []} />`}
+        ${!DOOR && html`<${Gallery} photos=${gallery} onOpen=${openGallery} />`}
+        ${!DOOR && html`<${Steps} steps=${ev.page?.steps ?? []} />`}
+        <${About} text=${ev.description} notice=${ev.page?.notice} />
         <${Facts} ev=${ev} />
         <${Venue} venue=${ev.venue} address=${address} />
+        ${!DOOR && html`<${Faq} ev=${ev} />`}
         <${Policy} brand=${ev.brand} id="policy-event" level=${2} />
         <${Organizer} brand=${ev.brand} />
       </div>
@@ -1178,7 +1472,7 @@ function EventShop({ config }) {
     ${!DOOR && html`<div class="wrap"><${FindTickets} /></div>`}
   </main>
   <${Footer} />
-  ${zoom && html`<${Lightbox} src=${photo} alt=${ev.title} onClose=${closeZoom} />`}
+  ${zoom && html`<${Lightbox} photos=${zoom.photos} start=${zoom.start} onClose=${closeZoom} />`}
   <${Toast} msg=${toast} />`;
 }
 

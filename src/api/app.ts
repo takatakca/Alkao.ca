@@ -368,11 +368,14 @@ export function createApp(deps: AppDeps) {
     const eventId = param(c, "eventId");
     const event = eventId ? await catalog.loadPublicEvent(deps.db, scope, eventId) : null;
     if (!eventId || !event) return fail(c, 404, "event_not_found");
-    const [details, types, sessions] = await Promise.all([
+    const [details, types, sessions, described] = await Promise.all([
       catalog.getEvent(deps.db, scope, eventId),
       catalog.loadTicketTypeRules(deps.db, scope, eventId),
       catalog.listPublicSessions(deps.db, scope, eventId, now()),
+      // Run 93: what each ticket includes, under "Plus d'infos".
+      catalog.listTicketTypes(deps.db, scope, eventId),
     ]);
+    const descriptionOf = new Map(described.map((t) => [t.id as string, (t.description as string | null) ?? null]));
     const { status: _status, createdAt: _c, updatedAt: _u, ...publicDetails } = details;
     // Run 08: what the hosted shop shows (Brand and venue names).
     const place = await catalog.loadPublicEventPlace(deps.db, scope, eventId);
@@ -380,7 +383,7 @@ export function createApp(deps: AppDeps) {
       event: { ...publicDetails, taxRegion: event.taxRegion, ...place },
       ticketTypes: types
         .filter((t) => t.active)
-        .map(({ active: _a, ...t }) => t),
+        .map(({ active: _a, ...t }) => ({ ...t, description: descriptionOf.get(t.id) ?? null })),
       sessions,
     });
   });
@@ -1459,7 +1462,7 @@ export function createApp(deps: AppDeps) {
   // ── Run 92: the writing assistant (drafts only: staff read, change and save) ──
   const assistantLimit = deps.assistantDailyLimit ?? 30;
   /** Runs one draft: off without a writer, at most N per Brand per day, each one in the Journal. */
-  const assist = async (c: Context<Env>, entity: { type: string; id: string | null }, kind: string, run: (w: Writer) => Promise<{ draft: Record<string, string>; usage: drafts.DraftUsage }>) => {
+  const assist = async (c: Context<Env>, entity: { type: string; id: string | null }, kind: string, run: (w: Writer) => Promise<{ draft: drafts.Draft; usage: drafts.DraftUsage }>) => {
     const writer = deps.writer;
     if (!writer) return fail(c, 503, "assistant_disabled");
     const scope = c.get("scope");
@@ -1493,6 +1496,15 @@ export function createApp(deps: AppDeps) {
     if (body.eventId) await catalog.getEvent(deps.db, c.get("scope"), body.eventId);
     return assist(c, { type: body.eventId ? "event" : "brand", id: body.eventId ?? c.get("scope").brandId }, `campaign_${body.channel}`,
       (w) => drafts.draftCampaign(deps.db, w, c.get("scope"), body, now()));
+  });
+
+  // Run 93: the event page's sections (summary, highlights, "Le jour J", FAQ).
+  app.post(`${ADMIN}/events/:eventId/assistant/page`, ...admin, can("ticketing.catalog.write"), async (c) => {
+    const eventId = param(c, "eventId");
+    if (!eventId) return fail(c, 404, "event_not_found");
+    const body = drafts.DescriptionDraftRequest.parse(await readJson(c));
+    await catalog.getEvent(deps.db, c.get("scope"), eventId);
+    return assist(c, { type: "event", id: eventId }, "event_page", (w) => drafts.draftEventPage(deps.db, w, c.get("scope"), eventId, body, now()));
   });
 
   app.post(`${ADMIN}/events/:eventId/assistant/description`, ...admin, can("ticketing.catalog.write"), async (c) => {

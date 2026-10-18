@@ -1,5 +1,15 @@
 # ALKAO — Project status
 
+## Run 93 — the event page in full (2026-10-18)
+
+The event page now follows the structure of the big ticketing sites:
+- hero with the facts and the price;
+- section tabs;
+- highlights, gallery, "Le jour J", description, venue with its map, FAQ;
+- a booking calendar, then hours and tickets with "Plus d'infos".
+
+Organizers fill these sections in /ops, by hand or with the assistant. Nothing is invented: no stars, fees or discounts. It goes live with the next deploy (Coolify #84).
+
 ## Run 92 — executive pass (2026-10-17)
 
 - **Home copy:** firm and factual, with a calm design. The ALKAO assistant on the home stays.

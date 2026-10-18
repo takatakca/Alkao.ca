@@ -49,7 +49,7 @@ Previously imported entries can remain in third-party calendar apps.
 | `src/ops` | Hold sweeper, sales reports, CSV exports, Flex Météo exchange (Run 04) |
 | `ops-ui/` | Standalone Operations web app served at `/ops` (Preact + htm, no build step) |
 | `src/delivery`, `buyer-ui/` | Buyers' tickets email (outbox, Resend, worker) and the buyer's tickets page at `/billets` (Run 06) |
-| `shop-ui/` | Hosted ticket shop at `/acheter/<clientId>/<brandId>[/<eventId>]` (Run 08) |
+| `shop-ui/` | Hosted ticket shop at `/acheter/<clientId>/<brandId>[/<eventId>]` (Run 08). Run 93: the event page in full (hero facts and price, section tabs, highlights, gallery, "Le jour J", venue map on request, FAQ, booking calendar), filled in /ops → Page de l'événement |
 | `home-ui/` | The platform home's style, script, photos and fonts, served at `/assets/home/` (Run 64; the page itself is `src/api/home-view.ts`) |
 | `src/api/venue-view.ts` | Public FR/EN venue directory `/salles` and tenant-scoped venue details (Run 73), in the home's look with photo heroes and a gallery (Run 90); lists only events already approved for the ALKAO platform home |
 | `src/ai/` | Writing assistant in /ops (Run 92): drafts campaigns and event descriptions with Claude from the Brand's catalog; the code refuses invented prices, discounts, codes or links. Off by default (paid): [docs/ASSISTANT_REDACTION.md](docs/ASSISTANT_REDACTION.md) |
