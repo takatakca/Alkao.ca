@@ -2,7 +2,7 @@ import { z } from "zod";
 import * as catalog from "../db/catalog.js";
 import type { Db, Tx } from "../db/pool.js";
 import type { TenantScope } from "../db/commerce.js";
-import { CreateEvent, CreateSession, CreateTicketType, CreateVenue } from "../contracts/api-v1.js";
+import { CreateEvent, CreateSession, CreateTicketType, CreateVenue, UpdateEvent } from "../contracts/api-v1.js";
 
 /**
  * Run 91: load one Brand's event from a file, the same rows /ops would create (venue, event,
@@ -28,12 +28,14 @@ export interface ImportOptions {
   publish: boolean;
   /** Turn on "Afficher mes événements sur ALKAO" (the Brand's explicit opt-in). */
   listOnAlkao: boolean;
+  /** Run 94: on an event already there, take its page from the file (texts, photo, facts, sections, ticket descriptions). */
+  updatePage?: boolean;
   now: Date;
 }
 
 export interface ImportResult {
   venue: "created" | "kept";
-  event: "created" | "kept";
+  event: "created" | "kept" | "updated";
   eventId: string;
   ticketTypes: { created: string[]; kept: string[] };
   sessions: { created: number; kept: number; past: number };
@@ -69,12 +71,33 @@ export async function importEvent(q: Db | Tx, s: TenantScope, file: EventFile, o
     await catalog.writeAudit(q, s, ACTOR, "event.created", { type: "event", id: eventId }, { source: "events:import" });
   }
 
+  // Run 94: the page of an event already there, from the file; dates, prices and status are left alone.
+  let eventResult: ImportResult["event"] = eventState;
+  if (eventState === "kept" && opts.updatePage) {
+    const PAGE_FIELDS = ["description", "imageUrl", "category", "minAge", "doorsOpenMinutes", "language", "accessibility", "durationMinutes", "format", "page"] as const;
+    const fields = Object.fromEntries(PAGE_FIELDS.filter((k) => file.event[k] !== undefined).map((k) => [k, file.event[k]]));
+    if (Object.keys(fields).length) {
+      await catalog.updateEvent(q, s, eventId, UpdateEvent.parse(fields));
+      await catalog.writeAudit(q, s, ACTOR, "event.updated", { type: "event", id: eventId }, { fields: Object.keys(fields), source: "events:import" });
+      eventResult = "updated";
+    }
+  }
+
   // Ticket types, by code.
   const types = await catalog.listTicketTypes(q, s, eventId);
   const codes = new Set(types.map((t) => t.code as string));
   const ticketTypes = { created: [] as string[], kept: [] as string[] };
   for (const t of file.ticketTypes) {
-    if (codes.has(t.code)) { ticketTypes.kept.push(t.code); continue; }
+    if (codes.has(t.code)) {
+      // Run 94: with --update-page, what the ticket includes comes from the file too (never its price).
+      const existing = types.find((x) => x.code === t.code)!;
+      if (opts.updatePage && t.description !== undefined && (existing.description ?? null) !== (t.description ?? null)) {
+        await catalog.updateTicketType(q, s, existing.id as string, { description: t.description ?? null });
+        await catalog.writeAudit(q, s, ACTOR, "ticket_type.updated", { type: "ticket_type", id: existing.id as string }, { fields: ["description"], source: "events:import" });
+      }
+      ticketTypes.kept.push(t.code);
+      continue;
+    }
     const row = await catalog.createTicketType(q, s, eventId, t);
     await catalog.writeAudit(q, s, ACTOR, "ticket_type.created", { type: "ticket_type", id: row.id as string }, { source: "events:import" });
     ticketTypes.created.push(t.code);
@@ -119,5 +142,5 @@ export async function importEvent(q: Db | Tx, s: TenantScope, file: EventFile, o
        ON CONFLICT (client_id, brand_id) DO UPDATE SET show_on_alkao = true`, [s.clientId, s.brandId]);
     await catalog.writeAudit(q, s, ACTOR, "appearance.updated", { type: "brand", id: s.brandId }, { showOnAlkao: true, source: "events:import" });
   }
-  return { venue: venueState, event: eventState, eventId, ticketTypes, sessions, published: opts.publish, listedOnAlkao: opts.listOnAlkao };
+  return { venue: venueState, event: eventResult, eventId, ticketTypes, sessions, published: opts.publish, listedOnAlkao: opts.listOnAlkao };
 }

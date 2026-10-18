@@ -1,5 +1,12 @@
 # ALKAO — Task queue (priority ordered)
 
+## Run 94 — Havana live on alkao.ca (2026-10-18)
+
+1. Merge the Run 94 PR when CI is green.
+2. Owner: choose A (separate ALKAO quota, Weezevent keeps selling) or B (everything on ALKAO). Then give the capacity per evening and write the refund policy.
+3. Coolify operator and owner: `docs/CE_SOIR_HAVANA.md`, steps 1 to 7 (8 with choice B).
+
+
 ## Run 93 — the event page in full (2026-10-18)
 
 1. Merge the Run 93 PR when CI is green.

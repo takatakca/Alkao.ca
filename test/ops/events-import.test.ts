@@ -81,6 +81,33 @@ describe("Run 91: events:import", () => {
     expect(home).toMatch(/À partir de 12\s\$ \+ taxes/);
   });
 
+  it("brings Havana's page from the file, and --update-page refreshes it without touching prices or dates (Run 94)", async () => {
+    expect(havana.event.page?.highlights.map((h) => h.title)).toEqual(["Le train hanté", "Le parcours lumineux", "La citrouille géante", "Les allées illuminées", "Le bar et la terrasse"]);
+    expect(havana.event.page?.gallery.every((g) => g.url.startsWith("https://www.promohavana.ca/photos/"))).toBe(true);
+    const page = async () => (await db.pool.query(`SELECT format, page FROM public.ticketing_events WHERE slug = 'halloween-havana-2026'`)).rows[0];
+    // Created earlier in this file from the same catalog: the page came with it.
+    expect((await page()).page.faq).toHaveLength(6);
+    const { rows: [adult] } = await db.pool.query(`SELECT description, price_cents FROM public.ticketing_ticket_types WHERE code = 'ADULT' AND event_id = (SELECT id FROM public.ticketing_events WHERE slug = 'halloween-havana-2026')`);
+    expect(adult).toMatchObject({ price_cents: 2500 });
+    expect(adult.description).toMatch(/parcours lumineux et le train hanté/);
+
+    // The owner changes the page; a run without --update-page keeps what is there, with it the file wins.
+    const changed = { ...havana, event: { ...havana.event, format: "Soirée extérieure", page: { ...havana.event.page!, summary: "Nouveau résumé" } },
+      ticketTypes: havana.ticketTypes.map((t) => ({ ...t, priceCents: t.priceCents + 500, description: `${t.name} : tout compris` })) };
+    expect((await run({}, changed)).event).toBe("kept");
+    expect((await page()).format).toBe("Événement extérieur");
+    const r = await run({ updatePage: true }, changed);
+    expect(r.event).toBe("updated");
+    expect(await page()).toMatchObject({ format: "Soirée extérieure", page: { summary: "Nouveau résumé" } });
+    const { rows: types } = await db.pool.query(`SELECT code, description, price_cents FROM public.ticketing_ticket_types
+      WHERE event_id = (SELECT id FROM public.ticketing_events WHERE slug = 'halloween-havana-2026') ORDER BY code`);
+    // What each ticket includes follows the file; the price never does.
+    expect(types).toEqual([
+      { code: "ADULT", description: "Adulte : tout compris", price_cents: 2500 },
+      { code: "CHILD", description: "Enfant (5 ans et plus) : tout compris", price_cents: 1200 },
+    ]);
+  });
+
   it("checks the API's own rules on each row", async () => {
     const wrong = { ...havana, event: { ...havana.event, slug: "halloween-wrong" }, sessions: [{ startsAt: "2026-11-07T22:00:00-05:00", endsAt: "2026-11-07T14:00:00-05:00" }] };
     await expect(run({}, wrong)).rejects.toThrow(/endsAt must be after startsAt/);

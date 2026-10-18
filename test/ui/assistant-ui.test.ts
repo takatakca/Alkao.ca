@@ -18,7 +18,11 @@ import { FakeWriter } from "../helpers/writer.js";
 const executablePath = process.env.ALKAO_CHROMIUM_PATH ?? (existsSync("/opt/pw-browsers/chromium") ? "/opt/pw-browsers/chromium" : undefined);
 const shots = process.env.ALKAO_SCREENSHOTS;
 const NOW = new Date("2026-10-01T12:00:00Z");
-const havana = EventFile.parse(JSON.parse(readFileSync(new URL("../../catalogs/havana-halloween-2026.json", import.meta.url), "utf8")));
+// Run 94: the catalog now carries Havana's page; these tests start from an event without one.
+const catalogFile = JSON.parse(readFileSync(new URL("../../catalogs/havana-halloween-2026.json", import.meta.url), "utf8"));
+delete catalogFile.event.page;
+for (const t of catalogFile.ticketTypes) delete t.description;
+const havana = EventFile.parse(catalogFile);
 
 let db: TestDatabase;
 let seed: SeedResult;
