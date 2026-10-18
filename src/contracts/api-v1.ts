@@ -96,7 +96,29 @@ export const EventDetails = z.object({
   doorsOpenMinutes: z.number().int().min(0).max(600).nullable(),
   language: z.enum(["fr", "en", "fr-en", "none"]).nullable(),
   accessibility: z.string().trim().min(1).max(1000).regex(/^[^<>]*$/, "plain text only").nullable(),
+  /** Run 93: how long a visit or a show lasts. */
+  durationMinutes: z.number().int().min(5).max(1440).nullable(),
+  /** Run 93: what kind of outing it is, in a few words ("Exposition intérieure", "Spectacle en plein air"). */
+  format: z.string().trim().min(1).max(80).regex(/^[^<>]*$/, "plain text only").nullable(),
 });
+
+// ── Run 93: the event page's sections, as the organizer writes them ──────────
+const plain = (max: number) => z.string().trim().min(1).max(max).regex(/^[^<>]*$/, "plain text only");
+export const EventPage = z.object({
+  /** One line under the title, what one finds there ("18 tueurs · 20 étapes · VR en option"). */
+  summary: plain(120).nullish(),
+  /** A notice before buying (content that may shock, steps, a waiver to sign). */
+  notice: plain(600).nullish(),
+  /** Points forts: a photo with a title and a short text. */
+  highlights: z.array(z.object({ title: plain(80), text: plain(400).nullish(), imageUrl: displayUrl.nullish() })).max(10).default([]),
+  /** Galerie: photos of the place or past editions. */
+  gallery: z.array(z.object({ url: displayUrl, alt: plain(150).nullish() })).max(24).default([]),
+  /** Le jour J: how the visit goes, step by step. */
+  steps: z.array(z.object({ title: plain(80), text: plain(400).nullish(), imageUrl: displayUrl.nullish() })).max(10).default([]),
+  /** FAQ: the organizer's own questions and answers. */
+  faq: z.array(z.object({ question: plain(200), answer: plain(1500) })).max(20).default([]),
+});
+export type EventPage = z.infer<typeof EventPage>;
 
 export const CreateEvent = z
   .object({
@@ -113,6 +135,7 @@ export const CreateEvent = z
     /** Run 50: the event's photo (https), on the tickets page, the shop and the tickets e-mail. */
     imageUrl: displayUrl.nullish(),
     ...EventDetails.partial().shape,
+    page: EventPage.optional(),
   })
   .refine((e) => !e.salesOpenAt || !e.salesCloseAt || Date.parse(e.salesOpenAt) < Date.parse(e.salesCloseAt), {
     message: "salesOpenAt must be before salesCloseAt",
@@ -128,6 +151,7 @@ export const UpdateEvent = z
     admissionClosesAfterMinutes: admissionMinutes,
     imageUrl: displayUrl.nullable(),
     ...EventDetails.shape,
+    page: EventPage,
   })
   .partial()
   .refine((o) => Object.keys(o).length > 0, "empty update");

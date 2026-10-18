@@ -23,7 +23,7 @@ const VENUE_COLUMNS = "id, name, address_line1, city, region, postal_code, count
 const EVENT_COLUMNS =
   "id, venue_id, slug, title, description, status, sales_open_at, sales_close_at, admission_opens_before_minutes, admission_closes_after_minutes, image_url, " +
   // Run 69: what a buyer wants to know before choosing.
-  "category, min_age, doors_open_minutes, language, accessibility, created_at, updated_at";
+  "category, min_age, doors_open_minutes, language, accessibility, duration_minutes, format, page, created_at, updated_at";
 const SESSION_COLUMNS = "id, event_id, starts_at, ends_at, capacity, reserved_count, sold_count, status, created_at, updated_at";
 const TYPE_COLUMNS =
   "id, event_id, code, name, description, kind, price_cents, min_quantity, max_quantity, max_adults_in_order, counts_as_adult, add_on_scope, grants_session_change, open_date, active, sort_order, created_at, updated_at, stock_per_session";
@@ -95,6 +95,7 @@ export function createEvent(q: Queryable, s: TenantScope, e: {
   admissionOpensBeforeMinutes?: number | undefined; admissionClosesAfterMinutes?: number | undefined; imageUrl?: string | null | undefined;
   category?: string | null | undefined; minAge?: number | null | undefined; doorsOpenMinutes?: number | null | undefined;
   language?: string | null | undefined; accessibility?: string | null | undefined;
+  durationMinutes?: number | null | undefined; format?: string | null | undefined; page?: Record<string, unknown> | undefined;
 }) {
   return mapDbErrors(() =>
     one(
@@ -102,11 +103,13 @@ export function createEvent(q: Queryable, s: TenantScope, e: {
       `INSERT INTO public.ticketing_events
          (client_id, brand_id, venue_id, slug, title, description, sales_open_at, sales_close_at,
           admission_opens_before_minutes, admission_closes_after_minutes, image_url,
-          category, min_age, doors_open_minutes, language, accessibility)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, coalesce($9, 60), coalesce($10, 120), $11, $12, $13, $14, $15, $16) RETURNING ${EVENT_COLUMNS}`,
+          category, min_age, doors_open_minutes, language, accessibility, duration_minutes, format, page)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, coalesce($9, 60), coalesce($10, 120), $11, $12, $13, $14, $15, $16, $17, $18, coalesce($19::jsonb, '{}'::jsonb))
+       RETURNING ${EVENT_COLUMNS}`,
       [s.clientId, s.brandId, e.venueId, e.slug, e.title, e.description ?? null, e.salesOpenAt ?? null, e.salesCloseAt ?? null,
         e.admissionOpensBeforeMinutes ?? null, e.admissionClosesAfterMinutes ?? null, e.imageUrl ?? null,
-        e.category ?? null, e.minAge ?? null, e.doorsOpenMinutes ?? null, e.language ?? null, e.accessibility ?? null],
+        e.category ?? null, e.minAge ?? null, e.doorsOpenMinutes ?? null, e.language ?? null, e.accessibility ?? null,
+        e.durationMinutes ?? null, e.format ?? null, e.page ? JSON.stringify(e.page) : null],
       "event_not_found",
     ),
   );
@@ -118,6 +121,7 @@ export function updateEvent(q: Queryable, s: TenantScope, eventId: string, field
     admissionOpensBeforeMinutes: "admission_opens_before_minutes", admissionClosesAfterMinutes: "admission_closes_after_minutes",
     imageUrl: "image_url",
     category: "category", minAge: "min_age", doorsOpenMinutes: "doors_open_minutes", language: "language", accessibility: "accessibility",
+    durationMinutes: "duration_minutes", format: "format", page: "page",
   }, 4);
   return mapDbErrors(() =>
     one(q, `UPDATE public.ticketing_events SET ${set.sql} WHERE id = $1 AND client_id = $2 AND brand_id = $3 RETURNING ${EVENT_COLUMNS}`,
