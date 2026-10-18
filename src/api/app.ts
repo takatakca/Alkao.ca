@@ -368,11 +368,14 @@ export function createApp(deps: AppDeps) {
     const eventId = param(c, "eventId");
     const event = eventId ? await catalog.loadPublicEvent(deps.db, scope, eventId) : null;
     if (!eventId || !event) return fail(c, 404, "event_not_found");
-    const [details, types, sessions] = await Promise.all([
+    const [details, types, sessions, described] = await Promise.all([
       catalog.getEvent(deps.db, scope, eventId),
       catalog.loadTicketTypeRules(deps.db, scope, eventId),
       catalog.listPublicSessions(deps.db, scope, eventId, now()),
+      // Run 93: what each ticket includes, under "Plus d'infos".
+      catalog.listTicketTypes(deps.db, scope, eventId),
     ]);
+    const descriptionOf = new Map(described.map((t) => [t.id as string, (t.description as string | null) ?? null]));
     const { status: _status, createdAt: _c, updatedAt: _u, ...publicDetails } = details;
     // Run 08: what the hosted shop shows (Brand and venue names).
     const place = await catalog.loadPublicEventPlace(deps.db, scope, eventId);
@@ -380,7 +383,7 @@ export function createApp(deps: AppDeps) {
       event: { ...publicDetails, taxRegion: event.taxRegion, ...place },
       ticketTypes: types
         .filter((t) => t.active)
-        .map(({ active: _a, ...t }) => t),
+        .map(({ active: _a, ...t }) => ({ ...t, description: descriptionOf.get(t.id) ?? null })),
       sessions,
     });
   });

@@ -46,8 +46,23 @@ async function session(t: TenantFixture, daysAhead: number) {
      VALUES ($1, $2, $3, date_trunc('minute', now()) + make_interval(days => $4), 30, 'on_sale') RETURNING id, starts_at`,
     [t.clientId, t.brandId, t.eventId, daysAhead],
   );
-  const label = new Intl.DateTimeFormat("fr-CA", { dateStyle: "full", timeStyle: "short", timeZone: "America/Toronto" }).format(rows[0]!.starts_at);
-  return { id: rows[0]!.id, label };
+  const at = (o: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat("fr-CA", { timeZone: "America/Toronto", ...o }).format(rows[0]!.starts_at);
+  return { id: rows[0]!.id, label: at({ dateStyle: "full", timeStyle: "short" }), day: at({ dateStyle: "full" }), month: at({ month: "long", year: "numeric" }) };
+}
+
+const esc = (t: string) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+/**
+ * Run 93: a session through the calendar: its month, then its day (a day with one session
+ * chooses it), then its hour when the day has several. `choose: false` only shows it.
+ */
+async function pick(page: Page, s: { label: string; day: string; month: string }, choose = true) {
+  await page.locator(".cal").waitFor();
+  const month = page.getByRole("button", { name: s.month, exact: true });
+  if (await month.count()) await month.click();
+  const exact = page.getByRole("button", { name: new RegExp(`^${esc(s.label)}`) });
+  if (!(await exact.count())) await page.getByRole("button", { name: new RegExp(`^${esc(s.day)}, \\d+ séances`) }).click();
+  if (choose) await exact.click();
+  else await exact.waitFor();
 }
 
 async function shop(t: TenantFixture): Promise<Page> {
@@ -83,7 +98,7 @@ describe("hosted ticket shop", () => {
       await box.getByLabel("Code de prévente").fill("fans");
       await box.getByRole("button", { name: "Valider le code" }).click();
       await page.getByText("Code de prévente accepté : vous pouvez acheter dès maintenant.").waitFor();
-      expect(await page.locator(".session").count()).toBeGreaterThan(0);
+      expect(await page.locator(".cal-day.on").count()).toBeGreaterThan(0);
       await page.context().close();
     } finally {
       await db.pool.query(`DELETE FROM public.ticketing_presale_codes WHERE event_id = $1`, [f.eventId]);
@@ -131,12 +146,85 @@ describe("hosted ticket shop", () => {
     }
   });
 
+  it("Run 93: shows the event page in full: hero facts, sections, gallery, FAQ, map on request, hours of a day", async () => {
+    const f = seed.festi;
+    const page93 = {
+      summary: "Glace, musique et feux",
+      notice: "Habillez-vous chaudement : tout se passe dehors.",
+      highlights: [{ title: "La patinoire illuminée", text: "Un anneau de glace sous les lumières.", imageUrl: null }, { title: "Les feux", text: null, imageUrl: null }],
+      gallery: [{ url: "https://photos.alkao.test/1.webp", alt: "La glace" }, { url: "https://photos.alkao.test/2.webp", alt: "Les feux" }],
+      steps: [{ title: "Arrivée", text: "Présentez votre billet à l'entrée.", imageUrl: null }],
+      faq: [{ question: "Peut-on louer des patins ?", answer: "Oui, au chalet." }],
+    };
+    await db.pool.query(`UPDATE public.ticketing_events SET duration_minutes = 90, format = 'Festival extérieur', min_age = 0, page = $2 WHERE id = $1`, [f.eventId, JSON.stringify(page93)]);
+    const general = f.types.find((x) => x.code === "GENERAL")!;
+    await db.pool.query(`UPDATE public.ticketing_ticket_types SET description = 'Accès au site et à la patinoire.' WHERE id = $1`, [general.id]);
+    // Two hours on the same day.
+    const { rows } = await db.pool.query<{ id: string; starts_at: Date }>(
+      `INSERT INTO public.ticketing_sessions (client_id, brand_id, event_id, starts_at, capacity, status)
+       SELECT $1, $2, $3, date_trunc('day', now() + interval '40 days') + h, 30, 'on_sale' FROM unnest(ARRAY[interval '17 hours', interval '20 hours']) h RETURNING id, starts_at`,
+      [f.clientId, f.brandId, f.eventId]);
+    try {
+      const page = await shop(f);
+      await page.context().route("https://photos.alkao.test/**", (r) => r.fulfill({ contentType: "image/svg+xml", body: "<svg xmlns='http://www.w3.org/2000/svg' width='8' height='8'/>" }));
+      const hero = page.getByRole("region", { name: "FESTI-ICE 2026-2027" });
+      for (const text of ["1 h 30", "Festival extérieur", "Glace, musique et feux", "Pour tous"]) await hero.getByText(text, { exact: true }).waitFor();
+      const tabs = page.getByRole("navigation", { name: "Sections de la page" });
+      expect(await tabs.getByRole("link").allTextContents()).toEqual(["Points forts", "Galerie", "Le jour J", "Description", "Lieu", "FAQ"]);
+      await page.getByRole("region", { name: "L'expérience" }).getByText("La patinoire illuminée").waitFor();
+      await page.getByRole("region", { name: "Comment ça se passe" }).getByText("Présentez votre billet à l'entrée.").waitFor();
+      await page.getByRole("region", { name: "Description" }).getByText("Habillez-vous chaudement : tout se passe dehors.").waitFor();
+
+      // The gallery opens on the photo chosen and moves to the next.
+      await page.getByRole("button", { name: "Voir la photo 1 sur 2 : La glace" }).click();
+      const viewer = page.getByRole("dialog", { name: "Photo : La glace" });
+      await viewer.getByText("1 / 2").waitFor();
+      await viewer.getByRole("button", { name: "Photo suivante" }).click();
+      await page.getByRole("dialog", { name: "Photo : Les feux" }).waitFor();
+      await page.keyboard.press("Escape");
+      await page.getByRole("dialog").waitFor({ state: "detached" });
+
+      // The FAQ: the organizer's question first, then answers from the page's own facts.
+      const faq = page.getByRole("region", { name: "Questions fréquentes" });
+      await faq.getByText("Peut-on louer des patins ?").click();
+      await faq.getByText("Oui, au chalet.").waitFor();
+      await faq.getByText("Quel est l'âge minimum ?").waitFor();
+      await faq.getByRole("button", { name: /^Voir les \d+ questions$/ }).click();
+      await faq.getByText("Y a-t-il des frais ajoutés ?").waitFor();
+
+      // The map is not loaded until asked for (it comes from Google).
+      const venue = page.getByRole("region", { name: "Havana Resort" });
+      expect(await page.locator("iframe").count()).toBe(0);
+      await venue.getByRole("button", { name: "Afficher la carte" }).click();
+      expect(await page.locator("iframe").getAttribute("src")).toMatch(/^https:\/\/www\.google\.com\/maps\?q=.+&output=embed$/);
+
+      // A day with two hours shows them; the ticket says what it includes.
+      const at = (d: Date, o: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat("fr-CA", { timeZone: "America/Toronto", ...o }).format(d);
+      const month = page.getByRole("button", { name: at(rows[0]!.starts_at, { month: "long", year: "numeric" }), exact: true });
+      if (await month.count()) await month.click();
+      await page.getByRole("button", { name: `${at(rows[0]!.starts_at, { dateStyle: "full" })}, 2 séances` }).click();
+      const hours = page.getByRole("group", { name: "Choisissez l'heure" });
+      expect(await hours.getByRole("button").count()).toBe(2);
+      await hours.getByRole("button", { name: new RegExp(`^${at(rows[1]!.starts_at, { dateStyle: "full", timeStyle: "short" })}`) }).click();
+      await page.getByText("Plus d'infos").click();
+      await page.getByText("Accès au site et à la patinoire.").waitFor();
+      await plus(page, general.name).click();
+      await page.getByRole("cell", { name: "Total" }).waitFor();
+      expect(await page.getByRole("button", { name: /^\d+,\d{2}\s\$ · Continuer/ }).isEnabled()).toBe(true);
+      await page.context().close();
+    } finally {
+      await db.pool.query(`UPDATE public.ticketing_sessions SET status = 'cancelled' WHERE id = ANY($1)`, [rows.map((r) => r.id)]);
+      await db.pool.query(`UPDATE public.ticketing_events SET duration_minutes = NULL, format = NULL, min_age = NULL, page = '{}' WHERE id = $1`, [f.eventId]);
+      await db.pool.query(`UPDATE public.ticketing_ticket_types SET description = NULL WHERE id = $1`, [general.id]);
+    }
+  });
+
   it("sells paid tickets: session, quantities, server quote, hold, Stripe, then the buyer's QR codes", async () => {
     const f = seed.festi;
     const s = await session(f, 20);
     const page = await shop(f);
     expect(await page.getByText("FESTI-ICE", { exact: true }).isVisible()).toBe(true);
-    await page.getByRole("button", { name: new RegExp(s.label) }).click();
+    await pick(page, s);
     const general = f.types.find((x) => x.code === "GENERAL")!;
     await plus(page, general.name).click();
     await plus(page, general.name).click();
@@ -175,7 +263,7 @@ describe("hosted ticket shop", () => {
     const h = seed.havana;
     const s = await session(h, 21);
     const page = await shop(h);
-    await page.getByRole("button", { name: new RegExp(s.label) }).click();
+    await pick(page, s);
     const toddler = h.types.find((x) => x.code === "TODDLER")!;
     await plus(page, toddler.name).click();
     await page.getByRole("cell", { name: "Total" }).waitFor();
@@ -194,7 +282,7 @@ describe("hosted ticket shop", () => {
     const f = seed.festi;
     const s = await session(f, 22);
     const page = await shop(f);
-    await page.getByRole("button", { name: new RegExp(s.label) }).click();
+    await pick(page, s);
     const flex = f.types.find((x) => x.code === "FLEX_WEATHER")!;
     const general = f.types.find((x) => x.code === "GENERAL")!;
     // Run 60: options sit in their own card and wait for a ticket.
@@ -213,7 +301,7 @@ describe("hosted ticket shop", () => {
     const f = seed.festi;
     const s = await session(f, 23);
     const page = await shop(f);
-    await page.getByRole("button", { name: new RegExp(s.label) }).click();
+    await pick(page, s);
     await plus(page, f.types.find((x) => x.code === "GENERAL")!.name).click();
     await page.getByRole("cell", { name: "Total" }).waitFor();
     await page.getByRole("button", { name: "Continuer" }).click();
@@ -226,7 +314,7 @@ describe("hosted ticket shop", () => {
     await page.goto(local(input.cancelUrl));
     await page.getByText("Paiement non terminé", { exact: false }).waitFor();
     await page.getByRole("button", { name: "Libérer mes places" }).click();
-    await page.getByRole("button", { name: new RegExp(s.label) }).waitFor();
+    await pick(page, s, false);
     const { rows } = await db.pool.query(`SELECT reserved_count, sold_count FROM public.ticketing_sessions WHERE id = $1`, [s.id]);
     expect(rows).toEqual([{ reserved_count: 0, sold_count: 0 }]);
   });
@@ -347,7 +435,7 @@ describe("hosted ticket shop", () => {
     );
     const s = await session(f, 21);
     const page = await shop(f);
-    await page.getByRole("button", { name: new RegExp(s.label) }).click();
+    await pick(page, s);
     await plus(page, f.types.find((x) => x.code === "GENERAL")!.name).click();
     await page.getByRole("cell", { name: "Total" }).waitFor();
     // Run 90: the field is folded behind a link until the buyer has a code.

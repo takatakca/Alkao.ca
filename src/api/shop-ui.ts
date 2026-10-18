@@ -27,6 +27,8 @@ const HEADERS = (type: string) => ({
     // Run 90: Montserrat and Inter, self-hosted with the platform home (/assets/home/fonts).
     "font-src 'self'",
     "connect-src 'self'",
+    // Run 93: the venue's map, loaded only when the buyer asks for it.
+    "frame-src https://www.google.com",
     "frame-ancestors 'none'",
     "base-uri 'none'",
     "form-action 'none'",

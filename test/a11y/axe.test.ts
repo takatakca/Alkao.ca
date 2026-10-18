@@ -147,7 +147,9 @@ describe.each(["light", "dark"] as const)("accessibility (%s)", (scheme) => {
     await shop.goto(`${origin}/acheter/${h.clientId}/${h.brandId}/${h.eventId}`);
     await shop.getByRole("heading", { level: 1 }).waitFor();
     problems.push(...report("event", await audit(shop)));
-    await shop.locator("button.session:not([disabled])").first().click();
+    // Run 93: the calendar: the first day on sale, then its first hour when it has several.
+    await shop.locator("button.cal-day.on:not([disabled])").first().click();
+    if (!(await shop.locator('.slot[aria-pressed="true"]').count())) await shop.locator(".slot:not([disabled])").first().click();
     const toddler = h.types.find((t) => t.code === "TODDLER")!;
     await shop.getByRole("button", { name: `Ajouter ${toddler.name}`, exact: true }).click();
     await shop.getByRole("cell", { name: "Total" }).waitFor();
