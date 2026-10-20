@@ -43,4 +43,8 @@ jobs:
       - run: npm run typecheck
       - run: npm run check:migrations
       - run: npm run check:secrets
+      - name: Verify the container includes a valid Halloween catalog
+        run: |
+          docker build --build-arg SOURCE_COMMIT="$GITHUB_SHA" -t alkao-ci .
+          docker run --rm alkao-ci node --import tsx --input-type=module -e 'import { readFileSync } from "node:fs"; import { EventFile } from "./src/ops/events-import.ts"; EventFile.parse(JSON.parse(readFileSync("catalogs/havana-halloween-2026.json", "utf8"))); console.log("Container Halloween catalog is valid");'
       - run: npm test
