@@ -3,6 +3,8 @@
 Newest first, one line per piece of work. Rule: `AGENTS.md` › Work log rule.
 Format: `YYYY-MM-DD | agent | branch → PR | status | what | next step`
 
+- 2026-10-21 | Codex | codex/include-event-catalogs | active | Package the event catalogs used by the documented Coolify import command; prepare the authorized Havana option B rollout | validate the container artifact, then deploy after provider access and owner capacity/commission are supplied
+
 - 2026-10-20 | claude (Code, cloud) | claude/amazing-pascal-tppqd4 → PR #89 | PR #89 | Run 95: owner chose B (everything on ALKAO); go-live list rewritten for the Weezevent switch, capacity, gate and a proposed refund policy | owner gives capacity and approves the policy; operator follows CE_SOIR_HAVANA.md
 - 2026-10-18 | claude (Code, cloud) | claude/amazing-pascal-tppqd4 → PR #88 | done, merged 010b614 (CI qa SUCCESS on 6fc4b5e) | Run 94: Havana's Halloween page from its public sites in the catalog, `events:import --update-page`, owner's go-live list docs/CE_SOIR_HAVANA.md | merge when green; owner and Coolify operator follow CE_SOIR_HAVANA.md
 - 2026-10-18 | claude (Code, cloud) | claude/amazing-pascal-tppqd4 → PR #87 | done, merged b5de6f8 (CI qa SUCCESS on 657b0f4) | Run 93: full event page on the Fever model (hero chips, section tabs, highlights, gallery, Le jour J, description, venue map, FAQ, calendar booking panel, recommendations), in ALKAO brand; new event page content editable in /ops (and drafted by the assistant) | merge when green; owner fills Havana's page in /ops; deploy waits on Coolify #84
