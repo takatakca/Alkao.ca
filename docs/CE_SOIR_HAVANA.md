@@ -1,8 +1,10 @@
-# Halloween Havana en vente sur alkao.ca : votre liste (Run 94, 18 octobre 2026)
+# Halloween Havana en vente sur alkao.ca : votre liste (Run 94, choix B confirmé le 20 octobre 2026)
 
 Le code est prêt et fusionné. Ce qui reste demande l'accès au serveur et aux comptes : Coolify, Stripe, les clés, la base de données. Je ne l'ai pas, et les secrets ne doivent jamais passer par le clavardage. Ces étapes vous reviennent, ou à la personne qui gère Coolify.
 
 **Temps total : environ 1 heure, dans l'ordre ci-dessous.** Cochez au fur et à mesure.
+
+**Pour vendre le samedi 24 octobre, terminez les étapes 1 à 8 au plus tard le vendredi 23 au soir.** Chaque jour sans billetterie en ligne coûte des ventes.
 
 ## Ce qui est déjà fait (rien à faire de votre côté)
 
@@ -19,14 +21,21 @@ Le code est prêt et fusionné. Ce qui reste demande l'accès au serveur et aux 
   - **Havana n'est pas créé** ;
   - promohavana.ca vend toujours avec **Weezevent**, sur son ancienne version.
 
-## Avant de commencer : une décision (5 min)
+## Votre choix : B, tout sur ALKAO (confirmé le 20 octobre)
 
-promohavana.ca vend déjà les samedis 24 et 31 octobre avec Weezevent. **Si ALKAO vend les mêmes soirées, les deux inventaires ne se parlent pas.** Choisissez :
+promohavana.ca vendait les samedis 24 et 31 octobre avec Weezevent. Avec le choix B, ALKAO vend tout et la vente Weezevent ferme. Les deux inventaires ne se parlent pas : **l'ordre du passage compte**.
 
-- [ ] **A, sans risque ce soir :** Weezevent continue sur promohavana.ca. ALKAO vend sur alkao.ca un **quota à part**, par exemple 100 places par soirée. La somme des deux quotas ne doit jamais dépasser la capacité réelle du site.
-- [ ] **B, tout sur ALKAO :** une fois l'achat test réussi (étape 7), promohavana.ca passe à ALKAO (étape 8) et vous fermez la vente Weezevent. ALKAO prend alors toute la capacité, moins les billets déjà vendus sur Weezevent.
+1. Étapes 1 à 7, dans l'ordre. ALKAO est prêt, puis l'import met les soirées en vente sur alkao.ca avec une **capacité prudente**, plus basse que la vraie (étape 5). Enfin, un achat test réussit. Pendant ce temps, Weezevent vend encore.
+2. Étape 8 : promohavana.ca passe à ALKAO.
+   - Le site le fait de lui-même dès qu'ALKAO a des dates en vente. Avant, il reste sur Weezevent : il n'y a donc jamais de trou dans la vente.
+   - **Le même jour**, vous fermez la vente Weezevent.
+3. Juste après la fermeture : comptez les billets Weezevent vendus **pour chaque samedi**. Montez ensuite la capacité de chaque soirée dans /ops au chiffre exact (étape 5, point 3).
 
-**Ce qu'il me faut de vous :** la capacité par soirée à mettre dans ALKAO (le nombre de places), et votre choix A ou B.
+**Les billets Weezevent déjà vendus restent valides.** Ne les annulez pas et ne les remboursez pas. À l'entrée, ils se scannent avec l'application de contrôle de Weezevent, pas avec ALKAO (voir « Les samedis à l'entrée » plus bas).
+
+**Ce qu'il me faut encore de vous :**
+- la capacité réelle du site par soirée (le nombre total de personnes) ;
+- votre accord sur la politique de remboursement proposée à l'étape 6, ou votre propre texte.
 
 ## Étape 1 — Coolify : mettre ALKAO à jour (personne qui gère Coolify, 15 min)
 
@@ -90,7 +99,9 @@ promohavana.ca vend déjà les samedis 24 et 31 octobre avec Weezevent. **Si ALK
 
 ## Étape 5 — Charger Halloween (personne qui gère le serveur, 2 min)
 
-Dans Coolify, ouvrir **Terminal** dans le conteneur ALKAO. `DATABASE_URL` y est déjà. Remplacer `<N>` par la capacité par soirée (selon le choix A ou B) :
+Dans Coolify, ouvrir **Terminal** dans le conteneur ALKAO. `DATABASE_URL` y est déjà.
+
+**Choisir `<N>`, la capacité prudente :** prendre la capacité réelle du site, enlever les billets Weezevent vendus pour le samedi qui en a le plus, puis enlever une marge pour les ventes Weezevent d'ici la fermeture (par exemple 50). Exemple : 1 000 places − 380 vendus − 50 de marge = 570.
 
 ```bash
 # Essai : tout est fait, puis annulé.
@@ -101,6 +112,13 @@ npm run events:import -- --client <clientId> --brand <brandId> catalogs/havana-h
 
 Les soirées déjà passées (3, 10 et 17 octobre) ne sont jamais créées.
 
+3. **Après la fermeture de Weezevent (étape 8)**, mettre la capacité exacte de chaque soirée :
+   - le calcul : capacité réelle moins les billets Weezevent vendus pour ce samedi ;
+   - où : dans /ops, ouvrir **Événements**, puis **Halloween Havana 2026**, puis la section **Séances** ;
+   - comment : cliquer sur le chiffre de la colonne **Capacité** et taper le nouveau nombre.
+
+   ALKAO refuse un chiffre plus bas que les places déjà vendues ou réservées.
+
 ## Étape 6 — Apparence et politique (vous, 10 min)
 
 Dans /ops, ouvrir **Apparence** et remplir :
@@ -108,7 +126,13 @@ Dans /ops, ouvrir **Apparence** et remplir :
 - [ ] Logo : `https://www.promohavana.ca/brand/havana-resort-logo-blanc.png`
 - [ ] Couleur de Havana
 - [ ] Courriel : `info@havanaresort.ca` ; téléphone : `514 774-7979` ; adresse : `631, 7e Rang, Maricourt (Québec) J0E 2L2`
-- [ ] **Politique d'échange et de remboursement** : le texte réel de Havana. Il est montré avant le paiement, comme la loi l'exige, et il répond à la question « Puis-je me faire rembourser ? » dans la FAQ. **Je ne l'ai pas : écrivez-le.**
+- [ ] **Politique d'échange et de remboursement.** Elle est montrée avant le paiement, comme la loi l'exige, et elle répond à la question « Puis-je me faire rembourser ? » dans la FAQ.
+  - Havana n'en publie aucune pour l'Halloween : ni promohavana.ca, ni havanaresort.ca, ni la page Weezevent. Seule la passe d'un jour d'été dit « non remboursable ».
+  - **Proposition, à approuver ou à corriger avant de la coller :**
+
+    > Les billets ne sont ni remboursables ni échangeables, sauf si Havana annule la soirée. Dans ce cas, vous choisissez entre un remboursement complet et un billet pour un autre samedi d'octobre. Questions : info@havanaresort.ca ou 514 774-7979.
+
+  - Si une soirée est annulée, le remboursement est de toute façon dû selon la loi. ALKAO le fait depuis /ops → **Commandes**.
 - [ ] Vérifier que **Afficher mes événements sur ALKAO** est coché (l'import l'a fait).
 
 ## Étape 7 — Vérifier et faire un achat test (vous, 10 min)
@@ -121,15 +145,26 @@ Dans /ops, ouvrir **Apparence** et remplir :
    - un scan dans /ops → **Scanner**.
 4. Rembourser ce billet depuis /ops → **Commandes**.
 
-## Étape 8 — Seulement avec le choix B : promohavana.ca vend par ALKAO (personne qui gère Coolify, 10 min)
+## Étape 8 — promohavana.ca vend par ALKAO, puis Weezevent ferme (personne qui gère Coolify, 10 min)
 
 1. Dans Coolify, ouvrir la ressource **Promo Havana** et mettre :
    - `ALKAO_URL=https://alkao.ca`
    - `ALKAO_CLIENT_ID=<clientId>`
    - `ALKAO_BRAND_ID=<brandId>`
 2. **Redeploy**. Cela met aussi en ligne les pages refaites de promohavana.ca.
-3. Vérifier que https://www.promohavana.ca/api/site/v1/health montre un nouveau `"build"`, et que la page `/billets` vend les mêmes soirées qu'alkao.ca.
-4. Fermer la vente Halloween dans Weezevent.
+3. Vérifier :
+   - https://www.promohavana.ca/api/site/v1/health montre un nouveau `"build"` ;
+   - les boutons d'achat de promohavana.ca mènent à ALKAO, plus à Weezevent ;
+   - la page `/billets` vend les mêmes soirées qu'alkao.ca.
+4. **Tout de suite après**, dans Weezevent, fermer la vente « Passe journalière - HALLOWEEN AU HAVANA ».
+5. Compter dans Weezevent les billets vendus pour le samedi 24 et pour le samedi 31, puis faire l'étape 5, point 3.
+
+## Les samedis 24 et 31 à l'entrée (vous et votre équipe)
+
+- **Billets ALKAO :** dans /ops, ouvrir **Scanner**. Le scanner fonctionne aussi sans réseau, et les scans s'envoient au retour du réseau.
+- **Billets Weezevent achetés avant la fermeture :** les scanner avec l'application de contrôle de Weezevent, sur un autre téléphone. ALKAO ne les reconnaît pas.
+- Le plus simple : une file ALKAO et une file Weezevent, ou deux téléphones au même poste.
+- La présence totale est la somme des deux. Le tableau de bord d'ALKAO compte seulement les billets ALKAO.
 
 ## Étape 9 — Facultatif : l'assistant de rédaction
 
@@ -140,3 +175,8 @@ Voir `docs/ASSISTANT_REDACTION.md`. Il faut mettre `ALKAO_ASSISTANT_ENABLED=true
 - **Le build ne change pas après Redeploy :** regardez le journal de déploiement dans Coolify (issue #84).
 - **« La billetterie n'est pas active » :** l'étape 3 n'a pas été envoyée, ou `ALKAO_OPERATIONAL_API_ENABLED` n'est pas à `true`.
 - **Le paiement ne finit pas :** vérifiez l'étape 2 (le webhook et son secret) et l'étape 4 (le Stripe de Havana).
+- **promohavana.ca renvoie encore vers Weezevent :**
+  - ALKAO n'a aucune date en vente pour Havana (étape 5 faite sans `--publish`), ou ne répond pas ;
+  - ou les trois variables de l'étape 8 manquent.
+
+  promohavana.ca ne passe à ALKAO que si ALKAO répond et a des dates en vente : c'est voulu, pour ne jamais couper la vente.

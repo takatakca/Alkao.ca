@@ -1,5 +1,11 @@
 # ALKAO — Task queue (priority ordered)
 
+## Run 95 — choice B (2026-10-20)
+
+1. Owner: give the real capacity per evening, and approve or rewrite the refund policy proposed in `docs/CE_SOIR_HAVANA.md`, step 6.
+2. Operator and owner: steps 1 to 8 of `docs/CE_SOIR_HAVANA.md` before Friday 23 October. Close Weezevent the same day promohavana.ca switches to ALKAO.
+
+
 ## Run 94 — Havana live on alkao.ca (2026-10-18)
 
 1. Merge the Run 94 PR when CI is green.

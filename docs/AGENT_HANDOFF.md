@@ -1,5 +1,19 @@
 # ALKAO — Agent handoff (mandatory)
 
+## Run 95 — the owner chose B: everything on ALKAO (2026-10-20)
+
+- `docs/CE_SOIR_HAVANA.md` now follows choice B, in this order:
+  1. ALKAO goes live and a test purchase succeeds;
+  2. the import runs with a cautious capacity;
+  3. Promo Havana gets its three ALKAO variables. It switches on its own once ALKAO has sellable dates (`resolvePublicTicketing` in promohavanaca), so the sale never stops;
+  4. Weezevent closes the same day;
+  5. each Saturday's capacity is raised in /ops to the real capacity minus that Saturday's Weezevent sales.
+- At the gate, the tickets already sold on Weezevent stay valid. They are scanned with Weezevent's app; ALKAO tickets with /ops Scanner.
+- Refund policy: Havana publishes none for Halloween. A proposed text is in step 6, waiting for the owner's approval.
+- Still missing from the owner: the real capacity per evening, and approval of the policy.
+- NEXT EXACT ACTION: the operator and owner follow `docs/CE_SOIR_HAVANA.md` before Friday 23 October. No code change is needed.
+
+
 ## Run 94 — Havana's Halloween page, ready to load, and the owner's go-live list (2026-10-18)
 
 - Branch `claude/amazing-pascal-tppqd4`. The owner wants Havana live on alkao.ca tonight.
