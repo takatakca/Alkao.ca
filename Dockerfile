@@ -12,6 +12,7 @@ RUN npm ci --omit=dev && npm cache clean --force
 COPY tsconfig.json ./
 COPY src ./src
 COPY scripts ./scripts
+COPY catalogs ./catalogs
 COPY supabase ./supabase
 COPY contracts ./contracts
 COPY ops-ui ./ops-ui
