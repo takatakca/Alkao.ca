@@ -1,5 +1,10 @@
 # ALKAO — Project status
 
+## Run 100 — festival passes everywhere the buyer looks (2026-10-22)
+
+A pass buyer finds every date in the confirmation e-mail and the reminder, as on the tickets page. alkao.ca flags the events that sell a pass.
+
+
 ## Run 99 — catalog files and coupons kept off presales (2026-10-22)
 
 A whole event loads from one file: its presales, festival passes and coupons included. An organizer can keep a coupon off presale prices: it then reduces regular-price tickets only. The shop says so, and the amount paid is always the one shown.

@@ -112,6 +112,8 @@ export interface TicketsEmailData {
   codes?: EmailCode[] | null;
   /** Run 54: the options bought with the tickets (meals, activities…), which have no QR code. */
   addOns?: { name: string; quantity: number }[] | null;
+  /** Run 100: a festival pass's other dates, after the order's own. */
+  passDates?: Date[] | null;
 }
 
 const TICKETS = {
@@ -132,6 +134,8 @@ const TICKETS = {
     codesText: "Vos codes QR sont aussi dans ce courriel (version avec images).",
     qrAlt: (code: string) => `Code QR du billet ${code}`,
     options: "Options",
+    passAlso: "Valide aussi",
+    passEntry: "Votre passe entre une fois par date, avec le même code QR.",
   },
   en: {
     title: (changed: boolean) => (changed ? "Your new tickets" : "Your tickets"),
@@ -150,6 +154,8 @@ const TICKETS = {
     codesText: "Your QR codes are also in this e-mail (version with images).",
     qrAlt: (code: string) => `QR code of ticket ${code}`,
     options: "Options",
+    passAlso: "Also valid",
+    passEntry: "Your pass enters once per date, with the same QR code.",
   },
 };
 
@@ -173,6 +179,10 @@ function codeRows(t: { codesTitle: string; codesNote: string; qrAlt: (code: stri
 const optionsLine = (label: string, addOns: TicketsEmailData["addOns"]) =>
   addOns?.length ? `${label} : ${addOns.map((a) => `${a.name} × ${a.quantity}`).join(" · ")}` : null;
 
+/** Run 100: "Valide aussi : samedi 25 octobre 2026 à 12 h 00 ; dimanche …", or nothing. */
+const passLine = (l: Language, label: string, d: Pick<TicketsEmailData, "passDates" | "timezone">) =>
+  d.passDates?.length ? `${label}${l === "fr" ? " :" : ":"} ${d.passDates.map((at) => fullDate(l, at, d.timezone)).join(" ; ")}` : null;
+
 export function ticketsEmail(d: TicketsEmailData): Content {
   const l = d.language ?? "fr";
   const t = TICKETS[l];
@@ -185,13 +195,14 @@ export function ticketsEmail(d: TicketsEmailData): Content {
   const subject = `${t.title(changed)} — ${d.eventTitle} (${d.reference})`;
   const codes = d.codes?.length ? ["", t.codesText] : [];
   const options = optionsLine(t.options, d.addOns);
-  const text = [hello, "", intro, "", d.eventTitle, when, where, count, ...(options ? [options] : []), "", `${t.linkLine}${d.link}`, ...codes, "", t.advice, ...policyText(l, d.look), "", footerText(l, d.brandName, d.look)].join("\n");
+  const pass = passLine(l, t.passAlso, d);
+  const text = [hello, "", intro, "", d.eventTitle, when, ...(pass ? [pass] : []), where, count, ...(options ? [options] : []), "", `${t.linkLine}${d.link}`, ...codes, "", ...(pass ? [t.passEntry] : []), t.advice, ...policyText(l, d.look), "", footerText(l, d.brandName, d.look)].join("\n");
   const html = layout(l, d.brandName, t.title(changed), [
     paragraph(`${esc(hello)}<br>${esc(intro)}`),
-    box(`<strong>${esc(d.eventTitle)}</strong><br>${esc(when)}<br>${esc(where)}<br>${esc(count)} · ${t.order} ${esc(d.reference)}${options ? `<br>${esc(options)}` : ""}`),
+    box(`<strong>${esc(d.eventTitle)}</strong><br>${esc(when)}${pass ? `<br>${esc(pass)}` : ""}<br>${esc(where)}<br>${esc(count)} · ${t.order} ${esc(d.reference)}${options ? `<br>${esc(options)}` : ""}`),
     button(d.link, t.show, d.look),
     ...codeRows(t, d.codes),
-    note(esc(t.advice), Boolean(d.codes?.length)),
+    note(esc(pass ? `${t.passEntry} ${t.advice}` : t.advice), Boolean(d.codes?.length)),
     ...policyRows(l, d.look),
   ], d.look);
   return { fromName: d.brandName, subject, text, html };
@@ -224,13 +235,14 @@ export function reminderEmail(d: ReminderEmailData): Content {
   const intro = r.intro(d.reference);
   const codes = d.codes?.length ? ["", t.codesText] : [];
   const options = optionsLine(t.options, d.addOns);
-  const text = [hello, "", intro, "", d.eventTitle, when, where, count, ...(options ? [options] : []), "", `${t.linkLine}${d.link}`, ...codes, "", t.advice, ...policyText(l, d.look), "", footerText(l, d.brandName, d.look)].join("\n");
+  const pass = passLine(l, t.passAlso, d);
+  const text = [hello, "", intro, "", d.eventTitle, when, ...(pass ? [pass] : []), where, count, ...(options ? [options] : []), "", `${t.linkLine}${d.link}`, ...codes, "", ...(pass ? [t.passEntry] : []), t.advice, ...policyText(l, d.look), "", footerText(l, d.brandName, d.look)].join("\n");
   const html = layout(l, d.brandName, r.title, [
     paragraph(`${esc(hello)}<br>${esc(intro)}`),
-    box(`<strong>${esc(d.eventTitle)}</strong><br>${esc(when)}<br>${esc(where)}<br>${esc(count)} · ${t.order} ${esc(d.reference)}${options ? `<br>${esc(options)}` : ""}`),
+    box(`<strong>${esc(d.eventTitle)}</strong><br>${esc(when)}${pass ? `<br>${esc(pass)}` : ""}<br>${esc(where)}<br>${esc(count)} · ${t.order} ${esc(d.reference)}${options ? `<br>${esc(options)}` : ""}`),
     button(d.link, t.show, d.look),
     ...codeRows(t, d.codes),
-    note(esc(t.advice), Boolean(d.codes?.length)),
+    note(esc(pass ? `${t.passEntry} ${t.advice}` : t.advice), Boolean(d.codes?.length)),
   ], d.look);
   return { fromName: d.brandName, subject: r.subject(d.eventTitle, when), text, html };
 }

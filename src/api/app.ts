@@ -1682,7 +1682,7 @@ export function createApp(deps: AppDeps) {
             ends: open.slice(0, 60).map((session) => (session.endsAt ?? null) as Date | string | null),
             timezone: event.venueTimezone == null ? null : String(event.venueTimezone),
             ...(floors.has(eventId) ? { fromCents: floors.get(eventId)! } : {}),
-            ...(deals.has(eventId) ? { presale: deals.get(eventId)!.presale, coupon: deals.get(eventId)!.coupon } : {}),
+            ...(deals.has(eventId) ? { presale: deals.get(eventId)!.presale, coupon: deals.get(eventId)!.coupon, pass: deals.get(eventId)!.pass ?? null } : {}),
             shopPath: `/acheter/${b.client_id}/${b.brand_id}/${eventId}`,
           });
         }

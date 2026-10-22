@@ -7,6 +7,19 @@ import { APPEARANCE_COLUMNS, appearanceJoin, appearanceOf } from "../db/appearan
 type Queryable = Db | Tx;
 
 /** Delivery state of an order's ticket emails, for staff. Never the link or its token. */
+/** Run 100: the other dates an order's valid festival passes enter, in time order (cancelled dates aside). */
+export async function orderPassDates(q: Queryable, s: TenantScope, orderId: string): Promise<Date[]> {
+  const { rows } = await q.query<{ starts_at: Date }>(
+    `SELECT DISTINCT se.starts_at FROM public.ticketing_ticket_pass_seats p
+     JOIN public.ticketing_tickets t ON t.id = p.ticket_id AND t.client_id = p.client_id AND t.brand_id = p.brand_id
+     JOIN public.ticketing_sessions se ON se.id = p.session_id
+     WHERE t.order_id = $1 AND p.client_id = $2 AND p.brand_id = $3 AND t.status = 'valid' AND se.status <> 'cancelled'
+     ORDER BY se.starts_at`,
+    [orderId, s.clientId, s.brandId],
+  );
+  return rows.map((r) => r.starts_at);
+}
+
 export async function listOrderEmails(q: Queryable, s: TenantScope, orderId: string) {
   const { rows } = await q.query(
     `SELECT id, kind, status, attempts, last_error, sent_at, next_attempt_at, created_at, bounced_at

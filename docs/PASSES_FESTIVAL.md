@@ -23,6 +23,8 @@ Une prévente de la passe se crée comme les autres, avec **Prix de prévente** 
 - **Le prix** de la passe est celui que vous avez entré. ALKAO n'affiche aucune économie inventée par rapport aux billets d'un jour.
 - **Sur la page des billets** : la première date sur le talon, puis « Valide aussi » et les autres dates.
 - **Ajouter à mon calendrier** ajoute une entrée par date.
+- **Le courriel des billets** et le rappel listent aussi les autres dates (« Valide aussi : … ») et précisent que la passe entre une fois par date avec le même code QR (Run 100). Une date annulée n'y figure plus.
+- **Sur alkao.ca**, la carte de l'événement affiche « Passe festival · 3 dates », sauf si une prévente ou un coupon est en cours : le rabais passe en premier (Run 100).
 
 ## Ce que la base de données garantit
 

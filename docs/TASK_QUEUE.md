@@ -2,7 +2,7 @@
 
 ## Run 99 — catalog files and coupons kept off presales (2026-10-22)
 
-1. Merge the Run 99 PR when CI is green.
+1. Done: merged 7b17b0a (PR #94). Run 100: pass dates in the e-mails and on alkao.ca; merge its PR when green.
 2. Owner: in /ops, tick "Non cumulable avec la prévente" on a coupon meant for regular prices only (`docs/PREVENTES_COUPONS.md`).
 
 

@@ -39,6 +39,8 @@ export interface HomeEvent {
   presale?: { priceCents: number; regularCents: number; endsAt: Date | string | null; remaining: number | null } | null;
   /** Run 97: the event's best public coupon on now. */
   coupon?: { label: string | null; percent: number | null; amountCents: number | null; endsAt: Date | string | null } | null;
+  /** Run 100: the cheapest festival pass on sale (one ticket for every date). */
+  pass?: { priceCents: number } | null;
   shopPath: string;
 }
 
@@ -232,6 +234,8 @@ export interface Card {
   title: string;
   /** Run 97: "Prévente −20 %" or "Coupon −15 %", as the organizer set it; null without either. */
   deal: string | null;
+  /** Run 100: "Passe festival · 3 dates" when the event sells one and has several dates. */
+  pass: string | null;
   brand: string;
   brandId: string;
   /** Lowest paid admission before taxes; null when free; undefined when unknown. */
@@ -343,6 +347,7 @@ export function cardsOf(brands: HomeBrand[], lang: Lang, origin: string | null, 
         id: e.id,
         title: e.title,
         deal: dealLabel(lang, e),
+        pass: e.pass && (e.sessions?.length ?? 0) > 1 ? t.passRibbon(e.sessions!.length) : null,
         brand: b.name,
         brandId: b.brandId,
         fromCents: e.fromCents,
@@ -413,7 +418,7 @@ export function eventCard(t: Words, c: Card, { eager = false, venueLink = true }
     <p class="date-badge" aria-hidden="true"><span>${esc(c.day)}</span>${esc(c.month)}</p>
     <button class="fav" type="button" data-fav="${esc(c.id)}" aria-pressed="false" aria-label="${esc(`${t.favorite} : ${c.title}`)}" hidden>${icon("heart")}</button>
     <div class="card-body">
-      ${c.deal ? `<p class="deal-ribbon">${icon("tag")}<span>${esc(c.deal)}</span></p>` : ""}
+      ${c.deal ? `<p class="deal-ribbon">${icon("tag")}<span>${esc(c.deal)}</span></p>` : c.pass ? `<p class="deal-ribbon is-pass">${icon("ticket")}<span>${esc(c.pass)}</span></p>` : ""}
       <p class="card-brand">${c.logo ? `<img src="${esc(c.logo)}" alt="" loading="lazy" decoding="async" />` : ""}${esc(c.brand)}</p>
       <h3 class="card-title"><a href="${esc(c.shop)}">${esc(c.title)}</a></h3>
       <p class="card-meta">${icon("clock")}<time datetime="${esc(c.next.toISOString())}">${esc(c.nextLabel)}</time></p>
