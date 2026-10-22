@@ -8,7 +8,7 @@
   - a card with two dates or more shows "Passe festival · N dates" (the `is-pass` ribbon, ticket icon) when no presale or coupon is on;
   - a pass is never a deal, so it stays out of the "Préventes et rabais" rail.
 - Tests: the e-mail case in `test/scanner/festival-pass.test.ts`, and the pass ribbon in `test/api/home-deals.test.ts`.
-- NEXT EXACT ACTION: merge the Run 100 PR when green.
+- Merged f9095a7 (PR #95).
 
 
 ## Run 99 — catalog files with presales, passes and coupons; coupons kept off presales (2026-10-22)
