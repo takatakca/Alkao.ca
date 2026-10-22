@@ -244,4 +244,14 @@ describe("coupons", () => {
     expect(patch.body.promoCode.excludesPresales).toBe(false);
     expect((await quote([{ ticketTypeId: presaleId, quantity: 1 }, { ticketTypeId: general().id, quantity: 1 }])).body.quote.discountCents).toBe(Math.round((2395 + 2995) * 0.2));
   });
+
+  it("the sales report shows what each code brought and gave away, and which tickets were presales (Run 101)", async () => {
+    const r = (await call(app, "GET", `${adm(t.clientId, t.brandId)}/reports/sales?eventId=${t.eventId}`, { token: await owner() })).body.report;
+    expect(r.promoCodes).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "REGULIER20", public: true, orders: 1, discountCents: Math.round(2995 * 0.2) }),
+      expect.objectContaining({ code: "PREVENTE15", public: true, orders: 1, discountCents: Math.round(2 * 2995 * 0.15) }),
+    ]));
+    expect(r.ticketTypes.find((x: { code: string }) => x.code === "GENERAL_PRE")).toMatchObject({ presale: true, pass: false });
+    expect(r.ticketTypes.find((x: { code: string }) => x.code === "GENERAL")).toMatchObject({ presale: false });
+  });
 });

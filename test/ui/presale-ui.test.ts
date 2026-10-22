@@ -136,6 +136,19 @@ describe("Run 97: presales and coupons in the shop", () => {
     if (shots) await page.locator(".side").screenshot({ path: `${shots}/coupon-presale-only.png` });
   });
 
+  it("counts a presale down in its last 48 hours, to its real end (Run 101)", async () => {
+    await db.pool.query(`UPDATE public.ticketing_ticket_types SET sales_end_at = now() + interval '5 hours' WHERE code = 'GENERAL_PRE'`);
+    try {
+      const page = await shop();
+      const meta = page.locator(".type.is-deal .deal-meta span").first();
+      await expect.poll(() => meta.textContent()).toMatch(/^Se termine dans [45] h \d+ min$/);
+      expect(await page.locator(".hero-book .hb-deal-until").textContent()).toMatch(/^Se termine dans [45] h \d+ min$/);
+      if (shots) await page.locator(".type.is-deal").screenshot({ path: `${shots}/presale-countdown.png` });
+    } finally {
+      await db.pool.query(`UPDATE public.ticketing_ticket_types SET sales_end_at = now() + interval '10 days' WHERE code = 'GENERAL_PRE'`);
+    }
+  });
+
   it("alkao.ca shows the presale on the event's card", async () => {
     const token = await tokenFor(seed.users.havanaOwner);
     expect((await call(app, "PUT", `${adm(t.clientId, t.brandId)}/appearance`, { token, body: { showOnAlkao: true } })).status).toBe(200);

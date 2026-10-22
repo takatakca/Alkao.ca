@@ -652,7 +652,7 @@ function Dashboard({ api, base, prefix }) {
     ${todo.data?.attention.total > 0 && html`<${Attention} a=${todo.data.attention} prefix=${prefix} />`}`;
   if (state.error) return html`${head}<${Failure} error=${state.error} />`;
   if (!state.data) return html`${head}<${Loading} />`;
-  const { totals, sessions, ticketTypes } = state.data.report;
+  const { totals, sessions, ticketTypes, promoCodes = [] } = state.data.report;
   const days = daily.data?.report;
   const prev = before && !previous.loading ? previous.data?.report ?? null : null;
   const titles = new Map(eventList.map((ev) => [ev.id, ev.title]));
@@ -682,7 +682,11 @@ function Dashboard({ api, base, prefix }) {
           <tbody>${sessions.map((s) => html`<tr><td>${when(s.startsAt)}</td><td><${Badge} status=${s.status} /></td><td class="num">${s.capacity}</td><td class="num">${s.sold}</td><td class="num">${s.held}</td><td class="num">${s.available}</td><td class="num">${s.admitted}</td></tr>`)}</tbody></table></div>
         <h3>Par type de billet</h3>
         <table><thead><tr><th>Code</th><th class="num">Quantité</th><th class="num">Revenu</th></tr></thead>
-          <tbody>${ticketTypes.map((t) => html`<tr><td>${t.code}</td><td class="num">${t.quantity}</td><td class="num">${money(t.revenueCents)}</td></tr>`)}</tbody></table>
+          <tbody>${ticketTypes.map((t) => html`<tr><td>${t.code}${t.presale ? html` <span class="badge">Prévente</span>` : ""}${t.pass ? html` <span class="badge">Passe festival</span>` : ""}</td><td class="num">${t.quantity}</td><td class="num">${money(t.revenueCents)}</td></tr>`)}</tbody></table>
+        ${promoCodes.length > 0 && html`<h3>Codes promo et coupons</h3>
+          <p class="muted">Commandes payées avec chaque code. Rabais : ce que le code a retiré avant taxes. Brut : payé, taxes comprises.</p>
+          <div class="table-scroll" role="region" aria-label="Codes promo et coupons" tabindex="0"><table><thead><tr><th>Code</th><th>Genre</th><th class="num">Commandes</th><th class="num">Rabais accordé</th><th class="num">Brut</th><th class="num">Remboursé</th></tr></thead>
+            <tbody>${promoCodes.map((p) => html`<tr><td><code>${p.code}</code></td><td>${p.public ? "Coupon public" : "Code privé"}</td><td class="num">${p.orders}</td><td class="num">${money(p.discountCents)}</td><td class="num">${money(p.grossCents)}</td><td class="num">${money(p.refundedCents)}</td></tr>`)}</tbody></table></div>`}
         ${days && html`<h3>Par jour</h3>
           <p class="muted">Ventes au jour du paiement, remboursements au jour où Stripe les a faits (heure de ${days.timeZone}).</p>
           ${days.days.length === 0 ? html`<p class="muted">Aucune vente ni aucun remboursement sur cette période.</p>` : html`

@@ -1,5 +1,18 @@
 # ALKAO — Agent handoff (mandatory)
 
+## Run 101 — presale countdown, presale and coupon results (2026-10-22)
+
+- Shop (`shop-ui/app.js`):
+  - in a presale's last 48 hours, its end date becomes "Se termine dans 5 h 12 min", on the row and in the hero (`endsIn` and `presaleEnd`);
+  - a minute clock runs only while a presale ends within 48 hours. At the end, the shop reloads the event, so the presale row goes away.
+- Reports (`src/ops/reports.ts`, `salesReport`):
+  - `ticketTypes` rows carry `presale` and `pass`;
+  - new `promoCodes` rows: code, public, orders, discount, gross, refunded, under the same filters.
+  - /ops shows both under "Détail des ventes".
+- Tests: the Run 101 cases in `test/payments/presale-coupons.test.ts` and `test/ui/presale-ui.test.ts`.
+- NEXT EXACT ACTION: merge the Run 101 PR when green.
+
+
 ## Run 100 — festival passes in the e-mails and on alkao.ca (2026-10-22)
 
 - E-mails (`src/delivery/templates.ts`, `worker.ts`): the tickets and reminder e-mails take `passDates` from `orderPassDates` (`src/delivery/db.ts`), which lists the other dates of the order's valid pass tickets, cancelled dates aside. They add "Valide aussi : …" and "Votre passe entre une fois par date, avec le même code QR."
@@ -8,7 +21,7 @@
   - a card with two dates or more shows "Passe festival · N dates" (the `is-pass` ribbon, ticket icon) when no presale or coupon is on;
   - a pass is never a deal, so it stays out of the "Préventes et rabais" rail.
 - Tests: the e-mail case in `test/scanner/festival-pass.test.ts`, and the pass ribbon in `test/api/home-deals.test.ts`.
-- NEXT EXACT ACTION: merge the Run 100 PR when green.
+- Merged f9095a7 (PR #95).
 
 
 ## Run 99 — catalog files with presales, passes and coupons; coupons kept off presales (2026-10-22)
