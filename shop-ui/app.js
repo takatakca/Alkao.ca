@@ -39,6 +39,7 @@ const T = {
       toggle: "J'ai un code promo", applied: (c) => `Code ${c} appliqué`,
       unknown: "Ce code n'existe pas pour cet événement.", inactive: "Ce code n'est plus actif.",
       not_started: "Ce code n'est pas encore valide.", ended: "Ce code a expiré.", used_up: "Ce code a atteint sa limite d'utilisations.",
+      presale_only: "Ce code ne s'applique pas aux billets en prévente : il vaut pour les billets au prix régulier.",
     },
     // Run 97: presale prices and coupons, always as the organizer set them.
     deal: {
@@ -48,7 +49,7 @@ const T = {
     },
     coupons: {
       title: "Coupons", apply: "Appliquer", applied: "Appliqué", until: (d) => `jusqu'au ${d}`,
-      left: (n) => `${n} restant${n > 1 ? "s" : ""}`, off: "de rabais", label: (l, v) => `Coupon ${l} : ${v} de rabais`, generic: "Rabais",
+      left: (n) => `${n} restant${n > 1 ? "s" : ""}`, off: "de rabais", label: (l, v) => `Coupon ${l} : ${v} de rabais`, generic: "Rabais", notPresale: "hors prix prévente",
     },
     v: {
       above_maximum: (n, l) => `${n} : ${l} au maximum par commande.`,
@@ -247,6 +248,7 @@ const T = {
       toggle: "I have a promo code", applied: (c) => `Code ${c} applied`,
       unknown: "This code does not exist for this event.", inactive: "This code is no longer active.",
       not_started: "This code is not valid yet.", ended: "This code has expired.", used_up: "This code has reached its limit.",
+      presale_only: "This code does not apply to presale tickets: it is for regular-price tickets.",
     },
     deal: {
       presale: "Presale price", instead: (p) => `instead of ${p}`, save: (pct) => `−${pct}%`,
@@ -255,7 +257,7 @@ const T = {
     },
     coupons: {
       title: "Coupons", apply: "Apply", applied: "Applied", until: (d) => `until ${d}`,
-      left: (n) => `${n} left`, off: "off", label: (l, v) => `Coupon ${l}: ${v} off`, generic: "Discount",
+      left: (n) => `${n} left`, off: "off", label: (l, v) => `Coupon ${l}: ${v} off`, generic: "Discount", notPresale: "not on presale prices",
     },
     v: {
       above_maximum: (n, l) => `${n}: at most ${l} per order.`,
@@ -1376,7 +1378,9 @@ function EventShop({ config }) {
     <h3 id="coupons-title" class="coupons-title"><${Icon} n="tag" />${T.coupons.title}</h3>
     <ul class="coupon-list">${coupons.map((c) => {
       const on = promo === c.code;
-      const meta = [c.endsAt && T.coupons.until(dayLong(c.endsAt, tz)), Number.isInteger(c.remaining) && T.coupons.left(c.remaining)].filter(Boolean).join(" · ");
+      // Run 99: a coupon kept off presale prices says so while a presale is on.
+      const meta = [c.endsAt && T.coupons.until(dayLong(c.endsAt, tz)), Number.isInteger(c.remaining) && T.coupons.left(c.remaining),
+        c.excludesPresales && presaleDeal && T.coupons.notPresale].filter(Boolean).join(" · ");
       return html`<li class=${`coupon${on ? " is-on" : ""}`}>
         <p class="coupon-value"><strong>−${couponValue(c)}</strong><span>${T.coupons.off}</span></p>
         <div class="coupon-body" id=${`coupon-${c.code}`}>

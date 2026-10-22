@@ -103,8 +103,8 @@ export async function lockHoldForCheckout(tx: Tx, s: TenantScope, holdId: string
   const h = rows[0];
   if (!h) return null;
   if (!isTaxRegion(h.tax_region)) throw new DomainError("unsupported_tax_region");
-  const { rows: items } = await tx.query<{ ticket_type_id: string; code: string; name: string; kind: TicketKind; quantity: number; unit_price_cents: number }>(
-    `SELECT i.ticket_type_id, t.code, t.name, t.kind, i.quantity, i.unit_price_cents
+  const { rows: items } = await tx.query<{ ticket_type_id: string; code: string; name: string; kind: TicketKind; quantity: number; unit_price_cents: number; presale: boolean }>(
+    `SELECT i.ticket_type_id, t.code, t.name, t.kind, i.quantity, i.unit_price_cents, t.presale_of IS NOT NULL AS presale
      FROM public.ticketing_hold_items i
      JOIN public.ticketing_ticket_types t ON t.id = i.ticket_type_id AND t.client_id = i.client_id AND t.brand_id = i.brand_id
      WHERE i.hold_id = $1 AND i.client_id = $2 AND i.brand_id = $3
@@ -119,7 +119,7 @@ export async function lockHoldForCheckout(tx: Tx, s: TenantScope, holdId: string
     expiresAt: h.expires_at,
     taxRegion: h.tax_region,
     items: items.map((i) => ({
-      ticketTypeId: i.ticket_type_id, code: i.code, name: i.name, kind: i.kind, quantity: i.quantity, unitPriceCents: i.unit_price_cents,
+      ticketTypeId: i.ticket_type_id, code: i.code, name: i.name, kind: i.kind, quantity: i.quantity, unitPriceCents: i.unit_price_cents, presale: i.presale,
     })),
   };
 }

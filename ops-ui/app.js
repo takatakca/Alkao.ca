@@ -900,7 +900,7 @@ function PresaleCodes({ api, base, eventId, event }) {
 
 function PromoCodes({ api, base, eventId, shopUrl }) {
   const [state, reload] = useLoad(() => api(`${base}/events/${eventId}/promo-codes`), [base, eventId]);
-  const [f, setF] = useState({ code: "", kind: "percent", value: "", maxUses: "", endsAt: "", public: false, label: "" });
+  const [f, setF] = useState({ code: "", kind: "percent", value: "", maxUses: "", endsAt: "", public: false, label: "", excludesPresales: false });
   const [error, setError] = useState(null);
   const [copiedCode, setCopiedCode] = useState(null);
   const act = (fn) => async (e) => { e?.preventDefault?.(); setError(null); try { await fn(); reload(); } catch (err) { setError(err); } };
@@ -913,11 +913,14 @@ function PromoCodes({ api, base, eventId, shopUrl }) {
       endsAt: f.endsAt ? new Date(f.endsAt).toISOString() : null,
       // Run 97: a coupon shown to every buyer, on the event's page and on alkao.ca.
       public: f.public, label: f.public && f.label.trim() ? f.label.trim() : null,
+      // Run 99: kept off presale prices (regular-price tickets only).
+      excludesPresales: f.excludesPresales,
     } });
-    setF({ code: "", kind: f.kind, value: "", maxUses: "", endsAt: "", public: f.public, label: "" });
+    setF({ code: "", kind: f.kind, value: "", maxUses: "", endsAt: "", public: f.public, label: "", excludesPresales: f.excludesPresales });
   });
   const toggle = (p) => act(() => api(`${base}/promo-codes/${p.id}`, { method: "PATCH", body: { active: !p.active } }));
   const togglePublic = (p) => act(() => api(`${base}/promo-codes/${p.id}`, { method: "PATCH", body: { public: !p.public } }));
+  const toggleStacking = (p) => act(() => api(`${base}/promo-codes/${p.id}`, { method: "PATCH", body: { excludesPresales: !p.excludesPresales } }));
   // Run 97: the shop applies the coupon on arrival (?coupon=CODE): for a post, an e-mail, a QR code.
   const couponLink = (p) => `${shopUrl}?coupon=${encodeURIComponent(p.code)}`;
   const copyLink = (p) => navigator.clipboard?.writeText(couponLink(p)).then(() => setCopiedCode(p.code), () => setCopiedCode(null));
@@ -932,15 +935,17 @@ function PromoCodes({ api, base, eventId, shopUrl }) {
       <label>Fin (facultatif)<input type="datetime-local" value=${f.endsAt} onInput=${(e) => setF({ ...f, endsAt: e.target.value })} /></label>
       <label class="check"><input type="checkbox" checked=${f.public} onChange=${(e) => setF({ ...f, public: e.target.checked })} /> Coupon public (montré à tous les acheteurs)</label>
       ${f.public && html`<label>Nom du coupon (facultatif)<input maxlength="60" placeholder="Coupon prévente" value=${f.label} onInput=${(e) => setF({ ...f, label: e.target.value })} /></label>`}
+      <label class="check"><input type="checkbox" checked=${f.excludesPresales} onChange=${(e) => setF({ ...f, excludesPresales: e.target.checked })} /> Non cumulable avec la prévente</label>
       <button type="submit">Créer le code</button>
     </form>
-    <p class="muted">Le rabais s'applique avant les taxes ; la commission TAKATAK est calculée sur le montant réduit. Un coupon public est montré sur la page de l'événement et sur alkao.ca, avec sa fin et les utilisations qui restent ; un code privé ne sert qu'à qui le reçoit.</p>
-    ${state.loading ? html`<${Loading} />` : list.length === 0 ? html`<p class="muted">Aucun code.</p>` : html`<div class="table-scroll" role="region" aria-label="Codes promo" tabindex="0"><table><thead><tr><th>Code</th><th>Rabais</th><th class="num">Utilisé</th><th>Fin</th><th>Coupon</th><th>Statut</th><th></th></tr></thead>
+    <p class="muted">Le rabais s'applique avant les taxes ; la commission TAKATAK est calculée sur le montant réduit. Un coupon public est montré sur la page de l'événement et sur alkao.ca, avec sa fin et les utilisations qui restent ; un code privé ne sert qu'à qui le reçoit. Un code non cumulable avec la prévente ne réduit que les billets au prix régulier.</p>
+    ${state.loading ? html`<${Loading} />` : list.length === 0 ? html`<p class="muted">Aucun code.</p>` : html`<div class="table-scroll" role="region" aria-label="Codes promo" tabindex="0"><table><thead><tr><th>Code</th><th>Rabais</th><th class="num">Utilisé</th><th>Fin</th><th>Coupon</th><th>Prévente</th><th>Statut</th><th></th></tr></thead>
       <tbody>${list.map((p) => html`<tr><td><code>${p.code}</code></td><td>${p.kind === "percent" ? `${p.percent} %` : money(p.amountCents)}</td>
         <td class="num">${p.usedCount}${p.maxUses ? ` / ${p.maxUses}` : ""}</td><td>${p.endsAt ? when(p.endsAt) : "—"}</td>
         <td>${p.public ? html`<span class="badge">Public</span>${p.label ? html` ${p.label}` : ""}` : html`<span class="muted">Privé</span>`}
           <br /><button class="link" onClick=${togglePublic(p)}>${p.public ? "Rendre privé" : "Montrer comme coupon"}</button>
           <br /><button class="link" onClick=${() => copyLink(p)}>${copiedCode === p.code ? "Lien copié" : "Copier le lien du coupon"}</button></td>
+        <td>${p.excludesPresales ? "Non cumulable" : "Cumulable"}<br /><button class="link" onClick=${toggleStacking(p)}>${p.excludesPresales ? "Rendre cumulable" : "Rendre non cumulable"}</button></td>
         <td><span class="badge ${p.active ? "ok" : "bad"}">${p.active ? "Actif" : "Désactivé"}</span></td>
         <td><button class="secondary" onClick=${toggle(p)}>${p.active ? "Désactiver" : "Réactiver"}</button></td></tr>`)}</tbody></table></div>`}`;
 }

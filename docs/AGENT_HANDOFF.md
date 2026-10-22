@@ -1,5 +1,23 @@
 # ALKAO — Agent handoff (mandatory)
 
+## Run 99 — catalog files with presales, passes and coupons; coupons kept off presales (2026-10-22)
+
+- `events:import` (`src/ops/events-import.ts`):
+  - a ticket type may name its regular ticket with `presaleOfCode`. The regular tickets are created first, then each presale is checked against `CreateTicketType`, so the Run 97 rules still apply;
+  - `pass: true` makes a festival pass;
+  - `promoCodes` (`CreatePromoCode`) creates codes and public coupons;
+  - as for the rest of the file, a code already there is kept as it is. The result lists `promoCodes: { created, kept }`.
+- Migration `20261122000100_alkao_coupon_excludes_presales.sql`: `ticketing_promo_codes.excludes_presales`.
+  - `discountBase` in `src/domain/pricing.ts` takes such a code off the regular-price lines only. Quote lines carry `presale`, for carts and for hold items alike (`lockHoldForCheckout`), so the quote, the hold and the checkout agree.
+  - A cart of presale tickets only is refused with `promo_code_invalid` and `{ reason: "presale_only" }` (`promoApplies`).
+  - /ops: "Non cumulable avec la prévente" on creation, and a toggle in the codes table.
+  - Shop: the coupon says "hors prix prévente" while a presale is on, and the refusal has its own message.
+- Tests:
+  - Run 99 cases in `test/ops/events-import.test.ts` and `test/payments/presale-coupons.test.ts`;
+  - `test/ui/presale-ui.test.ts` and `test/ui/presale-ops.test.ts`.
+- NEXT EXACT ACTION: merge the Run 99 PR when green.
+
+
 ## Run 98 — festival passes (2026-10-22)
 
 - One ticket, one QR code, valid once at every session of its event on sale when it was bought (a weekend, a three-day festival). Owner guide: `docs/PASSES_FESTIVAL.md`.
@@ -23,9 +41,7 @@
   - /ops: the "Passe festival (toutes les dates)" checkbox, and "· passe festival" in the ticket types table. A presale of a pass stays a pass.
   - Public availability and the waitlist no longer count lapsed pass carts' seats on the other days.
 - Tests: `test/scanner/festival-pass.test.ts` (7) and `test/ui/festival-pass-ui.test.ts` (2).
-- NEXT EXACT ACTION: merge the Run 98 PR when green. Follow-ups:
-  - `events:import` support for presales and passes;
-  - an option for coupons not to stack with a presale.
+- Merged 21cc80d (PR #93). The import and the coupon option followed in Run 99.
 
 
 ## Run 97 — presales and discount coupons, for any event (2026-10-22)

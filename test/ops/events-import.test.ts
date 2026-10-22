@@ -113,3 +113,54 @@ describe("Run 91: events:import", () => {
     await expect(run({}, wrong)).rejects.toThrow(/endsAt must be after startsAt/);
   });
 });
+
+describe("Run 99: events:import with presales, passes and coupons", () => {
+  // A made-up three-day festival: day tickets, a presale of them listed first, a pass, a coupon.
+  const at = (days: number) => new Date(Date.now() + days * 86_400_000).toISOString();
+  const festival = () => EventFile.parse({
+    venue: havana.venue,
+    event: { slug: "festival-saveurs-test", title: "Festival des saveurs (test)", category: "gastronomie" },
+    sessions: [{ startsAt: at(40) }, { startsAt: at(41) }, { startsAt: at(42) }],
+    ticketTypes: [
+      { code: "JOUR_PRE", name: "Billet d'un jour — Prévente", priceCents: 2400, maxQuantity: 10, countsAsAdult: true, presaleOfCode: "JOUR", quantityLimit: 100, sortOrder: 0 },
+      { code: "JOUR", name: "Billet d'un jour", priceCents: 3000, maxQuantity: 10, countsAsAdult: true, sortOrder: 1 },
+      { code: "PASSE_3J", name: "Passe festival — 3 jours", priceCents: 7500, maxQuantity: 10, countsAsAdult: true, pass: true, sortOrder: 2 },
+    ],
+    promoCodes: [{ code: "SAVEURS10", kind: "percent", percent: 10, public: true, label: "Coupon lancement", endsAt: at(30) }],
+  });
+  const now = () => new Date();
+
+  it("ties each presale to its regular ticket by code, makes the pass and the coupon, then keeps them", async () => {
+    const first = await run({ publish: true, now: now() }, festival());
+    expect(first).toMatchObject({ event: "created", ticketTypes: { created: ["JOUR_PRE", "JOUR", "PASSE_3J"], kept: [] }, promoCodes: { created: ["SAVEURS10"], kept: [] } });
+    const { rows } = await db.pool.query(
+      `SELECT t.code, t.pass, t.quantity_limit, r.code AS regular FROM public.ticketing_ticket_types t
+       LEFT JOIN public.ticketing_ticket_types r ON r.id = t.presale_of WHERE t.event_id = $1 ORDER BY t.sort_order`, [first.eventId]);
+    expect(rows).toEqual([
+      { code: "JOUR_PRE", pass: false, quantity_limit: 100, regular: "JOUR" },
+      { code: "JOUR", pass: false, quantity_limit: null, regular: null },
+      { code: "PASSE_3J", pass: true, quantity_limit: null, regular: null },
+    ]);
+    const { rows: [coupon] } = await db.pool.query(`SELECT public, label, percent FROM public.ticketing_promo_codes WHERE event_id = $1`, [first.eventId]);
+    expect(coupon).toEqual({ public: true, label: "Coupon lancement", percent: 10 });
+
+    // The shop sells all of it: the presale, the pass on every date, the coupon.
+    const app = testApp(db.pool);
+    const shop = await app.request(`/v1/public/clients/${seed.havana.clientId}/brands/${seed.havana.brandId}/events/${first.eventId}`);
+    const body = await shop.json() as { ticketTypes: { code: string; pass: boolean; remaining: number | null }[]; coupons: { code: string }[]; sessions: unknown[] };
+    expect(body.ticketTypes.map((t) => [t.code, t.pass, t.remaining])).toEqual([["JOUR_PRE", false, 100], ["JOUR", false, null], ["PASSE_3J", true, null]]);
+    expect(body.coupons.map((c) => c.code)).toEqual(["SAVEURS10"]);
+    expect(body.sessions).toHaveLength(3);
+
+    const again = await run({ now: now() }, festival());
+    expect(again).toMatchObject({ event: "kept", ticketTypes: { created: [], kept: ["JOUR_PRE", "JOUR", "PASSE_3J"] }, promoCodes: { created: [], kept: ["SAVEURS10"] } });
+  });
+
+  it("refuses a presale of a ticket the event does not have, and keeps the presale rules", async () => {
+    const file = festival();
+    const stray = { ...file, event: { ...file.event, slug: "festival-stray" }, ticketTypes: [{ ...file.ticketTypes[0]!, presaleOfCode: "NOPE" }] };
+    await expect(run({ now: now() }, stray)).rejects.toThrow(/presaleOfCode NOPE/);
+    const endless = { ...file, event: { ...file.event, slug: "festival-endless" }, ticketTypes: [file.ticketTypes[1]!, { ...file.ticketTypes[0]!, quantityLimit: null }] };
+    await expect(run({ now: now() }, endless)).rejects.toThrow(/a presale ends on a date or after a quantity/);
+  });
+});

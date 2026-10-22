@@ -1,11 +1,14 @@
 # ALKAO — Task queue (priority ordered)
 
+## Run 99 — catalog files and coupons kept off presales (2026-10-22)
+
+1. Merge the Run 99 PR when CI is green.
+2. Owner: in /ops, tick "Non cumulable avec la prévente" on a coupon meant for regular prices only (`docs/PREVENTES_COUPONS.md`).
+
+
 ## Run 98 — festival passes (2026-10-22)
 
-1. Merge the Run 98 PR when CI is green.
-2. Next:
-   - presales and passes in `events:import`;
-   - a "do not stack with the presale" switch for coupons.
+1. Done: merged 21cc80d (PR #93). Run 99 did the import and the coupon switch.
 3. Owner: create a festival pass in /ops (`docs/PASSES_FESTIVAL.md`). It goes live with the next deploy.
 
 

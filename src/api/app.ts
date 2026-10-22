@@ -15,7 +15,7 @@ import { isUuid } from "../domain/ids.js";
 import { isSessionSellable } from "../domain/lifecycle.js";
 import { rulesOnSale } from "../domain/catalog.js";
 import { roleHasPermission, type TicketingPermission, type WorkspaceRole } from "../domain/permissions.js";
-import { buildQuote } from "../domain/pricing.js";
+import { buildQuote, promoApplies } from "../domain/pricing.js";
 import { AuthError, type AuthVerifier } from "./auth.js";
 import { verifyControlSignature } from "./control-signature.js";
 import { errorResponse, fail, readJson } from "./http.js";
@@ -404,6 +404,7 @@ export function createApp(deps: AppDeps) {
     const promo = body.promoCode ? await promoDb.usablePromo(deps.db, scope, eventId, body.promoCode, now()) : null;
     const result = buildQuote(rules, body.items, event.taxRegion, undefined, promo);
     if (!result.ok) return fail(c, 422, "cart_invalid", result.violations);
+    if (!promoApplies(result.quote.lines, promo)) throw new DomainError("promo_code_invalid", { reason: "presale_only" });
     return c.json({ quote: result.quote });
   });
 
@@ -485,6 +486,8 @@ export function createApp(deps: AppDeps) {
     const result = buildQuote(rules, body.items, event.taxRegion, undefined, promo);
     if (!result.ok) return fail(c, 422, "cart_invalid", result.violations);
     const quote = result.quote;
+    // Run 99: a code kept off presale prices, on presale tickets only, is refused with its reason.
+    if (!promoApplies(quote.lines, promo)) throw new DomainError("promo_code_invalid", { reason: "presale_only" });
 
     // Run 98: a pass is bought on its own. Its cart belongs to the first session on sale; each
     // later one holds a seat for it too.
