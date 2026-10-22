@@ -2,7 +2,7 @@
 
 ## Run 101 — presale countdown and results (2026-10-22)
 
-1. Merge the Run 101 PR when CI is green.
+1. Done: merged f357d08 (PR #96).
 2. Owner: after a presale, read "Codes promo et coupons" in /ops → Tableau de bord to see what each coupon brought.
 
 

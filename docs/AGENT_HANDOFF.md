@@ -10,7 +10,7 @@
   - new `promoCodes` rows: code, public, orders, discount, gross, refunded, under the same filters.
   - /ops shows both under "Détail des ventes".
 - Tests: the Run 101 cases in `test/payments/presale-coupons.test.ts` and `test/ui/presale-ui.test.ts`.
-- NEXT EXACT ACTION: merge the Run 101 PR when green.
+- Merged f357d08 (PR #96).
 
 
 ## Run 100 — festival passes in the e-mails and on alkao.ca (2026-10-22)
