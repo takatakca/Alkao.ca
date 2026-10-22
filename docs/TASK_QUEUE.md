@@ -1,5 +1,18 @@
 # ALKAO — Task queue (priority ordered)
 
+## Run 96 — Havana's sale, what remains (2026-10-22)
+
+1. Owner, privately in Coolify:
+   - the live TAKATAK Stripe key and webhook secret;
+   - a valid Resend key.
+   Then Havana's Stripe onboarding in /ops.
+2. Operator agent:
+   - remove `ALKAO_HOME_URL` and redeploy ALKAO;
+   - after a passing paid test ticket, publish Halloween's two sessions, with capacity 3,000 minus each Saturday's Weezevent sales;
+   - redeploy Promo Havana (`main` has the Weezevent removal, PR #29, `4e38f98`).
+3. Owner: close the Weezevent sale. Tickets already sold there stay valid at the gate (Weezevent app).
+
+
 ## Run 95 — choice B (2026-10-20)
 
 1. Owner: give the real capacity per evening, and approve or rewrite the refund policy proposed in `docs/CE_SOIR_HAVANA.md`, step 6.

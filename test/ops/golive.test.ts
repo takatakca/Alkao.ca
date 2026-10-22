@@ -378,6 +378,13 @@ describe("go-live check: the running service", () => {
     ]);
   });
 
+  it("says when the home page sends visitors to another site (Run 96)", async () => {
+    app = ready();
+    expect(of(await checkLive(origin), "ok")).toContain("Boutique : Page d'accueil d'ALKAO affichée");
+    app = testApp(db.pool, { homeUrl: "https://promo.alkao.test/billets" });
+    expect(of(await checkLive(origin), "warn")).toContain("Boutique : La page d'accueil renvoie vers https://promo.alkao.test/billets");
+  });
+
   it("tells a buyer's public address from a proxy's or none", async () => {
     expect(["203.0.113.9", "2001:db8::1", "::ffff:198.51.100.7"].map(ipKind)).toEqual(["public", "public", "public"]);
     expect(["10.0.0.5", "172.20.1.1", "192.168.1.2", "127.0.0.1", "100.64.0.1", "::1", "fd00::1", "fe80::1"].map(ipKind)).toEqual(Array(8).fill("private"));
