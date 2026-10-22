@@ -87,7 +87,8 @@ export const BrandAppearance = z
   });
 
 /** Run 69: what a buyer wants to know before choosing. Each is optional (null = not said). */
-export const EVENT_CATEGORIES = ["concerts", "festivals", "sports", "famille", "plein-air", "spectacles", "soirees", "experiences"] as const;
+// Run 97: food, fashion, and markets and fairs, for the events ALKAO now sells.
+export const EVENT_CATEGORIES = ["concerts", "festivals", "sports", "famille", "plein-air", "spectacles", "soirees", "experiences", "gastronomie", "mode", "marches"] as const;
 export const EventDetails = z.object({
   category: z.enum(EVENT_CATEGORIES).nullable(),
   /** 0 = for all ages, 18 = 18 and over. */
@@ -192,6 +193,12 @@ const ticketTypeFields = {
   grantsSessionChange: z.boolean().default(false),
   /** Run 37, admissions only: "billet ouvert", its order can change session as often as needed. */
   openDate: z.boolean().default(false),
+  /** Run 97: the regular ticket type this presale ticket undercuts (same event, same kind, cheaper). */
+  presaleOf: z.uuid().nullish(),
+  /** Run 97: no longer sold from this moment (a presale ends on a date, a quantity, or both). */
+  salesEndAt: timestamp.nullish(),
+  /** Run 97, admissions only: how many can be sold for the whole event ("the first 200"); null = no limit. */
+  quantityLimit: z.number().int().min(1).max(1_000_000).nullish(),
 };
 export const CreateTicketType = z
   .object(ticketTypeFields)
@@ -199,7 +206,9 @@ export const CreateTicketType = z
   .refine((t) => (t.kind === "add_on") === Boolean(t.addOnScope), { message: "add-ons need addOnScope; admissions must not have one" })
   .refine((t) => !t.grantsSessionChange || t.kind === "add_on", { message: "only add-ons can grant a session change" })
   .refine((t) => !t.openDate || t.kind === "admission", { message: "only admissions can be open-date" })
-  .refine((t) => t.stockPerSession == null || t.kind === "add_on", { message: "only add-ons have a stock" });
+  .refine((t) => t.stockPerSession == null || t.kind === "add_on", { message: "only add-ons have a stock" })
+  .refine((t) => t.quantityLimit == null || t.kind === "admission", { message: "only admissions have a quantity limit" })
+  .refine((t) => !t.presaleOf || t.salesEndAt != null || t.quantityLimit != null, { message: "a presale ends on a date or after a quantity", path: ["salesEndAt"] });
 export const UpdateTicketType = z
   .object({
     name,
@@ -212,6 +221,9 @@ export const UpdateTicketType = z
     sortOrder: z.number().int().min(0).max(10_000),
     openDate: z.boolean(),
     stockPerSession: z.number().int().min(0).max(100_000).nullable(),
+    // Run 97: a presale's end and quantity can move; which ticket it undercuts cannot.
+    salesEndAt: timestamp.nullable(),
+    quantityLimit: z.number().int().min(1).max(1_000_000).nullable(),
   })
   .partial()
   .refine((o) => Object.keys(o).length > 0, "empty update");
@@ -348,6 +360,11 @@ const promoWindow = {
   endsAt: timestamp.nullish(),
   maxUses: z.number().int().min(1).max(1_000_000).nullish(),
 };
+/** Run 97: a public code is shown as a coupon on the event's page and on alkao.ca, with its label. */
+const couponFields = {
+  public: z.boolean().default(false),
+  label: z.string().trim().min(1).max(60).regex(/^[^<>]*$/).nullish(),
+};
 export const CreatePromoCode = z
   .object({
     code: z.string().trim().toUpperCase().regex(/^[A-Z0-9-]{3,32}$/),
@@ -355,6 +372,7 @@ export const CreatePromoCode = z
     percent: z.number().int().min(1).max(100).nullish(),
     amountCents: z.number().int().min(1).max(10_000_000).nullish(),
     ...promoWindow,
+    ...couponFields,
   })
   .refine((p) => (p.kind === "percent" ? p.percent != null && p.amountCents == null : p.amountCents != null && p.percent == null), {
     message: "percent for kind percent, amountCents for kind amount", path: ["kind"],
@@ -368,7 +386,7 @@ export const CreatePresaleCode = z.object({
 });
 export const UpdatePresaleCode = z.object({ active: z.boolean() });
 export const UpdatePromoCode = z
-  .object({ active: z.boolean(), ...promoWindow })
+  .object({ active: z.boolean(), ...promoWindow, public: z.boolean(), label: couponFields.label })
   .partial()
   .refine((o) => Object.keys(o).length > 0, "empty update");
 

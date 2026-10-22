@@ -35,6 +35,10 @@ export interface HomeEvent {
   ends?: (Date | string | null)[];
   /** Run 64: the lowest price of an active paid admission, before taxes; null when none is paid. */
   fromCents?: number | null;
+  /** Run 97: the cheapest presale on now, against the regular price it undercuts. */
+  presale?: { priceCents: number; regularCents: number; endsAt: Date | string | null; remaining: number | null } | null;
+  /** Run 97: the event's best public coupon on now. */
+  coupon?: { label: string | null; percent: number | null; amountCents: number | null; endsAt: Date | string | null } | null;
   shopPath: string;
 }
 

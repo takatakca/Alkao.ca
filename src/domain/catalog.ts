@@ -24,6 +24,17 @@ export interface TicketTypeRule {
   active: boolean;
   /** Run 37: an open-date admission ("billet ouvert"): its order can change session freely. */
   openDate?: boolean;
+  /** Run 97: the regular type a presale ticket undercuts. */
+  presaleOf?: string | null;
+  /** Run 97: no longer sold from this moment. */
+  salesEndAt?: Date | null;
+  /** Run 97: tickets for the whole event; the database refuses a cart past it. */
+  quantityLimit?: number | null;
+}
+
+/** Run 97: a type whose sale has ended is sold no more (a cart with it is refused as inactive). */
+export function rulesOnSale(types: readonly TicketTypeRule[], now: Date): TicketTypeRule[] {
+  return types.map((t) => (t.salesEndAt && t.salesEndAt.getTime() <= now.getTime() ? { ...t, active: false } : t));
 }
 
 export interface CartItem {

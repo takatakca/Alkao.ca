@@ -22,7 +22,7 @@ export interface PromoRow extends PromoDiscount {
   active: boolean;
 }
 
-const COLUMNS = "id, event_id, code, kind, percent, amount_cents, max_uses, used_count, starts_at, ends_at, active, created_at, updated_at";
+const COLUMNS = "id, event_id, code, kind, percent, amount_cents, max_uses, used_count, starts_at, ends_at, active, created_at, updated_at, public, label";
 const fromRow = (r: Record<string, unknown>): PromoRow => ({
   id: r.id as string, eventId: r.event_id as string, code: r.code as string, kind: r.kind as "percent" | "amount",
   percent: (r.percent as number | null) ?? null, amountCents: (r.amount_cents as number | null) ?? null,
@@ -55,6 +55,27 @@ export async function usablePromo(q: Queryable, s: TenantScope, eventId: string,
   return promo;
 }
 
+/**
+ * Run 97: the event's coupons, as every buyer sees them: public codes usable now, with what
+ * they take off, when they end and, for a limited code, how many uses are left.
+ */
+export async function publicCoupons(q: Queryable, s: TenantScope, eventId: string, now: Date) {
+  const { rows } = await q.query(
+    `SELECT ${COLUMNS} FROM public.ticketing_promo_codes
+     WHERE event_id = $1 AND client_id = $2 AND brand_id = $3 AND public AND active
+       AND (starts_at IS NULL OR starts_at <= $4) AND (ends_at IS NULL OR ends_at > $4)
+       AND (max_uses IS NULL OR used_count < max_uses)
+     ORDER BY coalesce(ends_at, 'infinity'::timestamptz), code`,
+    [eventId, s.clientId, s.brandId, now],
+  );
+  return rows.map((r) => ({
+    code: r.code as string, label: (r.label as string | null) ?? null, kind: r.kind as "percent" | "amount",
+    percent: (r.percent as number | null) ?? null, amountCents: (r.amount_cents as number | null) ?? null,
+    endsAt: (r.ends_at as Date | null) ?? null,
+    remaining: r.max_uses === null ? null : Number(r.max_uses) - Number(r.used_count),
+  }));
+}
+
 /** The code attached to a hold, if any (checkout prices the order with it). */
 export async function promoOfHold(tx: Tx, s: TenantScope, holdId: string): Promise<PromoRow | null> {
   const { rows } = await tx.query(
@@ -77,7 +98,10 @@ export async function listPromoCodes(q: Queryable, s: TenantScope, eventId: stri
 
 export async function createPromoCode(
   tx: Tx, s: TenantScope, eventId: string,
-  p: { code: string; kind: "percent" | "amount"; percent?: number | null | undefined; amountCents?: number | null | undefined; maxUses?: number | null | undefined; startsAt?: string | null | undefined; endsAt?: string | null | undefined },
+  p: {
+    code: string; kind: "percent" | "amount"; percent?: number | null | undefined; amountCents?: number | null | undefined; maxUses?: number | null | undefined;
+    startsAt?: string | null | undefined; endsAt?: string | null | undefined; public?: boolean | undefined; label?: string | null | undefined;
+  },
   actor: { type: "user"; id: string | null },
 ) {
   return mapDbErrors(async () => {
@@ -85,12 +109,12 @@ export async function createPromoCode(
     if (!ev[0]) throw new DomainError("event_not_found");
     try {
       const { rows } = await tx.query(
-        `INSERT INTO public.ticketing_promo_codes (client_id, brand_id, event_id, code, kind, percent, amount_cents, max_uses, starts_at, ends_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING ${COLUMNS}`,
+        `INSERT INTO public.ticketing_promo_codes (client_id, brand_id, event_id, code, kind, percent, amount_cents, max_uses, starts_at, ends_at, public, label)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING ${COLUMNS}`,
         [s.clientId, s.brandId, eventId, normalizeCode(p.code), p.kind, p.kind === "percent" ? p.percent : null, p.kind === "amount" ? p.amountCents : null,
-          p.maxUses ?? null, p.startsAt ?? null, p.endsAt ?? null],
+          p.maxUses ?? null, p.startsAt ?? null, p.endsAt ?? null, p.public ?? false, p.label ?? null],
       );
-      await writeAudit(tx, s, actor, "promo_code.created", { type: "promo_code", id: rows[0].id }, { eventId, code: rows[0].code, kind: p.kind });
+      await writeAudit(tx, s, actor, "promo_code.created", { type: "promo_code", id: rows[0].id }, { eventId, code: rows[0].code, kind: p.kind, public: p.public ?? false });
       return toApi(rows[0]);
     } catch (error) {
       if ((error as { constraint?: string }).constraint === "ticketing_promo_codes_code_key") throw new DomainError("promo_code_exists");
@@ -101,13 +125,16 @@ export async function createPromoCode(
 
 export async function updatePromoCode(
   tx: Tx, s: TenantScope, id: string,
-  p: { active?: boolean | undefined; maxUses?: number | null | undefined; startsAt?: string | null | undefined; endsAt?: string | null | undefined },
+  p: {
+    active?: boolean | undefined; maxUses?: number | null | undefined; startsAt?: string | null | undefined; endsAt?: string | null | undefined;
+    public?: boolean | undefined; label?: string | null | undefined;
+  },
   actor: { type: "user"; id: string | null },
 ) {
   return mapDbErrors(async () => {
     const sets: string[] = [];
     const values: unknown[] = [id, s.clientId, s.brandId];
-    for (const [key, column] of [["active", "active"], ["maxUses", "max_uses"], ["startsAt", "starts_at"], ["endsAt", "ends_at"]] as const) {
+    for (const [key, column] of [["active", "active"], ["maxUses", "max_uses"], ["startsAt", "starts_at"], ["endsAt", "ends_at"], ["public", "public"], ["label", "label"]] as const) {
       if (p[key] !== undefined) { values.push(p[key]); sets.push(`${column} = $${values.length}`); }
     }
     if (sets.length === 0) throw new DomainError("empty_update");

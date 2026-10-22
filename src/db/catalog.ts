@@ -26,7 +26,9 @@ const EVENT_COLUMNS =
   "category, min_age, doors_open_minutes, language, accessibility, duration_minutes, format, page, created_at, updated_at";
 const SESSION_COLUMNS = "id, event_id, starts_at, ends_at, capacity, reserved_count, sold_count, status, created_at, updated_at";
 const TYPE_COLUMNS =
-  "id, event_id, code, name, description, kind, price_cents, min_quantity, max_quantity, max_adults_in_order, counts_as_adult, add_on_scope, grants_session_change, open_date, active, sort_order, created_at, updated_at, stock_per_session";
+  "id, event_id, code, name, description, kind, price_cents, min_quantity, max_quantity, max_adults_in_order, counts_as_adult, add_on_scope, grants_session_change, open_date, active, sort_order, created_at, updated_at, stock_per_session, " +
+  // Run 97: presale tickets.
+  "presale_of, sales_end_at, quantity_limit";
 
 /** camelCase body field → column, for whitelisted updates. */
 function updateSet(fields: Record<string, unknown>, allowed: Record<string, string>, startAt: number) {
@@ -163,7 +165,11 @@ export function updateSession(q: Queryable, s: TenantScope, sessionId: string, f
 
 // ── Ticket types ────────────────────────────────────────────────────────────
 export const listTicketTypes = (q: Queryable, s: TenantScope, eventId: string) =>
-  many(q, `SELECT ${TYPE_COLUMNS} FROM public.ticketing_ticket_types WHERE event_id = $1 AND client_id = $2 AND brand_id = $3 ORDER BY sort_order, code`,
+  many(q, `SELECT ${TYPE_COLUMNS},
+                  -- Run 97: what a limited type has sold for the event, and holds in progress.
+                  (SELECT c.sold_count FROM public.ticketing_ticket_type_counts c WHERE c.ticket_type_id = t.id) AS quota_sold,
+                  (SELECT c.reserved_count FROM public.ticketing_ticket_type_counts c WHERE c.ticket_type_id = t.id) AS quota_reserved
+           FROM public.ticketing_ticket_types t WHERE event_id = $1 AND client_id = $2 AND brand_id = $3 ORDER BY sort_order, code`,
     [eventId, s.clientId, s.brandId]);
 
 export function createTicketType(q: Queryable, s: TenantScope, eventId: string, t: {
@@ -172,17 +178,21 @@ export function createTicketType(q: Queryable, s: TenantScope, eventId: string, 
   grantsSessionChange?: boolean | undefined;
   openDate?: boolean | undefined;
   stockPerSession?: number | null | undefined;
+  presaleOf?: string | null | undefined;
+  salesEndAt?: string | null | undefined;
+  quantityLimit?: number | null | undefined;
 }) {
   return mapDbErrors(() =>
     one(
       q,
       `INSERT INTO public.ticketing_ticket_types
          (client_id, brand_id, event_id, code, name, description, kind, price_cents, min_quantity, max_quantity,
-          max_adults_in_order, counts_as_adult, add_on_scope, active, sort_order, grants_session_change, open_date, stock_per_session)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18) RETURNING ${TYPE_COLUMNS}`,
+          max_adults_in_order, counts_as_adult, add_on_scope, active, sort_order, grants_session_change, open_date, stock_per_session,
+          presale_of, sales_end_at, quantity_limit)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21) RETURNING ${TYPE_COLUMNS}`,
       [s.clientId, s.brandId, eventId, t.code, t.name, t.description ?? null, t.kind, t.priceCents, t.minQuantity, t.maxQuantity,
         t.maxAdultsInOrder ?? null, t.countsAsAdult, t.addOnScope ?? null, t.active, t.sortOrder, t.grantsSessionChange ?? false, t.openDate ?? false,
-        t.stockPerSession ?? null],
+        t.stockPerSession ?? null, t.presaleOf ?? null, t.salesEndAt ?? null, t.quantityLimit ?? null],
       "ticket_type_not_found",
     ),
   );
@@ -192,13 +202,15 @@ export function updateTicketType(q: Queryable, s: TenantScope, ticketTypeId: str
   const set = updateSet(fields, {
     name: "name", description: "description", priceCents: "price_cents", minQuantity: "min_quantity",
     maxQuantity: "max_quantity", maxAdultsInOrder: "max_adults_in_order", active: "active", sortOrder: "sort_order",
-    openDate: "open_date", stockPerSession: "stock_per_session",
+    openDate: "open_date", stockPerSession: "stock_per_session", salesEndAt: "sales_end_at", quantityLimit: "quantity_limit",
   }, 4);
   return mapDbErrors(async () => {
     const row = await one(q, `UPDATE public.ticketing_ticket_types SET ${set.sql} WHERE id = $1 AND client_id = $2 AND brand_id = $3 RETURNING ${TYPE_COLUMNS}`,
       [ticketTypeId, s.clientId, s.brandId, ...set.values], "ticket_type_not_found");
     // Run 49: a stock set (or changed) later counts what is already held and sold.
     if ("stockPerSession" in fields) await recountAddOnStock(q, s, ticketTypeId);
+    // Run 97: likewise for a quantity limit set on a ticket already on sale.
+    if ("quantityLimit" in fields) await recountTicketTypeQuota(q, s, ticketTypeId);
     return row;
   });
 }
@@ -230,14 +242,52 @@ export async function recountAddOnStock(q: Queryable, s: TenantScope, ticketType
   );
 }
 
+/**
+ * Run 97: a limited type's counts for the event, rebuilt from the active holds and the orders
+ * that took money (fully refunded and session-change orders aside), as for add-on stock.
+ */
+export async function recountTicketTypeQuota(q: Queryable, s: TenantScope, ticketTypeId: string) {
+  await q.query(`DELETE FROM public.ticketing_ticket_type_counts WHERE ticket_type_id = $1 AND client_id = $2 AND brand_id = $3`,
+    [ticketTypeId, s.clientId, s.brandId]);
+  await q.query(
+    `INSERT INTO public.ticketing_ticket_type_counts (ticket_type_id, client_id, brand_id, event_id, reserved_count, sold_count)
+     SELECT t.id, t.client_id, t.brand_id, t.event_id,
+            coalesce((SELECT sum(i.quantity) FROM public.ticketing_hold_items i JOIN public.ticketing_holds h ON h.id = i.hold_id
+                      WHERE i.ticket_type_id = t.id AND h.status = 'active'), 0)::int,
+            coalesce((SELECT sum(l.quantity) FROM public.ticketing_order_lines l JOIN public.ticketing_orders o ON o.id = l.order_id
+                      WHERE l.ticket_type_id = t.id AND o.status IN ('paid', 'partially_refunded') AND o.exchange_of_order_id IS NULL), 0)::int
+     FROM public.ticketing_ticket_types t
+     WHERE t.id = $1 AND t.client_id = $2 AND t.brand_id = $3 AND t.quantity_limit IS NOT NULL`,
+    [ticketTypeId, s.clientId, s.brandId],
+  );
+}
+
+/**
+ * Run 97: what is left of each limited type of an event, by its id. Holds past their deadline
+ * still count in reserved_count until swept; they never show as taken.
+ */
+export async function ticketTypesRemaining(q: Queryable, s: TenantScope, eventId: string, now: Date): Promise<Map<string, number>> {
+  const { rows } = await q.query<{ id: string; remaining: number }>(
+    `SELECT t.id, GREATEST(t.quantity_limit - coalesce(c.sold_count, 0) - (coalesce(c.reserved_count, 0) - coalesce((
+              SELECT sum(i.quantity) FROM public.ticketing_hold_items i JOIN public.ticketing_holds h ON h.id = i.hold_id
+              WHERE i.ticket_type_id = t.id AND h.status = 'active' AND h.expires_at <= $4), 0)), 0)::int AS remaining
+     FROM public.ticketing_ticket_types t
+     LEFT JOIN public.ticketing_ticket_type_counts c ON c.ticket_type_id = t.id
+     WHERE t.event_id = $1 AND t.client_id = $2 AND t.brand_id = $3 AND t.quantity_limit IS NOT NULL`,
+    [eventId, s.clientId, s.brandId, now],
+  );
+  return new Map(rows.map((r) => [r.id, Number(r.remaining)]));
+}
+
 /** Purchase rules for an event, as the domain sees them. */
 export async function loadTicketTypeRules(q: Queryable, s: TenantScope, eventId: string): Promise<TicketTypeRule[]> {
   const { rows } = await q.query<{
     id: string; code: string; name: string; kind: "admission" | "add_on"; price_cents: number; min_quantity: number;
     max_quantity: number; max_adults_in_order: number | null; counts_as_adult: boolean; add_on_scope: TicketTypeRule["addOnScope"]; active: boolean;
-    open_date: boolean;
+    open_date: boolean; presale_of: string | null; sales_end_at: Date | null; quantity_limit: number | null;
   }>(
-    `SELECT id, code, name, kind, price_cents, min_quantity, max_quantity, max_adults_in_order, counts_as_adult, add_on_scope, active, open_date
+    `SELECT id, code, name, kind, price_cents, min_quantity, max_quantity, max_adults_in_order, counts_as_adult, add_on_scope, active, open_date,
+            presale_of, sales_end_at, quantity_limit
      FROM public.ticketing_ticket_types WHERE event_id = $1 AND client_id = $2 AND brand_id = $3 ORDER BY sort_order, code`,
     [eventId, s.clientId, s.brandId],
   );
@@ -245,6 +295,7 @@ export async function loadTicketTypeRules(q: Queryable, s: TenantScope, eventId:
     id: r.id, code: r.code, name: r.name, kind: r.kind, priceCents: r.price_cents, minQuantity: r.min_quantity,
     maxQuantity: r.max_quantity, maxAdultsInOrder: r.max_adults_in_order, countsAsAdult: r.counts_as_adult,
     addOnScope: r.add_on_scope, active: r.active, openDate: r.open_date,
+    presaleOf: r.presale_of, salesEndAt: r.sales_end_at, quantityLimit: r.quantity_limit,
   }));
 }
 
@@ -305,15 +356,63 @@ export const listPublicEvents = (q: Queryable, s: TenantScope) =>
  * price before taxes, or null when every active admission is free. What the platform home
  * shows as "From …" (ALKAO adds no fee: the buyer pays the price plus taxes).
  */
-export async function admissionPriceFloors(q: Queryable, s: TenantScope): Promise<Map<string, number | null>> {
+export async function admissionPriceFloors(q: Queryable, s: TenantScope, now: Date = new Date()): Promise<Map<string, number | null>> {
+  // Run 97: a presale that has ended, or has no ticket left, is no longer a price anyone pays.
   const { rows } = await q.query<{ event_id: string; min_paid: number | null }>(
-    `SELECT event_id, min(price_cents) FILTER (WHERE price_cents > 0) AS min_paid
-     FROM public.ticketing_ticket_types
-     WHERE client_id = $1 AND brand_id = $2 AND kind = 'admission' AND active
-     GROUP BY event_id`,
-    [s.clientId, s.brandId],
+    `SELECT t.event_id, min(t.price_cents) FILTER (WHERE t.price_cents > 0) AS min_paid
+     FROM public.ticketing_ticket_types t
+     LEFT JOIN public.ticketing_ticket_type_counts c ON c.ticket_type_id = t.id
+     WHERE t.client_id = $1 AND t.brand_id = $2 AND t.kind = 'admission' AND t.active
+       AND (t.sales_end_at IS NULL OR t.sales_end_at > $3)
+       AND (t.quantity_limit IS NULL OR t.quantity_limit > coalesce(c.sold_count, 0) + coalesce(c.reserved_count, 0))
+     GROUP BY t.event_id`,
+    [s.clientId, s.brandId, now],
   );
   return new Map(rows.map((r) => [r.event_id, r.min_paid === null ? null : Number(r.min_paid)]));
+}
+
+/** Run 97: an event's presale and coupon, as the platform home shows them. */
+export interface EventDeal {
+  /** The cheapest presale ticket on sale now, against the regular ticket it undercuts. */
+  presale: { priceCents: number; regularCents: number; endsAt: Date | null; remaining: number | null } | null;
+  /** The public coupon that takes off the most (a percentage first). */
+  coupon: { label: string | null; percent: number | null; amountCents: number | null; endsAt: Date | null } | null;
+}
+
+export async function eventDeals(q: Queryable, s: TenantScope, now: Date): Promise<Map<string, EventDeal>> {
+  const [{ rows: presales }, { rows: coupons }] = await Promise.all([
+    q.query<{ event_id: string; price_cents: number; regular_cents: number; sales_end_at: Date | null; remaining: number | null }>(
+      `SELECT DISTINCT ON (t.event_id) t.event_id, t.price_cents, r.price_cents AS regular_cents, t.sales_end_at,
+              CASE WHEN t.quantity_limit IS NULL THEN NULL
+                   ELSE GREATEST(t.quantity_limit - coalesce(c.sold_count, 0) - coalesce(c.reserved_count, 0), 0) END AS remaining
+       FROM public.ticketing_ticket_types t
+       JOIN public.ticketing_ticket_types r ON r.id = t.presale_of AND r.active
+       LEFT JOIN public.ticketing_ticket_type_counts c ON c.ticket_type_id = t.id
+       WHERE t.client_id = $1 AND t.brand_id = $2 AND t.kind = 'admission' AND t.active
+         AND (t.sales_end_at IS NULL OR t.sales_end_at > $3)
+         AND (t.quantity_limit IS NULL OR t.quantity_limit > coalesce(c.sold_count, 0) + coalesce(c.reserved_count, 0))
+       ORDER BY t.event_id, t.price_cents, t.sort_order`,
+      [s.clientId, s.brandId, now],
+    ),
+    q.query<{ event_id: string; label: string | null; percent: number | null; amount_cents: number | null; ends_at: Date | null }>(
+      `SELECT DISTINCT ON (event_id) event_id, label, percent, amount_cents, ends_at
+       FROM public.ticketing_promo_codes
+       WHERE client_id = $1 AND brand_id = $2 AND public AND active
+         AND (starts_at IS NULL OR starts_at <= $3) AND (ends_at IS NULL OR ends_at > $3)
+         AND (max_uses IS NULL OR used_count < max_uses)
+       ORDER BY event_id, (kind = 'percent') DESC, coalesce(percent, 0) DESC, coalesce(amount_cents, 0) DESC, code`,
+      [s.clientId, s.brandId, now],
+    ),
+  ]);
+  const deals = new Map<string, EventDeal>();
+  const of = (id: string) => deals.get(id) ?? (deals.set(id, { presale: null, coupon: null }), deals.get(id)!);
+  for (const p of presales) {
+    of(p.event_id).presale = { priceCents: Number(p.price_cents), regularCents: Number(p.regular_cents), endsAt: p.sales_end_at, remaining: p.remaining === null ? null : Number(p.remaining) };
+  }
+  for (const c of coupons) {
+    of(c.event_id).coupon = { label: c.label, percent: c.percent, amountCents: c.amount_cents, endsAt: c.ends_at };
+  }
+  return deals;
 }
 
 /** Sessions open for sale (future, on sale), with remaining availability only. */

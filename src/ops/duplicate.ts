@@ -52,13 +52,26 @@ export async function duplicateEvent(
       [eventId, s.clientId, s.brandId, slug, title, shift],
     );
     const newId = created[0]!.id;
+    // Run 97: a presale keeps its limit and its end (moved with the sessions), and undercuts the
+    // copy's own regular ticket, found by code once every type exists.
     const types = await tx.query(
       `INSERT INTO public.ticketing_ticket_types
          (client_id, brand_id, event_id, code, name, description, kind, price_cents, min_quantity, max_quantity,
-          max_adults_in_order, counts_as_adult, add_on_scope, active, sort_order, grants_session_change, open_date)
+          max_adults_in_order, counts_as_adult, add_on_scope, active, sort_order, grants_session_change, open_date,
+          quantity_limit, sales_end_at)
        SELECT client_id, brand_id, $4, code, name, description, kind, price_cents, min_quantity, max_quantity,
-              max_adults_in_order, counts_as_adult, add_on_scope, active, sort_order, grants_session_change, open_date
+              max_adults_in_order, counts_as_adult, add_on_scope, active, sort_order, grants_session_change, open_date,
+              quantity_limit, CASE WHEN $5::int IS NULL THEN sales_end_at ELSE sales_end_at + make_interval(days => $5::int) END
        FROM public.ticketing_ticket_types WHERE event_id = $1 AND client_id = $2 AND brand_id = $3`,
+      [eventId, s.clientId, s.brandId, newId, shift],
+    );
+    await tx.query(
+      `UPDATE public.ticketing_ticket_types copy SET presale_of = regular_copy.id
+       FROM public.ticketing_ticket_types src
+       JOIN public.ticketing_ticket_types regular ON regular.id = src.presale_of
+       JOIN public.ticketing_ticket_types regular_copy ON regular_copy.event_id = $4 AND regular_copy.code = regular.code
+       WHERE src.event_id = $1 AND src.client_id = $2 AND src.brand_id = $3
+         AND copy.event_id = $4 AND copy.code = src.code`,
       [eventId, s.clientId, s.brandId, newId],
     );
     let sessions = 0;
