@@ -398,10 +398,12 @@ export interface EventDeal {
   presale: { priceCents: number; regularCents: number; endsAt: Date | null; remaining: number | null } | null;
   /** The public coupon that takes off the most (a percentage first). */
   coupon: { label: string | null; percent: number | null; amountCents: number | null; endsAt: Date | null } | null;
+  /** Run 100: the cheapest festival pass on sale now. */
+  pass?: { priceCents: number } | null;
 }
 
 export async function eventDeals(q: Queryable, s: TenantScope, now: Date): Promise<Map<string, EventDeal>> {
-  const [{ rows: presales }, { rows: coupons }] = await Promise.all([
+  const [{ rows: presales }, { rows: coupons }, { rows: passes }] = await Promise.all([
     q.query<{ event_id: string; price_cents: number; regular_cents: number; sales_end_at: Date | null; remaining: number | null }>(
       `SELECT DISTINCT ON (t.event_id) t.event_id, t.price_cents, r.price_cents AS regular_cents, t.sales_end_at,
               CASE WHEN t.quantity_limit IS NULL THEN NULL
@@ -424,6 +426,16 @@ export async function eventDeals(q: Queryable, s: TenantScope, now: Date): Promi
        ORDER BY event_id, (kind = 'percent') DESC, coalesce(percent, 0) DESC, coalesce(amount_cents, 0) DESC, code`,
       [s.clientId, s.brandId, now],
     ),
+    q.query<{ event_id: string; price_cents: number }>(
+      `SELECT DISTINCT ON (t.event_id) t.event_id, t.price_cents
+       FROM public.ticketing_ticket_types t
+       LEFT JOIN public.ticketing_ticket_type_counts c ON c.ticket_type_id = t.id
+       WHERE t.client_id = $1 AND t.brand_id = $2 AND t.kind = 'admission' AND t.pass AND t.active
+         AND (t.sales_end_at IS NULL OR t.sales_end_at > $3)
+         AND (t.quantity_limit IS NULL OR t.quantity_limit > coalesce(c.sold_count, 0) + coalesce(c.reserved_count, 0))
+       ORDER BY t.event_id, t.price_cents`,
+      [s.clientId, s.brandId, now],
+    ),
   ]);
   const deals = new Map<string, EventDeal>();
   const of = (id: string) => deals.get(id) ?? (deals.set(id, { presale: null, coupon: null }), deals.get(id)!);
@@ -433,6 +445,7 @@ export async function eventDeals(q: Queryable, s: TenantScope, now: Date): Promi
   for (const c of coupons) {
     of(c.event_id).coupon = { label: c.label, percent: c.percent, amountCents: c.amount_cents, endsAt: c.ends_at };
   }
+  for (const p of passes) of(p.event_id).pass = { priceCents: Number(p.price_cents) };
   return deals;
 }
 

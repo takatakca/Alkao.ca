@@ -1,5 +1,16 @@
 # ALKAO — Agent handoff (mandatory)
 
+## Run 100 — festival passes in the e-mails and on alkao.ca (2026-10-22)
+
+- E-mails (`src/delivery/templates.ts`, `worker.ts`): the tickets and reminder e-mails take `passDates` from `orderPassDates` (`src/delivery/db.ts`), which lists the other dates of the order's valid pass tickets, cancelled dates aside. They add "Valide aussi : …" and "Votre passe entre une fois par date, avec le même code QR."
+- alkao.ca:
+  - `eventDeals` also returns the cheapest pass on sale;
+  - a card with two dates or more shows "Passe festival · N dates" (the `is-pass` ribbon, ticket icon) when no presale or coupon is on;
+  - a pass is never a deal, so it stays out of the "Préventes et rabais" rail.
+- Tests: the e-mail case in `test/scanner/festival-pass.test.ts`, and the pass ribbon in `test/api/home-deals.test.ts`.
+- NEXT EXACT ACTION: merge the Run 100 PR when green.
+
+
 ## Run 99 — catalog files with presales, passes and coupons; coupons kept off presales (2026-10-22)
 
 - `events:import` (`src/ops/events-import.ts`):
@@ -15,7 +26,7 @@
 - Tests:
   - Run 99 cases in `test/ops/events-import.test.ts` and `test/payments/presale-coupons.test.ts`;
   - `test/ui/presale-ui.test.ts` and `test/ui/presale-ops.test.ts`.
-- NEXT EXACT ACTION: merge the Run 99 PR when green.
+- Merged 7b17b0a (PR #94).
 
 
 ## Run 98 — festival passes (2026-10-22)

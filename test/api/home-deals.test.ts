@@ -40,6 +40,24 @@ describe("presales and coupons on alkao.ca", () => {
     expect(render([event("a"), event("b"), event("c"), event("e")])).not.toContain('id="deals"');
   });
 
+  it("says when an event sells a festival pass, never as a deal (Run 100)", () => {
+    const days = ["2026-11-20T23:00:00Z", "2026-11-21T23:00:00Z", "2026-11-22T23:00:00Z"];
+    const html = render([
+      event("p", { pass: { priceCents: 7500 }, sessions: days }),
+      event("q", { pass: { priceCents: 7500 }, sessions: days, presale: { priceCents: 1600, regularCents: 2000, endsAt: null, remaining: null } }),
+      event("r", { pass: { priceCents: 7500 }, sessions: [days[0]!] }),
+      event("s"),
+    ]);
+    expect(html).toContain('<p class="deal-ribbon is-pass">');
+    expect(html.match(/Passe festival · 3 dates/g)).toHaveLength(1);
+    // A presale still comes first; a single date has no pass to speak of.
+    expect(html).toContain("<span>Prévente −20 %</span>");
+    expect(html).not.toContain("Passe festival · 1 dates");
+    // The deals rail keeps deals only.
+    expect(rail(html)).not.toContain("Événement p");
+    expect(render([event("p", { pass: { priceCents: 7500 }, sessions: days })], "en")).toContain("<span>Festival pass · 3 dates</span>");
+  });
+
   it("files food, fashion and markets under their own categories, never on a stray word", () => {
     const html = render([
       event("f", { title: "Festival de la poutine", category: null }),

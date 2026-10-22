@@ -147,6 +147,20 @@ describe("Run 98: festival passes in the shop and on the tickets", () => {
     } finally {
       await db.pool.query(`UPDATE public.ticketing_ticket_types SET active = true WHERE event_id = $1 AND kind = 'admission'`, [t.eventId]);
     }
+  });
+
+  it("alkao.ca flags the event's festival pass on its card (Run 100)", async () => {
+    const token = await tokenFor(seed.users.havanaOwner);
+    expect((await call(app, "PUT", `${adm(t.clientId, t.brandId)}/appearance`, { token, body: { showOnAlkao: true } })).status).toBe(200);
+    const context = await browser.newContext({ locale: "fr-CA", viewport: { width: 1280, height: 900 }, reducedMotion: "reduce" });
+    const page = await context.newPage();
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    await page.goto(`${origin}/`);
+    const ribbon = page.locator(".grid .card .deal-ribbon.is-pass").first();
+    await ribbon.waitFor();
+    expect(await ribbon.textContent()).toBe("Passe festival · 3 dates");
+    if (shots) await page.locator(".grid .card").first().screenshot({ path: `${shots}/pass-home-card.png` });
+    await context.close();
     expect(pageErrors).toEqual([]);
   });
 });

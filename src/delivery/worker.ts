@@ -10,6 +10,7 @@ import { APPEARANCE_COLUMNS, appearanceJoin, appearanceOf, type LookRow } from "
 import { CredentialsService } from "../scanner/service.js";
 import { emailCodes } from "./codes.js";
 import { orderOptions } from "../db/options.js";
+import { orderPassDates } from "./db.js";
 
 export interface DeliveryConfig {
   sender: EmailSender;
@@ -187,6 +188,8 @@ export async function deliverTicketEmails(db: Db, cfg: DeliveryConfig, now = new
       const inline = await emailCodes(tx, credentials, { clientId: row.client_id, brandId: row.brand_id }, row.order_id);
       // Runs 54–55: the options bought, which have no QR code of their own, kept across session changes.
       const addOns = await orderOptions(tx, { clientId: row.client_id, brandId: row.brand_id }, row.order_id);
+      // Run 100: a festival pass's other dates.
+      const passDates = await orderPassDates(tx, { clientId: row.client_id, brandId: row.brand_id }, row.order_id);
       if (row.kind === "reminder") {
         // Run 23: too late once the session has started, pointless if it was cancelled.
         if (row.session_status === "cancelled") return skip("session_cancelled");
@@ -195,7 +198,7 @@ export async function deliverTicketEmails(db: Db, cfg: DeliveryConfig, now = new
           ...reminderEmail({
             language: row.language, brandName: row.brand_name, look, buyerName: row.full_name, reference: row.reference, eventTitle: row.event_title,
             startsAt: row.starts_at, venueName: row.venue_name, city: row.city, timezone: row.timezone, validTickets: row.valid_tickets,
-            link: await personalLink(), codes: inline?.codes, addOns,
+            link: await personalLink(), codes: inline?.codes, addOns, passDates,
           }),
           attachments: inline?.attachments,
         });
@@ -217,6 +220,7 @@ export async function deliverTicketEmails(db: Db, cfg: DeliveryConfig, now = new
         link,
         codes: inline?.codes,
         addOns,
+        passDates,
       });
       return send({ ...content, attachments: inline?.attachments });
     });

@@ -1,4 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import type { EmailMessage, EmailSender } from "../../src/delivery/email.js";
+import { deliverTicketEmails } from "../../src/delivery/worker.js";
 import { adm, call, pub, testApp, tokenFor, type TestApp } from "../helpers/app.js";
 import { createTestDatabase, type TestDatabase } from "../helpers/db.js";
 import { seedTwoTenants, TEST_CREDENTIAL_SECRET, type SeedResult, type TenantFixture } from "../helpers/seed.js";
@@ -163,5 +165,21 @@ describe("festival passes", () => {
     expect((await available()).map(([, n]) => n)).toEqual(before.map(([, n]) => Number(n) - 1));
     await new Promise((r) => setTimeout(r, 1200));
     expect(await available()).toEqual(before);
+  });
+
+  it("the tickets e-mail lists every date the pass enters (Run 100)", async () => {
+    const sent: EmailMessage[] = [];
+    const sender: EmailSender = { send: async (m: EmailMessage) => { sent.push(m); return `msg_${sent.length}`; } };
+    const pass = await buy(days[0]!, [{ ticketTypeId: passId, quantity: 1 }]);
+    await deliverTicketEmails(db.pool, { sender, publicUrl: "https://billets.alkao.test", credentialMasterSecret: TEST_CREDENTIAL_SECRET }, new Date(Date.now() + 1000));
+    const ref = (await db.pool.query(`SELECT reference FROM public.ticketing_orders WHERE id = $1`, [pass.orderId])).rows[0].reference as string;
+    const mail = sent.find((m) => m.subject.includes(ref));
+    expect(mail, JSON.stringify(sent.map((m) => m.subject))).toBeDefined();
+    // Day 2 was cancelled: the pass enters days 1 and 3, the e-mail says so.
+    const { rows } = await db.pool.query<{ starts_at: Date }>(`SELECT starts_at FROM public.ticketing_sessions WHERE id = $1`, [days[2]]);
+    const day3 = new Intl.DateTimeFormat("fr-CA", { dateStyle: "full", timeStyle: "short", timeZone: "America/Toronto" }).format(rows[0]!.starts_at);
+    expect(mail!.text).toContain(`Valide aussi : ${day3}`);
+    expect(mail!.text).toContain("Votre passe entre une fois par date, avec le même code QR.");
+    expect(mail!.html).toContain(`Valide aussi : ${day3}`);
   });
 });
