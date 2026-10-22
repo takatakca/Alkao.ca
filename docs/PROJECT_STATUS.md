@@ -1,5 +1,10 @@
 # ALKAO — Project status
 
+## Run 101 — presales that count down, results that add up (2026-10-22)
+
+In its last 48 hours, a presale shows the real time left ("Se termine dans 5 h 12 min"), then steps aside on its own. The organizer's dashboard shows what each coupon brought and gave away, and which tickets sold at the presale price.
+
+
 ## Run 100 — festival passes everywhere the buyer looks (2026-10-22)
 
 A pass buyer finds every date in the confirmation e-mail and the reminder, as on the tickets page. alkao.ca flags the events that sell a pass.

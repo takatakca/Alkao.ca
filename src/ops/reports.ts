@@ -30,7 +30,7 @@ function where(f: ReportFilter, first: number) {
 export async function salesReport(db: Db, s: TenantScope, f: ReportFilter) {
   const w = where(f, 3);
   const base = [s.clientId, s.brandId, ...w.params];
-  const [totals, taxes, types, sessions] = await Promise.all([
+  const [totals, taxes, types, sessions, codes] = await Promise.all([
     db.query(
       `SELECT count(*)::int AS orders,
               coalesce(sum(o.subtotal_cents), 0)::bigint AS "subtotalCents",
@@ -51,8 +51,11 @@ export async function salesReport(db: Db, s: TenantScope, f: ReportFilter) {
       base,
     ),
     db.query(
-      `SELECT l.code_snapshot AS code, l.kind, sum(l.quantity)::int AS quantity, sum(l.line_total_cents)::bigint AS "revenueCents"
+      // Run 101: which lines were presale tickets or festival passes.
+      `SELECT l.code_snapshot AS code, l.kind, sum(l.quantity)::int AS quantity, sum(l.line_total_cents)::bigint AS "revenueCents",
+              coalesce(bool_or(tt.presale_of IS NOT NULL), false) AS presale, coalesce(bool_or(tt.pass), false) AS pass
        FROM public.ticketing_order_lines l JOIN public.ticketing_orders o ON o.id = l.order_id
+       LEFT JOIN public.ticketing_ticket_types tt ON tt.id = l.ticket_type_id AND tt.client_id = l.client_id AND tt.brand_id = l.brand_id
        WHERE o.client_id = $1 AND o.brand_id = $2 AND ${PAID}${w.sql}
        GROUP BY l.code_snapshot, l.kind ORDER BY l.kind, l.code_snapshot`,
       base,
@@ -67,6 +70,16 @@ export async function salesReport(db: Db, s: TenantScope, f: ReportFilter) {
        ORDER BY s.starts_at`,
       [s.clientId, s.brandId, f.eventId ?? null],
     ),
+    // Run 101: what each promo code or coupon brought, and what it gave away.
+    db.query(
+      `SELECT p.code, p.public, count(*)::int AS orders, sum(o.discount_cents)::bigint AS "discountCents",
+              sum(o.total_cents)::bigint AS "grossCents", sum(o.refunded_cents)::bigint AS "refundedCents"
+       FROM public.ticketing_orders o
+       JOIN public.ticketing_promo_codes p ON p.id = o.promo_code_id AND p.client_id = o.client_id AND p.brand_id = o.brand_id
+       WHERE o.client_id = $1 AND o.brand_id = $2 AND ${PAID}${w.sql}
+       GROUP BY p.code, p.public ORDER BY sum(o.total_cents) DESC, p.code`,
+      base,
+    ),
   ]);
   const t = totals.rows[0];
   return {
@@ -80,6 +93,7 @@ export async function salesReport(db: Db, s: TenantScope, f: ReportFilter) {
     },
     ticketTypes: types.rows,
     sessions: sessions.rows,
+    promoCodes: codes.rows,
   };
 }
 

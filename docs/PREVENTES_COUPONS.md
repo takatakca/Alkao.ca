@@ -22,6 +22,7 @@ Pour un événement de plusieurs jours, la **passe festival** vend toutes les da
 
 - **Sur la page de l'événement**, juste avant le billet régulier : le badge **Prix prévente**, le rabais (« −20 % »), le prix régulier barré, la date de fin et ce qui reste (« Plus que 12 à ce prix »).
 - **En haut de la page** : « Prix prévente 20 $ ~~25 $~~ −20 % · jusqu'au 1er novembre ».
+- **Dans les 48 dernières heures** (Run 101), la date devient un compte à rebours : « Se termine dans 5 h 12 min ». Il suit la vraie date de fin, sans jamais la repousser. À la fin, la page se met à jour d'elle-même : la prévente disparaît et le prix régulier reste.
 - **Sur alkao.ca** : le badge **Prévente −20 %** sur la carte de l'événement.
   - Le rabais est arrondi vers le bas : jamais plus que la réalité.
   - À partir de quatre événements, une rangée **Préventes et rabais** les regroupe.
@@ -71,6 +72,15 @@ Le rabais s'applique avant les taxes. La commission TAKATAK se calcule sur le mo
 - pendant la prévente, le coupon affiche « hors prix prévente ».
 
 Le serveur fait ce calcul à chaque étape (devis, panier, paiement) : le montant payé est toujours celui affiché.
+
+## Les résultats (Run 101)
+
+/ops → **Tableau de bord** → **Détail des ventes** :
+
+- **Par type de billet** : chaque billet de prévente porte le badge **Prévente** et chaque passe le badge **Passe festival**, avec la quantité vendue et le revenu.
+- **Codes promo et coupons** : pour chaque code, le nombre de commandes, le rabais accordé (avant taxes), le montant payé et ce qui a été remboursé. Un coupon public y est séparé d'un code privé.
+
+Les filtres de période et d'événement s'appliquent à ces tableaux comme au reste du rapport.
 
 ## Charger par fichier (Run 99)
 
