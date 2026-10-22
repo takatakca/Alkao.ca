@@ -367,6 +367,8 @@ const promoWindow = {
 const couponFields = {
   public: z.boolean().default(false),
   label: z.string().trim().min(1).max(60).regex(/^[^<>]*$/).nullish(),
+  /** Run 99: not on top of a presale (the code applies to regular-price tickets only). */
+  excludesPresales: z.boolean().default(false),
 };
 export const CreatePromoCode = z
   .object({
@@ -389,7 +391,7 @@ export const CreatePresaleCode = z.object({
 });
 export const UpdatePresaleCode = z.object({ active: z.boolean() });
 export const UpdatePromoCode = z
-  .object({ active: z.boolean(), ...promoWindow, public: z.boolean(), label: couponFields.label })
+  .object({ active: z.boolean(), ...promoWindow, public: z.boolean(), label: couponFields.label, excludesPresales: z.boolean() })
   .partial()
   .refine((o) => Object.keys(o).length > 0, "empty update");
 

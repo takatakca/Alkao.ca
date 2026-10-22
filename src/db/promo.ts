@@ -22,12 +22,13 @@ export interface PromoRow extends PromoDiscount {
   active: boolean;
 }
 
-const COLUMNS = "id, event_id, code, kind, percent, amount_cents, max_uses, used_count, starts_at, ends_at, active, created_at, updated_at, public, label";
+const COLUMNS = "id, event_id, code, kind, percent, amount_cents, max_uses, used_count, starts_at, ends_at, active, created_at, updated_at, public, label, excludes_presales";
 const fromRow = (r: Record<string, unknown>): PromoRow => ({
   id: r.id as string, eventId: r.event_id as string, code: r.code as string, kind: r.kind as "percent" | "amount",
   percent: (r.percent as number | null) ?? null, amountCents: (r.amount_cents as number | null) ?? null,
   maxUses: (r.max_uses as number | null) ?? null, usedCount: r.used_count as number,
   startsAt: (r.starts_at as Date | null) ?? null, endsAt: (r.ends_at as Date | null) ?? null, active: r.active as boolean,
+  excludesPresales: r.excludes_presales === true,
 });
 
 /** Codes are typed by buyers: case and spaces around them do not matter. */
@@ -73,6 +74,7 @@ export async function publicCoupons(q: Queryable, s: TenantScope, eventId: strin
     percent: (r.percent as number | null) ?? null, amountCents: (r.amount_cents as number | null) ?? null,
     endsAt: (r.ends_at as Date | null) ?? null,
     remaining: r.max_uses === null ? null : Number(r.max_uses) - Number(r.used_count),
+    excludesPresales: r.excludes_presales === true,
   }));
 }
 
@@ -97,22 +99,23 @@ export async function listPromoCodes(q: Queryable, s: TenantScope, eventId: stri
 }
 
 export async function createPromoCode(
-  tx: Tx, s: TenantScope, eventId: string,
+  tx: Queryable, s: TenantScope, eventId: string,
   p: {
     code: string; kind: "percent" | "amount"; percent?: number | null | undefined; amountCents?: number | null | undefined; maxUses?: number | null | undefined;
     startsAt?: string | null | undefined; endsAt?: string | null | undefined; public?: boolean | undefined; label?: string | null | undefined;
+    excludesPresales?: boolean | undefined;
   },
-  actor: { type: "user"; id: string | null },
+  actor: { type: "user" | "system"; id: string | null },
 ) {
   return mapDbErrors(async () => {
     const { rows: ev } = await tx.query(`SELECT 1 FROM public.ticketing_events WHERE id = $1 AND client_id = $2 AND brand_id = $3`, [eventId, s.clientId, s.brandId]);
     if (!ev[0]) throw new DomainError("event_not_found");
     try {
       const { rows } = await tx.query(
-        `INSERT INTO public.ticketing_promo_codes (client_id, brand_id, event_id, code, kind, percent, amount_cents, max_uses, starts_at, ends_at, public, label)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING ${COLUMNS}`,
+        `INSERT INTO public.ticketing_promo_codes (client_id, brand_id, event_id, code, kind, percent, amount_cents, max_uses, starts_at, ends_at, public, label, excludes_presales)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING ${COLUMNS}`,
         [s.clientId, s.brandId, eventId, normalizeCode(p.code), p.kind, p.kind === "percent" ? p.percent : null, p.kind === "amount" ? p.amountCents : null,
-          p.maxUses ?? null, p.startsAt ?? null, p.endsAt ?? null, p.public ?? false, p.label ?? null],
+          p.maxUses ?? null, p.startsAt ?? null, p.endsAt ?? null, p.public ?? false, p.label ?? null, p.excludesPresales ?? false],
       );
       await writeAudit(tx, s, actor, "promo_code.created", { type: "promo_code", id: rows[0].id }, { eventId, code: rows[0].code, kind: p.kind, public: p.public ?? false });
       return toApi(rows[0]);
@@ -127,14 +130,14 @@ export async function updatePromoCode(
   tx: Tx, s: TenantScope, id: string,
   p: {
     active?: boolean | undefined; maxUses?: number | null | undefined; startsAt?: string | null | undefined; endsAt?: string | null | undefined;
-    public?: boolean | undefined; label?: string | null | undefined;
+    public?: boolean | undefined; label?: string | null | undefined; excludesPresales?: boolean | undefined;
   },
   actor: { type: "user"; id: string | null },
 ) {
   return mapDbErrors(async () => {
     const sets: string[] = [];
     const values: unknown[] = [id, s.clientId, s.brandId];
-    for (const [key, column] of [["active", "active"], ["maxUses", "max_uses"], ["startsAt", "starts_at"], ["endsAt", "ends_at"], ["public", "public"], ["label", "label"]] as const) {
+    for (const [key, column] of [["active", "active"], ["maxUses", "max_uses"], ["startsAt", "starts_at"], ["endsAt", "ends_at"], ["public", "public"], ["label", "label"], ["excludesPresales", "excludes_presales"]] as const) {
       if (p[key] !== undefined) { values.push(p[key]); sets.push(`${column} = $${values.length}`); }
     }
     if (sets.length === 0) throw new DomainError("empty_update");

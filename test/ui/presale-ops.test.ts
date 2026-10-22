@@ -94,18 +94,22 @@ describe("Run 97: presales and coupons in /ops", () => {
     await form.getByLabel("Rabais (%)").fill("15");
     await form.getByLabel("Coupon public (montré à tous les acheteurs)").check();
     await form.getByLabel("Nom du coupon (facultatif)").fill("Coupon prévente");
+    // Run 99: kept off presale prices.
+    await form.getByLabel("Non cumulable avec la prévente").check();
     await form.getByRole("button", { name: "Créer le code" }).click();
     const row = page.getByRole("row", { name: /^PREVENTE15 / });
     await row.waitFor();
-    expect(await row.textContent()).toMatch(/Public Coupon prévente/);
+    expect(await row.textContent()).toMatch(/Public Coupon prévente.*Non cumulable/s);
+    await row.getByRole("button", { name: "Rendre cumulable" }).click();
+    await row.getByRole("button", { name: "Rendre non cumulable" }).waitFor();
     await row.getByRole("button", { name: "Copier le lien du coupon" }).click();
     await row.getByRole("button", { name: "Lien copié" }).waitFor();
     const h = seed.havana;
     expect(await page.evaluate("navigator.clipboard.readText()")).toBe(`${origin}/acheter/${h.clientId}/${h.brandId}/${h.eventId}?coupon=PREVENTE15`);
     await row.getByRole("button", { name: "Rendre privé" }).click();
     await row.getByRole("button", { name: "Montrer comme coupon" }).waitFor();
-    const { rows } = await db.pool.query(`SELECT public, label FROM public.ticketing_promo_codes WHERE code = 'PREVENTE15'`);
-    expect(rows[0]).toEqual({ public: false, label: "Coupon prévente" });
+    const { rows } = await db.pool.query(`SELECT public, label, excludes_presales FROM public.ticketing_promo_codes WHERE code = 'PREVENTE15'`);
+    expect(rows[0]).toEqual({ public: false, label: "Coupon prévente", excludes_presales: false });
     expect(pageErrors).toEqual([]);
   });
 });

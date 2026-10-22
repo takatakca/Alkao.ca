@@ -10,6 +10,8 @@ export interface QuoteLine {
   quantity: number;
   unitPriceCents: Cents;
   lineTotalCents: Cents;
+  /** Run 99: a presale ticket (a code that excludes presales leaves it at its price). */
+  presale?: boolean;
 }
 
 export interface Quote {
@@ -34,6 +36,8 @@ export interface PromoDiscount {
   kind: "percent" | "amount";
   percent: number | null;
   amountCents: number | null;
+  /** Run 99: not on top of a presale; the code applies to the regular-price lines only. */
+  excludesPresales?: boolean;
 }
 
 /** What a code takes off a subtotal: a rounded percentage, or a fixed amount, never more than the subtotal. */
@@ -53,6 +57,20 @@ export interface PricedLineInput {
   kind: TicketKind;
   quantity: number;
   unitPriceCents: Cents;
+  presale?: boolean;
+}
+
+/** Run 99: what a code applies to, the whole subtotal or, for one that excludes presales, the regular-price lines. */
+export function discountBase(lines: readonly { lineTotalCents: Cents; presale?: boolean }[], promo: PromoDiscount): Cents {
+  return lines.reduce((n, l) => n + (promo.excludesPresales && l.presale ? 0 : l.lineTotalCents), 0);
+}
+
+/**
+ * Run 99: false when a code that excludes presales meets a cart of presale tickets only: it
+ * would take nothing off, so the buyer is told why instead.
+ */
+export function promoApplies(lines: readonly { lineTotalCents: Cents; presale?: boolean }[], promo: PromoDiscount | null): boolean {
+  return !promo?.excludesPresales || !lines.some((l) => l.presale) || discountBase(lines, promo) > 0;
 }
 
 /**
@@ -62,7 +80,7 @@ export interface PricedLineInput {
 export function quoteFromLines(input: readonly PricedLineInput[], taxRegion: TaxRegion, promo: PromoDiscount | null = null): Quote {
   const lines: QuoteLine[] = input.map((l) => ({ ...l, lineTotalCents: l.unitPriceCents * l.quantity }));
   const subtotalCents = lines.reduce((n, l) => n + l.lineTotalCents, 0);
-  const discountCents = promo ? discountFor(subtotalCents, promo) : 0;
+  const discountCents = promo ? discountFor(discountBase(lines, promo), promo) : 0;
   const taxes = computeTaxes(taxRegion, subtotalCents - discountCents);
   const taxCents = taxes.reduce((n, t) => n + t.amountCents, 0);
   const admissionLines = lines.filter((l) => l.kind === "admission");
@@ -99,6 +117,7 @@ export function buildQuote(
       kind: type.kind,
       quantity,
       unitPriceCents: type.priceCents,
+      presale: Boolean(type.presaleOf),
     })),
     taxRegion,
     promo,

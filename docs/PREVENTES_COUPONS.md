@@ -64,7 +64,23 @@ Le rabais s'applique avant les taxes. La commission TAKATAK se calcule sur le mo
 
 **Un code privé** (case non cochée) reste un code qu'on vous donne : partenaires, membres, employés. Il n'apparaît nulle part. Dans la ligne du code, **Rendre privé** et **Montrer comme coupon** font passer un code d'un état à l'autre.
 
-**Prévente et coupon ensemble** : le coupon s'applique aussi aux billets de prévente. Si vous ne voulez pas les cumuler, n'activez pas de coupon public pendant la prévente.
+**Prévente et coupon ensemble** : par défaut, le coupon s'applique aussi aux billets de prévente. Pour ne pas les cumuler (Run 99), cochez **Non cumulable avec la prévente** en créant le code, ou cliquez **Rendre non cumulable** dans sa ligne :
+
+- le code ne réduit alors que les billets au prix régulier du panier ; les billets en prévente gardent leur prix ;
+- sur un panier de billets en prévente seulement, le code est refusé avec la raison : « Ce code ne s'applique pas aux billets en prévente » ;
+- pendant la prévente, le coupon affiche « hors prix prévente ».
+
+Le serveur fait ce calcul à chaque étape (devis, panier, paiement) : le montant payé est toujours celui affiché.
+
+## Charger par fichier (Run 99)
+
+`npm run events:import` charge un événement complet depuis un fichier JSON (voir `HAVANA_SUR_ALKAO.md`). Le fichier peut maintenant contenir :
+
+- **une prévente** : un billet avec `presaleOfCode` (le code du billet régulier), un prix plus bas, et `salesEndAt`, `quantityLimit` ou les deux ;
+- **une passe festival** : un billet avec `"pass": true` (voir `PASSES_FESTIVAL.md`) ;
+- **des coupons** : une liste `promoCodes`, avec `code`, `kind` (`percent` ou `amount`), `percent` ou `amountCents`, et au besoin `public`, `label`, `endsAt`, `maxUses` et `excludesPresales`.
+
+Comme le reste du fichier, un billet ou un code qui existe déjà (même code) est gardé tel quel. Une prévente qui nomme un billet absent de l'événement est refusée.
 
 ## Catégories
 
@@ -78,7 +94,7 @@ Elles ont leur propre filtre et leur propre photo sur alkao.ca.
 
 ## Côté technique
 
-- **Migration** : `20261120000100_alkao_presales_coupons.sql`.
+- **Migrations** : `20261120000100_alkao_presales_coupons.sql`, puis `20261122000100_alkao_coupon_excludes_presales.sql` (Run 99, `excludes_presales` sur `ticketing_promo_codes`).
   - Sur `ticketing_ticket_types` : `presale_of`, `sales_end_at` et `quantity_limit`.
   - Une nouvelle table de comptage, `ticketing_ticket_type_counts`, réservée au serveur.
   - Sur `ticketing_promo_codes` : `public` et `label`.

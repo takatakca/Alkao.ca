@@ -215,4 +215,33 @@ describe("coupons", () => {
     await patch({ active: false });
     expect((await publicEvent()).coupons).toEqual([]);
   });
+
+  it("a code kept off presale prices only reduces regular tickets, and says why on a presale-only cart (Run 99)", async () => {
+    await db.pool.query(`UPDATE public.ticketing_ticket_types SET quantity_limit = NULL WHERE id = $1`, [presaleId]);
+    const made = await createCode({ code: "REGULIER20", kind: "percent", percent: 20, public: true, excludesPresales: true });
+    expect(made.status, JSON.stringify(made.body)).toBe(201);
+    expect(made.body.promoCode).toMatchObject({ excludesPresales: true });
+    expect((await publicEvent()).coupons).toEqual([expect.objectContaining({ code: "REGULIER20", excludesPresales: true })]);
+
+    const quote = (items: { ticketTypeId: string; quantity: number }[]) =>
+      call(app, "POST", `${pub(t.clientId, t.brandId)}/events/${t.eventId}/quote`, { body: { items, promoCode: "regulier20" } });
+    const presaleOnly = await quote([{ ticketTypeId: presaleId, quantity: 2 }]);
+    expect(presaleOnly.status).toBe(422);
+    expect(presaleOnly.body.error).toMatchObject({ code: "promo_code_invalid", details: { reason: "presale_only" } });
+    expect((await hold([{ ticketTypeId: presaleId, quantity: 1 }], "REGULIER20")).body.error.details).toEqual({ reason: "presale_only" });
+
+    // A mixed cart: the presale ticket keeps its price, the regular one gets the 20 %, and the
+    // payment charges exactly that.
+    const mixed = await hold([{ ticketTypeId: presaleId, quantity: 1 }, { ticketTypeId: general().id, quantity: 1 }], "REGULIER20");
+    expect(mixed.status, JSON.stringify(mixed.body)).toBe(201);
+    expect(mixed.body.hold.quote).toMatchObject({ subtotalCents: 2395 + 2995, discountCents: Math.round(2995 * 0.2) });
+    const order = await pay(mixed.body.hold);
+    const { rows: [paid] } = await db.pool.query(`SELECT discount_cents, total_cents FROM public.ticketing_orders WHERE id = $1`, [order.id]);
+    expect(paid).toEqual({ discount_cents: Math.round(2995 * 0.2), total_cents: mixed.body.hold.quote.totalCents });
+
+    // Made cumulative again, it applies to the whole cart.
+    const patch = await call(app, "PATCH", `${adm(t.clientId, t.brandId)}/promo-codes/${made.body.promoCode.id}`, { token: await owner(), body: { excludesPresales: false } });
+    expect(patch.body.promoCode.excludesPresales).toBe(false);
+    expect((await quote([{ ticketTypeId: presaleId, quantity: 1 }, { ticketTypeId: general().id, quantity: 1 }])).body.quote.discountCents).toBe(Math.round((2395 + 2995) * 0.2));
+  });
 });

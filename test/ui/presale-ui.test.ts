@@ -62,6 +62,11 @@ beforeAll(async () => {
     body: { code: "PREVENTE10", kind: "percent", percent: 10, public: true, label: "Coupon prévente", endsAt: new Date(Date.now() + 5 * 86_400_000).toISOString(), maxUses: 100 },
   });
   expect(coupon.status, JSON.stringify(coupon.body)).toBe(201);
+  // Run 99: a second coupon, kept off presale prices.
+  const regular = await call(app, "POST", `${base}/events/${t.eventId}/promo-codes`, {
+    token, body: { code: "REGULIER5", kind: "amount", amountCents: 500, public: true, label: "Prix régulier", excludesPresales: true },
+  });
+  expect(regular.status, JSON.stringify(regular.body)).toBe(201);
 }, 60_000);
 
 afterAll(async () => {
@@ -98,9 +103,11 @@ describe("Run 97: presales and coupons in the shop", () => {
     expect(names.indexOf("Admission générale — Prévente")).toBe(names.indexOf("Admission générale — 13 ans et +") - 1);
 
     // The coupon, with its label, end and uses left; one click applies it.
-    const card = page.locator(".coupon");
+    const card = page.locator(".coupon").filter({ hasText: "PREVENTE10" });
     expect(await card.textContent()).toMatch(/−10 %.*de rabais.*Coupon prévente.*jusqu'au .*100 restants.*PREVENTE10/s);
-    await page.getByRole("button", { name: "Appliquer", exact: true }).click();
+    // Run 99: a coupon kept off presale prices says so while the presale is on.
+    expect(await page.locator(".coupon").filter({ hasText: "REGULIER5" }).locator(".coupon-meta").textContent()).toBe("hors prix prévente");
+    await card.getByRole("button", { name: "Appliquer", exact: true }).click();
     await page.getByRole("button", { name: "Appliqué", exact: true, pressed: true }).waitFor();
     await page.getByRole("button", { name: "Ajouter Admission générale — Prévente", exact: true }).click();
     await page.getByRole("button", { name: "Ajouter Admission générale — Prévente", exact: true }).click();
@@ -119,6 +126,14 @@ describe("Run 97: presales and coupons in the shop", () => {
     expect(await add.isDisabled()).toBe(true);
     expect(await page.locator(".type.is-deal .deal-meta").textContent()).toMatch(/Plus que 2 à ce prix/);
     await db.pool.query(`UPDATE public.ticketing_ticket_types SET quantity_limit = 12 WHERE code = 'GENERAL_PRE'`);
+  });
+
+  it("a coupon kept off presale prices explains itself on presale tickets (Run 99)", async () => {
+    const page = await shop();
+    await page.locator(".coupon").filter({ hasText: "REGULIER5" }).getByRole("button", { name: "Appliquer", exact: true }).click();
+    await page.getByRole("button", { name: "Ajouter Admission générale — Prévente", exact: true }).click();
+    await page.getByText("Ce code ne s'applique pas aux billets en prévente : il vaut pour les billets au prix régulier.").waitFor();
+    if (shots) await page.locator(".side").screenshot({ path: `${shots}/coupon-presale-only.png` });
   });
 
   it("alkao.ca shows the presale on the event's card", async () => {

@@ -1,5 +1,10 @@
 # ALKAO — Project status
 
+## Run 99 — catalog files and coupons kept off presales (2026-10-22)
+
+A whole event loads from one file: its presales, festival passes and coupons included. An organizer can keep a coupon off presale prices: it then reduces regular-price tickets only. The shop says so, and the amount paid is always the one shown.
+
+
 ## Run 98 — festival passes (2026-10-22)
 
 A festival or a weekend market sells one pass for all its dates: one ticket and one QR code, entering once per date. The database keeps every date within its capacity. The shop offers the pass next to one-day tickets, and the tickets page lists every date. /ops creates a pass with one checkbox.
