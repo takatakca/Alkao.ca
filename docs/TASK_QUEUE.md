@@ -9,7 +9,7 @@
 2. Operator agent:
    - remove `ALKAO_HOME_URL` and redeploy ALKAO;
    - after a passing paid test ticket, publish Halloween's two sessions, with capacity 3,000 minus each Saturday's Weezevent sales;
-   - merge and redeploy Promo Havana's Weezevent removal.
+   - redeploy Promo Havana (`main` has the Weezevent removal, PR #29, `4e38f98`).
 3. Owner: close the Weezevent sale. Tickets already sold there stay valid at the gate (Weezevent app).
 
 

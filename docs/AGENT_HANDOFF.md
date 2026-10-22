@@ -17,7 +17,7 @@
   - Havana's Stripe onboarding in /ops.
   Then a paid child ticket, e-mail, QR scan and refund, and only then publish.
 - `alkao.ca/` answers 302 to `https://promohavana.ca/billets`. That is `ALKAO_HOME_URL` on the ALKAO Coolify resource, not code. The owner calls it a bug: the operator removes it and restarts. `checkLive` now warns on a home redirect (`src/ops/golive.ts`, test in `test/ops/golive.test.ts`).
-- The owner ended Weezevent on 2026-10-22: "ENLEVE WEEZEVENT C FINI". Promo Havana PR `claude/remove-weezevent` takes every Weezevent link out. Until ALKAO publishes, buy buttons lead to the read-only `/billets` preview.
+- The owner ended Weezevent on 2026-10-22: "ENLEVE WEEZEVENT C FINI". Promo Havana PR #29 takes every Weezevent link out. It is merged (`4e38f98`) but not deployed, and was merged with its `qa` check red: the job never got a runner, like `main` since 16 October. Its 242 local tests pass, and the 2 failures already on `main` remain. Until ALKAO publishes, buy buttons lead to the read-only `/billets` preview.
 - NEXT EXACT ACTION, for the operator agent with Coolify access:
   - remove `ALKAO_HOME_URL`;
   - after the owner's keys, redeploy ALKAO, then publish the two sessions once the test purchase passes;
