@@ -16,6 +16,8 @@ const T = {
       order_not_found: "Ce lien n'est plus valide. Utilisez le lien du courriel le plus récent.",
       ticketing_unavailable: "La billetterie de cet organisateur est momentanément indisponible.",
       already_exchanged: "Le changement de séance a déjà été utilisé.",
+      pass_cannot_change_session: "Une passe festival est déjà valide à toutes ses dates : elle ne change pas de séance.",
+      pass_not_transferable: "Une passe festival ne peut pas être transférée.",
       ticket_already_used: "Un billet de cette commande est déjà entré : changement impossible.",
       session_not_available: "Cette séance n'est plus disponible.",
       sold_out: "Plus assez de places dans cette séance.",
@@ -81,6 +83,8 @@ const T = {
     print: "Imprimer les billets",
     pick: (i) => `Afficher le billet ${i}`,
     ticketNo: "N° du billet",
+    passAlso: "Valide aussi",
+    passEntry: "Une entrée par date avec le même code QR.",
     date: "Date",
     time: "Heure",
     fullscreen: "Plein écran pour l'entrée",
@@ -111,6 +115,8 @@ const T = {
       order_not_found: "This link no longer works. Use the link from your most recent email.",
       ticketing_unavailable: "This organizer's ticketing is temporarily unavailable.",
       already_exchanged: "The session change has already been used.",
+      pass_cannot_change_session: "A festival pass is already valid on all its dates: it does not change session.",
+      pass_not_transferable: "A festival pass cannot be transferred.",
       ticket_already_used: "A ticket of this order has already entered: no change is possible.",
       session_not_available: "This session is no longer available.",
       sold_out: "Not enough seats left in this session.",
@@ -176,6 +182,8 @@ const T = {
     print: "Print the tickets",
     pick: (i) => `Show ticket ${i}`,
     ticketNo: "Ticket no.",
+    passAlso: "Also valid",
+    passEntry: "One entry per date with the same QR code.",
     date: "Date",
     time: "Time",
     fullscreen: "Full screen for the entrance",
@@ -373,6 +381,10 @@ function Ticket({ t, name, index, count, stub, current, onGate }) {
         <div><dt>${T.date}</dt><dd>${stub.date}</dd></div>
         <div><dt>${T.time}</dt><dd>${stub.time}</dd></div>
       </dl>
+      ${t.passDates?.length > 0 && html`<div class="pass-days">
+        <p>${T.passAlso}</p>
+        <ul>${t.passDates.map((d) => html`<li key=${d.startsAt}>${stub.when(d.startsAt)}</li>`)}</ul>
+      </div>`}
     </div>
     <div class="ticket-body">
       ${scannable
@@ -383,6 +395,7 @@ function Ticket({ t, name, index, count, stub, current, onGate }) {
         ${valid ? html`<span class="badge ok">${Icon("check")}${T.valid}</span>`
           : html`<span class="badge bad">${t.transferred ? T.transferred : (T.void[t.voidReason] ?? T.voidDefault)}</span>`}
       </div>
+      ${valid && t.passDates?.length > 0 && html`<p class="pass-entry muted">${T.passEntry}</p>`}
       ${scannable && html`<button type="button" class="gate-open noprint" onClick=${open}>${Icon("expand")}${T.fullscreen}</button>`}
     </div>
   </div></div>`;
@@ -940,9 +953,11 @@ function TransferTickets({ order, token, names }) {
 
 // Run 31: an .ics file made here, from what the page shows; the personal link is not in it.
 function addToCalendar(o) {
+  // Run 98: a festival pass adds each of its other dates.
+  const more = new Map(o.tickets.filter(isValid).flatMap((t) => t.passDates ?? []).map((d) => [d.startsAt, d]));
   const file = calendarFile({
     orderId: o.id, title: o.event.title, startsAt: o.event.startsAt, endsAt: o.event.endsAt, venue: o.event.venue,
-    description: T.calendarText(o.reference, o.brand.name),
+    description: T.calendarText(o.reference, o.brand.name), more: [...more.values()],
   });
   const url = URL.createObjectURL(new Blob([file], { type: "text/calendar;charset=utf-8" }));
   const a = Object.assign(document.createElement("a"), { href: url, download: `${o.reference}.ics` });
@@ -1020,7 +1035,11 @@ function App() {
   const logo = https(o.brand.logoUrl);
   const pending = o.status === "pending_payment";
   const start = new Date(o.event.startsAt);
-  const stub = { date: fmt({ day: "numeric", month: "short", year: "numeric" }, tz).format(start), time: fmt({ timeStyle: "short" }, tz).format(start) };
+  const stub = {
+    date: fmt({ day: "numeric", month: "short", year: "numeric" }, tz).format(start), time: fmt({ timeStyle: "short" }, tz).format(start),
+    // Run 98: a festival pass's other dates.
+    when: (iso) => `${capital(fmt({ weekday: "short", day: "numeric", month: "short" }, tz).format(new Date(iso)))} · ${fmt({ timeStyle: "short" }, tz).format(new Date(iso))}`,
+  };
   const image = photo ?? (category === undefined ? null : categoryPhoto(category));
   const thanks = o.status === "paid" && !state.offlineSince && !o.exchanged && !o.exchangeOfOrderId
     && (wasPending.current || Date.now() - Date.parse(o.paidAt ?? "") < 30 * 60_000);

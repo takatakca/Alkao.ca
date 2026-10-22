@@ -211,6 +211,18 @@ ul.violations { margin: 0; padding-left: 1.1rem; }
 .type.is-gone .name, .type.is-gone .type-price { color: var(--muted); }
 .type.is-gone .deal-meta { color: var(--muted); }
 
+/* ── Run 98: festival passes ── */
+.mode-switch { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; border-radius: 999px; background: var(--soft); }
+.mode-switch button { min-height: 42px; border: 0; border-radius: 999px; background: transparent; color: var(--muted); font-weight: 650; font-size: .92rem; cursor: pointer; transition: background .2s, color .2s, box-shadow .2s; }
+.mode-switch button[aria-pressed="true"] { background: var(--panel); color: var(--ink); box-shadow: var(--sh-1); }
+.pass-dates { display: grid; gap: 10px; }
+.pass-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.pass-list li { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); font-weight: 600; }
+.pass-list li span::first-letter { text-transform: uppercase; }
+.pass-list .i { width: 18px; height: 18px; color: var(--muted); }
+.pass-note { font-size: .88rem; color: var(--muted); }
+.pass-note strong { color: var(--ink); }
+
 .coupons { display: grid; gap: 10px; margin-bottom: 4px; }
 .coupons-title { display: flex; align-items: center; gap: 8px; font-size: 1rem; }
 .coupons-title .i { width: 18px; height: 18px; }
@@ -508,6 +520,13 @@ table.quote tr.total td { padding-top: 10px; border-top: 1px solid var(--soft-2)
 .hb-deal-was { color: #D5DCE8; font-variant-numeric: tabular-nums; }
 .hb-deal-was s { text-decoration-thickness: 1.5px; }
 .hb-deal-until { color: #D5DCE8; }
+/* Run 98: the festival pass, offered in the hero; a click switches the panel to it. */
+.hb-pass { flex-wrap: nowrap; width: 100%; margin: 0; background: none; border: 0; border-top: 1px solid rgba(255, 255, 255, .18); border-radius: 0; text-align: left; font: inherit; font-size: .9rem; cursor: pointer; }
+.hb-pass .hb-deal-until { flex: 1 1 auto; min-width: 0; }
+.hb-pass .i { width: 18px; height: 18px; margin-left: auto; transition: translate .2s ease; }
+.hb-pass:hover .i { translate: 3px 0; }
+.hb-pass:hover .hb-deal-until { color: #fff; }
+.hb-pass:focus-visible { outline: 2px solid #fff; outline-offset: 4px; border-radius: 4px; }
 .hb-btn { min-height: 52px; padding: 0 34px; border: 0; border-radius: 999px; background: #fff; color: #0E1525; font-weight: 700; font-size: 1.02rem; cursor: pointer; transition: transform .18s var(--ease), box-shadow .25s var(--ease); }
 .hb-btn:hover { box-shadow: 0 8px 22px -8px rgba(0, 0, 0, .6); }
 .hb-btn:active { transform: scale(.97); }

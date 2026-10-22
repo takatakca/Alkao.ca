@@ -146,8 +146,22 @@ describe("festival passes", () => {
     const before = await counts();
     const pass = await buy(days[0]!, [{ ticketTypeId: passId, quantity: 1 }]);
     // Day 2 was cancelled: a pass bought now covers days 1 and 3 only.
-    expect((await counts()).map(([, sold], i) => sold - before[i]![1]!)).toEqual([1, 0, 1]);
+    expect((await counts()).map(([, sold], i) => sold! - before[i]![1]!)).toEqual([1, 0, 1]);
     await db.pool.query(`UPDATE public.ticketing_tickets SET status = 'void', void_reason = 'admin', voided_at = now() WHERE order_id = $1`, [pass.orderId]);
     expect(await counts()).toEqual(before);
+  });
+
+  it("an abandoned pass cart never shows its seats as taken, on any day, before it is swept", async () => {
+    const brief = testApp(db.pool, { credentialMasterSecret: TEST_CREDENTIAL_SECRET, holdTtlSeconds: 1 });
+    const available = async () => {
+      const shop = await call(app, "GET", `${pub(t.clientId, t.brandId)}/events/${t.eventId}`);
+      return (shop.body.sessions as { id: string; available: number }[]).map((x) => [x.id, x.available]);
+    };
+    const before = await available();
+    const h = await call(brief, "POST", `${pub(t.clientId, t.brandId)}/holds`, { body: { sessionId: days[0], items: [{ ticketTypeId: passId, quantity: 1 }] } });
+    expect(h.status, JSON.stringify(h.body)).toBe(201);
+    expect((await available()).map(([, n]) => n)).toEqual(before.map(([, n]) => Number(n) - 1));
+    await new Promise((r) => setTimeout(r, 1200));
+    expect(await available()).toEqual(before);
   });
 });

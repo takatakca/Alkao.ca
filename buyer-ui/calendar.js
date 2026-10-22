@@ -30,27 +30,31 @@ export function fold(line) {
 
 /**
  * @param {{ orderId: string, title: string, startsAt: string, endsAt?: string | null,
- *   venue: { name: string, addressLine1?: string | null, city?: string | null }, description: string }} e
+ *   venue: { name: string, addressLine1?: string | null, city?: string | null }, description: string,
+ *   more?: { startsAt: string, endsAt?: string | null }[] }} e  `more`: a festival pass's other dates (Run 98).
  * @param {Date} now
  */
 export function calendarFile(e, now = new Date()) {
   const where = [e.venue.name, e.venue.addressLine1, e.venue.city].filter(Boolean).join(", ");
+  const dates = [{ startsAt: e.startsAt, endsAt: e.endsAt }, ...(e.more ?? [])];
   const lines = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
     "PRODID:-//ALKAO//Billetterie//FR",
     "CALSCALE:GREGORIAN",
     "METHOD:PUBLISH",
-    "BEGIN:VEVENT",
-    // One entry per order: adding it again updates it instead of doubling it.
-    `UID:${e.orderId}@alkao`,
-    `DTSTAMP:${stamp(now)}`,
-    `DTSTART:${stamp(new Date(e.startsAt))}`,
-    ...(e.endsAt ? [`DTEND:${stamp(new Date(e.endsAt))}`] : []),
-    `SUMMARY:${escapeText(e.title)}`,
-    `LOCATION:${escapeText(where)}`,
-    `DESCRIPTION:${escapeText(e.description)}`,
-    "END:VEVENT",
+    ...dates.flatMap((d, k) => [
+      "BEGIN:VEVENT",
+      // One entry per order and date: adding it again updates it instead of doubling it.
+      `UID:${e.orderId}${k === 0 ? "" : `-${k + 1}`}@alkao`,
+      `DTSTAMP:${stamp(now)}`,
+      `DTSTART:${stamp(new Date(d.startsAt))}`,
+      ...(d.endsAt ? [`DTEND:${stamp(new Date(d.endsAt))}`] : []),
+      `SUMMARY:${escapeText(e.title)}`,
+      `LOCATION:${escapeText(where)}`,
+      `DESCRIPTION:${escapeText(e.description)}`,
+      "END:VEVENT",
+    ]),
     "END:VCALENDAR",
   ];
   return `${lines.map(fold).join("\r\n")}\r\n`;

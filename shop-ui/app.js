@@ -30,6 +30,8 @@ const T = {
       promo_code_invalid: "Le code promo n'est plus valide. Changez votre sélection et retirez-le.",
       add_on_sold_out: "Une option choisie vient de s'épuiser pour cette séance. Retirez-la ou changez de séance.",
       ticket_type_sold_out: "Les billets à ce prix viennent de s'épuiser. Choisissez le prix régulier.",
+      pass_cart_mixed: "Une passe festival s'achète seule : retirez les billets d'un jour, ou achetez-les dans une autre commande.",
+      pass_no_session: "Aucune date de ce festival n'est en vente pour le moment.",
     },
     generic: "Une erreur est survenue. Réessayez dans un instant.",
     promo: {
@@ -65,6 +67,13 @@ const T = {
     ticketsTitle: "Billets",
     step1: "Choisissez votre séance",
     noSessions: "Aucune séance en vente pour le moment.",
+    // Run 98: festival passes.
+    pass: {
+      modes: "Type de billet", day: "Billet d'un jour", pass: "Passe festival", dates: "Les dates de la passe",
+      covers: (n) => `Valide ${n} date${n > 1 ? "s" : ""}`, each: "Une entrée par date, avec le même code QR.",
+      left: (n) => (n <= 25 ? `Plus que ${n} passes` : `${n} passes restantes`), full: "Complet pour au moins une date",
+      hero: (n) => `Les ${n} dates`, see: "Voir la passe festival",
+    },
     doorSale: "Vente à la porte",
     noSessionsToday: "Aucune séance à vendre aujourd'hui.",
     full: "Complet",
@@ -229,6 +238,8 @@ const T = {
       promo_code_invalid: "The promo code is no longer valid. Change your selection and remove it.",
       add_on_sold_out: "An option you chose just sold out for this session. Remove it or pick another session.",
       ticket_type_sold_out: "The tickets at this price just sold out. Choose the regular price.",
+      pass_cart_mixed: "A festival pass is bought on its own: remove the day tickets, or buy them in another order.",
+      pass_no_session: "No date of this festival is on sale right now.",
     },
     generic: "Something went wrong. Please try again in a moment.",
     promo: {
@@ -263,6 +274,12 @@ const T = {
     ticketsTitle: "Tickets",
     step1: "Choose your session",
     noSessions: "No session on sale right now.",
+    pass: {
+      modes: "Ticket type", day: "One-day ticket", pass: "Festival pass", dates: "The pass's dates",
+      covers: (n) => `Valid for ${n} date${n > 1 ? "s" : ""}`, each: "One entry per date, with the same QR code.",
+      left: (n) => (n <= 25 ? `Only ${n} passes left` : `${n} passes left`), full: "Full for at least one date",
+      hero: (n) => `All ${n} dates`, see: "See the festival pass",
+    },
     doorSale: "Door sale",
     noSessionsToday: "No session to sell today.",
     full: "Sold out",
@@ -553,6 +570,14 @@ function presaleFrom(types) {
   const d = deals[0];
   return d ? { cents: d.t.priceCents, regularCents: d.regular.priceCents, endsAt: d.t.salesEndAt ?? null, remaining: d.t.remaining ?? null } : null;
 }
+/** Run 98: the dates a festival pass covers (every date on sale), and what is left. */
+function PassDates({ sessions, tz, left }) {
+  return html`<div class="pass-dates">
+    <ul class="pass-list">${sessions.map((s) => html`<li><${Icon} n="calendar" /><span>${fmt(s.startsAt, tz, { weekday: "long", day: "numeric", month: "long", hour: "numeric", minute: "2-digit" })}</span></li>`)}</ul>
+    <p class="pass-note">${T.pass.each} ${left === 0 ? html`<strong>${T.pass.full}</strong>` : html`<strong>${T.pass.left(left)}</strong>`}</p>
+  </div>`;
+}
+
 /** Run 97: presale tickets right before the regular ticket each undercuts, the rest in order. */
 function presalesFirst(list) {
   const ids = new Set(list.map((t) => t.id));
@@ -898,7 +923,7 @@ function dateRange(sessions, tz) {
 }
 
 /** Run 93: the hero as the organizer describes the outing, with the price and a way to the tickets. */
-function Hero({ ev, src, own, onBroken, sessions, address, from, presale, compact, zoomRef, onZoom, onBook }) {
+function Hero({ ev, src, own, onBroken, sessions, address, from, presale, pass, compact, zoomRef, onZoom, onBook, onPass }) {
   const tz = ev.venue?.timezone;
   const when = dateRange(sessions, tz);
   const place = [address || ev.venue?.name, ev.venue?.city].filter(Boolean).join(", ");
@@ -926,7 +951,7 @@ function Hero({ ev, src, own, onBroken, sessions, address, from, presale, compac
         ${facts.length > 0 && !compact && html`<ul class="hero-facts">${facts.map(([icon, label, value]) => html`<li>
           <${Icon} n=${icon} /><span><span class="hf-label">${label}</span><span class="hf-value">${value}</span></span></li>`)}</ul>`}
       </div>
-      ${from && !compact && html`<div class=${`hero-book${presale ? " has-deal" : ""}`}>
+      ${from && !compact && html`<div class=${`hero-book${presale || pass ? " has-deal" : ""}`}>
         <p class="hb-from"><span class="hb-label">${from.free ? T.ticketsTitle : T.from}</span>
           <span class="hb-price">${from.free ? T.free : money(from.cents)}</span>${!from.free && html`<span class="hb-tax">${T.plusTax}</span>`}</p>
         <button type="button" class="hb-btn" onClick=${onBook}>${T.book}</button>
@@ -935,6 +960,9 @@ function Hero({ ev, src, own, onBroken, sessions, address, from, presale, compac
           <span class="hb-deal-was"><span class="sr-only">${T.deal.instead("")}</span><s>${money(presale.regularCents)}</s></span>
           <span class="save">${T.deal.save(savePct(presale.cents, presale.regularCents))}</span>
           ${presale.endsAt && html`<span class="hb-deal-until">${T.coupons.until(dayLong(presale.endsAt, ev.venue?.timezone))}</span>`}</p>`}
+        ${pass && html`<button type="button" class="hb-deal hb-pass" aria-label=${`${T.pass.see} — ${T.pass.hero(pass.dates)}, ${money(pass.cents)}`} onClick=${onPass}>
+          <span class="deal-badge">${T.pass.pass}</span><span class="hb-deal-price">${money(pass.cents)}</span>
+          <span class="hb-deal-until">${T.pass.hero(pass.dates)}</span><${Icon} n="arrow" /></button>`}
       </div>`}
     </div>
   </section>`;
@@ -1226,6 +1254,8 @@ function EventShop({ config }) {
   const [promoOpen, setPromoOpen] = useState(Boolean(URL_COUPON));
   // Run 72: a presale code that opens the sale before the public opening ({ code, opensAt }).
   const [presale, setPresale] = useState(null);
+  // Run 98: "day" (one session) or "pass" (a festival pass, valid at every date on sale).
+  const [mode, setMode] = useState(null);
   // Run 90: the Brand's list (other events, this one's address), the photo, the zoom.
   const [listing, setListing] = useState(null);
   const [photoBroken, setPhotoBroken] = useState(false);
@@ -1246,9 +1276,14 @@ function EventShop({ config }) {
     if (cancelled) history.replaceState(null, "", location.pathname);
   }, []);
 
-  // With a single date on sale, it is already chosen.
+  // With a single date on sale, it is already chosen. Run 98: an event selling only passes
+  // starts in pass mode, its cart on the first date.
   useEffect(() => {
     if (!data || sessionId) return;
+    if (!DOOR && data.ticketTypes.some((t) => t.kind === "admission" && t.pass) && !data.ticketTypes.some((t) => t.kind === "admission" && !t.pass)) {
+      if (data.sessions[0]) setSessionId(data.sessions[0].id);
+      return;
+    }
     const tz = data.event.venue?.timezone;
     const today = dayIn(new Date(), tz);
     const list = DOOR ? data.sessions.filter((s) => dayIn(new Date(s.startsAt), tz) === today) : data.sessions;
@@ -1277,12 +1312,22 @@ function EventShop({ config }) {
   applyLook(ev.brand);
   const tz = ev.venue?.timezone;
   // Run 97: a presale ticket comes right before the regular ticket it undercuts.
-  const admissions = presalesFirst(data.ticketTypes.filter((t) => t.kind === "admission"));
+  // Run 98: a festival pass is sold on its own, for every date on sale (never at the door).
+  const passTypes = DOOR ? [] : data.ticketTypes.filter((t) => t.kind === "admission" && t.pass);
+  const dayTypes = data.ticketTypes.filter((t) => t.kind === "admission" && !t.pass);
+  const passMode = passTypes.length > 0 && (dayTypes.length === 0 || mode === "pass");
+  const admissions = presalesFirst(passMode ? passTypes : dayTypes);
   const addOns = data.ticketTypes.filter((t) => t.kind === "add_on");
   const wanted = items.reduce((n, i) => n + (data.ticketTypes.find((t) => t.id === i.ticketTypeId)?.kind === "admission" ? i.quantity : 0), 0);
   const today = dayIn(new Date(), tz);
   const sessions = DOOR ? data.sessions.filter((s) => dayIn(new Date(s.startsAt), tz) === today) : data.sessions;
   const session = sessions.find((s) => s.id === sessionId);
+  // Run 98: a pass takes a seat on every date: what is left is the fullest date's.
+  const passLeft = sessions.length ? Math.min(...sessions.map((s) => s.available)) : 0;
+  // Run 98: the hero offers the pass when one-day tickets are sold too.
+  const passOffer = passTypes.length > 0 && dayTypes.length > 0 && sessions.length > 1
+    ? { cents: Math.min(...passTypes.map((t) => t.priceCents)), dates: sessions.length } : null;
+  const pickMode = (m) => { setMode(m); setQty({}); setSessionId(m === "pass" ? sessions[0]?.id ?? null : sessions.length === 1 && sessions[0].available > 0 ? sessions[0].id : null); };
   // Run 72: the sale window; a valid presale code opens it from its own time.
   const nowMs = Date.now();
   const closed = !DOOR && ev.salesCloseAt && nowMs >= Date.parse(ev.salesCloseAt);
@@ -1291,7 +1336,7 @@ function EventShop({ config }) {
   const set = (id, n) => setQty((q) => ({ ...q, [id]: Math.max(0, n) }));
   // Run 49: what is left of an add-on with a stock, for the chosen session (null: no limit).
   const left = (t) => (t.kind === "add_on" && session?.addOnsAvailable && t.id in session.addOnsAvailable ? session.addOnsAvailable[t.id] : null);
-  const tooMany = !!session && wanted > session.available;
+  const tooMany = passMode ? wanted > passLeft : !!session && wanted > session.available;
   const from = priceFrom(data.ticketTypes);
   const presaleDeal = DOOR ? null : presaleFrom(data.ticketTypes);
   const coupons = DOOR ? [] : data.coupons ?? [];
@@ -1310,7 +1355,7 @@ function EventShop({ config }) {
     const deal = regular && t.priceCents < regular.priceCents ? regular : null;
     const limited = Number.isInteger(t.remaining) ? t.remaining : null;
     const gone = limited === 0;
-    const meta = `${t.kind === "add_on" ? SCOPE_TEXT(t) : ""}${t.openDate ? T.openDate : ""}${t.minQuantity > 1 ? T.minimum(t.minQuantity) : ""}${left(t) !== null ? T.addOnLeft(left(t)) : ""}`.replace(/^ · /, "");
+    const meta = `${t.kind === "add_on" ? SCOPE_TEXT(t) : ""}${t.openDate ? T.openDate : ""}${t.pass ? ` · ${T.pass.covers(sessions.length)}` : ""}${t.minQuantity > 1 ? T.minimum(t.minQuantity) : ""}${left(t) !== null ? T.addOnLeft(left(t)) : ""}`.replace(/^ · /, "");
     const dealMeta = deal ? [t.salesEndAt && T.deal.until(dayLong(t.salesEndAt, tz)), limited !== null && !gone && T.deal.left(limited)].filter(Boolean) : [];
     return html`<div class=${`type${q > 0 ? " is-on" : ""}${deal ? " is-deal" : ""}${gone ? " is-gone" : ""}`}>
       <div class="type-info">
@@ -1322,7 +1367,7 @@ function EventShop({ config }) {
       <div class="stepper">
         <button type="button" class="step-btn" aria-label=${T.remove(t.name)} disabled=${!(q > 0)} onClick=${() => set(t.id, q - 1)}><${Icon} n="minus" /></button>
         <output aria-label=${T.quantity(t.name)}><${Num} value=${q} /></output>
-        <button type="button" class="step-btn plus" aria-label=${T.add(t.name)} disabled=${(t.kind === "add_on" && wanted === 0) || q >= Math.min(t.maxQuantity, left(t) ?? Infinity, limited ?? Infinity)} onClick=${() => set(t.id, q + 1)}><${Icon} n="plus" /></button>
+        <button type="button" class="step-btn plus" aria-label=${T.add(t.name)} disabled=${(t.kind === "add_on" && wanted === 0) || q >= Math.min(t.maxQuantity, left(t) ?? Infinity, limited ?? Infinity, t.pass ? passLeft - (wanted - q) : Infinity)} onClick=${() => set(t.id, q + 1)}><${Icon} n="plus" /></button>
       </div></div>`;
   };
   // Run 97: a coupon goes into the promo code, checked by the server like a typed one.
@@ -1509,19 +1554,24 @@ function EventShop({ config }) {
       ${(closed || early) && html`<${SaleWindow} closed=${closed} opensAt=${ev.salesOpenAt} tz=${tz} eventId=${route.eventId} presale=${presale} onPresale=${setPresale} />`}
       ${canBuy && presale && html`<div class="alert ok" role="status">${T.presaleOpenNow}</div>`}
       ${canBuy && couponsBlock}
+      ${canBuy && passTypes.length > 0 && dayTypes.length > 0 && sessions.length > 0 && html`<div class="mode-switch" role="group" aria-label=${T.pass.modes}>
+        <button type="button" aria-pressed=${passMode ? "false" : "true"} onClick=${() => pickMode("day")}>${T.pass.day}</button>
+        <button type="button" aria-pressed=${passMode ? "true" : "false"} onClick=${() => pickMode("pass")}>${T.pass.pass}</button>
+      </div>`}
       ${canBuy && html`
         <div class="step">
-          <h3 class="step-title">${stepNo(1)}${T.step1}</h3>
+          <h3 class="step-title">${stepNo(1)}${passMode ? T.pass.dates : T.step1}</h3>
           ${sessions.length === 0 ? html`<p class="step-hint">${DOOR ? T.noSessionsToday : T.noSessions}</p>`
+            : passMode ? html`<${PassDates} sessions=${sessions} tz=${tz} left=${passLeft} />`
             : DOOR ? html`<${TimeSlots} sessions=${sessions} tz=${tz} value=${sessionId} onPick=${setSessionId} />`
             : html`<${SessionCalendar} sessions=${sessions} tz=${tz} value=${sessionId} onPick=${setSessionId} />`}
-          ${!DOOR && sessions.some((s) => s.available === 0) && html`<${Waitlist} sessions=${sessions.filter((s) => s.available === 0)} tz=${tz} onFree=${load} />`}
+          ${!DOOR && !passMode && sessions.some((s) => s.available === 0) && html`<${Waitlist} sessions=${sessions.filter((s) => s.available === 0)} tz=${tz} onFree=${load} />`}
         </div>
         ${sessions.length > 0 && html`<div class=${`step${sessionId ? "" : " is-idle"}`}>
           <h3 class="step-title">${stepNo(2)}${T.step2}</h3>
           ${!sessionId ? html`<p class="step-hint">${T.pickDateFirst}</p>` : html`<div class="step-in" key=${sessionId}>
             <div class="types">${admissions.map(typeRow)}</div>
-            ${addOns.length > 0 && html`<section class="options" aria-labelledby="options-title">
+            ${addOns.length > 0 && !passMode && html`<section class="options" aria-labelledby="options-title">
               <h4 id="options-title">${T.optionsTitle}</h4>
               ${wanted === 0 && html`<p class="muted">${T.optionsHint}</p>`}
               <div class="types">${addOns.map(typeRow)}</div>
@@ -1549,6 +1599,7 @@ function EventShop({ config }) {
   <main class=${`event-main${canBuy && sessions.length > 0 ? " with-bar" : ""}`}>
     <${Hero} ev=${ev} src=${photo} own=${photo === own} onBroken=${(e) => (photo === own ? setPhotoBroken(true) : hideBroken(e))}
       sessions=${sessions} address=${address} from=${from} presale=${presaleDeal} compact=${DOOR}
+      pass=${passOffer} onPass=${() => { if (!passMode) pickMode("pass"); book(); }}
       zoomRef=${zoomButton} onZoom=${() => setZoom({ photos: [{ src: photo, alt: ev.title }], start: 0 })} onBook=${book} />
     <div class="wrap layout">
       <section class="side" id="billets" aria-labelledby="panel-title">${panel}</section>

@@ -1105,7 +1105,7 @@ function EventDetail({ api, base, eventId, assistant }) {
   const [types, reloadTypes] = useLoad(() => api(`${base}/events/${eventId}/ticket-types`), [base, eventId]);
   const [error, setError] = useState(null);
   const [sess, setSess] = useState({ startsAt: "", capacity: 100 });
-  const [tt, setTt] = useState({ code: "", name: "", price: "", maxQuantity: 10, minQuantity: 0, kind: "admission", countsAsAdult: true, grantsSessionChange: false, openDate: false, addOnScope: "up_to_admissions", stock: "", active: true });
+  const [tt, setTt] = useState({ code: "", name: "", price: "", maxQuantity: 10, minQuantity: 0, kind: "admission", countsAsAdult: true, grantsSessionChange: false, openDate: false, pass: false, addOnScope: "up_to_admissions", stock: "", active: true });
   const [cancelling, setCancelling] = useState(null);
   const [copied, setCopied] = useState(false);
   // Run 97: a presale price for a regular ticket, ending on a date, after a quantity, or both.
@@ -1153,7 +1153,7 @@ function EventDetail({ api, base, eventId, assistant }) {
     await api(`${base}/events/${eventId}/ticket-types`, { method: "POST", body: {
       code: tt.code.toUpperCase(), name: tt.name, kind: tt.kind, priceCents: Math.round(Number(tt.price.replace(",", ".")) * 100),
       minQuantity: Number(tt.minQuantity), maxQuantity: Number(tt.maxQuantity), countsAsAdult: !addOn && tt.countsAsAdult,
-      addOnScope: addOn ? tt.addOnScope : null, grantsSessionChange: addOn && tt.grantsSessionChange, openDate: !addOn && tt.openDate,
+      addOnScope: addOn ? tt.addOnScope : null, grantsSessionChange: addOn && tt.grantsSessionChange, openDate: !addOn && !tt.pass && tt.openDate, pass: !addOn && tt.pass,
       stockPerSession: addOn && String(tt.stock).trim() !== "" ? Number(tt.stock) : null, active: tt.active,
     } });
     setTt({ ...tt, code: "", name: "", price: "", stock: "" }); reloadTypes();
@@ -1170,7 +1170,7 @@ function EventDetail({ api, base, eventId, assistant }) {
     for (let i = 2; taken.has(code); i++) code = `${regular.code}_PRE${i}`.slice(0, 40);
     await api(`${base}/events/${eventId}/ticket-types`, { method: "POST", body: {
       code, name: `${regular.name} — Prévente`.slice(0, 200), kind: regular.kind, priceCents: cents,
-      minQuantity: regular.minQuantity, maxQuantity: regular.maxQuantity, countsAsAdult: regular.countsAsAdult, openDate: regular.openDate,
+      minQuantity: regular.minQuantity, maxQuantity: regular.maxQuantity, countsAsAdult: regular.countsAsAdult, openDate: regular.openDate, pass: regular.pass === true,
       ...(regular.maxAdultsInOrder != null ? { maxAdultsInOrder: regular.maxAdultsInOrder } : {}),
       description: regular.description ?? null, sortOrder: regular.sortOrder, active: true,
       presaleOf: regular.id, salesEndAt: pre.endsAt ? new Date(pre.endsAt).toISOString() : null,
@@ -1292,7 +1292,8 @@ function EventDetail({ api, base, eventId, assistant }) {
       <label>Genre<select value=${tt.kind} onChange=${(e) => setTt({ ...tt, kind: e.target.value })}><option value="admission">Admission</option><option value="add_on">Option (ajout)</option></select></label>
       ${tt.kind === "admission"
         ? html`<label class="check"><input type="checkbox" checked=${tt.countsAsAdult} onChange=${(e) => setTt({ ...tt, countsAsAdult: e.target.checked })} /> Adulte</label>
-            <label class="check"><input type="checkbox" checked=${tt.openDate} onChange=${(e) => setTt({ ...tt, openDate: e.target.checked })} /> Billet ouvert (date modifiable)</label>`
+            <label class="check"><input type="checkbox" checked=${tt.openDate} disabled=${tt.pass} onChange=${(e) => setTt({ ...tt, openDate: e.target.checked })} /> Billet ouvert (date modifiable)</label>
+            <label class="check" title="Un seul billet et un seul code QR, valides une fois à chaque date en vente au moment de l'achat (Run 98)."><input type="checkbox" checked=${tt.pass} onChange=${(e) => setTt({ ...tt, pass: e.target.checked, openDate: e.target.checked ? false : tt.openDate })} /> Passe festival (toutes les dates)</label>`
         : html`<label>Quantité<select value=${tt.addOnScope} onChange=${(e) => setTt({ ...tt, addOnScope: e.target.value })}>
               <option value="up_to_admissions">Jusqu'à une par personne</option><option value="per_admission">Exactement une par personne</option><option value="per_order">Libre (min–max)</option></select></label>
             <label>Stock par séance<input type="number" min="0" placeholder="sans limite" value=${tt.stock} onInput=${(e) => setTt({ ...tt, stock: e.target.value })} /></label>
@@ -1305,7 +1306,7 @@ function EventDetail({ api, base, eventId, assistant }) {
       <tbody>${(types.data?.ticketTypes ?? []).map((t) => html`<tr><td>${t.code}</td><td>${t.name}<br />
         <button class="link" title=${t.description ?? ""} onClick=${editType(t, "description")}>${t.description ? "Modifier ce qui est inclus" : "Dire ce qui est inclus"}</button></td>
         <td class="num"><button class="link" onClick=${editType(t, "price")}>${money(t.priceCents)}</button></td><td class="num">${t.minQuantity}–${t.maxQuantity}</td>
-        <td>${t.kind === "add_on" ? `${t.grantsSessionChange ? "Option (Flex)" : "Option"} · ${ADD_ON_SCOPE_FR[t.addOnScope] ?? ""}` : t.countsAsAdult ? "Admission adulte" : "Admission"}${t.openDate ? " · billet ouvert" : ""}</td>
+        <td>${t.kind === "add_on" ? `${t.grantsSessionChange ? "Option (Flex)" : "Option"} · ${ADD_ON_SCOPE_FR[t.addOnScope] ?? ""}` : t.countsAsAdult ? "Admission adulte" : "Admission"}${t.openDate ? " · billet ouvert" : ""}${t.pass ? " · passe festival" : ""}</td>
         <td class="num">${t.kind === "add_on" ? html`<button class="link" onClick=${editType(t, "stock")}>${t.stockPerSession ?? "sans limite"}</button>` : "—"}</td>
         <td>${t.presaleOf ? html`<${PresaleCell} t=${t} types=${types.data?.ticketTypes ?? []} onEnd=${editType(t, "salesEnd")} onQuantity=${editType(t, "quantityLimit")} />` : "—"}</td>
         <td><button class=${t.active ? "secondary" : ""} onClick=${editType(t, "active")}>${t.active ? "Retirer de la vente" : "Mettre en vente"}</button></td></tr>`)}</tbody></table></div>`}`;

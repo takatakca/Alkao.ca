@@ -455,8 +455,11 @@ export const listPublicSessions = (q: Queryable, s: TenantScope, eventId: string
             ), '{}'::jsonb) AS add_ons_available
      FROM public.ticketing_sessions s
      LEFT JOIN LATERAL (
-       SELECT sum(h.quantity)::int AS quantity FROM public.ticketing_holds h
-       WHERE h.session_id = s.id AND h.status = 'active' AND h.expires_at <= $4
+       -- Run 98: with the seats lapsed festival-pass carts hold here.
+       SELECT (coalesce((SELECT sum(h.quantity) FROM public.ticketing_holds h
+                         WHERE h.session_id = s.id AND h.status = 'active' AND h.expires_at <= $4), 0)
+             + coalesce((SELECT sum(p.quantity) FROM public.ticketing_hold_pass_seats p JOIN public.ticketing_holds h ON h.id = p.hold_id
+                         WHERE p.session_id = s.id AND h.status = 'active' AND h.expires_at <= $4), 0))::int AS quantity
      ) lapsed ON true
      WHERE s.event_id = $1 AND s.client_id = $2 AND s.brand_id = $3 AND s.status = 'on_sale' AND s.starts_at > $4
      ORDER BY s.starts_at`,

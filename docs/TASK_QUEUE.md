@@ -1,12 +1,17 @@
 # ALKAO — Task queue (priority ordered)
 
+## Run 98 — festival passes (2026-10-22)
+
+1. Merge the Run 98 PR when CI is green.
+2. Next:
+   - presales and passes in `events:import`;
+   - a "do not stack with the presale" switch for coupons.
+3. Owner: create a festival pass in /ops (`docs/PASSES_FESTIVAL.md`). It goes live with the next deploy.
+
+
 ## Run 97 — presales and coupons (2026-10-22)
 
-1. Merge the Run 97 PR when CI is green.
-2. Next:
-   - Run 98, festival passes: one ticket valid on 2 or 3 days, scanned once per day;
-   - presales in `events:import`;
-   - a "do not stack with the presale" switch for coupons.
+1. Done: merged 2939a27 (PR #92). Run 98 did the festival passes.
 3. Owner: create the first presales and coupons in /ops (`docs/PREVENTES_COUPONS.md`). They go live with the next deploy.
 
 
