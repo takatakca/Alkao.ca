@@ -925,7 +925,7 @@ function PromoCodes({ api, base, eventId }) {
 }
 
 // ── Run 69: what a buyer wants to know before choosing (shop, ALKAO home, search engines) ──
-const CATEGORY_LABELS = { concerts: "Concerts", festivals: "Festivals", sports: "Sports", famille: "Famille", "plein-air": "Plein air et camping", spectacles: "Théâtre et humour", soirees: "Soirées", experiences: "Expériences" };
+const CATEGORY_LABELS = { concerts: "Concerts", festivals: "Festivals", sports: "Sports", famille: "Famille", "plein-air": "Plein air et camping", spectacles: "Théâtre et humour", soirees: "Soirées", experiences: "Expériences", gastronomie: "Gastronomie", mode: "Mode", marches: "Marchés et salons" };
 const LANGUAGE_LABELS = { fr: "Français", en: "Anglais", "fr-en": "Français et anglais", none: "Sans paroles (musique, cirque…)" };
 const AGE_CHOICES = [["", "Non précisé"], ["0", "Pour tous"], ["6", "6 ans et plus"], ["12", "12 ans et plus"], ["14", "14 ans et plus"], ["16", "16 ans et plus"], ["18", "18 ans et plus"]];
 function EventFacts({ api, base, eventId, event, assistant }) {

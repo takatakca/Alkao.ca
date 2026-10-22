@@ -29,6 +29,7 @@ const T = {
       invalid_request: "Vérifiez vos informations.",
       promo_code_invalid: "Le code promo n'est plus valide. Changez votre sélection et retirez-le.",
       add_on_sold_out: "Une option choisie vient de s'épuiser pour cette séance. Retirez-la ou changez de séance.",
+      ticket_type_sold_out: "Les billets à ce prix viennent de s'épuiser. Choisissez le prix régulier.",
     },
     generic: "Une erreur est survenue. Réessayez dans un instant.",
     promo: {
@@ -36,6 +37,16 @@ const T = {
       toggle: "J'ai un code promo", applied: (c) => `Code ${c} appliqué`,
       unknown: "Ce code n'existe pas pour cet événement.", inactive: "Ce code n'est plus actif.",
       not_started: "Ce code n'est pas encore valide.", ended: "Ce code a expiré.", used_up: "Ce code a atteint sa limite d'utilisations.",
+    },
+    // Run 97: presale prices and coupons, always as the organizer set them.
+    deal: {
+      presale: "Prix prévente", instead: (p) => `au lieu de ${p}`, save: (pct) => `−${pct} %`,
+      until: (d) => `Jusqu'au ${d}`, left: (n) => (n <= 25 ? `Plus que ${n} à ce prix` : `${n} restants à ce prix`),
+      soldOut: "Épuisé à ce prix",
+    },
+    coupons: {
+      title: "Coupons", apply: "Appliquer", applied: "Appliqué", until: (d) => `jusqu'au ${d}`,
+      left: (n) => `${n} restant${n > 1 ? "s" : ""}`, off: "de rabais", label: (l, v) => `Coupon ${l} : ${v} de rabais`, generic: "Rabais",
     },
     v: {
       above_maximum: (n, l) => `${n} : ${l} au maximum par commande.`,
@@ -101,7 +112,7 @@ const T = {
     policyTitle: "Politique d'échange et de remboursement",
     // Run 69: what the organizer says about the event.
     factsTitle: "À savoir",
-    categories: { concerts: "Concert", festivals: "Festival", sports: "Sport", famille: "Famille", "plein-air": "Plein air", spectacles: "Théâtre et humour", soirees: "Soirée", experiences: "Expérience" },
+    categories: { concerts: "Concert", festivals: "Festival", sports: "Sport", famille: "Famille", "plein-air": "Plein air", spectacles: "Théâtre et humour", soirees: "Soirée", experiences: "Expérience", gastronomie: "Gastronomie", mode: "Mode", marches: "Marché et salon" },
     age: (n) => (n === 0 ? "Pour tous" : `${n} ans et plus`),
     doors: (d) => `Ouverture des portes ${d} avant le début`,
     languages: { fr: "En français", en: "En anglais", "fr-en": "En français et en anglais", none: "Sans paroles" },
@@ -217,6 +228,7 @@ const T = {
       invalid_request: "Please check your details.",
       promo_code_invalid: "The promo code is no longer valid. Change your selection and remove it.",
       add_on_sold_out: "An option you chose just sold out for this session. Remove it or pick another session.",
+      ticket_type_sold_out: "The tickets at this price just sold out. Choose the regular price.",
     },
     generic: "Something went wrong. Please try again in a moment.",
     promo: {
@@ -224,6 +236,15 @@ const T = {
       toggle: "I have a promo code", applied: (c) => `Code ${c} applied`,
       unknown: "This code does not exist for this event.", inactive: "This code is no longer active.",
       not_started: "This code is not valid yet.", ended: "This code has expired.", used_up: "This code has reached its limit.",
+    },
+    deal: {
+      presale: "Presale price", instead: (p) => `instead of ${p}`, save: (pct) => `−${pct}%`,
+      until: (d) => `Until ${d}`, left: (n) => (n <= 25 ? `Only ${n} left at this price` : `${n} left at this price`),
+      soldOut: "Sold out at this price",
+    },
+    coupons: {
+      title: "Coupons", apply: "Apply", applied: "Applied", until: (d) => `until ${d}`,
+      left: (n) => `${n} left`, off: "off", label: (l, v) => `Coupon ${l}: ${v} off`, generic: "Discount",
     },
     v: {
       above_maximum: (n, l) => `${n}: at most ${l} per order.`,
@@ -288,7 +309,7 @@ const T = {
     stripe: "Secure payment by Stripe, directly to the organizer.",
     policyTitle: "Exchange and refund policy",
     factsTitle: "Good to know",
-    categories: { concerts: "Concert", festivals: "Festival", sports: "Sports", famille: "Family", "plein-air": "Outdoors", spectacles: "Theatre and comedy", soirees: "Nightlife", experiences: "Experience" },
+    categories: { concerts: "Concert", festivals: "Festival", sports: "Sports", famille: "Family", "plein-air": "Outdoors", spectacles: "Theatre and comedy", soirees: "Nightlife", experiences: "Experience", gastronomie: "Food and drink", mode: "Fashion", marches: "Market and fair" },
     age: (n) => (n === 0 ? "All ages" : `Ages ${n} and over`),
     doors: (d) => `Doors open ${d} before the start`,
     languages: { fr: "In French", en: "In English", "fr-en": "In French and English", none: "No spoken words" },
@@ -459,7 +480,7 @@ function applyLook(brand) {
   }
 }
 // Run 90: without the organizer's photo, the category's photo (Run 69), else a neutral one.
-const CATEGORY_PHOTO = { concerts: "cat-concerts", festivals: "cat-festivals", sports: "cat-sports", famille: "cat-family", "plein-air": "cat-camping", spectacles: "cat-shows", soirees: "cat-nightlife", experiences: "cat-live" };
+const CATEGORY_PHOTO = { concerts: "cat-concerts", festivals: "cat-festivals", sports: "cat-sports", famille: "cat-family", "plein-air": "cat-camping", spectacles: "cat-shows", soirees: "cat-nightlife", experiences: "cat-live", gastronomie: "cat-food", mode: "cat-fashion", marches: "cat-markets" };
 const fallbackPhoto = (category) => `/assets/home/img/${CATEGORY_PHOTO[category] ?? "event-fallback"}.webp`;
 
 /** The logo, or the Brand's name when the image cannot be shown. */
@@ -512,11 +533,45 @@ function dateParts(iso, tz) {
 const shortDate = (iso, tz) => fmt(iso, tz, { weekday: "short", day: "numeric", month: "short" });
 /** "From": the lowest paid admission before taxes (as the platform home shows it), or free. */
 function priceFrom(types) {
-  const admissions = (types ?? []).filter((t) => t.kind === "admission");
+  // Run 97: a presale with no ticket left is no longer a price anyone pays.
+  const admissions = (types ?? []).filter((t) => t.kind === "admission" && t.remaining !== 0);
   if (admissions.length === 0) return null;
   const paid = admissions.map((t) => t.priceCents).filter((c) => c > 0);
   return paid.length ? { cents: Math.min(...paid) } : { free: true };
 }
+
+/**
+ * Run 97: the cheapest presale ticket still on sale, against the regular ticket it undercuts
+ * (both as the organizer priced them), or null.
+ */
+function presaleFrom(types) {
+  const list = types ?? [];
+  const deals = list.filter((t) => t.kind === "admission" && t.presaleOf && t.remaining !== 0)
+    .map((t) => ({ t, regular: list.find((r) => r.id === t.presaleOf) }))
+    .filter((d) => d.regular && d.t.priceCents < d.regular.priceCents)
+    .sort((a, b) => a.t.priceCents - b.t.priceCents);
+  const d = deals[0];
+  return d ? { cents: d.t.priceCents, regularCents: d.regular.priceCents, endsAt: d.t.salesEndAt ?? null, remaining: d.t.remaining ?? null } : null;
+}
+/** Run 97: presale tickets right before the regular ticket each undercuts, the rest in order. */
+function presalesFirst(list) {
+  const ids = new Set(list.map((t) => t.id));
+  const out = [];
+  for (const t of list) {
+    if (t.presaleOf && ids.has(t.presaleOf)) continue;
+    out.push(...list.filter((p) => p.presaleOf === t.id), t);
+  }
+  return out;
+}
+/** Run 97: what a saving is, in whole percent (rounded down: never more than the truth). */
+const savePct = (cents, regularCents) => Math.floor(((regularCents - cents) / regularCents) * 100);
+/** Run 97: a coupon's value, as the organizer set it. */
+const couponValue = (c) => (c.kind === "percent" ? (LANG === "en" ? `${c.percent}%` : `${c.percent} %`) : money(c.amountCents));
+/** Run 97: a coupon shared as /acheter/…?coupon=CODE is applied on arrival. */
+const URL_COUPON = (() => {
+  const v = new URLSearchParams(location.search).get("coupon");
+  return v && /^[A-Za-z0-9-]{3,32}$/.test(v) ? v.toUpperCase() : null;
+})();
 
 class ApiError extends Error {
   constructor(status, code, details) { super(code); this.status = status; this.code = code; this.details = details; }
@@ -829,6 +884,11 @@ function OtherEvents({ brandName, events }) {
 // ── Event page blocks ───────────────────────────────────────────────────────
 const span = (m) => (m < 60 ? `${m} min` : `${Math.floor(m / 60)} h${m % 60 ? ` ${String(m % 60).padStart(2, "0")}` : ""}`);
 const dayMonth = (iso, tz) => fmt(iso, tz, { day: "numeric", month: "short" });
+// Run 97: when a presale or a coupon ends ("1 novembre, 23 h 59").
+const dayLong = (iso, tz) => {
+  const text = fmt(iso, tz, { day: "numeric", month: "long", hour: "numeric", minute: "2-digit" });
+  return LANG === "en" ? text : text.replace(/^1 /, "1er ");
+};
 /** "18 oct. – 31 janv.", or the one date and its time. */
 function dateRange(sessions, tz) {
   if (!sessions.length) return null;
@@ -838,7 +898,7 @@ function dateRange(sessions, tz) {
 }
 
 /** Run 93: the hero as the organizer describes the outing, with the price and a way to the tickets. */
-function Hero({ ev, src, own, onBroken, sessions, address, from, compact, zoomRef, onZoom, onBook }) {
+function Hero({ ev, src, own, onBroken, sessions, address, from, presale, compact, zoomRef, onZoom, onBook }) {
   const tz = ev.venue?.timezone;
   const when = dateRange(sessions, tz);
   const place = [address || ev.venue?.name, ev.venue?.city].filter(Boolean).join(", ");
@@ -866,10 +926,15 @@ function Hero({ ev, src, own, onBroken, sessions, address, from, compact, zoomRe
         ${facts.length > 0 && !compact && html`<ul class="hero-facts">${facts.map(([icon, label, value]) => html`<li>
           <${Icon} n=${icon} /><span><span class="hf-label">${label}</span><span class="hf-value">${value}</span></span></li>`)}</ul>`}
       </div>
-      ${from && !compact && html`<div class="hero-book">
+      ${from && !compact && html`<div class=${`hero-book${presale ? " has-deal" : ""}`}>
         <p class="hb-from"><span class="hb-label">${from.free ? T.ticketsTitle : T.from}</span>
           <span class="hb-price">${from.free ? T.free : money(from.cents)}</span>${!from.free && html`<span class="hb-tax">${T.plusTax}</span>`}</p>
         <button type="button" class="hb-btn" onClick=${onBook}>${T.book}</button>
+        ${presale && html`<p class="hb-deal"><span class="deal-badge">${T.deal.presale}</span>
+          <span class="hb-deal-price">${money(presale.cents)}</span>
+          <span class="hb-deal-was"><span class="sr-only">${T.deal.instead("")}</span><s>${money(presale.regularCents)}</s></span>
+          <span class="save">${T.deal.save(savePct(presale.cents, presale.regularCents))}</span>
+          ${presale.endsAt && html`<span class="hb-deal-until">${T.coupons.until(dayLong(presale.endsAt, ev.venue?.timezone))}</span>`}</p>`}
       </div>`}
     </div>
   </section>`;
@@ -1155,10 +1220,10 @@ function EventShop({ config }) {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState(null);
   // Run 36: the code as typed, the code applied (checked by the server), and why it was refused.
-  const [promoInput, setPromoInput] = useState("");
-  const [promo, setPromo] = useState(null);
+  const [promoInput, setPromoInput] = useState(URL_COUPON ?? "");
+  const [promo, setPromo] = useState(URL_COUPON);
   const [promoError, setPromoError] = useState(null);
-  const [promoOpen, setPromoOpen] = useState(false);
+  const [promoOpen, setPromoOpen] = useState(Boolean(URL_COUPON));
   // Run 72: a presale code that opens the sale before the public opening ({ code, opensAt }).
   const [presale, setPresale] = useState(null);
   // Run 90: the Brand's list (other events, this one's address), the photo, the zoom.
@@ -1211,7 +1276,8 @@ function EventShop({ config }) {
   const ev = data.event;
   applyLook(ev.brand);
   const tz = ev.venue?.timezone;
-  const admissions = data.ticketTypes.filter((t) => t.kind === "admission");
+  // Run 97: a presale ticket comes right before the regular ticket it undercuts.
+  const admissions = presalesFirst(data.ticketTypes.filter((t) => t.kind === "admission"));
   const addOns = data.ticketTypes.filter((t) => t.kind === "add_on");
   const wanted = items.reduce((n, i) => n + (data.ticketTypes.find((t) => t.id === i.ticketTypeId)?.kind === "admission" ? i.quantity : 0), 0);
   const today = dayIn(new Date(), tz);
@@ -1227,6 +1293,8 @@ function EventShop({ config }) {
   const left = (t) => (t.kind === "add_on" && session?.addOnsAvailable && t.id in session.addOnsAvailable ? session.addOnsAvailable[t.id] : null);
   const tooMany = !!session && wanted > session.available;
   const from = priceFrom(data.ticketTypes);
+  const presaleDeal = DOOR ? null : presaleFrom(data.ticketTypes);
+  const coupons = DOOR ? [] : data.coupons ?? [];
   const own = https(ev.imageUrl);
   const photo = own && !photoBroken ? own : fallbackPhoto(ev.category);
   const others = (listing?.events ?? []).filter((e) => e.id !== route.eventId);
@@ -1237,17 +1305,45 @@ function EventShop({ config }) {
   const typeRow = (t) => {
     const q = qty[t.id] ?? 0;
     const about = String(t.description ?? "").trim();
+    // Run 97: a presale shows the regular price it undercuts, when it ends and what is left.
+    const regular = t.presaleOf ? data.ticketTypes.find((r) => r.id === t.presaleOf) : null;
+    const deal = regular && t.priceCents < regular.priceCents ? regular : null;
+    const limited = Number.isInteger(t.remaining) ? t.remaining : null;
+    const gone = limited === 0;
     const meta = `${t.kind === "add_on" ? SCOPE_TEXT(t) : ""}${t.openDate ? T.openDate : ""}${t.minQuantity > 1 ? T.minimum(t.minQuantity) : ""}${left(t) !== null ? T.addOnLeft(left(t)) : ""}`.replace(/^ · /, "");
-    return html`<div class=${`type${q > 0 ? " is-on" : ""}`}>
-      <div class="type-info"><div class="name">${t.name}</div>
-        <div class="type-price"><span class="price">${t.priceCents === 0 ? T.free : money(t.priceCents)}</span>${meta && html`<span class="meta"> · ${meta}</span>`}</div>
+    const dealMeta = deal ? [t.salesEndAt && T.deal.until(dayLong(t.salesEndAt, tz)), limited !== null && !gone && T.deal.left(limited)].filter(Boolean) : [];
+    return html`<div class=${`type${q > 0 ? " is-on" : ""}${deal ? " is-deal" : ""}${gone ? " is-gone" : ""}`}>
+      <div class="type-info">
+        ${deal && html`<p class="type-deal"><span class="deal-badge">${T.deal.presale}</span><span class="save">${T.deal.save(savePct(t.priceCents, deal.priceCents))}</span></p>`}
+        <div class="name">${t.name}</div>
+        <div class="type-price"><span class="price">${t.priceCents === 0 ? T.free : money(t.priceCents)}</span>${deal && html` <span class="was"><span class="sr-only">${T.deal.instead("")}</span><s>${money(deal.priceCents)}</s></span>`}${meta && html`<span class="meta"> · ${meta}</span>`}</div>
+        ${(dealMeta.length > 0 || gone) && html`<p class="deal-meta">${gone ? T.deal.soldOut : dealMeta.map((m) => html`<span>${m}</span>`)}</p>`}
         ${about && html`<details class="type-more"><summary>${T.moreInfo}</summary><p>${about}</p></details>`}</div>
       <div class="stepper">
         <button type="button" class="step-btn" aria-label=${T.remove(t.name)} disabled=${!(q > 0)} onClick=${() => set(t.id, q - 1)}><${Icon} n="minus" /></button>
         <output aria-label=${T.quantity(t.name)}><${Num} value=${q} /></output>
-        <button type="button" class="step-btn plus" aria-label=${T.add(t.name)} disabled=${(t.kind === "add_on" && wanted === 0) || q >= Math.min(t.maxQuantity, left(t) ?? Infinity)} onClick=${() => set(t.id, q + 1)}><${Icon} n="plus" /></button>
+        <button type="button" class="step-btn plus" aria-label=${T.add(t.name)} disabled=${(t.kind === "add_on" && wanted === 0) || q >= Math.min(t.maxQuantity, left(t) ?? Infinity, limited ?? Infinity)} onClick=${() => set(t.id, q + 1)}><${Icon} n="plus" /></button>
       </div></div>`;
   };
+  // Run 97: a coupon goes into the promo code, checked by the server like a typed one.
+  const applyCoupon = (code) => { setPromoError(null); setPromoInput(code); setPromo(code); setPromoOpen(true); };
+  const couponsBlock = coupons.length > 0 && html`<section class="coupons" aria-labelledby="coupons-title">
+    <h3 id="coupons-title" class="coupons-title"><${Icon} n="tag" />${T.coupons.title}</h3>
+    <ul class="coupon-list">${coupons.map((c) => {
+      const on = promo === c.code;
+      const meta = [c.endsAt && T.coupons.until(dayLong(c.endsAt, tz)), Number.isInteger(c.remaining) && T.coupons.left(c.remaining)].filter(Boolean).join(" · ");
+      return html`<li class=${`coupon${on ? " is-on" : ""}`}>
+        <p class="coupon-value"><strong>−${couponValue(c)}</strong><span>${T.coupons.off}</span></p>
+        <div class="coupon-body" id=${`coupon-${c.code}`}>
+          <p class="coupon-label">${c.label ?? T.coupons.generic}</p>
+          ${meta && html`<p class="coupon-meta">${meta}</p>`}
+          <p class="coupon-code"><code>${c.code}</code></p>
+        </div>
+        <button type="button" class=${`coupon-btn${on ? " is-on" : ""}`} aria-pressed=${on ? "true" : "false"} aria-describedby=${`coupon-${c.code}`} onClick=${() => applyCoupon(c.code)}>
+          ${on ? html`<${Icon} n="check" />${T.coupons.applied}` : T.coupons.apply}</button>
+      </li>`;
+    })}</ul>
+  </section>`;
 
   const reserve = async () => {
     setBusy(true); setError(null);
@@ -1258,7 +1354,7 @@ function EventShop({ config }) {
     } catch (e) {
       if (e.code === "promo_code_invalid") { setPromoError(e.details?.reason ?? "unknown"); setPromo(null); }
       else setError(e);
-      if (e.code === "sold_out" || e.code === "add_on_sold_out" || e.code === "session_not_available") load();
+      if (e.code === "sold_out" || e.code === "add_on_sold_out" || e.code === "ticket_type_sold_out" || e.code === "session_not_available") load();
     }
     finally { setBusy(false); }
   };
@@ -1412,6 +1508,7 @@ function EventShop({ config }) {
       ${error && html`<div class="alert bad" role="alert">${errText(error)}</div>`}
       ${(closed || early) && html`<${SaleWindow} closed=${closed} opensAt=${ev.salesOpenAt} tz=${tz} eventId=${route.eventId} presale=${presale} onPresale=${setPresale} />`}
       ${canBuy && presale && html`<div class="alert ok" role="status">${T.presaleOpenNow}</div>`}
+      ${canBuy && couponsBlock}
       ${canBuy && html`
         <div class="step">
           <h3 class="step-title">${stepNo(1)}${T.step1}</h3>
@@ -1451,7 +1548,7 @@ function EventShop({ config }) {
   return html`<${Top} brand=${ev.brand} extra=${doorBadge} />
   <main class=${`event-main${canBuy && sessions.length > 0 ? " with-bar" : ""}`}>
     <${Hero} ev=${ev} src=${photo} own=${photo === own} onBroken=${(e) => (photo === own ? setPhotoBroken(true) : hideBroken(e))}
-      sessions=${sessions} address=${address} from=${from} compact=${DOOR}
+      sessions=${sessions} address=${address} from=${from} presale=${presaleDeal} compact=${DOOR}
       zoomRef=${zoomButton} onZoom=${() => setZoom({ photos: [{ src: photo, alt: ev.title }], start: 0 })} onBook=${book} />
     <div class="wrap layout">
       <section class="side" id="billets" aria-labelledby="panel-title">${panel}</section>

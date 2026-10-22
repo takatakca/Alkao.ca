@@ -180,6 +180,48 @@ describe("Run 64: the premium platform home", () => {
     }
   });
 
+  it("shows a presale's saving or a public coupon, as set, and a rail of them; a presale with nothing left is no price (Run 97)", async () => {
+    const h = seed.havana;
+    await setOptIn(h.clientId, h.brandId, havanaOwner, true);
+    const general = h.types.find((t) => t.code === "GENERAL")!;
+    const { rows } = await db.pool.query<{ id: string }>(
+      `INSERT INTO public.ticketing_ticket_types (client_id, brand_id, event_id, code, name, kind, price_cents, max_quantity, counts_as_adult, presale_of, sales_end_at, quantity_limit)
+       VALUES ($1, $2, $3, 'GENERAL_PRE', 'Admission générale — Prévente', 'admission', 1495, 10, true, $4, now() + interval '10 days', 50) RETURNING id`,
+      [h.clientId, h.brandId, h.eventId, general.id],
+    );
+    try {
+      const fr = await page();
+      // 1495 against 2995 is 50.08 % off: shown as 50 %, never rounded up.
+      expect(fr).toContain('<p class="deal-ribbon">');
+      expect(fr).toContain("<span>Prévente −50 %</span>");
+      // One event: its card says it; a rail would only repeat it.
+      expect(fr).not.toContain('id="deals"');
+      expect(fr).toMatch(/À partir de 14,95\s\$ \+ taxes/);
+      expect(await page("lang=en")).toContain("<span>Presale −50%</span>");
+
+      // Every presale ticket held or sold: no ribbon, and its price is no longer "From".
+      await db.pool.query(
+        `INSERT INTO public.ticketing_ticket_type_counts (ticket_type_id, client_id, brand_id, event_id, sold_count) VALUES ($1, $2, $3, $4, 50)`,
+        [rows[0]!.id, h.clientId, h.brandId, h.eventId],
+      );
+      await db.pool.query(
+        `INSERT INTO public.ticketing_promo_codes (client_id, brand_id, event_id, code, kind, percent, public, label) VALUES ($1, $2, $3, 'PRIVE10', 'percent', 10, false, null)`,
+        [h.clientId, h.brandId, h.eventId],
+      );
+      let after = await page();
+      expect(after).not.toContain('class="deal-ribbon"');
+      expect(after).toMatch(/À partir de 17,95\s\$ \+ taxes/);
+      // A public coupon shows instead.
+      await db.pool.query(`UPDATE public.ticketing_promo_codes SET public = true WHERE code = 'PRIVE10'`);
+      after = await page();
+      expect(after).toContain("<span>Coupon −10 %</span>");
+    } finally {
+      await db.pool.query(`DELETE FROM public.ticketing_promo_codes WHERE code = 'PRIVE10'`);
+      await db.pool.query(`DELETE FROM public.ticketing_ticket_type_counts WHERE ticket_type_id = $1`, [rows[0]!.id]);
+      await db.pool.query(`DELETE FROM public.ticketing_ticket_types WHERE id = $1`, [rows[0]!.id]);
+    }
+  });
+
   it("searches on the server by words, city, date and category, and drops unknown values", async () => {
     const h = seed.havana;
     await setOptIn(h.clientId, h.brandId, havanaOwner, true);

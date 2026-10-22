@@ -111,6 +111,7 @@ export function formatWhen(at: Date, timeZone: string, language: "fr" | "en"): s
 const CATEGORY: Record<string, string> = {
   concerts: "concert", festivals: "festival", sports: "sport", famille: "sortie en famille", "plein-air": "plein air",
   spectacles: "spectacle", soirees: "soirée", experiences: "expérience",
+  gastronomie: "gastronomie", mode: "mode", marches: "marché ou salon",
 };
 
 async function eventFacts(db: Db, s: TenantScope, event: Record<string, unknown>, venues: Map<string, Record<string, unknown>>, language: "fr" | "en", now: Date) {

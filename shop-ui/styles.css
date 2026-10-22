@@ -200,6 +200,35 @@ ul.violations { margin: 0; padding-left: 1.1rem; }
 .promo-ok .i { width: 18px; height: 18px; }
 .promo-ok .link-btn { color: var(--ink); font-size: .88rem; }
 
+/* ── Run 97: presale prices and coupons (the Brand's accent, never a status colour) ── */
+.deal-badge { display: inline-flex; align-items: center; white-space: nowrap; min-height: 22px; padding: 0 8px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); font-size: .72rem; font-weight: 750; letter-spacing: .04em; text-transform: uppercase; }
+.save { display: inline-flex; align-items: center; white-space: nowrap; min-height: 22px; padding: 0 7px; border: 1px solid currentColor; border-radius: 999px; font-size: .76rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.type-deal { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+.type.is-deal { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); box-shadow: inset 3px 0 0 var(--accent); }
+.type-price .was { color: var(--muted); font-variant-numeric: tabular-nums; }
+.type-price .was s { text-decoration-thickness: 1.5px; }
+.deal-meta { display: grid; margin-top: 3px; font-size: .84rem; font-weight: 600; line-height: 1.35; color: var(--ink); }
+.type.is-gone .name, .type.is-gone .type-price { color: var(--muted); }
+.type.is-gone .deal-meta { color: var(--muted); }
+
+.coupons { display: grid; gap: 10px; margin-bottom: 4px; }
+.coupons-title { display: flex; align-items: center; gap: 8px; font-size: 1rem; }
+.coupons-title .i { width: 18px; height: 18px; }
+.coupon-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.coupon { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "value body" "value action"; align-items: center; gap: 8px 14px; padding: 12px 14px 12px 12px; border: 1px dashed color-mix(in srgb, var(--accent) 55%, var(--line)); border-radius: 14px; background: var(--panel); transition: border-color .2s, box-shadow .2s; }
+.coupon.is-on { border-style: solid; border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.coupon-value { grid-area: value; align-self: stretch; display: grid; place-content: center; justify-items: center; min-width: 78px; min-height: 64px; padding: 6px 8px; border-radius: 10px; background: var(--accent); color: var(--accent-ink); line-height: 1.1; text-align: center; }
+.coupon-value strong { font-family: var(--font-head); font-size: 1.15rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.coupon-value span { font-size: .7rem; font-weight: 600; opacity: .9; }
+.coupon-body { grid-area: body; display: grid; gap: 2px; }
+.coupon-label { font-weight: 650; line-height: 1.25; }
+.coupon-meta { font-size: .82rem; color: var(--muted); }
+.coupon-code code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .8rem; letter-spacing: .08em; color: var(--ink); background: var(--soft); padding: 1px 6px; border-radius: 6px; }
+.coupon-btn { grid-area: action; justify-self: start; display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 14px; border: 1px solid var(--ink); border-radius: 999px; background: transparent; color: var(--ink); font-weight: 650; font-size: .88rem; cursor: pointer; white-space: nowrap; transition: background .2s, color .2s; }
+.coupon-btn:hover { background: var(--soft); }
+.coupon-btn.is-on { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); cursor: default; }
+.coupon-btn .i { width: 16px; height: 16px; }
+
 /* The server's quote */
 .quote-box:empty { display: none; }
 .quote-box { padding: 14px 16px; border-radius: 14px; background: var(--soft); animation: fade-up .3s var(--ease) both; }
@@ -472,6 +501,13 @@ table.quote tr.total td { padding-top: 10px; border-top: 1px solid var(--soft-2)
 .hb-label { font-size: .84rem; color: #D5DCE8; }
 .hb-price { font-family: var(--font-head); font-weight: 800; font-size: 1.75rem; letter-spacing: -.01em; color: #fff; font-variant-numeric: tabular-nums; }
 .hb-tax { font-size: .84rem; color: #D5DCE8; }
+.hero-book.has-deal { flex-wrap: wrap; row-gap: 14px; }
+.hb-deal { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding-top: 12px; border-top: 1px solid rgba(255, 255, 255, .18); color: #fff; font-size: .9rem; }
+.hb-deal .deal-badge { background: #fff; color: #0E1525; }
+.hb-deal-price { font-weight: 750; font-variant-numeric: tabular-nums; }
+.hb-deal-was { color: #D5DCE8; font-variant-numeric: tabular-nums; }
+.hb-deal-was s { text-decoration-thickness: 1.5px; }
+.hb-deal-until { color: #D5DCE8; }
 .hb-btn { min-height: 52px; padding: 0 34px; border: 0; border-radius: 999px; background: #fff; color: #0E1525; font-weight: 700; font-size: 1.02rem; cursor: pointer; transition: transform .18s var(--ease), box-shadow .25s var(--ease); }
 .hb-btn:hover { box-shadow: 0 8px 22px -8px rgba(0, 0, 0, .6); }
 .hb-btn:active { transform: scale(.97); }

@@ -148,6 +148,8 @@ const PATHS: Record<string, string> = {
   unzoom: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5M8 11h6"/>',
   expand: '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>',
   down: '<path d="m6 9 6 6 6-6"/>',
+  // Run 97: a presale or a coupon on an event card.
+  tag: '<path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1.5"/>',
   users: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8M18.5 20a6.5 6.5 0 0 0-3-5.5"/>',
 };
 export const icon = (name: string, cls = "i") =>
@@ -228,6 +230,8 @@ export function siteFooter({ t, lang, base, home, here, otherHere, year }: Frame
 export interface Card {
   id: string;
   title: string;
+  /** Run 97: "Prévente −20 %" or "Coupon −15 %", as the organizer set it; null without either. */
+  deal: string | null;
   brand: string;
   brandId: string;
   /** Lowest paid admission before taxes; null when free; undefined when unknown. */
@@ -278,6 +282,25 @@ function priceLabel(lang: Lang, fromCents: number | null | undefined): string | 
   return `${t.from} ${money} ${t.plusTax}`;
 }
 
+/**
+ * Run 97: the presale first (its saving against the regular price, rounded down), else the
+ * best public coupon; both only while on.
+ */
+function dealLabel(lang: Lang, e: HomeEvent): string | null {
+  const t = COPY[lang];
+  const p = e.presale;
+  if (p && p.regularCents > p.priceCents && p.remaining !== 0) {
+    return t.presaleRibbon(Math.floor(((p.regularCents - p.priceCents) / p.regularCents) * 100));
+  }
+  const c = e.coupon;
+  if (c?.percent) return t.couponRibbon(lang === "en" ? `${c.percent}%` : `${c.percent} %`);
+  if (c?.amountCents) {
+    const whole = c.amountCents % 100 === 0;
+    return t.couponRibbon(new Intl.NumberFormat(t.lang, { style: "currency", currency: "CAD", minimumFractionDigits: whole ? 0 : 2, maximumFractionDigits: 2 }).format(c.amountCents / 100));
+  }
+  return null;
+}
+
 export function cardsOf(brands: HomeBrand[], lang: Lang, origin: string | null, asset: (name: string) => string): Card[] {
   const t = COPY[lang];
   const locale = t.lang;
@@ -319,6 +342,7 @@ export function cardsOf(brands: HomeBrand[], lang: Lang, origin: string | null, 
       cards.push({
         id: e.id,
         title: e.title,
+        deal: dealLabel(lang, e),
         brand: b.name,
         brandId: b.brandId,
         fromCents: e.fromCents,
@@ -389,6 +413,7 @@ export function eventCard(t: Words, c: Card, { eager = false, venueLink = true }
     <p class="date-badge" aria-hidden="true"><span>${esc(c.day)}</span>${esc(c.month)}</p>
     <button class="fav" type="button" data-fav="${esc(c.id)}" aria-pressed="false" aria-label="${esc(`${t.favorite} : ${c.title}`)}" hidden>${icon("heart")}</button>
     <div class="card-body">
+      ${c.deal ? `<p class="deal-ribbon">${icon("tag")}<span>${esc(c.deal)}</span></p>` : ""}
       <p class="card-brand">${c.logo ? `<img src="${esc(c.logo)}" alt="" loading="lazy" decoding="async" />` : ""}${esc(c.brand)}</p>
       <h3 class="card-title"><a href="${esc(c.shop)}">${esc(c.title)}</a></h3>
       <p class="card-meta">${icon("clock")}<time datetime="${esc(c.next.toISOString())}">${esc(c.nextLabel)}</time></p>
@@ -478,6 +503,8 @@ export function renderHome({ origin, lang, brands, query, now, asset }: RenderOp
   const shown = filtered ? all.filter((c) => matches(c, query, now)) : all;
   if (query.sort === "price") shown.sort((a, b) => cheapest(a) - cheapest(b) || a.next.getTime() - b.next.getTime());
   const week = all.filter((c) => c.next.getTime() - now.getTime() <= 7 * 86_400_000);
+  // Run 97: presales and coupons on now.
+  const deals = all.filter((c) => c.deal);
   const cities = [...new Set(all.map((c) => c.city).filter(Boolean))].sort((a, b) => a.localeCompare(b, t.lang));
   const link = (params: Record<string, string>) => {
     const p = new URLSearchParams({ ...(lang === "en" ? { lang: "en" } : {}), ...params });
@@ -739,6 +766,7 @@ ${siteHeader(frame)}
           : filtered
             ? shown.length ? `<div class="grid">${shown.map((c) => card(c)).join("")}</div>` : `<p class="empty-inline">${esc(t.noResults)}</p>`
             : `${rail("recent", t.recentTitle, "", [], `<button class="link-btn" type="button" data-recent-clear aria-label="${esc(t.clearRecentLabel)}">${esc(t.clearRecent)}</button>`).replace('<div class="rail-block">', '<div class="rail-block" data-recent hidden>')}
+               ${deals.length && all.length > 3 ? rail("deals", t.dealsTitle, t.dealsLead, deals) : ""}
                ${week.length && all.length > 3 ? `${rail("week", t.weekTitle, "", week)}<h3 class="grid-title">${esc(t.allEvents)}</h3>` : ""}
                <div class="grid">${all.map((c, i) => card(c, i < 3)).join("")}</div>`}
       </div>
