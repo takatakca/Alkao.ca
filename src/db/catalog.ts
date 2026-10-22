@@ -27,8 +27,8 @@ const EVENT_COLUMNS =
 const SESSION_COLUMNS = "id, event_id, starts_at, ends_at, capacity, reserved_count, sold_count, status, created_at, updated_at";
 const TYPE_COLUMNS =
   "id, event_id, code, name, description, kind, price_cents, min_quantity, max_quantity, max_adults_in_order, counts_as_adult, add_on_scope, grants_session_change, open_date, active, sort_order, created_at, updated_at, stock_per_session, " +
-  // Run 97: presale tickets.
-  "presale_of, sales_end_at, quantity_limit";
+  // Run 97: presale tickets. Run 98: festival passes.
+  "presale_of, sales_end_at, quantity_limit, pass";
 
 /** camelCase body field → column, for whitelisted updates. */
 function updateSet(fields: Record<string, unknown>, allowed: Record<string, string>, startAt: number) {
@@ -181,6 +181,7 @@ export function createTicketType(q: Queryable, s: TenantScope, eventId: string, 
   presaleOf?: string | null | undefined;
   salesEndAt?: string | null | undefined;
   quantityLimit?: number | null | undefined;
+  pass?: boolean | undefined;
 }) {
   return mapDbErrors(() =>
     one(
@@ -188,11 +189,11 @@ export function createTicketType(q: Queryable, s: TenantScope, eventId: string, 
       `INSERT INTO public.ticketing_ticket_types
          (client_id, brand_id, event_id, code, name, description, kind, price_cents, min_quantity, max_quantity,
           max_adults_in_order, counts_as_adult, add_on_scope, active, sort_order, grants_session_change, open_date, stock_per_session,
-          presale_of, sales_end_at, quantity_limit)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21) RETURNING ${TYPE_COLUMNS}`,
+          presale_of, sales_end_at, quantity_limit, pass)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22) RETURNING ${TYPE_COLUMNS}`,
       [s.clientId, s.brandId, eventId, t.code, t.name, t.description ?? null, t.kind, t.priceCents, t.minQuantity, t.maxQuantity,
         t.maxAdultsInOrder ?? null, t.countsAsAdult, t.addOnScope ?? null, t.active, t.sortOrder, t.grantsSessionChange ?? false, t.openDate ?? false,
-        t.stockPerSession ?? null, t.presaleOf ?? null, t.salesEndAt ?? null, t.quantityLimit ?? null],
+        t.stockPerSession ?? null, t.presaleOf ?? null, t.salesEndAt ?? null, t.quantityLimit ?? null, t.pass ?? false],
       "ticket_type_not_found",
     ),
   );
@@ -293,10 +294,10 @@ export async function loadTicketTypeRules(q: Queryable, s: TenantScope, eventId:
   const { rows } = await q.query<{
     id: string; code: string; name: string; kind: "admission" | "add_on"; price_cents: number; min_quantity: number;
     max_quantity: number; max_adults_in_order: number | null; counts_as_adult: boolean; add_on_scope: TicketTypeRule["addOnScope"]; active: boolean;
-    open_date: boolean; presale_of: string | null; sales_end_at: Date | null; quantity_limit: number | null;
+    open_date: boolean; presale_of: string | null; sales_end_at: Date | null; quantity_limit: number | null; pass: boolean;
   }>(
     `SELECT id, code, name, kind, price_cents, min_quantity, max_quantity, max_adults_in_order, counts_as_adult, add_on_scope, active, open_date,
-            presale_of, sales_end_at, quantity_limit
+            presale_of, sales_end_at, quantity_limit, pass
      FROM public.ticketing_ticket_types WHERE event_id = $1 AND client_id = $2 AND brand_id = $3 ORDER BY sort_order, code`,
     [eventId, s.clientId, s.brandId],
   );
@@ -304,7 +305,7 @@ export async function loadTicketTypeRules(q: Queryable, s: TenantScope, eventId:
     id: r.id, code: r.code, name: r.name, kind: r.kind, priceCents: r.price_cents, minQuantity: r.min_quantity,
     maxQuantity: r.max_quantity, maxAdultsInOrder: r.max_adults_in_order, countsAsAdult: r.counts_as_adult,
     addOnScope: r.add_on_scope, active: r.active, openDate: r.open_date,
-    presaleOf: r.presale_of, salesEndAt: r.sales_end_at, quantityLimit: r.quantity_limit,
+    presaleOf: r.presale_of, salesEndAt: r.sales_end_at, quantityLimit: r.quantity_limit, pass: r.pass,
   }));
 }
 
@@ -378,6 +379,17 @@ export async function admissionPriceFloors(q: Queryable, s: TenantScope, now: Da
     [s.clientId, s.brandId, now],
   );
   return new Map(rows.map((r) => [r.event_id, r.min_paid === null ? null : Number(r.min_paid)]));
+}
+
+/** Run 98: the event's sessions a pass bought now covers: on sale and still to come, in time order. */
+export async function passSessions(q: Queryable, s: TenantScope, eventId: string, now: Date): Promise<SellableSession[]> {
+  const { rows } = await q.query<{ id: string; event_id: string; starts_at: Date; status: SellableSession["status"] }>(
+    `SELECT id, event_id, starts_at, status FROM public.ticketing_sessions
+     WHERE event_id = $1 AND client_id = $2 AND brand_id = $3 AND status = 'on_sale' AND starts_at > $4
+     ORDER BY starts_at, id`,
+    [eventId, s.clientId, s.brandId, now],
+  );
+  return rows.map((r) => ({ id: r.id, eventId: r.event_id, startsAt: r.starts_at, status: r.status }));
 }
 
 /** Run 97: an event's presale and coupon, as the platform home shows them. */

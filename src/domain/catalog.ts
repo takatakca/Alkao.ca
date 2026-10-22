@@ -30,6 +30,8 @@ export interface TicketTypeRule {
   salesEndAt?: Date | null;
   /** Run 97: tickets for the whole event; the database refuses a cart past it. */
   quantityLimit?: number | null;
+  /** Run 98: a festival pass, valid once at every session on sale when bought. */
+  pass?: boolean;
 }
 
 /** Run 97: a type whose sale has ended is sold no more (a cart with it is refused as inactive). */

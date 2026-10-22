@@ -51,7 +51,7 @@ export async function exportBuyerData(db: Db, s: TenantScope, orderId: string, n
     ),
     db.query(
       `SELECT k.order_id, k.id, tt.name AS ticket_type, k.status, k.void_reason,
-              (SELECT sc.scanned_at FROM public.ticketing_scans sc WHERE sc.ticket_id = k.id AND sc.result = 'admitted') AS admitted_at
+              (SELECT min(sc.scanned_at) FROM public.ticketing_scans sc WHERE sc.ticket_id = k.id AND sc.result = 'admitted') AS admitted_at
        FROM public.ticketing_tickets k
        JOIN public.ticketing_orders o ON o.id = k.order_id AND o.client_id = k.client_id AND o.brand_id = k.brand_id
        JOIN public.ticketing_ticket_types tt ON tt.id = k.ticket_type_id AND tt.client_id = k.client_id AND tt.brand_id = k.brand_id

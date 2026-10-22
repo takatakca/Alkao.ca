@@ -152,18 +152,35 @@ export async function getGateSession(q: Queryable, s: TenantScope, sessionId: st
 
 export async function sessionCredentials(q: Queryable, s: TenantScope, sessionId: string) {
   // A credential's ticket is always in the credential's session (composite key): saying so
-  // in the join lets the manifest read only this session's tickets (Run 18).
+  // in the join lets the manifest read only this session's tickets (Run 18). Run 98: then the
+  // festival passes bought for an earlier session that cover this one, entered here or not.
   const { rows } = await q.query<{ id: string; status: "active" | "revoked"; code: string; name: string; admitted: boolean; order_id: string }>(
-    `SELECT c.id, c.status, tt.code, tt.name, t.order_id,
-            EXISTS (SELECT 1 FROM public.ticketing_scans sc WHERE sc.ticket_id = c.ticket_id AND sc.result = 'admitted') AS admitted
-     FROM public.ticketing_credentials c
-     JOIN public.ticketing_tickets t ON t.id = c.ticket_id AND t.session_id = c.session_id AND t.client_id = c.client_id AND t.brand_id = c.brand_id
-     JOIN public.ticketing_ticket_types tt ON tt.id = t.ticket_type_id AND tt.client_id = t.client_id AND tt.brand_id = t.brand_id
-     WHERE c.session_id = $1 AND c.client_id = $2 AND c.brand_id = $3
-     ORDER BY c.created_at, c.id`,
+    `SELECT id, status, code, name, order_id, admitted FROM (
+       SELECT c.id, c.status, tt.code, tt.name, t.order_id, c.created_at,
+              EXISTS (SELECT 1 FROM public.ticketing_scans sc WHERE sc.ticket_id = c.ticket_id AND sc.session_id = $1 AND sc.result = 'admitted') AS admitted
+       FROM public.ticketing_credentials c
+       JOIN public.ticketing_tickets t ON t.id = c.ticket_id AND t.session_id = c.session_id AND t.client_id = c.client_id AND t.brand_id = c.brand_id
+       JOIN public.ticketing_ticket_types tt ON tt.id = t.ticket_type_id AND tt.client_id = t.client_id AND tt.brand_id = t.brand_id
+       WHERE c.session_id = $1 AND c.client_id = $2 AND c.brand_id = $3
+       UNION ALL
+       SELECT c.id, c.status, tt.code, tt.name, t.order_id, c.created_at,
+              EXISTS (SELECT 1 FROM public.ticketing_scans sc WHERE sc.ticket_id = c.ticket_id AND sc.session_id = $1 AND sc.result = 'admitted') AS admitted
+       FROM public.ticketing_ticket_pass_seats p
+       JOIN public.ticketing_credentials c ON c.ticket_id = p.ticket_id AND c.client_id = p.client_id AND c.brand_id = p.brand_id
+       JOIN public.ticketing_tickets t ON t.id = c.ticket_id AND t.session_id = c.session_id AND t.client_id = c.client_id AND t.brand_id = c.brand_id
+       JOIN public.ticketing_ticket_types tt ON tt.id = t.ticket_type_id AND tt.client_id = t.client_id AND tt.brand_id = t.brand_id
+       WHERE p.session_id = $1 AND p.client_id = $2 AND p.brand_id = $3
+     ) x
+     ORDER BY created_at, id`,
     [sessionId, s.clientId, s.brandId],
   );
   return rows;
+}
+
+/** Run 98: whether a festival pass ticket covers a session other than its own. */
+export async function passCovers(q: Queryable, ticketId: string, sessionId: string): Promise<boolean> {
+  const { rowCount } = await q.query(`SELECT 1 FROM public.ticketing_ticket_pass_seats WHERE ticket_id = $1 AND session_id = $2`, [ticketId, sessionId]);
+  return (rowCount ?? 0) > 0;
 }
 
 // ── Scans ───────────────────────────────────────────────────────────────────
@@ -179,10 +196,11 @@ export async function admissionsForOrder(q: Queryable, s: TenantScope, orderId: 
   return new Map(rows.map((r) => [r.ticket_id, r.scanned_at]));
 }
 
-export async function findAdmission(q: Queryable, ticketId: string): Promise<{ scannedAt: Date; deviceId: string | null } | null> {
+/** A ticket's admission at a session (Run 98: a pass has one per session it covers). */
+export async function findAdmission(q: Queryable, ticketId: string, sessionId: string): Promise<{ scannedAt: Date; deviceId: string | null } | null> {
   const { rows } = await q.query<{ scanned_at: Date; device_id: string | null }>(
-    `SELECT scanned_at, device_id FROM public.ticketing_scans WHERE ticket_id = $1 AND result = 'admitted'`,
-    [ticketId],
+    `SELECT scanned_at, device_id FROM public.ticketing_scans WHERE ticket_id = $1 AND session_id = $2 AND result = 'admitted'`,
+    [ticketId, sessionId],
   );
   return rows[0] ? { scannedAt: rows[0].scanned_at, deviceId: rows[0].device_id } : null;
 }
