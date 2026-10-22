@@ -33,7 +33,16 @@ export const CATEGORIES: Category[] = [
   { id: "soirees", image: "cat-nightlife.webp", label: { fr: "Soirées", en: "Nightlife" },
     words: ["soiree", "party", "club", " dj", "bar ", "nuit", "night", "rave", "gala"] },
   { id: "experiences", image: "cat-live.webp", label: { fr: "Expériences", en: "Experiences" },
-    words: ["experience", "atelier", "workshop", "visite", "tour guide", "degustation", "tasting", "conference", "salon", "expo", "exposition", "activite", "activity", "forfait", "package"] },
+    words: ["experience", "atelier", "workshop", "visite", "tour guide", "conference", "expo", "exposition", "activite", "activity", "forfait", "package"] },
+  // Run 97: the events ALKAO now sells too: food, fashion, and markets and fairs.
+  { id: "gastronomie", image: "cat-food.webp", label: { fr: "Gastronomie", en: "Food and drink" },
+    words: ["gastronom", "food", "bouffe", "cuisine", "culinaire", "culinary", "degustation", "tasting", "vin ", "wine", "biere", "beer", "brasserie", "brewery", "bbq", "barbecue", "poutine", "street food", "food truck", "chef"] },
+  { id: "mode", image: "cat-fashion.webp", label: { fr: "Mode", en: "Fashion" },
+    // Not "mode" alone: "en mode Halloween" is not a fashion show.
+    words: ["fashion", "vetement", "clothing", "vente trottoir", "sidewalk sale", "liquidation", "friperie", "thrift", "defile de mode", "runway", "pop-up", "pop up"] },
+  { id: "marches", image: "cat-markets.webp", label: { fr: "Marchés et salons", en: "Markets and fairs" },
+    // Not "marche" alone: a walk ("une marche") is not a market.
+    words: ["marche de", "marche public", "marche fermier", "marche aux", "market", "salon", "foire", "bazar", "bazaar", "artisan", "exposant", "exhibitor", "kiosque", "vendors"] },
 ];
 
 export interface HelpTopic {
@@ -135,6 +144,11 @@ export const COPY = {
     featuredLead: "Les prochaines dates, en vente maintenant.",
     eventsTitle: "Événements en vente",
     weekTitle: "Cette semaine",
+    // Run 97: presales and coupons, always as the organizer set them.
+    dealsTitle: "Préventes et rabais",
+    dealsLead: "Les prix de prévente et les coupons des organisateurs, jusqu’à leur date de fin.",
+    presaleRibbon: (pct: number) => `Prévente −${pct} %`,
+    couponRibbon: (value: string) => `Coupon −${value}`,
     allEvents: "Toutes les dates",
     citiesTitle: "Par ville",
     results: (n: number) => (n === 1 ? "1 événement" : `${n} événements`),
@@ -346,6 +360,10 @@ export const COPY = {
     featuredLead: "Upcoming dates, on sale now.",
     eventsTitle: "Events on sale",
     weekTitle: "This week",
+    dealsTitle: "Presales and discounts",
+    dealsLead: "Organizers’ presale prices and coupons, until they end.",
+    presaleRibbon: (pct: number) => `Presale −${pct}%`,
+    couponRibbon: (value: string) => `Coupon −${value}`,
     allEvents: "All dates",
     citiesTitle: "By city",
     results: (n: number) => (n === 1 ? "1 event" : `${n} events`),

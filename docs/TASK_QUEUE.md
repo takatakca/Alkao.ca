@@ -1,5 +1,15 @@
 # ALKAO — Task queue (priority ordered)
 
+## Run 97 — presales and coupons (2026-10-22)
+
+1. Merge the Run 97 PR when CI is green.
+2. Next:
+   - Run 98, festival passes: one ticket valid on 2 or 3 days, scanned once per day;
+   - presales in `events:import`;
+   - a "do not stack with the presale" switch for coupons.
+3. Owner: create the first presales and coupons in /ops (`docs/PREVENTES_COUPONS.md`). They go live with the next deploy.
+
+
 ## Run 96 — Havana's sale, what remains (2026-10-22)
 
 1. Owner, privately in Coolify:

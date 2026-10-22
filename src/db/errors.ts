@@ -48,6 +48,10 @@ const TRIGGER_CODES = new Set([
   "exchange_must_point_to_original",
   // Run 49
   "add_on_sold_out",
+  // Run 97
+  "ticket_type_sold_out",
+  "presale_price_not_lower",
+  "presale_of_invalid",
 ]);
 
 /** Translate a PostgreSQL error into a DomainError, or return null if it is not one of ours. */
@@ -58,6 +62,9 @@ export function toDomainError(error: unknown): DomainError | null {
   if (e.code === "23514") {
     if (e.constraint === "ticketing_sessions_capacity_ck") return new DomainError("sold_out");
     if (e.constraint === "ticketing_ticket_types_stock_ck") return new DomainError("stock_only_for_add_ons");
+    // Run 97: a presale must end, by date or quantity; a quantity limit is for admissions.
+    if (e.constraint === "ticketing_ticket_types_presale_ends_ck") return new DomainError("presale_must_end");
+    if (e.constraint === "ticketing_ticket_types_quantity_limit_ck") return new DomainError("quantity_limit_only_for_admissions");
     // Run 36: the code's last use went to another buyer first.
     if (e.constraint === "ticketing_promo_codes_uses_ck") return new DomainError("promo_code_invalid", { reason: "used_up" });
     if (e.message && TRIGGER_CODES.has(e.message)) return new DomainError(e.message);

@@ -20,6 +20,9 @@ From [Unsplash](https://unsplash.com), under the [Unsplash License](https://unsp
 | `cat-live.webp` | https://images.unsplash.com/photo-1506157786151-b8491531f063 |
 | `band-organizers.webp` | https://images.unsplash.com/photo-1459749411175-04bf5292ceea |
 | `event-fallback.webp` | https://images.unsplash.com/photo-1470229722913-7c0e2dbbafd3 |
+| `cat-food.webp` (Run 97) | https://images.unsplash.com/photo-1555939594-58d7cb561ad1 |
+| `cat-fashion.webp` (Run 97) | https://images.unsplash.com/photo-1567401893414-76b7b1e5a7a5 |
+| `cat-markets.webp` (Run 97) | https://images.unsplash.com/photo-1533900298318-6b8da08a523e |
 
 They illustrate categories only. An event's card and slide show the organizer's own photo when there is one.
 

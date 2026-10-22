@@ -13,6 +13,7 @@ import { evaluateTicketingGate, type GateDecision } from "../domain/entitlement.
 import { DomainError } from "../domain/errors.js";
 import { isUuid } from "../domain/ids.js";
 import { isSessionSellable } from "../domain/lifecycle.js";
+import { rulesOnSale } from "../domain/catalog.js";
 import { roleHasPermission, type TicketingPermission, type WorkspaceRole } from "../domain/permissions.js";
 import { buildQuote } from "../domain/pricing.js";
 import { AuthError, type AuthVerifier } from "./auth.js";
@@ -368,12 +369,15 @@ export function createApp(deps: AppDeps) {
     const eventId = param(c, "eventId");
     const event = eventId ? await catalog.loadPublicEvent(deps.db, scope, eventId) : null;
     if (!eventId || !event) return fail(c, 404, "event_not_found");
-    const [details, types, sessions, described] = await Promise.all([
+    const [details, types, sessions, described, remaining, coupons] = await Promise.all([
       catalog.getEvent(deps.db, scope, eventId),
       catalog.loadTicketTypeRules(deps.db, scope, eventId),
       catalog.listPublicSessions(deps.db, scope, eventId, now()),
       // Run 93: what each ticket includes, under "Plus d'infos".
       catalog.listTicketTypes(deps.db, scope, eventId),
+      // Run 97: what is left of each limited ticket, and the coupons shown to every buyer.
+      catalog.ticketTypesRemaining(deps.db, scope, eventId, now()),
+      promoDb.publicCoupons(deps.db, scope, eventId, now()),
     ]);
     const descriptionOf = new Map(described.map((t) => [t.id as string, (t.description as string | null) ?? null]));
     const { status: _status, createdAt: _c, updatedAt: _u, ...publicDetails } = details;
@@ -381,10 +385,11 @@ export function createApp(deps: AppDeps) {
     const place = await catalog.loadPublicEventPlace(deps.db, scope, eventId);
     return c.json({
       event: { ...publicDetails, taxRegion: event.taxRegion, ...place },
-      ticketTypes: types
+      ticketTypes: rulesOnSale(types, now())
         .filter((t) => t.active)
-        .map(({ active: _a, ...t }) => ({ ...t, description: descriptionOf.get(t.id) ?? null })),
+        .map(({ active: _a, ...t }) => ({ ...t, description: descriptionOf.get(t.id) ?? null, remaining: remaining.get(t.id) ?? null })),
       sessions,
+      coupons,
     });
   });
 
@@ -394,7 +399,7 @@ export function createApp(deps: AppDeps) {
     const event = eventId ? await catalog.loadPublicEvent(deps.db, scope, eventId) : null;
     if (!eventId || !event) return fail(c, 404, "event_not_found");
     const body = api.QuoteRequest.parse(await readJson(c));
-    const rules = await catalog.loadTicketTypeRules(deps.db, scope, eventId);
+    const rules = rulesOnSale(await catalog.loadTicketTypeRules(deps.db, scope, eventId), now());
     // Run 36: a promo code the buyer can use now, or promo_code_invalid with the reason.
     const promo = body.promoCode ? await promoDb.usablePromo(deps.db, scope, eventId, body.promoCode, now()) : null;
     const result = buildQuote(rules, body.items, event.taxRegion, undefined, promo);
@@ -474,7 +479,8 @@ export function createApp(deps: AppDeps) {
       return fail(c, 409, early ? "sales_not_open" : "session_not_available");
     }
 
-    const rules = await catalog.loadTicketTypeRules(deps.db, scope, session.eventId);
+    // Run 97: a presale past its end date is sold no more.
+    const rules = rulesOnSale(await catalog.loadTicketTypeRules(deps.db, scope, session.eventId), now());
     const promo = body.promoCode ? await promoDb.usablePromo(deps.db, scope, session.eventId, body.promoCode, now()) : null;
     const result = buildQuote(rules, body.items, event.taxRegion, undefined, promo);
     if (!result.ok) return fail(c, 422, "cart_invalid", result.violations);
@@ -1606,10 +1612,12 @@ export function createApp(deps: AppDeps) {
       for (const b of opted) {
         if (!(await decide(b.client_id, b.brand_id)).active) continue;
         const scope = { clientId: b.client_id, brandId: b.brand_id };
-        const [look, listed, floors] = await Promise.all([
+        const [look, listed, floors, deals] = await Promise.all([
           appearanceDb.getAppearance(deps.db, scope),
           catalog.listPublicEvents(deps.db, scope),
-          catalog.admissionPriceFloors(deps.db, scope),
+          catalog.admissionPriceFloors(deps.db, scope, at),
+          // Run 97: presales and coupons on now.
+          catalog.eventDeals(deps.db, scope, at),
         ]);
         const events: HomeBrand["events"] = [];
         for (const event of listed) {
@@ -1644,6 +1652,7 @@ export function createApp(deps: AppDeps) {
             ends: open.slice(0, 60).map((session) => (session.endsAt ?? null) as Date | string | null),
             timezone: event.venueTimezone == null ? null : String(event.venueTimezone),
             ...(floors.has(eventId) ? { fromCents: floors.get(eventId)! } : {}),
+            ...(deals.has(eventId) ? { presale: deals.get(eventId)!.presale, coupon: deals.get(eventId)!.coupon } : {}),
             shopPath: `/acheter/${b.client_id}/${b.brand_id}/${eventId}`,
           });
         }

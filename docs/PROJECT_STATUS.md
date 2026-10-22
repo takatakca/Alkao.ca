@@ -1,5 +1,14 @@
 # ALKAO — Project status
 
+## Run 97 — presales and discount coupons (2026-10-22)
+
+Organizers sell any event (festival, food, fashion, market) earlier and better:
+- a presale price for a limited time or quantity, guarded by the database;
+- coupons shown to every buyer, applied in one click or by a shared link.
+
+The shop and alkao.ca show both honestly: real prices, real end dates and what is really left. /ops creates them in a few clicks. Three new categories: Gastronomie, Mode, Marchés et salons.
+
+
 ## Run 94 — Havana's Halloween page, ready to load (2026-10-18)
 
 Havana's Halloween page is complete in its catalog file, from the resort's own public sites: highlights, photos, Le jour J, FAQ and what each ticket includes. One import puts it on sale on alkao.ca. Going live still needs the server side, all listed in `docs/CE_SOIR_HAVANA.md`:

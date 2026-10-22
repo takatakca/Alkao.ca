@@ -60,6 +60,8 @@ const EXPECTED: Record<string, Visibility> = {
   // Run 44: newsletter sign-ups, server only.
   ticketing_newsletter_signups: "none",
   ticketing_add_on_stock: "none",
+  // Run 97: a limited ticket type's counts for the event, server only.
+  ticketing_ticket_type_counts: "none",
   // Run 65: changes of time or place told to buyers, server only.
   ticketing_session_changes: "none",
   // Run 71: the waitlist of sold-out sessions, server only.

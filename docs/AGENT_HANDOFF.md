@@ -1,5 +1,45 @@
 # ALKAO — Agent handoff (mandatory)
 
+## Run 97 — presales and discount coupons, for any event (2026-10-22)
+
+- The owner's new line of business: presales with discount coupons, for all kinds of events of one to three days. That means festivals, food, clothing sales, markets and fairs. Owner guide: `docs/PREVENTES_COUPONS.md`.
+- 97a, data (migration `20261120000100_alkao_presales_coupons.sql`):
+  - A presale ticket is an ordinary ticket type tied to the regular one (`presale_of`). Because it is an ordinary type, holds, payments, QR codes, scans and refunds work unchanged.
+    - Its price stays below the regular price. A trigger checks both rows, either way round.
+    - It must end on a date (`sales_end_at`), after a quantity (`quantity_limit`), or both.
+  - `quantity_limit` counts the whole event in `ticketing_ticket_type_counts`, using the same triggers as add-on stock (Run 49):
+    - a cart past the limit is refused with `ticket_type_sold_out`; a payment never is;
+    - lapsed holds never count, even before the sweep;
+    - a full refund gives the tickets back;
+    - a session change moves nothing.
+    Setting a limit later recounts. It is refused below what is already sold or held (`quantity_limit_below_committed`).
+  - Promo codes gain `public` and `label`. `publicCoupons` returns the codes usable now, with what is left.
+  - New categories: `gastronomie`, `mode` and `marches`.
+  - Duplicating an event keeps its presales, against the copy's own regular ticket. The end date moves with the sessions.
+- 97b, buyers:
+  - Shop:
+    - the presale row comes right before its regular ticket, with the badge, the saving rounded down, the regular price struck through, its end and what is left;
+    - the hero shows the presale against its own regular price, never next to "À partir de";
+    - coupon cards apply in one click, and `?coupon=CODE` applies one on arrival.
+  - alkao.ca:
+    - each card shows a deal ribbon ("Prévente −20 %" or "Coupon −15 %");
+    - a "Préventes et rabais" rail appears from four events;
+    - a presale with nothing left is no longer the "À partir de" price;
+    - the three categories have Unsplash photos, credited in `home-ui/CREDITS.md`. Category guessing ignores "mode" and "marche" used alone.
+- 97c, /ops:
+  - "Prix de prévente" makes the presale ticket from a regular one. The ticket types table shows each presale's end and its sold or held count, both editable.
+  - Promo codes: "Coupon public" with a name, "Copier le lien du coupon", and a switch between public and private.
+  - Run 72's early-access codes are now titled "Accès anticipé (codes de prévente)".
+- Tests:
+  - `test/payments/presale-coupons.test.ts` and `test/api/home-deals.test.ts`;
+  - the Run 97 case in `test/api/home.test.ts`;
+  - `test/ui/presale-ui.test.ts` and `test/ui/presale-ops.test.ts`.
+- NEXT EXACT ACTION: merge the Run 97 PR when green. Follow-ups:
+  - `events:import` support for presales (`presaleOfCode`);
+  - an option for coupons not to stack with a presale;
+  - festival passes valid on several days (Run 98).
+
+
 ## Run 96 — what still stops Havana's sale, verified live (2026-10-22)
 
 - Live on 2026-10-22:
