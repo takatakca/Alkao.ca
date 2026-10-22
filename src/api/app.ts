@@ -486,6 +486,20 @@ export function createApp(deps: AppDeps) {
     if (!result.ok) return fail(c, 422, "cart_invalid", result.violations);
     const quote = result.quote;
 
+    // Run 98: a pass is bought on its own. Its cart belongs to the first session on sale; each
+    // later one holds a seat for it too.
+    let holdSession = session;
+    let passSessionIds: string[] = [];
+    const passTypes = new Set(rules.filter((r) => r.pass).map((r) => r.id));
+    const passItems = body.items.filter((i) => passTypes.has(i.ticketTypeId));
+    if (passItems.length > 0) {
+      if (passItems.length !== body.items.length) return fail(c, 422, "pass_cart_mixed");
+      const covered = (await catalog.passSessions(deps.db, scope, session.eventId, now())).filter((x) => isSessionSellable(event, x, now(), presaleFrom));
+      if (covered.length === 0) return fail(c, 409, "pass_no_session");
+      holdSession = covered[0]!;
+      passSessionIds = covered.slice(1).map((x) => x.id);
+    }
+
     const token = randomBytes(32).toString("base64url");
     const expiresAt = new Date(now().getTime() + deps.holdTtlSeconds * 1000);
     const hold = await withTransaction(deps.db, async (tx) => {
@@ -494,11 +508,12 @@ export function createApp(deps: AppDeps) {
         {
           ...scope,
           eventId: session.eventId,
-          sessionId: session.id,
+          sessionId: holdSession.id,
           admissions: quote.admissions,
           items: quote.lines.map((l) => ({ ticketTypeId: l.ticketTypeId, quantity: l.quantity, unitPriceCents: l.unitPriceCents })),
           expiresAt,
           promoCodeId: promo?.id ?? null,
+          passSessionIds,
         },
         now(),
       );
@@ -509,7 +524,7 @@ export function createApp(deps: AppDeps) {
       );
       return created;
     });
-    return c.json({ hold: { id: hold.id, token, expiresAt: hold.expiresAt, sessionId: session.id, quote } }, 201);
+    return c.json({ hold: { id: hold.id, token, expiresAt: hold.expiresAt, sessionId: holdSession.id, ...(passSessionIds.length ? { passSessionIds } : {}), quote } }, 201);
   });
 
   /** Resolve a hold from its id + buyer token, within this tenant only. */
@@ -967,8 +982,20 @@ export function createApp(deps: AppDeps) {
       [orderId, scope.clientId, scope.brandId],
     );
     const transferred = new Set(transferredRows.map(r => r.ticket_id));
+    // Run 98: the other dates a festival pass is valid for, in time order.
+    const { rows: passRows } = await deps.db.query<{ ticket_id: string; starts_at: Date; ends_at: Date | null }>(
+      `SELECT p.ticket_id, s.starts_at, s.ends_at FROM public.ticketing_ticket_pass_seats p
+       JOIN public.ticketing_tickets t ON t.id = p.ticket_id AND t.client_id = p.client_id AND t.brand_id = p.brand_id
+       JOIN public.ticketing_sessions s ON s.id = p.session_id
+       WHERE t.order_id = $1 AND p.client_id = $2 AND p.brand_id = $3
+       ORDER BY s.starts_at, s.id`,
+      [orderId, scope.clientId, scope.brandId],
+    );
+    const passDates = new Map<string, { startsAt: Date; endsAt: Date | null }[]>();
+    for (const r of passRows) passDates.set(r.ticket_id, [...(passDates.get(r.ticket_id) ?? []), { startsAt: r.starts_at, endsAt: r.ends_at }]);
     const tickets = (order.tickets as { id: string }[]).map((t) => ({
       ...t, transferred: transferred.has(t.id), credential: transferred.has(t.id) ? null : (payloads.get(t.id) ?? null),
+      ...(passDates.has(t.id) ? { passDates: passDates.get(t.id) } : {}),
     }));
     // Run 06: what the buyer's ticket page shows (brand, event, session, venue, Flex option).
     const context = await delivery.publicOrderContext(deps.db, scope, orderId);

@@ -94,6 +94,13 @@ export async function exchangeOrder(
         [orderId],
       );
       if (tickets.length === 0) throw new DomainError("nothing_to_exchange");
+      // Run 98: a festival pass already covers every session it was bought for.
+      const { rowCount: passes } = await tx.query(
+        `SELECT 1 FROM public.ticketing_tickets k JOIN public.ticketing_ticket_types tt ON tt.id = k.ticket_type_id
+         WHERE k.id = ANY($1::uuid[]) AND tt.pass`,
+        [tickets.map((t) => t.id)],
+      );
+      if (passes) throw new DomainError("pass_cannot_change_session");
       const { rowCount: used } = await tx.query(
         `SELECT 1 FROM public.ticketing_scans WHERE ticket_id = ANY($1::uuid[]) AND result = 'admitted'`,
         [tickets.map((t) => t.id)],

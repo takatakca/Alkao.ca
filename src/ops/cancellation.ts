@@ -122,14 +122,16 @@ export async function runCancellationBatch(db: Db, payments: PaymentsService, s:
         [sessionId, s.clientId, s.brandId],
       );
       // The orders holding a valid ticket for this session; for tickets moved here by a Flex
-      // exchange, the original order, which holds the money.
+      // exchange, the original order, which holds the money. Run 98: never a festival pass,
+      // still valid on its other days; the organizer decides a partial refund in /ops.
       await tx.query(
         `INSERT INTO public.ticketing_session_cancellation_orders (cancellation_id, client_id, brand_id, event_id, order_id)
          SELECT DISTINCT $1::uuid, m.client_id, m.brand_id, m.event_id, m.id
          FROM public.ticketing_tickets t
          JOIN public.ticketing_orders o ON o.id = t.order_id AND o.client_id = t.client_id AND o.brand_id = t.brand_id
          JOIN public.ticketing_orders m ON m.id = coalesce(o.exchange_of_order_id, o.id) AND m.client_id = o.client_id AND m.brand_id = o.brand_id
-         WHERE t.session_id = $2 AND t.client_id = $3 AND t.brand_id = $4 AND t.status = 'valid'
+         JOIN public.ticketing_ticket_types tt ON tt.id = t.ticket_type_id AND tt.client_id = t.client_id AND tt.brand_id = t.brand_id
+         WHERE t.session_id = $2 AND t.client_id = $3 AND t.brand_id = $4 AND t.status = 'valid' AND NOT tt.pass
          ON CONFLICT DO NOTHING`,
         [job.id, sessionId, s.clientId, s.brandId],
       );

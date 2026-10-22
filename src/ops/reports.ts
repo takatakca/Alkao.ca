@@ -184,7 +184,8 @@ export interface DailyRow {
 export async function attendeesRows(db: Db, s: TenantScope, sessionId: string) {
   const { rows } = await db.query(
     `SELECT o.reference, k.id AS ticket_id, tt.code, tt.name, b.full_name, b.email, k.status,
-            (SELECT sc.scanned_at FROM public.ticketing_scans sc WHERE sc.ticket_id = k.id AND sc.result = 'admitted') AS admitted_at
+            -- Run 98: a pass enters once per session; its first entry here.
+            (SELECT min(sc.scanned_at) FROM public.ticketing_scans sc WHERE sc.ticket_id = k.id AND sc.result = 'admitted') AS admitted_at
      FROM public.ticketing_tickets k
      JOIN public.ticketing_orders o ON o.id = k.order_id AND o.client_id = k.client_id AND o.brand_id = k.brand_id
      JOIN public.ticketing_buyers b ON b.id = o.buyer_id AND b.client_id = o.client_id AND b.brand_id = o.brand_id

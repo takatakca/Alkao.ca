@@ -233,9 +233,12 @@ export class CredentialsService {
       [credential.id, scope.clientId, scope.brandId],
     );
     if (liveTickets[0]?.status !== "valid" || liveCredential[0]?.status !== "active") return decide("revoked");
-    if (credential.sessionId !== session.id) return decide("wrong_session", { ticketSession: { id: credential.sessionId } });
+    // Run 98: a festival pass enters at each session it covers, once per session.
+    if (credential.sessionId !== session.id && !(await creds.passCovers(tx, credential.ticketId, session.id))) {
+      return decide("wrong_session", { ticketSession: { id: credential.sessionId } });
+    }
 
-    const previous = await creds.findAdmission(tx, credential.ticketId);
+    const previous = await creds.findAdmission(tx, credential.ticketId, session.id);
     if (previous) return decide("already_admitted", { admittedAt: previous.scannedAt, admittedBy: previous.deviceId });
     if (at < session.opensAt) return decide("too_early");
     if (at > session.closesAt) return decide("too_late");
@@ -250,7 +253,7 @@ export class CredentialsService {
     } catch (error) {
       await tx.query("ROLLBACK TO SAVEPOINT admit");
       if ((error as { constraint?: string }).constraint !== "ticketing_scans_one_admission") throw error;
-      const winner = await creds.findAdmission(tx, credential.ticketId);
+      const winner = await creds.findAdmission(tx, credential.ticketId, session.id);
       return decide("already_admitted", { admittedAt: winner?.scannedAt, admittedBy: winner?.deviceId ?? null });
     }
   }
@@ -272,19 +275,21 @@ export class CredentialsService {
     const order = orders[0];
     if (!order) throw new DomainError("order_not_found");
     // The order's own tickets and, after a Flex change, those of its exchange order.
-    const { rows } = await this.deps.db.query<{ id: string; session_id: string; starts_at: Date; status: string; name: string; admitted_at: Date | null }>(
+    // Run 98: a pass counts here when it covers this session too; its entry is this session's.
+    const { rows } = await this.deps.db.query<{ id: string; session_id: string; starts_at: Date; status: string; name: string; admitted_at: Date | null; covers_here: boolean }>(
       `SELECT k.id, k.session_id, se.starts_at, k.status, tt.name,
-              (SELECT sc.scanned_at FROM public.ticketing_scans sc WHERE sc.ticket_id = k.id AND sc.result = 'admitted') AS admitted_at
+              (SELECT sc.scanned_at FROM public.ticketing_scans sc WHERE sc.ticket_id = k.id AND sc.session_id = $4 AND sc.result = 'admitted') AS admitted_at,
+              EXISTS (SELECT 1 FROM public.ticketing_ticket_pass_seats p WHERE p.ticket_id = k.id AND p.session_id = $4) AS covers_here
        FROM public.ticketing_tickets k
        JOIN public.ticketing_sessions se ON se.id = k.session_id AND se.client_id = k.client_id AND se.brand_id = k.brand_id
        JOIN public.ticketing_ticket_types tt ON tt.id = k.ticket_type_id AND tt.client_id = k.client_id AND tt.brand_id = k.brand_id
        WHERE k.client_id = $2 AND k.brand_id = $3
          AND (k.order_id = $1 OR k.order_id IN (SELECT id FROM public.ticketing_orders WHERE exchange_of_order_id = $1))
        ORDER BY tt.sort_order, k.created_at, k.id`,
-      [order.id, scope.clientId, scope.brandId],
+      [order.id, scope.clientId, scope.brandId, session.id],
     );
-    const here = rows.filter((r) => r.session_id === session.id);
-    const elsewhere = [...new Map(rows.filter((r) => r.session_id !== session.id && r.status === "valid").map((r) => [r.session_id, r.starts_at])).values()];
+    const here = rows.filter((r) => r.session_id === session.id || r.covers_here);
+    const elsewhere = [...new Map(rows.filter((r) => r.session_id !== session.id && !r.covers_here && r.status === "valid").map((r) => [r.session_id, r.starts_at])).values()];
     return {
       reference: order.reference,
       ...(withBuyer ? { buyerName: order.buyer_name } : {}),

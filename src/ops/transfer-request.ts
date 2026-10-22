@@ -67,6 +67,10 @@ export async function prepareTransferInvitation(
     );
     const ticket = tickets[0];
     if (!ticket) throw new DomainError("ticket_not_found");
+    // Run 98: a festival pass is not passed on (its seats on the other days stay with it).
+    const { rowCount: pass } = await tx.query(
+      `SELECT 1 FROM public.ticketing_tickets t JOIN public.ticketing_ticket_types tt ON tt.id = t.ticket_type_id WHERE t.id = $1 AND tt.pass`, [ticketId]);
+    if (pass) throw new DomainError("pass_not_transferable");
     // A cancellation takes the session row lock first and may refund later.
     // Forbid invitations during that window, even while the ticket is valid.
     if (ticket.session_status === "cancelled") throw new DomainError("transfer_session_cancelled");

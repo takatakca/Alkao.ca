@@ -52,6 +52,9 @@ const TRIGGER_CODES = new Set([
   "ticket_type_sold_out",
   "presale_price_not_lower",
   "presale_of_invalid",
+  // Run 98
+  "pass_seat_order",
+  "pass_seat_invalid",
 ]);
 
 /** Translate a PostgreSQL error into a DomainError, or return null if it is not one of ours. */

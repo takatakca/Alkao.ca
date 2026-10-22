@@ -30,6 +30,11 @@ export interface CreateHoldInput extends TenantScope {
   expiresAt: Date;
   /** Run 36: the promo code the buyer entered, already checked as usable. */
   promoCodeId?: string | null;
+  /**
+   * Run 98: a festival pass's other sessions, after this one, in their order in time. Each
+   * takes `admissions` seats there too (the database refuses a full one, as for this one).
+   */
+  passSessionIds?: string[];
 }
 
 /** Expire active holds past their deadline; triggers return their capacity. */
@@ -45,7 +50,8 @@ export async function expireStaleHolds(tx: Tx, now: Date, sessionId?: string): P
 export async function createHold(tx: Tx, input: CreateHoldInput, now = new Date()): Promise<{ id: string; expiresAt: Date }> {
   if (input.expiresAt <= now) throw new DomainError("invalid_hold_expiry");
   return mapDbErrors(async () => {
-    await expireStaleHolds(tx, now, input.sessionId);
+    // Run 98: every session the cart takes seats on, in time order (the order locks are taken).
+    for (const sessionId of [input.sessionId, ...(input.passSessionIds ?? [])]) await expireStaleHolds(tx, now, sessionId);
     const { rows } = await tx.query<{ id: string; expires_at: Date }>(
       `INSERT INTO public.ticketing_holds (client_id, brand_id, event_id, session_id, quantity, expires_at, promo_code_id)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -53,6 +59,15 @@ export async function createHold(tx: Tx, input: CreateHoldInput, now = new Date(
       [input.clientId, input.brandId, input.eventId, input.sessionId, input.admissions, input.expiresAt, input.promoCodeId ?? null],
     );
     const hold = rows[0]!;
+    // Run 98: the pass's other sessions before the items, so locks are taken session rows
+    // first, then add-on stock and quotas, as when a cart ends.
+    for (const passSession of input.passSessionIds ?? []) {
+      await tx.query(
+        `INSERT INTO public.ticketing_hold_pass_seats (hold_id, client_id, brand_id, event_id, session_id, quantity)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [hold.id, input.clientId, input.brandId, input.eventId, passSession, input.admissions],
+      );
+    }
     for (const item of input.items) {
       await tx.query(
         `INSERT INTO public.ticketing_hold_items
@@ -213,6 +228,20 @@ export async function recordOrderPaid(tx: Tx, scope: TenantScope, orderId: strin
        ORDER BY l.created_at, l.id
        RETURNING id`,
       [orderId, order.session_id],
+    );
+    // Run 98: a pass ticket is valid at its cart's other sessions too, each taking its seat
+    // there, in the sessions' order.
+    await tx.query(
+      `INSERT INTO public.ticketing_ticket_pass_seats (ticket_id, client_id, brand_id, event_id, session_id)
+       SELECT t.id, t.client_id, t.brand_id, t.event_id, p.session_id
+       FROM public.ticketing_tickets t
+       JOIN public.ticketing_ticket_types tt ON tt.id = t.ticket_type_id AND tt.client_id = t.client_id AND tt.brand_id = t.brand_id AND tt.pass
+       JOIN public.ticketing_orders o ON o.id = t.order_id AND o.client_id = t.client_id AND o.brand_id = t.brand_id
+       JOIN public.ticketing_hold_pass_seats p ON p.hold_id = o.hold_id AND p.client_id = o.client_id AND p.brand_id = o.brand_id
+       JOIN public.ticketing_sessions s ON s.id = p.session_id
+       WHERE t.id = ANY($1::uuid[])
+       ORDER BY s.starts_at, s.id, t.id`,
+      [tickets.map((t) => t.id)],
     );
     return tickets.map((t) => t.id);
   });

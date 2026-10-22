@@ -7,6 +7,8 @@ ALKAO vend tout événement d'une à quelques journées : un festival, une fête
 
 Tout se fait dans **/ops**, sur la page de l'événement. Rien n'est inventé : chaque prix, rabais et date affichés est celui que vous avez entré.
 
+Pour un événement de plusieurs jours, la **passe festival** vend toutes les dates en un seul billet : voir `PASSES_FESTIVAL.md`.
+
 ## Le prix de prévente
 
 **Créer** : /ops → Événements → votre événement → **Types de billets** → **Prix de prévente**.

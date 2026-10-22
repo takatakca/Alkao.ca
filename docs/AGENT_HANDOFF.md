@@ -1,5 +1,33 @@
 # ALKAO — Agent handoff (mandatory)
 
+## Run 98 — festival passes (2026-10-22)
+
+- One ticket, one QR code, valid once at every session of its event on sale when it was bought (a weekend, a three-day festival). Owner guide: `docs/PASSES_FESTIVAL.md`.
+- 98a, data (migration `20261121000100_alkao_festival_passes.sql`):
+  - `ticket_types.pass` (admission only, never `open_date`).
+  - The order and ticket belong to the first covered session. The other sessions' seats are rows:
+    - `ticketing_hold_pass_seats` while in the cart;
+    - `ticketing_ticket_pass_seats` once paid.
+    Triggers move `reserved_count` and `sold_count` on each session, so the capacity CHECK protects every day.
+  - Locks follow the sessions' time order on creation and release. `expireStaleHolds` runs for each covered session, in order.
+  - `ticketing_scans_one_admission` is now unique per (ticket, session).
+  - The scanner admits a pass at a covered session (`passCovers`). Offline manifests and lookup by reference include pass tickets.
+  - Refused: mixed carts (`pass_cart_mixed`), session change (`pass_cannot_change_session`), transfer (`pass_not_transferable`).
+  - Cancelling one session never refunds a pass (`cancellation.ts` skips pass tickets).
+- 98b, buyers and staff:
+  - Shop:
+    - a "Billet d'un jour / Passe festival" switch; pass mode lists the dates and what is left (the fullest date's seats);
+    - a pass-only event opens on the pass;
+    - the hero offers the pass, and a click switches the panel to it.
+  - Tickets page: "Valide aussi" lists the other dates. The calendar file adds one entry per date.
+  - /ops: the "Passe festival (toutes les dates)" checkbox, and "· passe festival" in the ticket types table. A presale of a pass stays a pass.
+  - Public availability and the waitlist no longer count lapsed pass carts' seats on the other days.
+- Tests: `test/scanner/festival-pass.test.ts` (7) and `test/ui/festival-pass-ui.test.ts` (2).
+- NEXT EXACT ACTION: merge the Run 98 PR when green. Follow-ups:
+  - `events:import` support for presales and passes;
+  - an option for coupons not to stack with a presale.
+
+
 ## Run 97 — presales and discount coupons, for any event (2026-10-22)
 
 - The owner's new line of business: presales with discount coupons, for all kinds of events of one to three days. That means festivals, food, clothing sales, markets and fairs. Owner guide: `docs/PREVENTES_COUPONS.md`.
@@ -34,10 +62,7 @@
   - `test/payments/presale-coupons.test.ts` and `test/api/home-deals.test.ts`;
   - the Run 97 case in `test/api/home.test.ts`;
   - `test/ui/presale-ui.test.ts` and `test/ui/presale-ops.test.ts`.
-- NEXT EXACT ACTION: merge the Run 97 PR when green. Follow-ups:
-  - `events:import` support for presales (`presaleOfCode`);
-  - an option for coupons not to stack with a presale;
-  - festival passes valid on several days (Run 98).
+- Merged 2939a27 (PR #92). Festival passes followed in Run 98.
 
 
 ## Run 96 — what still stops Havana's sale, verified live (2026-10-22)

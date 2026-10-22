@@ -58,10 +58,10 @@ export async function duplicateEvent(
       `INSERT INTO public.ticketing_ticket_types
          (client_id, brand_id, event_id, code, name, description, kind, price_cents, min_quantity, max_quantity,
           max_adults_in_order, counts_as_adult, add_on_scope, active, sort_order, grants_session_change, open_date,
-          quantity_limit, sales_end_at)
+          quantity_limit, pass, sales_end_at)
        SELECT client_id, brand_id, $4, code, name, description, kind, price_cents, min_quantity, max_quantity,
               max_adults_in_order, counts_as_adult, add_on_scope, active, sort_order, grants_session_change, open_date,
-              quantity_limit, CASE WHEN $5::int IS NULL THEN sales_end_at ELSE sales_end_at + make_interval(days => $5::int) END
+              quantity_limit, pass, CASE WHEN $5::int IS NULL THEN sales_end_at ELSE sales_end_at + make_interval(days => $5::int) END
        FROM public.ticketing_ticket_types WHERE event_id = $1 AND client_id = $2 AND brand_id = $3`,
       [eventId, s.clientId, s.brandId, newId, shift],
     );

@@ -194,6 +194,12 @@ a.action { transition: transform 180ms var(--ease), box-shadow 180ms var(--ease)
 .stub-meta { display: flex; gap: 28px; margin: 12px 0 0; }
 .stub-meta dt { font-size: .6875rem; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
 .stub-meta dd { margin: 1px 0 0; font-size: .9375rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+/* Run 98: a festival pass lists its other dates on the stub. */
+.pass-days { margin-top: 12px; padding-top: 10px; border-top: 1px solid color-mix(in srgb, currentColor 28%, transparent); }
+.pass-days p { margin: 0; font-size: .6875rem; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
+.pass-days ul { margin: 3px 0 0; padding: 0; list-style: none; display: grid; gap: 1px; }
+.pass-days li { font-size: .9375rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.pass-entry { margin: -4px 0 0; font-size: .8125rem; text-align: center; }
 .ticket-body { position: relative; flex: 1; display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 20px 20px 18px; border-radius: 0 0 var(--r2) var(--r2); background: var(--panel);
   -webkit-mask: radial-gradient(circle at 0 0, #0000 var(--notch), #000 calc(var(--notch) + .5px)) left / 51% 100% no-repeat, radial-gradient(circle at 100% 0, #0000 var(--notch), #000 calc(var(--notch) + .5px)) right / 51% 100% no-repeat;
   mask: radial-gradient(circle at 0 0, #0000 var(--notch), #000 calc(var(--notch) + .5px)) left / 51% 100% no-repeat, radial-gradient(circle at 100% 0, #0000 var(--notch), #000 calc(var(--notch) + .5px)) right / 51% 100% no-repeat; }

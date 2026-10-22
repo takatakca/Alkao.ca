@@ -199,6 +199,8 @@ const ticketTypeFields = {
   salesEndAt: timestamp.nullish(),
   /** Run 97, admissions only: how many can be sold for the whole event ("the first 200"); null = no limit. */
   quantityLimit: z.number().int().min(1).max(1_000_000).nullish(),
+  /** Run 98, admissions only: a festival pass, valid once at every session on sale when bought. */
+  pass: z.boolean().default(false),
 };
 export const CreateTicketType = z
   .object(ticketTypeFields)
@@ -208,6 +210,7 @@ export const CreateTicketType = z
   .refine((t) => !t.openDate || t.kind === "admission", { message: "only admissions can be open-date" })
   .refine((t) => t.stockPerSession == null || t.kind === "add_on", { message: "only add-ons have a stock" })
   .refine((t) => t.quantityLimit == null || t.kind === "admission", { message: "only admissions have a quantity limit" })
+  .refine((t) => !t.pass || (t.kind === "admission" && !t.openDate), { message: "a pass is an admission with fixed dates" })
   .refine((t) => !t.presaleOf || t.salesEndAt != null || t.quantityLimit != null, { message: "a presale ends on a date or after a quantity", path: ["salesEndAt"] });
 export const UpdateTicketType = z
   .object({

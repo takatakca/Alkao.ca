@@ -13,10 +13,12 @@ const MAX_ATTEMPTS = 5;
 const KEEP_DAYS = 30;
 const backoffMs = (attempt: number) => Math.min(60, 2 ** attempt) * 60_000;
 
-/** Seats a session can sell now (holds past their deadline do not count as taken). */
+/** Seats a session can sell now (holds past their deadline do not count as taken, nor their festival-pass seats, Run 98). */
 const FREE_SEATS = `GREATEST(se.capacity - se.sold_count - (se.reserved_count - coalesce((
   SELECT sum(h.quantity) FROM public.ticketing_holds h
-  WHERE h.session_id = se.id AND h.status = 'active' AND h.expires_at <= $1), 0)), 0)`;
+  WHERE h.session_id = se.id AND h.status = 'active' AND h.expires_at <= $1), 0) - coalesce((
+  SELECT sum(p.quantity) FROM public.ticketing_hold_pass_seats p JOIN public.ticketing_holds h ON h.id = p.hold_id
+  WHERE p.session_id = se.id AND h.status = 'active' AND h.expires_at <= $1), 0)), 0)`;
 
 export type JoinResult = "joined" | "session_not_found" | "session_not_full";
 

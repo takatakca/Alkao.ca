@@ -1,5 +1,10 @@
 # ALKAO — Project status
 
+## Run 98 — festival passes (2026-10-22)
+
+A festival or a weekend market sells one pass for all its dates: one ticket and one QR code, entering once per date. The database keeps every date within its capacity. The shop offers the pass next to one-day tickets, and the tickets page lists every date. /ops creates a pass with one checkbox.
+
+
 ## Run 97 — presales and discount coupons (2026-10-22)
 
 Organizers sell any event (festival, food, fashion, market) earlier and better:
