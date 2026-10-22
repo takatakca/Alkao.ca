@@ -8,6 +8,8 @@ import { parseReservationsReport } from "/ops/reservations-csv.js";
 const SESSION_KEY = "alkao.ops.session";
 const money = (cents) => (Number(cents ?? 0) / 100).toLocaleString("fr-CA", { style: "currency", currency: "CAD" });
 const when = (iso) => (iso ? new Date(iso).toLocaleString("fr-CA", { dateStyle: "medium", timeStyle: "short" }) : "—");
+/** Run 97: an instant as the browser's local "YYYY-MM-DDTHH:MM" (a datetime-local value). */
+const localInput = (iso) => { const d = new Date(iso); const p = (n) => String(n).padStart(2, "0"); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`; };
 const STATUS_FR = {
   draft: "Brouillon", published: "Publié", cancelled: "Annulé", archived: "Archivé", on_sale: "En vente", paused: "En pause",
   closed: "Fermé", pending_payment: "En attente de paiement", paid: "Payée", partially_refunded: "Remboursée en partie",
@@ -158,6 +160,13 @@ function makeApi(getToken, onUnauthorized) {
 const ERRORS_FR = {
   ticketing_disabled: "Ticketing est désactivé pour cette marque.", forbidden: "Votre rôle ne permet pas cette action.",
   sold_out: "Plus assez de places.", capacity_below_committed: "Impossible : des places sont déjà vendues ou réservées.",
+  // Run 97: presales.
+  presale_price_not_lower: "Le prix de prévente doit rester plus bas que le prix régulier.",
+  presale_of_invalid: "Une prévente se rattache à un billet régulier du même genre.",
+  presale_must_end: "Une prévente se termine : donnez une date de fin, une quantité, ou les deux.",
+  quantity_limit_below_committed: "Impossible : plus de billets sont déjà vendus ou réservés à ce prix.",
+  quantity_limit_only_for_admissions: "Seules les admissions ont une quantité totale.",
+  ticket_type_sold_out: "Les billets à ce prix sont épuisés.",
   refund_exceeds_paid: "Montant supérieur au montant remboursable.", refund_in_progress: "Un remboursement est déjà en cours.",
   order_not_refundable: "Commande non remboursable.", refund_provider_error: "Stripe a échoué : réessayez le remboursement.",
   flex_not_purchased: "Cette commande n'a pas l'option de changement de séance.", already_exchanged: "Le changement de séance a déjà été utilisé.",
@@ -874,7 +883,7 @@ function PresaleCodes({ api, base, eventId, event }) {
   });
   const toggle = (p) => act(() => api(`${base}/presale-codes/${p.id}`, { method: "PATCH", body: { active: !p.active } }));
   const list = state.data?.presaleCodes ?? [];
-  return html`<h2>Prévente</h2>
+  return html`<h2>Accès anticipé (codes de prévente)</h2>
     <p class="muted">${event.salesOpenAt ? `Vente publique : ${when(event.salesOpenAt)}. ` : "Aucune date d'ouverture de la vente publique : un code de prévente ne change rien tant qu'elle n'est pas fixée. "}Les détenteurs d'un code achètent plus tôt, aux mêmes prix et dans les mêmes places.</p>
     ${error && html`<${Failure} error=${error} />`}
     <form class="inline card" aria-label="Nouveau code de prévente" onSubmit=${create}>
@@ -889,10 +898,11 @@ function PresaleCodes({ api, base, eventId, event }) {
         <td><button class="secondary" onClick=${toggle(p)}>${p.active ? "Désactiver" : "Réactiver"}</button></td></tr>`)}</tbody></table>`}`;
 }
 
-function PromoCodes({ api, base, eventId }) {
+function PromoCodes({ api, base, eventId, shopUrl }) {
   const [state, reload] = useLoad(() => api(`${base}/events/${eventId}/promo-codes`), [base, eventId]);
-  const [f, setF] = useState({ code: "", kind: "percent", value: "", maxUses: "", endsAt: "" });
+  const [f, setF] = useState({ code: "", kind: "percent", value: "", maxUses: "", endsAt: "", public: false, label: "" });
   const [error, setError] = useState(null);
+  const [copiedCode, setCopiedCode] = useState(null);
   const act = (fn) => async (e) => { e?.preventDefault?.(); setError(null); try { await fn(); reload(); } catch (err) { setError(err); } };
   const create = act(async () => {
     const value = Number(f.value.replace(",", "."));
@@ -901,10 +911,16 @@ function PromoCodes({ api, base, eventId }) {
       ...(f.kind === "percent" ? { percent: Math.round(value) } : { amountCents: Math.round(value * 100) }),
       maxUses: f.maxUses === "" ? null : Number(f.maxUses),
       endsAt: f.endsAt ? new Date(f.endsAt).toISOString() : null,
+      // Run 97: a coupon shown to every buyer, on the event's page and on alkao.ca.
+      public: f.public, label: f.public && f.label.trim() ? f.label.trim() : null,
     } });
-    setF({ code: "", kind: f.kind, value: "", maxUses: "", endsAt: "" });
+    setF({ code: "", kind: f.kind, value: "", maxUses: "", endsAt: "", public: f.public, label: "" });
   });
   const toggle = (p) => act(() => api(`${base}/promo-codes/${p.id}`, { method: "PATCH", body: { active: !p.active } }));
+  const togglePublic = (p) => act(() => api(`${base}/promo-codes/${p.id}`, { method: "PATCH", body: { public: !p.public } }));
+  // Run 97: the shop applies the coupon on arrival (?coupon=CODE): for a post, an e-mail, a QR code.
+  const couponLink = (p) => `${shopUrl}?coupon=${encodeURIComponent(p.code)}`;
+  const copyLink = (p) => navigator.clipboard?.writeText(couponLink(p)).then(() => setCopiedCode(p.code), () => setCopiedCode(null));
   const list = state.data?.promoCodes ?? [];
   return html`<h2>Codes promo</h2>
     ${error && html`<${Failure} error=${error} />`}
@@ -914,14 +930,19 @@ function PromoCodes({ api, base, eventId }) {
       <label>${f.kind === "percent" ? "Rabais (%)" : "Rabais ($)"}<input required inputmode="decimal" value=${f.value} onInput=${(e) => setF({ ...f, value: e.target.value })} /></label>
       <label>Utilisations max. (facultatif)<input type="number" min="1" value=${f.maxUses} onInput=${(e) => setF({ ...f, maxUses: e.target.value })} /></label>
       <label>Fin (facultatif)<input type="datetime-local" value=${f.endsAt} onInput=${(e) => setF({ ...f, endsAt: e.target.value })} /></label>
+      <label class="check"><input type="checkbox" checked=${f.public} onChange=${(e) => setF({ ...f, public: e.target.checked })} /> Coupon public (montré à tous les acheteurs)</label>
+      ${f.public && html`<label>Nom du coupon (facultatif)<input maxlength="60" placeholder="Coupon prévente" value=${f.label} onInput=${(e) => setF({ ...f, label: e.target.value })} /></label>`}
       <button type="submit">Créer le code</button>
     </form>
-    <p class="muted">Le rabais s'applique avant les taxes ; la commission TAKATAK est calculée sur le montant réduit.</p>
-    ${state.loading ? html`<${Loading} />` : list.length === 0 ? html`<p class="muted">Aucun code.</p>` : html`<table><thead><tr><th>Code</th><th>Rabais</th><th class="num">Utilisé</th><th>Fin</th><th>Statut</th><th></th></tr></thead>
+    <p class="muted">Le rabais s'applique avant les taxes ; la commission TAKATAK est calculée sur le montant réduit. Un coupon public est montré sur la page de l'événement et sur alkao.ca, avec sa fin et les utilisations qui restent ; un code privé ne sert qu'à qui le reçoit.</p>
+    ${state.loading ? html`<${Loading} />` : list.length === 0 ? html`<p class="muted">Aucun code.</p>` : html`<div class="table-scroll" role="region" aria-label="Codes promo" tabindex="0"><table><thead><tr><th>Code</th><th>Rabais</th><th class="num">Utilisé</th><th>Fin</th><th>Coupon</th><th>Statut</th><th></th></tr></thead>
       <tbody>${list.map((p) => html`<tr><td><code>${p.code}</code></td><td>${p.kind === "percent" ? `${p.percent} %` : money(p.amountCents)}</td>
         <td class="num">${p.usedCount}${p.maxUses ? ` / ${p.maxUses}` : ""}</td><td>${p.endsAt ? when(p.endsAt) : "—"}</td>
+        <td>${p.public ? html`<span class="badge">Public</span>${p.label ? html` ${p.label}` : ""}` : html`<span class="muted">Privé</span>`}
+          <br /><button class="link" onClick=${togglePublic(p)}>${p.public ? "Rendre privé" : "Montrer comme coupon"}</button>
+          <br /><button class="link" onClick=${() => copyLink(p)}>${copiedCode === p.code ? "Lien copié" : "Copier le lien du coupon"}</button></td>
         <td><span class="badge ${p.active ? "ok" : "bad"}">${p.active ? "Actif" : "Désactivé"}</span></td>
-        <td><button class="secondary" onClick=${toggle(p)}>${p.active ? "Désactiver" : "Réactiver"}</button></td></tr>`)}</tbody></table>`}`;
+        <td><button class="secondary" onClick=${toggle(p)}>${p.active ? "Désactiver" : "Réactiver"}</button></td></tr>`)}</tbody></table></div>`}`;
 }
 
 // ── Run 69: what a buyer wants to know before choosing (shop, ALKAO home, search engines) ──
@@ -1087,6 +1108,8 @@ function EventDetail({ api, base, eventId, assistant }) {
   const [tt, setTt] = useState({ code: "", name: "", price: "", maxQuantity: 10, minQuantity: 0, kind: "admission", countsAsAdult: true, grantsSessionChange: false, openDate: false, addOnScope: "up_to_admissions", stock: "", active: true });
   const [cancelling, setCancelling] = useState(null);
   const [copied, setCopied] = useState(false);
+  // Run 97: a presale price for a regular ticket, ending on a date, after a quantity, or both.
+  const [pre, setPre] = useState({ of: "", price: "", endsAt: "", quantity: "" });
   const act = (fn) => async (e) => { e?.preventDefault?.(); setError(null); try { await fn(); } catch (err) { setError(err); } };
 
   if (ev.loading) return html`<${Loading} />`;
@@ -1135,6 +1158,26 @@ function EventDetail({ api, base, eventId, assistant }) {
     } });
     setTt({ ...tt, code: "", name: "", price: "", stock: "" }); reloadTypes();
   });
+  const addPresale = act(async () => {
+    const all = types.data?.ticketTypes ?? [];
+    const regular = all.find((t) => t.id === pre.of);
+    if (!regular) throw new Error("Choisissez le billet régulier.");
+    const cents = Math.round(Number(pre.price.replace(",", ".")) * 100);
+    if (!Number.isInteger(cents) || cents < 0 || cents >= regular.priceCents) throw new Error(`Le prix prévente doit être plus bas que le prix régulier (${money(regular.priceCents)}).`);
+    if (!pre.endsAt && String(pre.quantity).trim() === "") throw new Error("Une prévente se termine : donnez une date de fin, une quantité, ou les deux.");
+    const taken = new Set(all.map((t) => t.code));
+    let code = `${regular.code}_PRE`.slice(0, 40);
+    for (let i = 2; taken.has(code); i++) code = `${regular.code}_PRE${i}`.slice(0, 40);
+    await api(`${base}/events/${eventId}/ticket-types`, { method: "POST", body: {
+      code, name: `${regular.name} — Prévente`.slice(0, 200), kind: regular.kind, priceCents: cents,
+      minQuantity: regular.minQuantity, maxQuantity: regular.maxQuantity, countsAsAdult: regular.countsAsAdult, openDate: regular.openDate,
+      ...(regular.maxAdultsInOrder != null ? { maxAdultsInOrder: regular.maxAdultsInOrder } : {}),
+      description: regular.description ?? null, sortOrder: regular.sortOrder, active: true,
+      presaleOf: regular.id, salesEndAt: pre.endsAt ? new Date(pre.endsAt).toISOString() : null,
+      quantityLimit: String(pre.quantity).trim() === "" ? null : Number(pre.quantity),
+    } });
+    setPre({ of: "", price: "", endsAt: "", quantity: "" }); reloadTypes();
+  });
   // Run 49: change a price, a stock, or take a type off sale (an add-on stays hidden until its price is confirmed).
   const editType = (t, field) => act(async () => {
     let body;
@@ -1150,6 +1193,15 @@ function EventDetail({ api, base, eventId, assistant }) {
     } else if (field === "stock") {
       const v = prompt(`Stock de ${t.name} par séance (vide = sans limite)`, t.stockPerSession ?? ""); if (v === null) return;
       body = { stockPerSession: v.trim() === "" ? null : Number(v.trim()) };
+    } else if (field === "salesEnd") {
+      // Run 97: a presale's end; the browser's local time.
+      const v = prompt(`Fin de la vente de ${t.name} (AAAA-MM-JJ HH:MM ; vide = aucune date)`, t.salesEndAt ? localInput(t.salesEndAt).replace("T", " ") : ""); if (v === null) return;
+      const at = v.trim() === "" ? null : new Date(v.trim().replace(" ", "T"));
+      if (at && Number.isNaN(at.getTime())) throw new Error("Date invalide : AAAA-MM-JJ HH:MM.");
+      body = { salesEndAt: at ? at.toISOString() : null };
+    } else if (field === "quantityLimit") {
+      const v = prompt(`Combien de billets ${t.name} au total, toutes séances comprises (vide = sans limite)`, t.quantityLimit ?? ""); if (v === null) return;
+      body = { quantityLimit: v.trim() === "" ? null : Number(v.trim()) };
     } else body = { active: !t.active };
     await api(`${base}/ticket-types/${t.id}`, { method: "PATCH", body }); reloadTypes();
   });
@@ -1227,7 +1279,7 @@ function EventDetail({ api, base, eventId, assistant }) {
       ${cancelling.orders.failed > 0 && html`<div class="alert warn">${cancelling.orders.failed} remboursement(s) en échec : ${cancelling.failures.map((f) => f.reference).join(", ")}. Réessayez plus tard depuis la commande.</div>`}
     </div>`}
 
-    <${PromoCodes} api=${api} base=${base} eventId=${eventId} />
+    <${PromoCodes} api=${api} base=${base} eventId=${eventId} shopUrl=${shopUrl} />
     <${PresaleCodes} api=${api} base=${base} eventId=${eventId} event=${event} />
 
     <h2>Types de billets</h2>
@@ -1248,13 +1300,45 @@ function EventDetail({ api, base, eventId, assistant }) {
       <label class="check"><input type="checkbox" checked=${tt.active} onChange=${(e) => setTt({ ...tt, active: e.target.checked })} /> En vente dès maintenant</label>
       <button type="submit">Ajouter</button>
     </form>
-    ${types.loading ? html`<${Loading} />` : html`<div class="table-scroll" role="region" aria-label="Types de billets" tabindex="0"><table><thead><tr><th>Code</th><th>Nom</th><th class="num">Prix</th><th class="num">Min–Max</th><th>Genre</th><th class="num">Stock / séance</th><th>Vente</th></tr></thead>
+    ${!types.loading && html`<${PresaleForm} types=${types.data?.ticketTypes ?? []} pre=${pre} setPre=${setPre} onSubmit=${addPresale} />`}
+    ${types.loading ? html`<${Loading} />` : html`<div class="table-scroll" role="region" aria-label="Types de billets" tabindex="0"><table><thead><tr><th>Code</th><th>Nom</th><th class="num">Prix</th><th class="num">Min–Max</th><th>Genre</th><th class="num">Stock / séance</th><th>Prévente</th><th>Vente</th></tr></thead>
       <tbody>${(types.data?.ticketTypes ?? []).map((t) => html`<tr><td>${t.code}</td><td>${t.name}<br />
         <button class="link" title=${t.description ?? ""} onClick=${editType(t, "description")}>${t.description ? "Modifier ce qui est inclus" : "Dire ce qui est inclus"}</button></td>
         <td class="num"><button class="link" onClick=${editType(t, "price")}>${money(t.priceCents)}</button></td><td class="num">${t.minQuantity}–${t.maxQuantity}</td>
         <td>${t.kind === "add_on" ? `${t.grantsSessionChange ? "Option (Flex)" : "Option"} · ${ADD_ON_SCOPE_FR[t.addOnScope] ?? ""}` : t.countsAsAdult ? "Admission adulte" : "Admission"}${t.openDate ? " · billet ouvert" : ""}</td>
         <td class="num">${t.kind === "add_on" ? html`<button class="link" onClick=${editType(t, "stock")}>${t.stockPerSession ?? "sans limite"}</button>` : "—"}</td>
+        <td>${t.presaleOf ? html`<${PresaleCell} t=${t} types=${types.data?.ticketTypes ?? []} onEnd=${editType(t, "salesEnd")} onQuantity=${editType(t, "quantityLimit")} />` : "—"}</td>
         <td><button class=${t.active ? "secondary" : ""} onClick=${editType(t, "active")}>${t.active ? "Retirer de la vente" : "Mettre en vente"}</button></td></tr>`)}</tbody></table></div>`}`;
+}
+
+/** Run 97: a presale price for one regular ticket: cheaper, and it ends (a date, a quantity, or both). */
+function PresaleForm({ types, pre, setPre, onSubmit }) {
+  const regulars = types.filter((t) => t.kind === "admission" && !t.presaleOf && t.priceCents > 0);
+  if (regulars.length === 0) return null;
+  const regular = regulars.find((t) => t.id === pre.of);
+  const cents = Math.round(Number(String(pre.price).replace(",", ".")) * 100);
+  const saving = regular && Number.isInteger(cents) && cents > 0 && cents < regular.priceCents ? Math.floor(((regular.priceCents - cents) / regular.priceCents) * 100) : null;
+  return html`<h3 class="sub-title">Prix de prévente</h3>
+    <p class="muted">Un prix plus bas pour un temps ou une quantité limités. Les acheteurs le voient juste avant le billet régulier, avec le prix régulier barré, la date de fin et ce qui reste.</p>
+    <form class="inline card" aria-label="Créer une prévente" onSubmit=${onSubmit}>
+      <label>Billet régulier<select required value=${pre.of} onChange=${(e) => setPre({ ...pre, of: e.target.value })}>
+        <option value="">Choisir…</option>${regulars.map((t) => html`<option value=${t.id}>${t.name} (${money(t.priceCents)})</option>`)}</select></label>
+      <label>Prix prévente ($)<input required inputmode="decimal" value=${pre.price} onInput=${(e) => setPre({ ...pre, price: e.target.value })} /></label>
+      <label>Fin de la prévente<input type="datetime-local" value=${pre.endsAt} onInput=${(e) => setPre({ ...pre, endsAt: e.target.value })} /></label>
+      <label>Quantité (toutes séances)<input type="number" min="1" placeholder="sans limite" value=${pre.quantity} onInput=${(e) => setPre({ ...pre, quantity: e.target.value })} /></label>
+      <button type="submit">Créer la prévente</button>
+      <p class="muted form-note">${saving !== null ? `Rabais montré aux acheteurs : −${saving} % (${money(regular.priceCents)} barré). ` : ""}La prévente se termine à sa date ou quand sa quantité est vendue, puis le billet régulier reste seul en vente.</p>
+    </form>`;
+}
+
+/** Run 97: a presale's end and what it has sold, each editable. */
+function PresaleCell({ t, types, onEnd, onQuantity }) {
+  const regular = types.find((r) => r.id === t.presaleOf);
+  const sold = (t.quotaSold ?? 0) + (t.quotaReserved ?? 0);
+  const ended = t.salesEndAt && Date.parse(t.salesEndAt) <= Date.now();
+  return html`<span class="badge">${ended ? "Terminée" : "Prévente"}</span> de ${regular?.code ?? "?"}
+    <br /><button class="link" onClick=${onEnd}>${t.salesEndAt ? `jusqu'au ${when(t.salesEndAt)}` : "sans date de fin"}</button>
+    <br /><button class="link" onClick=${onQuantity}>${t.quantityLimit ? `${sold} / ${t.quantityLimit} vendus ou réservés` : "sans limite de quantité"}</button>`;
 }
 
 const ADD_ON_SCOPE_FR = { per_admission: "une par personne", up_to_admissions: "jusqu'à une par personne", per_order: "quantité libre" };

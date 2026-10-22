@@ -67,6 +67,7 @@ main { width: 100%; max-width: 1280px; margin: 0 auto; padding: 1.5rem; }
 
 h1 { font-size: 1.5rem; font-weight: 650; letter-spacing: -.02em; margin: .25rem 0 1.1rem; }
 h2 { font-size: 1.05rem; font-weight: 650; margin: 1.6rem 0 .65rem; }
+h3.sub-title { font-size: .95rem; font-weight: 650; margin: 1.2rem 0 .35rem; }
 .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 1.25rem; margin-bottom: 1rem; box-shadow: var(--shadow); }
 .grid { display: grid; gap: .9rem; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
 .kpi { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 1rem 1.15rem; box-shadow: var(--shadow); }
@@ -79,6 +80,8 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 tr:last-child td { border-bottom: 0; }
 tbody tr:hover td { background: var(--soft); }
 form.inline { display: flex; flex-wrap: wrap; gap: .6rem; align-items: end; }
+/* Run 97: a line under an inline form (the presale's saving, how it ends). */
+form.inline .form-note { flex: 1 1 100%; margin: 0; }
 label { display: flex; flex-direction: column; gap: .3rem; min-width: 0; max-width: 100%; font-size: 12px; font-weight: 500; color: var(--muted); }
 label.check { flex-direction: row; align-items: center; color: var(--ink); font-size: 14px; }
 input, select, textarea { max-width: 100%; font: inherit; font-size: 14px; padding: .5rem .7rem; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--ink); min-width: 0; }

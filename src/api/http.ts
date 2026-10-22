@@ -34,6 +34,7 @@ const STATUS_BY_CODE: Record<string, ContentfulStatusCode> = {
   presale_of_invalid: 422,
   presale_must_end: 422,
   quantity_limit_only_for_admissions: 422,
+  quantity_limit_below_committed: 409,
   appearance_low_contrast: 422,
   session_not_available: 409,
   // Run 72: the public sale is not open yet (a presale code may open it earlier).

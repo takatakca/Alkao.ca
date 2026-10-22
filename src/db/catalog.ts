@@ -209,8 +209,17 @@ export function updateTicketType(q: Queryable, s: TenantScope, ticketTypeId: str
       [ticketTypeId, s.clientId, s.brandId, ...set.values], "ticket_type_not_found");
     // Run 49: a stock set (or changed) later counts what is already held and sold.
     if ("stockPerSession" in fields) await recountAddOnStock(q, s, ticketTypeId);
-    // Run 97: likewise for a quantity limit set on a ticket already on sale.
-    if ("quantityLimit" in fields) await recountTicketTypeQuota(q, s, ticketTypeId);
+    // Run 97: likewise for a quantity limit set on a ticket already on sale, never below
+    // what is already sold or held.
+    if ("quantityLimit" in fields) {
+      await recountTicketTypeQuota(q, s, ticketTypeId);
+      const limit = fields.quantityLimit as number | null;
+      if (limit !== null) {
+        const { rows } = await q.query<{ taken: number }>(
+          `SELECT (sold_count + reserved_count)::int AS taken FROM public.ticketing_ticket_type_counts WHERE ticket_type_id = $1`, [ticketTypeId]);
+        if ((rows[0]?.taken ?? 0) > limit) throw new DomainError("quantity_limit_below_committed");
+      }
+    }
     return row;
   });
 }

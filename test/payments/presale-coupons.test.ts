@@ -139,15 +139,23 @@ describe("presale tickets", () => {
     expect(await counts()).toEqual({ reserved_count: 0, sold_count: 0 });
   });
 
-  it("a limit set later starts from what is already sold", async () => {
-    const h = await hold([{ ticketTypeId: presaleId, quantity: 1 }]);
-    await pay(h.body.hold);
-    const raised = await call(app, "PATCH", `${adm(t.clientId, t.brandId)}/ticket-types/${presaleId}`, { token: await owner(), body: { quantityLimit: 5 } });
+  it("a limit set later starts from what is already sold, and never goes below it", async () => {
+    const patch = async (body: Record<string, unknown>) =>
+      call(app, "PATCH", `${adm(t.clientId, t.brandId)}/ticket-types/${presaleId}`, { token: await owner(), body });
+    await pay((await hold([{ ticketTypeId: presaleId, quantity: 1 }])).body.hold);
+    // Without a limit for a while, a sale is not counted…
+    expect((await patch({ quantityLimit: null })).status).toBe(200);
+    await pay((await hold([{ ticketTypeId: presaleId, quantity: 1 }])).body.hold);
+    // …and a limit set again counts both, refusing one below them.
+    const tooLow = await patch({ quantityLimit: 1 });
+    expect(tooLow.status).toBe(409);
+    expect(tooLow.body.error.code).toBe("quantity_limit_below_committed");
+    const raised = await patch({ quantityLimit: 5 });
     expect(raised.status, JSON.stringify(raised.body)).toBe(200);
-    expect(await counts()).toEqual({ reserved_count: 0, sold_count: 1 });
-    expect(await remaining()).toBe(4);
+    expect(await counts()).toEqual({ reserved_count: 0, sold_count: 2 });
+    expect(await remaining()).toBe(3);
     const staff = await call(app, "GET", `${adm(t.clientId, t.brandId)}/events/${t.eventId}/ticket-types`, { token: await owner() });
-    expect(staff.body.ticketTypes.find((x: { id: string }) => x.id === presaleId)).toMatchObject({ quotaSold: 1, quotaReserved: 0 });
+    expect(staff.body.ticketTypes.find((x: { id: string }) => x.id === presaleId)).toMatchObject({ quotaSold: 2, quotaReserved: 0 });
   });
 
   it("a copied event keeps its presale, against the copy's own regular ticket, moved with the dates", async () => {
