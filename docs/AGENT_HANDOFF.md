@@ -1,5 +1,30 @@
 # ALKAO — Agent handoff (mandatory)
 
+## Run 96 — what still stops Havana's sale, verified live (2026-10-22)
+
+- Live on 2026-10-22:
+  - `/health` build `26a48ec`, `/health/ready` schema current;
+  - `check:golive --url https://alkao.ca`: only warnings, Stripe TEST mode and `/metrics` off.
+- Codex (2026-10-21) did the following:
+  - provisioned Havana;
+  - imported Halloween as drafts: 24 and 31 Oct, 3,000 seats each;
+  - saved appearance, refund policy and return origin;
+  - set Promo Havana's three ALKAO variables.
+- Still blocking, owner only:
+  - live `sk_live_` key for the TAKATAK platform (Codex's Stripe connector reaches another account, "ALKAO.CA");
+  - live Connect webhook secret;
+  - a valid Resend key (the current one returns 400);
+  - Havana's Stripe onboarding in /ops.
+  Then a paid child ticket, e-mail, QR scan and refund, and only then publish.
+- `alkao.ca/` answers 302 to `https://promohavana.ca/billets`. That is `ALKAO_HOME_URL` on the ALKAO Coolify resource, not code. The owner calls it a bug: the operator removes it and restarts. `checkLive` now warns on a home redirect (`src/ops/golive.ts`, test in `test/ops/golive.test.ts`).
+- The owner ended Weezevent on 2026-10-22: "ENLEVE WEEZEVENT C FINI". Promo Havana PR `claude/remove-weezevent` takes every Weezevent link out. Until ALKAO publishes, buy buttons lead to the read-only `/billets` preview.
+- NEXT EXACT ACTION, for the operator agent with Coolify access:
+  - remove `ALKAO_HOME_URL`;
+  - after the owner's keys, redeploy ALKAO, then publish the two sessions once the test purchase passes;
+  - redeploy Promo Havana.
+  The owner's steps are the table at the top of `docs/CE_SOIR_HAVANA.md`.
+
+
 ## Run 95 — the owner chose B: everything on ALKAO (2026-10-20)
 
 - `docs/CE_SOIR_HAVANA.md` now follows choice B, in this order:

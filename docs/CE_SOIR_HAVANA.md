@@ -1,12 +1,43 @@
-# Halloween Havana en vente sur alkao.ca : votre liste (Run 94, choix B confirmé le 20 octobre 2026)
+# Halloween Havana en vente sur alkao.ca : votre liste (choix B, mise à jour le 22 octobre 2026)
 
-Le code est prêt et fusionné. Ce qui reste demande l'accès au serveur et aux comptes : Coolify, Stripe, les clés, la base de données. Je ne l'ai pas, et les secrets ne doivent jamais passer par le clavardage. Ces étapes vous reviennent, ou à la personne qui gère Coolify.
+## Où on en est (vérifié le 22 octobre 2026)
 
-**Temps total : environ 1 heure, dans l'ordre ci-dessous.** Cochez au fur et à mesure.
+**Déjà fait (le 21 octobre, par Codex et par moi) :**
+- alkao.ca roule la dernière version, avec sa base à jour (`/health` et `/health/ready` vérifiés le 22).
+- Havana Resort est créé dans ALKAO, et la connexion du personnel à /ops fonctionne.
+- Halloween est importé avec la page complète : les samedis 24 et 31, 3 000 places chacun, **encore en brouillon**.
+- L'apparence, la politique de remboursement et le site de retour sont enregistrés.
+- promohavana.ca est à jour et connaît déjà ALKAO (ses trois réglages sont en place).
 
-**Pour vendre le samedi 24 octobre, terminez les étapes 1 à 8 au plus tard le vendredi 23 au soir.** Chaque jour sans billetterie en ligne coûte des ventes.
+**Pourquoi rien ne se vend encore sur ALKAO :**
+1. La clé Stripe du serveur est une **clé de TEST** : aucun vrai paiement n'est possible.
+2. Havana n'a **pas encore branché son compte Stripe** dans ALKAO.
+3. La clé **Resend est refusée** (« API key is invalid ») : les billets ne partiraient pas par courriel.
+4. Les deux soirées sont en **brouillon**. On les publie seulement après un achat test réussi.
 
-## Ce qui est déjà fait (rien à faire de votre côté)
+**Deux problèmes vus sur le site :**
+- **alkao.ca renvoie vers promohavana.ca/billets.** Ce n'est pas un bogue du code. C'est le réglage `ALKAO_HOME_URL`, ajouté sur le serveur ALKAO dans Coolify. Il faut le supprimer, puis redémarrer ALKAO. `check:golive` le signale maintenant.
+- **promohavana.ca/billets ne vend rien** (« Achats en ligne bientôt disponibles »). Les autres boutons menaient encore à Weezevent. Weezevent est retiré du site à votre demande. Jusqu'à la publication sur ALKAO, chaque bouton « Acheter » mène à cette page d'aperçu, **sans vente en ligne**.
+
+## Ce qui reste, dans l'ordre
+
+| # | Qui | Quoi | Où |
+|---|---|---|---|
+| 1 | **Vous** | Copier la clé `sk_live_…` du compte Stripe **TAKATAK** (mode live), avec Connect activé, dans `STRIPE_SECRET_KEY`. Ou donner à l'opérateur l'accès à ce compte : celui qu'il voit est un autre compte, « ALKAO.CA ». | Stripe, puis Coolify, ressource ALKAO |
+| 2 | **Vous** | Créer le webhook live de l'étape 2 et copier son `whsec_…` dans `STRIPE_WEBHOOK_SECRET`. | Stripe, puis Coolify |
+| 3 | **Vous** | Créer une nouvelle clé Resend pour un domaine vérifié, la mettre dans `RESEND_API_KEY`, et vérifier `ALKAO_EMAIL_FROM`. | resend.com, puis Coolify |
+| 4 | Opérateur | **Supprimer `ALKAO_HOME_URL`**, puis Redeploy d'ALKAO. | Coolify, ressource ALKAO |
+| 5 | **Vous** | Brancher le Stripe de Havana : Paiements, puis Connecter Stripe, avec les coordonnées de l'entreprise et du compte bancaire. | alkao.ca/ops |
+| 6 | **Vous** | Acheter un vrai billet enfant, vérifier le courriel, le code QR et un scan, puis le rembourser. | alkao.ca, puis /ops |
+| 7 | Vous ou l'opérateur | Mettre la capacité exacte (3 000 moins les billets Weezevent de chaque samedi), puis publier l'événement et ses deux séances. | /ops, Événements |
+| 8 | Opérateur | Redeploy de Promo Havana avec le retrait de Weezevent. Le site passe à ALKAO de lui-même dès que les dates sont publiées. | Coolify, ressource Promo Havana |
+| 9 | **Vous** | Fermer la vente sur Weezevent. Les billets déjà vendus restent valides et se scannent avec l'application Weezevent. | weezevent.com |
+
+**Les étapes 1, 2, 3 et 5 demandent vos comptes, et personne d'autre ne peut les faire.** Dès qu'elles sont faites, l'opérateur (Codex ou une personne) fait les étapes 4, 7 et 8 en quelques minutes.
+
+Le détail de chaque étape suit. Les étapes déjà faites sont marquées ✔.
+
+## Préparé dans le code (Run 94, 18 octobre)
 
 - La page Halloween est entièrement remplie dans `catalogs/havana-halloween-2026.json`, à partir des pages publiques de promohavana.ca et havanaresort.ca :
   - le résumé et l'avis « à savoir » ;
@@ -15,11 +46,6 @@ Le code est prêt et fusionné. Ce qui reste demande l'accès au serveur et aux 
   - ce que comprend chaque billet.
 - L'import met la page en place en une commande (étape 5). L'option `--update-page` la rafraîchit plus tard sans toucher aux prix ni aux dates.
 - La nouvelle page d'événement, le tableau de bord, l'assistant (éteint) et la page des billets sont dans `main`.
-- État vérifié le 18 octobre avec `check:golive` :
-  - alkao.ca répond, mais sur une **ancienne version** ;
-  - **Stripe n'y est pas configuré** ;
-  - **Havana n'est pas créé** ;
-  - promohavana.ca vend toujours avec **Weezevent**, sur son ancienne version.
 
 ## Votre choix : B, tout sur ALKAO (confirmé le 20 octobre)
 
@@ -27,17 +53,16 @@ promohavana.ca vendait les samedis 24 et 31 octobre avec Weezevent. Avec le choi
 
 1. Étapes 1 à 7, dans l'ordre. ALKAO est prêt, puis l'import met les soirées en vente sur alkao.ca avec une **capacité prudente**, plus basse que la vraie (étape 5). Enfin, un achat test réussit. Pendant ce temps, Weezevent vend encore.
 2. Étape 8 : promohavana.ca passe à ALKAO.
-   - Le site le fait de lui-même dès qu'ALKAO a des dates en vente. Avant, il reste sur Weezevent : il n'y a donc jamais de trou dans la vente.
+   - Le site le fait de lui-même dès qu'ALKAO a des dates en vente.
+   - Weezevent est retiré du site depuis le 22 octobre, à votre demande : avant la publication, les boutons mènent à l'aperçu, sans vente en ligne.
    - **Le même jour**, vous fermez la vente Weezevent.
 3. Juste après la fermeture : comptez les billets Weezevent vendus **pour chaque samedi**. Montez ensuite la capacité de chaque soirée dans /ops au chiffre exact (étape 5, point 3).
 
 **Les billets Weezevent déjà vendus restent valides.** Ne les annulez pas et ne les remboursez pas. À l'entrée, ils se scannent avec l'application de contrôle de Weezevent, pas avec ALKAO (voir « Les samedis à l'entrée » plus bas).
 
-**Ce qu'il me faut encore de vous :**
-- la capacité réelle du site par soirée (le nombre total de personnes) ;
-- votre accord sur la politique de remboursement proposée à l'étape 6, ou votre propre texte.
+La capacité (3 000 places par soirée) et la politique de remboursement ont été confirmées par vous et enregistrées le 21 octobre.
 
-## Étape 1 — Coolify : mettre ALKAO à jour (personne qui gère Coolify, 15 min)
+## Étape 1 — Coolify : mettre ALKAO à jour (✔ fait le 21 octobre ; restent les clés Stripe live et Resend, et le retrait de `ALKAO_HOME_URL`)
 
 1. Ouvrir Coolify, puis la ressource **ALKAO**, puis **Environment Variables**.
 2. Vérifier que ces variables existent. Si non, les ajouter. **Tapez les secrets vous-même** dans Coolify, jamais ailleurs. Pour générer une valeur au hasard : `openssl rand -base64 48`.
@@ -81,7 +106,7 @@ promohavana.ca vendait les samedis 24 et 31 octobre avec Weezevent. Avec le choi
    - `charge.dispute.funds_reinstated`
 5. Copier le **secret de signature** (`whsec_…`) dans `STRIPE_WEBHOOK_SECRET` sur Coolify (étape 1), puis **Redeploy**.
 
-## Étape 3 — Créer Havana dans ALKAO (personne qui gère le serveur, 10 min)
+## Étape 3 — Créer Havana dans ALKAO (✔ fait le 21 octobre)
 
 1. Préparer `plan.json` en copiant `provisioning.example.json`. Y mettre :
    - le vrai **Client** et la vraie **Brand** Havana Resort de TAKATAK. Leurs identifiants (UUID) sont dans le tableau de bord TAKATAK ;
@@ -97,7 +122,7 @@ promohavana.ca vendait les samedis 24 et 31 octobre avec Weezevent. Avec le choi
 2. Choisir Havana Resort, puis **Paiements**, puis **Connecter Stripe**, et terminer l'inscription de Havana chez Stripe.
 3. Toujours dans **Paiements**, ajouter `https://www.promohavana.ca` aux sites autorisés après paiement.
 
-## Étape 5 — Charger Halloween (personne qui gère le serveur, 2 min)
+## Étape 5 — Charger Halloween (✔ importé en brouillon le 21 octobre, 3 000 places par soirée ; reste la publication)
 
 Dans Coolify, ouvrir **Terminal** dans le conteneur ALKAO. `DATABASE_URL` y est déjà.
 
@@ -119,7 +144,7 @@ Les soirées déjà passées (3, 10 et 17 octobre) ne sont jamais créées.
 
    ALKAO refuse un chiffre plus bas que les places déjà vendues ou réservées.
 
-## Étape 6 — Apparence et politique (vous, 10 min)
+## Étape 6 — Apparence et politique (✔ enregistrées le 21 octobre)
 
 Dans /ops, ouvrir **Apparence** et remplir :
 

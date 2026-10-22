@@ -407,6 +407,13 @@ export async function checkLive(
     ? ok(area.auth, `/ops prêt${embed.length ? `, affichable dans ${embed.join(", ")}` : ""}`)
     : fail(area.auth, "/ops ne peut pas afficher la connexion (SUPABASE_URL, SUPABASE_ANON_KEY)"));
 
+  // Run 96: a platform home sent elsewhere by ALKAO_HOME_URL reads as a bug to its visitors.
+  const home = await get("/");
+  const away = home.status >= 300 && home.status < 400 ? home.headers.get("location") : null;
+  if (away) out.push(warn(area.shop, `La page d'accueil renvoie vers ${away}`,
+    "C'est ALKAO_HOME_URL sur le serveur : retirez-le, puis redémarrez, pour afficher la page d'accueil d'ALKAO. Gardez-le seulement pour une billetterie en marque blanche."));
+  else if (home.status === 200) out.push(ok(area.shop, "Page d'accueil d'ALKAO affichée"));
+
   const billets = await get("/billets");
   const csp = billets.headers.get("content-security-policy") ?? "";
   out.push(billets.status === 200 && csp.includes("frame-ancestors 'none'") && /noindex/.test(billets.headers.get("x-robots-tag") ?? "")
