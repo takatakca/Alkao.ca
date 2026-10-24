@@ -1,5 +1,24 @@
 # ALKAO — Agent handoff (mandatory)
 
+## Run 104 — price phases (2026-10-24)
+
+- Migration `20261124000100_alkao_price_phases.sql`:
+  - `ticket_types.sales_start_at`;
+  - `ticketing_ticket_types_sales_window_ck` (start < end), mapped to `sales_window_invalid` (422).
+- `rulesOnSale` treats a type before its start like one after its end: hidden, and refused in a cart (`inactive_ticket_type`).
+- `admissionPriceFloors` and `eventDeals` (presales and passes) leave out phases still to come.
+- The public event route adds `upcoming`: `id`, `name`, `presaleOf`, `priceCents`, `salesStartAt` and `salesEndAt` of the phases to come.
+- Shop:
+  - `nextPhase` shows "Ensuite : 25,00 $ (dès le …)" on a presale row, only when a later phase of the same regular ticket exists. The regular price is already struck through.
+  - The minute clock also reloads when a phase starts.
+- /ops:
+  - the presale form takes a phase name ("Lève-tôt") and an optional start;
+  - `PresaleCell` shows "À venir" and "dès le …", and the start can be edited.
+- `duplicate.ts` moves the start with the sessions. `events:import` accepts `salesStartAt` through `CreateTicketType`.
+- Tests: `test/payments/price-phases.test.ts` (4), and the Run 104 cases in `test/ui/presale-ui.test.ts` and `test/ui/presale-ops.test.ts`.
+- NEXT EXACT ACTION: merge the Run 104 PR when green.
+
+
 ## Run 103 — codes for partner companies (2026-10-24)
 
 - The owner's goal: presales with coupons given out through companies (sponsors, employers, shops), so the buyer saves, the organizer saves on advertising, and buyers come back. Owner guide: `docs/PREVENTES_COUPONS.md`, "Les codes pour les entreprises".
@@ -20,7 +39,7 @@
 - `salesReport.promoCodes`: a partner's codes are one row (`code: null`, `partner`, `codesUsed`).
 - /ops: the "Codes pour les entreprises" section (form, table, file, switch). The dashboard shows partner rows.
 - Tests: `test/payments/partner-codes.test.ts` (6), and the Run 103 case in `test/ui/presale-ops.test.ts`.
-- NEXT EXACT ACTION: merge the Run 103 PR when green. alkao.ca still needs the Coolify Redeploy (Run 102).
+- Merged d58dec6 (PR #98). alkao.ca still needs the Coolify Redeploy (Run 102).
 
 
 ## Run 102 — alkao.ca down since 2026-10-22; empty settings no longer stop the server (2026-10-24)

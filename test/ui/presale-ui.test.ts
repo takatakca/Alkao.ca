@@ -149,6 +149,29 @@ describe("Run 97: presales and coupons in the shop", () => {
     }
   });
 
+  it("announces the next price phase on the presale row (Run 104)", async () => {
+    const token = await tokenFor(seed.users.havanaOwner);
+    const { rows: [pre] } = await db.pool.query<{ sales_end_at: Date }>(`SELECT sales_end_at FROM public.ticketing_ticket_types WHERE code = 'GENERAL_PRE'`);
+    const next = await call(app, "POST", `${adm(t.clientId, t.brandId)}/events/${t.eventId}/ticket-types`, {
+      token,
+      body: {
+        code: "GENERAL_PRE2", name: "Admission générale — Dernière chance", priceCents: 2695, maxQuantity: 10, countsAsAdult: true,
+        presaleOf: t.types.find((x) => x.code === "GENERAL")!.id, salesStartAt: pre!.sales_end_at.toISOString(), salesEndAt: new Date(pre!.sales_end_at.getTime() + 5 * 86_400_000).toISOString(),
+      },
+    });
+    expect(next.status, JSON.stringify(next.body)).toBe(201);
+    try {
+      const page = await shop();
+      const meta = page.locator(".type.is-deal .deal-meta");
+      await expect.poll(() => meta.first().textContent()).toMatch(/Ensuite : 26,95\s\$/);
+      // The phase still to come is not sold yet.
+      expect(await page.getByRole("button", { name: "Ajouter Admission générale — Dernière chance", exact: true }).count()).toBe(0);
+      if (shots) await page.locator(".type.is-deal").first().screenshot({ path: `${shots}/price-phase-next.png` });
+    } finally {
+      await db.pool.query(`UPDATE public.ticketing_ticket_types SET active = false WHERE code = 'GENERAL_PRE2'`);
+    }
+  });
+
   it("alkao.ca shows the presale on the event's card", async () => {
     const token = await tokenFor(seed.users.havanaOwner);
     expect((await call(app, "PUT", `${adm(t.clientId, t.brandId)}/appearance`, { token, body: { showOnAlkao: true } })).status).toBe(200);

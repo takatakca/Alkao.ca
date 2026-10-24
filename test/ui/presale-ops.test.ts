@@ -87,6 +87,22 @@ describe("Run 97: presales and coupons in /ops", () => {
     if (shots) await page.screenshot({ path: `${shots}/presale-ops.png`, fullPage: true });
   });
 
+  it("makes a named price phase that starts later (Run 104)", async () => {
+    const page = await eventPage();
+    const form = page.getByRole("form", { name: "Créer une prévente" });
+    await form.getByLabel("Billet régulier").selectOption({ label: "Admission générale — 13 ans et + (29,95 $)" });
+    await form.getByLabel("Nom du palier").fill("Dernière chance");
+    await form.getByLabel("Prix prévente ($)").fill("26,95");
+    await form.getByLabel("Début (facultatif)").fill(local(new Date(Date.now() + 10 * 86_400_000)));
+    await form.getByLabel("Fin de la prévente").fill(local(new Date(Date.now() + 15 * 86_400_000)));
+    await form.getByRole("button", { name: "Créer la prévente" }).click();
+    const row = page.getByRole("row", { name: /Admission générale — 13 ans et \+ — Dernière chance/ });
+    await row.waitFor();
+    expect(await row.textContent()).toMatch(/À venir.*de GENERAL.*dès le /s);
+    const { rows } = await db.pool.query(`SELECT price_cents, sales_start_at IS NOT NULL AS starts FROM public.ticketing_ticket_types WHERE name = 'Admission générale — 13 ans et + — Dernière chance'`);
+    expect(rows[0]).toEqual({ price_cents: 2695, starts: true });
+  });
+
   it("shows a code as a public coupon, with its name, and copies its link", async () => {
     const page = await eventPage();
     const form = page.getByRole("form", { name: "Nouveau code promo" });

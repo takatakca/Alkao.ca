@@ -201,6 +201,8 @@ const ticketTypeFields = {
   quantityLimit: z.number().int().min(1).max(1_000_000).nullish(),
   /** Run 98, admissions only: a festival pass, valid once at every session on sale when bought. */
   pass: z.boolean().default(false),
+  /** Run 104: not sold before this moment (a later price phase: early bird, then presale, then regular). */
+  salesStartAt: timestamp.nullish(),
 };
 export const CreateTicketType = z
   .object(ticketTypeFields)
@@ -211,7 +213,8 @@ export const CreateTicketType = z
   .refine((t) => t.stockPerSession == null || t.kind === "add_on", { message: "only add-ons have a stock" })
   .refine((t) => t.quantityLimit == null || t.kind === "admission", { message: "only admissions have a quantity limit" })
   .refine((t) => !t.pass || (t.kind === "admission" && !t.openDate), { message: "a pass is an admission with fixed dates" })
-  .refine((t) => !t.presaleOf || t.salesEndAt != null || t.quantityLimit != null, { message: "a presale ends on a date or after a quantity", path: ["salesEndAt"] });
+  .refine((t) => !t.presaleOf || t.salesEndAt != null || t.quantityLimit != null, { message: "a presale ends on a date or after a quantity", path: ["salesEndAt"] })
+  .refine((t) => !t.salesStartAt || !t.salesEndAt || Date.parse(t.salesStartAt) < Date.parse(t.salesEndAt), { message: "salesEndAt must be after salesStartAt", path: ["salesEndAt"] });
 export const UpdateTicketType = z
   .object({
     name,
@@ -226,6 +229,7 @@ export const UpdateTicketType = z
     stockPerSession: z.number().int().min(0).max(100_000).nullable(),
     // Run 97: a presale's end and quantity can move; which ticket it undercuts cannot.
     salesEndAt: timestamp.nullable(),
+    salesStartAt: timestamp.nullable(),
     quantityLimit: z.number().int().min(1).max(1_000_000).nullable(),
   })
   .partial()

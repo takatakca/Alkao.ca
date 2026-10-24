@@ -162,6 +162,8 @@ const ERRORS_FR = {
   sold_out: "Plus assez de places.", capacity_below_committed: "Impossible : des places sont déjà vendues ou réservées.",
   // Run 97: presales.
   presale_price_not_lower: "Le prix de prévente doit rester plus bas que le prix régulier.",
+  sales_window_invalid: "La fin de la vente doit venir après son début.",
+  partner_code_private: "Un code d'entreprise reste privé : il ne peut pas devenir un coupon public.",
   presale_of_invalid: "Une prévente se rattache à un billet régulier du même genre.",
   presale_must_end: "Une prévente se termine : donnez une date de fin, une quantité, ou les deux.",
   quantity_limit_below_committed: "Impossible : plus de billets sont déjà vendus ou réservés à ce prix.",
@@ -1163,7 +1165,7 @@ function EventDetail({ api, base, eventId, assistant }) {
   const [cancelling, setCancelling] = useState(null);
   const [copied, setCopied] = useState(false);
   // Run 97: a presale price for a regular ticket, ending on a date, after a quantity, or both.
-  const [pre, setPre] = useState({ of: "", price: "", endsAt: "", quantity: "" });
+  const [pre, setPre] = useState({ of: "", price: "", endsAt: "", quantity: "", label: "", startsAt: "" });
   const act = (fn) => async (e) => { e?.preventDefault?.(); setError(null); try { await fn(); } catch (err) { setError(err); } };
 
   if (ev.loading) return html`<${Loading} />`;
@@ -1223,14 +1225,16 @@ function EventDetail({ api, base, eventId, assistant }) {
     let code = `${regular.code}_PRE`.slice(0, 40);
     for (let i = 2; taken.has(code); i++) code = `${regular.code}_PRE${i}`.slice(0, 40);
     await api(`${base}/events/${eventId}/ticket-types`, { method: "POST", body: {
-      code, name: `${regular.name} — Prévente`.slice(0, 200), kind: regular.kind, priceCents: cents,
+      // Run 104: a named price phase ("Lève-tôt"), which can start later than now.
+      code, name: `${regular.name} — ${pre.label.trim() || "Prévente"}`.slice(0, 200), kind: regular.kind, priceCents: cents,
       minQuantity: regular.minQuantity, maxQuantity: regular.maxQuantity, countsAsAdult: regular.countsAsAdult, openDate: regular.openDate, pass: regular.pass === true,
       ...(regular.maxAdultsInOrder != null ? { maxAdultsInOrder: regular.maxAdultsInOrder } : {}),
       description: regular.description ?? null, sortOrder: regular.sortOrder, active: true,
       presaleOf: regular.id, salesEndAt: pre.endsAt ? new Date(pre.endsAt).toISOString() : null,
+      salesStartAt: pre.startsAt ? new Date(pre.startsAt).toISOString() : null,
       quantityLimit: String(pre.quantity).trim() === "" ? null : Number(pre.quantity),
     } });
-    setPre({ of: "", price: "", endsAt: "", quantity: "" }); reloadTypes();
+    setPre({ of: "", price: "", endsAt: "", quantity: "", label: "", startsAt: "" }); reloadTypes();
   });
   // Run 49: change a price, a stock, or take a type off sale (an add-on stays hidden until its price is confirmed).
   const editType = (t, field) => act(async () => {
@@ -1247,6 +1251,12 @@ function EventDetail({ api, base, eventId, assistant }) {
     } else if (field === "stock") {
       const v = prompt(`Stock de ${t.name} par séance (vide = sans limite)`, t.stockPerSession ?? ""); if (v === null) return;
       body = { stockPerSession: v.trim() === "" ? null : Number(v.trim()) };
+    } else if (field === "salesStart") {
+      // Run 104: when a later price phase starts; the browser's local time.
+      const v = prompt(`Début de la vente de ${t.name} (AAAA-MM-JJ HH:MM ; vide = tout de suite)`, t.salesStartAt ? localInput(t.salesStartAt).replace("T", " ") : ""); if (v === null) return;
+      const at = v.trim() === "" ? null : new Date(v.trim().replace(" ", "T"));
+      if (at && Number.isNaN(at.getTime())) throw new Error("Date invalide : AAAA-MM-JJ HH:MM.");
+      body = { salesStartAt: at ? at.toISOString() : null };
     } else if (field === "salesEnd") {
       // Run 97: a presale's end; the browser's local time.
       const v = prompt(`Fin de la vente de ${t.name} (AAAA-MM-JJ HH:MM ; vide = aucune date)`, t.salesEndAt ? localInput(t.salesEndAt).replace("T", " ") : ""); if (v === null) return;
@@ -1363,7 +1373,7 @@ function EventDetail({ api, base, eventId, assistant }) {
         <td class="num"><button class="link" onClick=${editType(t, "price")}>${money(t.priceCents)}</button></td><td class="num">${t.minQuantity}–${t.maxQuantity}</td>
         <td>${t.kind === "add_on" ? `${t.grantsSessionChange ? "Option (Flex)" : "Option"} · ${ADD_ON_SCOPE_FR[t.addOnScope] ?? ""}` : t.countsAsAdult ? "Admission adulte" : "Admission"}${t.openDate ? " · billet ouvert" : ""}${t.pass ? " · passe festival" : ""}</td>
         <td class="num">${t.kind === "add_on" ? html`<button class="link" onClick=${editType(t, "stock")}>${t.stockPerSession ?? "sans limite"}</button>` : "—"}</td>
-        <td>${t.presaleOf ? html`<${PresaleCell} t=${t} types=${types.data?.ticketTypes ?? []} onEnd=${editType(t, "salesEnd")} onQuantity=${editType(t, "quantityLimit")} />` : "—"}</td>
+        <td>${t.presaleOf ? html`<${PresaleCell} t=${t} types=${types.data?.ticketTypes ?? []} onEnd=${editType(t, "salesEnd")} onQuantity=${editType(t, "quantityLimit")} onStart=${editType(t, "salesStart")} />` : "—"}</td>
         <td><button class=${t.active ? "secondary" : ""} onClick=${editType(t, "active")}>${t.active ? "Retirer de la vente" : "Mettre en vente"}</button></td></tr>`)}</tbody></table></div>`}`;
 }
 
@@ -1379,20 +1389,25 @@ function PresaleForm({ types, pre, setPre, onSubmit }) {
     <form class="inline card" aria-label="Créer une prévente" onSubmit=${onSubmit}>
       <label>Billet régulier<select required value=${pre.of} onChange=${(e) => setPre({ ...pre, of: e.target.value })}>
         <option value="">Choisir…</option>${regulars.map((t) => html`<option value=${t.id}>${t.name} (${money(t.priceCents)})</option>`)}</select></label>
+      <label>Nom du palier<input maxlength="40" placeholder="Prévente" value=${pre.label} onInput=${(e) => setPre({ ...pre, label: e.target.value })} /></label>
       <label>Prix prévente ($)<input required inputmode="decimal" value=${pre.price} onInput=${(e) => setPre({ ...pre, price: e.target.value })} /></label>
+      <label>Début (facultatif)<input type="datetime-local" value=${pre.startsAt} onInput=${(e) => setPre({ ...pre, startsAt: e.target.value })} /></label>
       <label>Fin de la prévente<input type="datetime-local" value=${pre.endsAt} onInput=${(e) => setPre({ ...pre, endsAt: e.target.value })} /></label>
       <label>Quantité (toutes séances)<input type="number" min="1" placeholder="sans limite" value=${pre.quantity} onInput=${(e) => setPre({ ...pre, quantity: e.target.value })} /></label>
       <button type="submit">Créer la prévente</button>
-      <p class="muted form-note">${saving !== null ? `Rabais montré aux acheteurs : −${saving} % (${money(regular.priceCents)} barré). ` : ""}La prévente se termine à sa date ou quand sa quantité est vendue, puis le billet régulier reste seul en vente.</p>
+      <p class="muted form-note">${saving !== null ? `Rabais montré aux acheteurs : −${saving} % (${money(regular.priceCents)} barré). ` : ""}La prévente se termine à sa date ou quand sa quantité est vendue, puis le billet régulier reste seul en vente. Pour des paliers (Lève-tôt, puis Prévente), créez-en deux : le second commence à la fin du premier, et la boutique annonce le prochain prix.</p>
     </form>`;
 }
 
 /** Run 97: a presale's end and what it has sold, each editable. */
-function PresaleCell({ t, types, onEnd, onQuantity }) {
+function PresaleCell({ t, types, onEnd, onQuantity, onStart }) {
   const regular = types.find((r) => r.id === t.presaleOf);
   const sold = (t.quotaSold ?? 0) + (t.quotaReserved ?? 0);
   const ended = t.salesEndAt && Date.parse(t.salesEndAt) <= Date.now();
-  return html`<span class="badge">${ended ? "Terminée" : "Prévente"}</span> de ${regular?.code ?? "?"}
+  // Run 104: a later price phase, not sold before its start.
+  const later = t.salesStartAt && Date.parse(t.salesStartAt) > Date.now();
+  return html`<span class="badge">${ended ? "Terminée" : later ? "À venir" : "Prévente"}</span> de ${regular?.code ?? "?"}
+    <br /><button class="link" onClick=${onStart}>${t.salesStartAt ? `dès le ${when(t.salesStartAt)}` : "dès maintenant"}</button>
     <br /><button class="link" onClick=${onEnd}>${t.salesEndAt ? `jusqu'au ${when(t.salesEndAt)}` : "sans date de fin"}</button>
     <br /><button class="link" onClick=${onQuantity}>${t.quantityLimit ? `${sold} / ${t.quantityLimit} vendus ou réservés` : "sans limite de quantité"}</button>`;
 }
