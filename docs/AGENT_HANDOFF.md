@@ -14,7 +14,7 @@
   - `live-watch` explains a proxy 502–504.
 - **Tests:** `test/api/config.test.ts`, `test/ops/golive.test.ts`, `test/ops/live-watch.test.ts`.
 - **Owner steps:** the top of `docs/CE_SOIR_HAVANA.md`. Read the Coolify logs, delete or fix the variable, Redeploy, check `/health`.
-- NEXT EXACT ACTION: merge the Run 102 PR. Then the operator redeploys ALKAO in Coolify, and `npm run check:golive -- --url https://alkao.ca` must pass the health lines.
+- Merged 5b02c28 (PR #97). NEXT EXACT ACTION: the operator redeploys ALKAO in Coolify, and `npm run check:golive -- --url https://alkao.ca` must pass the health lines.
 
 
 ## Run 101 — presale countdown, presale and coupon results (2026-10-22)

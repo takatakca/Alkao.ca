@@ -2,7 +2,7 @@
 
 ## Run 102 — alkao.ca back online (2026-10-24)
 
-1. Merge the Run 102 PR.
+1. Done: merged 5b02c28 (PR #97).
 2. Operator or owner, in Coolify (ALKAO): read the logs, delete the emptied variable or fix the malformed one, Redeploy. `https://alkao.ca/health` must show `"service":"alkao"` (`docs/CE_SOIR_HAVANA.md`, top).
 3. Halloween on the 24th stays on Weezevent. The 31st moves to ALKAO only if steps 1 to 6 of `CE_SOIR_HAVANA.md` are done by October 28.
 
