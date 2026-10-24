@@ -286,6 +286,16 @@ a.action { transition: transform 180ms var(--ease), box-shadow 180ms var(--ease)
 
 /* Run 54: the options bought with the tickets (meals, activities…), which have no QR code. */
 .options ul { list-style: none; margin: 12px 0 0; padding: 0; }
+/* Run 105: the organizer's offer for next time. */
+.offer-body { display: flex; align-items: center; gap: 16px; margin-top: 14px; }
+.offer-value { margin: 0; flex: none; display: grid; place-items: center; min-width: 92px; padding: 12px 10px; border-radius: var(--r1); background: var(--accent); color: var(--on-accent); text-align: center; line-height: 1.1; }
+.offer-value strong { font: 800 1.375rem/1.1 var(--display); }
+.offer-value span { font-size: .75rem; font-weight: 600; }
+.offer-event { margin: 0; font-weight: 600; }
+.offer-code { margin: 6px 0 0; }
+.offer-code code { font: 600 .9375rem/1.4 var(--mono); letter-spacing: .08em; padding: 2px 8px; border-radius: 6px; background: var(--panel-2); border: 1px dashed var(--line); }
+.offer .muted { margin: 6px 0 0; font-size: .875rem; }
+.offer > .button { width: 100%; margin-top: 14px; }
 .options li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line); }
 .options li:last-child { border-bottom: 0; }
 .options li > span { font-weight: 600; min-width: 0; }

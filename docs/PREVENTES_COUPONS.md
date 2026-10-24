@@ -105,6 +105,22 @@ L'entreprise envoie un lien par personne, par courriel ou sur son intranet.
 
 **Les résultats** : dans le tableau de bord, l'entreprise a sa propre ligne dans « Codes promo et coupons » : les codes utilisés, les commandes, le rabais accordé, le montant payé et le remboursé.
 
+## L'offre de retour (Run 105)
+
+Un client qui a aimé revient, surtout avec une raison de le faire. Chaque acheteur reçoit, avec ses billets, un rabais pour votre prochain événement.
+
+**Choisir** : /ops → votre événement → **Offre de retour** → **Code offert**.
+- Prenez un code d'un autre de vos événements (« RETOUR15 » sur le Festival d'hiver), ou de celui-ci pour une autre date.
+- Les codes des entreprises n'y figurent pas : ils restent à l'entreprise.
+
+**Ce que voit l'acheteur** :
+- Sur la page de ses billets, la carte **Votre prochaine sortie** : le rabais, l'événement, le code et sa fin. Le bouton **Voir l'événement** ouvre la boutique avec le code déjà appliqué.
+- Dans le courriel de ses billets : « Merci ! −15 % sur Festival d'hiver avec le code RETOUR15. », avec le même lien.
+
+**Quand elle se montre** : seulement si le code est utilisable et que son événement a une date en vente. Le code doit être actif, commencé, ni terminé ni épuisé. Sinon, rien ne s'affiche, sans rien à retirer : l'offre revient d'elle-même quand le code redevient utilisable. Dans /ops, la phrase sous le choix dit si elle est montrée.
+
+**Ses résultats** : le code est un code promo ordinaire. Ses ventes paraissent dans le tableau de bord, sous « Codes promo et coupons ».
+
 ## Les résultats (Run 101)
 
 /ops → **Tableau de bord** → **Détail des ventes** :
@@ -139,7 +155,9 @@ Elles ont leur propre filtre et leur propre photo sur alkao.ca.
 - **Migrations** :
   - `20261120000100_alkao_presales_coupons.sql` ;
   - `20261122000100_alkao_coupon_excludes_presales.sql` (Run 99) : `excludes_presales` sur `ticketing_promo_codes` ;
-  - `20261123000100_alkao_partner_codes.sql` (Run 103) : `partner` sur `ticketing_promo_codes`, et une contrainte qui garde ces codes privés.
+  - `20261123000100_alkao_partner_codes.sql` (Run 103) : `partner` sur `ticketing_promo_codes`, et une contrainte qui garde ces codes privés ;
+  - `20261124000100_alkao_price_phases.sql` (Run 104) : `sales_start_at` sur les types de billets ;
+  - `20261125000100_alkao_return_offer.sql` (Run 105) : `return_offer_promo_id` sur `ticketing_events`.
   - Sur `ticketing_ticket_types` : `presale_of`, `sales_end_at` et `quantity_limit`.
   - Une nouvelle table de comptage, `ticketing_ticket_type_counts`, réservée au serveur.
   - Sur `ticketing_promo_codes` : `public` et `label`.

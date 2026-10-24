@@ -114,6 +114,8 @@ export interface TicketsEmailData {
   addOns?: { name: string; quantity: number }[] | null;
   /** Run 100: a festival pass's other dates, after the order's own. */
   passDates?: Date[] | null;
+  /** Run 105: the organizer's offer for next time. */
+  returnOffer?: { eventTitle: string; code: string; kind: "percent" | "amount"; percent: number | null; amountCents: number | null; endsAt: Date | null; link: string } | null;
 }
 
 const TICKETS = {
@@ -136,6 +138,10 @@ const TICKETS = {
     options: "Options",
     passAlso: "Valide aussi",
     passEntry: "Votre passe entre une fois par date, avec le même code QR.",
+    offerTitle: "Votre prochaine sortie",
+    offer: (value: string, event: string, code: string) => `Merci ! ${value} sur ${event} avec le code ${code}.`,
+    offerUntil: (d: string) => `Valable jusqu'au ${d}.`,
+    offerShow: "Voir l'événement",
   },
   en: {
     title: (changed: boolean) => (changed ? "Your new tickets" : "Your tickets"),
@@ -156,6 +162,10 @@ const TICKETS = {
     options: "Options",
     passAlso: "Also valid",
     passEntry: "Your pass enters once per date, with the same QR code.",
+    offerTitle: "Your next outing",
+    offer: (value: string, event: string, code: string) => `Thank you! ${value} off ${event} with the code ${code}.`,
+    offerUntil: (d: string) => `Valid until ${d}.`,
+    offerShow: "See the event",
   },
 };
 
@@ -183,6 +193,15 @@ const optionsLine = (label: string, addOns: TicketsEmailData["addOns"]) =>
 const passLine = (l: Language, label: string, d: Pick<TicketsEmailData, "passDates" | "timezone">) =>
   d.passDates?.length ? `${label}${l === "fr" ? " :" : ":"} ${d.passDates.map((at) => fullDate(l, at, d.timezone)).join(" ; ")}` : null;
 
+/** Run 105: "Merci ! −15 % sur Festival d'hiver avec le code RETOUR15. Valable jusqu'au …", or nothing. */
+function offerLines(l: Language, t: { offer: (value: string, event: string, code: string) => string; offerUntil: (d: string) => string }, d: TicketsEmailData): { text: string; until: string | null } | null {
+  const o = d.returnOffer;
+  if (!o) return null;
+  const value = o.kind === "percent" ? (l === "en" ? `−${o.percent}%` : `−${o.percent} %`) : `−${cad(o.amountCents ?? 0, l)}`;
+  const until = o.endsAt ? t.offerUntil(new Intl.DateTimeFormat(locale(l), { dateStyle: "long", timeZone: d.timezone }).format(o.endsAt)) : null;
+  return { text: t.offer(value, o.eventTitle, o.code), until };
+}
+
 export function ticketsEmail(d: TicketsEmailData): Content {
   const l = d.language ?? "fr";
   const t = TICKETS[l];
@@ -196,13 +215,20 @@ export function ticketsEmail(d: TicketsEmailData): Content {
   const codes = d.codes?.length ? ["", t.codesText] : [];
   const options = optionsLine(t.options, d.addOns);
   const pass = passLine(l, t.passAlso, d);
-  const text = [hello, "", intro, "", d.eventTitle, when, ...(pass ? [pass] : []), where, count, ...(options ? [options] : []), "", `${t.linkLine}${d.link}`, ...codes, "", ...(pass ? [t.passEntry] : []), t.advice, ...policyText(l, d.look), "", footerText(l, d.brandName, d.look)].join("\n");
+  const offer = offerLines(l, t, d);
+  const offerText = offer && d.returnOffer ? ["", t.offerTitle, [offer.text, offer.until].filter(Boolean).join(" "), d.returnOffer.link] : [];
+  const text = [hello, "", intro, "", d.eventTitle, when, ...(pass ? [pass] : []), where, count, ...(options ? [options] : []), "", `${t.linkLine}${d.link}`, ...codes, "", ...(pass ? [t.passEntry] : []), t.advice, ...offerText, ...policyText(l, d.look), "", footerText(l, d.brandName, d.look)].join("\n");
   const html = layout(l, d.brandName, t.title(changed), [
     paragraph(`${esc(hello)}<br>${esc(intro)}`),
     box(`<strong>${esc(d.eventTitle)}</strong><br>${esc(when)}${pass ? `<br>${esc(pass)}` : ""}<br>${esc(where)}<br>${esc(count)} · ${t.order} ${esc(d.reference)}${options ? `<br>${esc(options)}` : ""}`),
     button(d.link, t.show, d.look),
     ...codeRows(t, d.codes),
     note(esc(pass ? `${t.passEntry} ${t.advice}` : t.advice), Boolean(d.codes?.length)),
+    ...(offer && d.returnOffer ? [
+      `<tr><td style="font-size:17px;font-weight:bold;padding-top:8px">${esc(t.offerTitle)}</td></tr>`,
+      box(`${esc(offer.text)}${offer.until ? `<br><span style="color:#57534e">${esc(offer.until)}</span>` : ""}`),
+      button(d.returnOffer.link, t.offerShow, d.look),
+    ] : []),
     ...policyRows(l, d.look),
   ], d.look);
   return { fromName: d.brandName, subject, text, html };

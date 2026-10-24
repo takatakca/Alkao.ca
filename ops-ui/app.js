@@ -956,6 +956,36 @@ function PromoCodes({ api, base, eventId, shopUrl }) {
         <td><button class="secondary" onClick=${toggle(p)}>${p.active ? "Désactiver" : "Réactiver"}</button></td></tr>`)}</tbody></table></div>`}`;
 }
 
+/** Run 105: the coupon this event's buyers see for next time, on their tickets and in their e-mail. */
+function ReturnOfferPicker({ api, base, eventId }) {
+  const [state, reload] = useLoad(() => api(`${base}/events/${eventId}/return-offer`), [base, eventId]);
+  const [picked, setPicked] = useState(null);
+  const [error, setError] = useState(null);
+  const [saved, setSaved] = useState(false);
+  const r = state.data?.returnOffer;
+  const value = (p) => (p.kind === "percent" ? `−${p.percent} %` : `−${money(p.amountCents)}`);
+  const current = picked ?? r?.promoCodeId ?? "";
+  const save = async (e) => {
+    e.preventDefault(); setError(null); setSaved(false);
+    try { await api(`${base}/events/${eventId}/return-offer`, { method: "PUT", body: { promoCodeId: current || null } }); setSaved(true); setPicked(null); reload(); } catch (err) { setError(err); }
+  };
+  if (state.loading && !r) return html`<${Loading} />`;
+  if (!r) return null;
+  return html`<h2>Offre de retour</h2>
+    <p class="muted">Les acheteurs de cet événement voient ce code sur la page de leurs billets et dans leur courriel : « Merci ! −15 % sur votre prochain événement ». Un clic les mène à la boutique, code appliqué. Choisissez un code d'un autre de vos événements, ou de celui-ci pour une autre date.</p>
+    ${error && html`<${Failure} error=${error} />`}
+    <form class="inline card" aria-label="Offre de retour" onSubmit=${save}>
+      <label>Code offert<select value=${current} onChange=${(e) => { setPicked(e.target.value); setSaved(false); }}>
+        <option value="">Aucune offre</option>
+        ${r.choices.map((p) => html`<option value=${p.id}>${p.code} — ${p.eventTitle}${p.eventId === eventId ? " (cet événement)" : ""} (${value(p)})${p.active ? "" : " · désactivé"}</option>`)}</select></label>
+      <button type="submit">Enregistrer</button>
+      ${saved && html`<span class="badge ok" role="status">Enregistré</span>`}
+      <p class="muted form-note">${r.live ? `Montré aux acheteurs : ${value(r.live)} sur ${r.live.eventTitle} avec le code ${r.live.code}.`
+        : r.promoCodeId ? "Choisi, mais pas montré pour l'instant : le code est désactivé, terminé ou épuisé, ou son événement n'a aucune date en vente."
+        : "Aucune offre n'est montrée."}</p>
+    </form>`;
+}
+
 /**
  * Run 103: codes for a partner company (a sponsor, an employer, a shop). One batch of unique
  * codes, each with its own use limit, sent as a file with each code's own link to the shop.
@@ -1345,6 +1375,7 @@ function EventDetail({ api, base, eventId, assistant }) {
 
     <${PromoCodes} api=${api} base=${base} eventId=${eventId} shopUrl=${shopUrl} />
     <${PartnerCodes} api=${api} base=${base} eventId=${eventId} />
+    <${ReturnOfferPicker} api=${api} base=${base} eventId=${eventId} />
     <${PresaleCodes} api=${api} base=${base} eventId=${eventId} event=${event} />
 
     <h2>Types de billets</h2>

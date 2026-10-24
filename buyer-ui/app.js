@@ -108,6 +108,12 @@ const T = {
     kept: "Billets enregistrés sur cet appareil : ils s'afficheront même sans réseau.",
     options: "Vos options",
     optionsTip: "Montrez cette page pour les recevoir sur place.",
+    // Run 105: the organizer's offer for next time.
+    offerTitle: "Votre prochaine sortie",
+    offerText: (event) => `sur ${event}, avec ce code`,
+    offerUntil: (d) => `Valable jusqu'au ${d}`,
+    offerShow: "Voir l'événement",
+    offerOff: "de rabais",
     optionRight: "Droit de changer de séance, rien à recevoir sur place",
   },
   en: {
@@ -207,6 +213,11 @@ const T = {
     kept: "Tickets saved on this device: they will show even without a network.",
     options: "Your options",
     optionsTip: "Show this page to receive them on site.",
+    offerTitle: "Your next outing",
+    offerText: (event) => `off ${event}, with this code`,
+    offerUntil: (d) => `Valid until ${d}`,
+    offerShow: "See the event",
+    offerOff: "off",
     optionRight: "Right to change session, nothing to pick up on site",
   },
 }[LANG];
@@ -850,6 +861,25 @@ function Contact({ brand }) {
 
 const CardHead = ({ icon, id, title }) => html`<div class="card-head"><span class="card-icon">${Icon(icon)}</span><h2 id=${id}>${title}</h2></div>`;
 
+/** Run 105: a coupon for the organizer's next event; its link applies the code on arrival. */
+function ReturnOffer({ offer, link, tz }) {
+  const value = offer.kind === "percent" ? (LANG === "en" ? `−${offer.percent}%` : `−${offer.percent} %`)
+    : `−${(offer.amountCents / 100).toLocaleString(localeOf(LANG), { style: "currency", currency: "CAD" })}`;
+  const href = `/acheter/${link.c}/${link.b}/${offer.eventId}?coupon=${encodeURIComponent(offer.code)}`;
+  return html`<section class="card offer" aria-labelledby="offer-title">
+    <${CardHead} icon="ticket" id="offer-title" title=${T.offerTitle} />
+    <div class="offer-body">
+      <p class="offer-value"><strong>${value}</strong><span>${T.offerOff}</span></p>
+      <div>
+        <p class="offer-event">${T.offerText(offer.eventTitle)}</p>
+        <p class="offer-code"><code>${offer.code}</code></p>
+        ${offer.endsAt && html`<p class="muted">${T.offerUntil(fmt({ day: "numeric", month: "long" }, tz).format(new Date(offer.endsAt)))}</p>`}
+      </div>
+    </div>
+    <a class="button" href=${href}>${T.offerShow}</a>
+  </section>`;
+}
+
 function ChangeSession({ order, token }) {
   const [sessions, setSessions] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -1085,6 +1115,7 @@ function App() {
         </section>`}
         ${o.canChangeSession && valid.length > 0 && !state.offlineSince && html`<${ChangeSession} order=${o} token=${link.k} />`}
         ${!state.offlineSince && !o.exchanged && !pending && html`<${TransferTickets} order=${o} token=${link.k} names=${names} />`}
+        ${o.returnOffer && !o.exchanged && !state.offlineSince && html`<${ReturnOffer} offer=${o.returnOffer} link=${link} tz=${tz} />`}
         <${Contact} brand=${o.brand} />
       </div>
     </main>

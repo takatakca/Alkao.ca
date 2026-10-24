@@ -1,5 +1,22 @@
 # ALKAO — Agent handoff (mandatory)
 
+## Run 105 — the return offer (2026-10-24)
+
+- Migration `20261125000100_alkao_return_offer.sql`: `ticketing_events.return_offer_promo_id`, an FK to a promo code of the same Brand.
+- `src/db/promo.ts`:
+  - `returnOfferFor` gives the offer only while it can be used: the code is active, started, not ended, not used up and not a partner code, and its event is published with a session on sale.
+  - `returnOfferChoices` lists the Brand's codes (no partner codes, none that have ended).
+  - `setReturnOffer` refuses a partner code (`partner_code_private`) and a code that is not the Brand's (404), and writes an audit row.
+- Routes: `GET` and `PUT /v1/admin/…/events/:id/return-offer` `{ promoCodeId | null }`.
+- Buyers:
+  - `GET /v1/public/…/orders/:id` adds `returnOffer` to a paid or partly refunded order;
+  - the tickets page shows the card "Votre prochaine sortie", whose link applies the code (`?coupon=`);
+  - the tickets e-mail carries the same offer, in text and HTML (`offerLines`, absolute link from `publicUrl`).
+- /ops: the "Offre de retour" picker on the event page, with what buyers see now.
+- Tests: `test/payments/return-offer.test.ts` (3) and `test/ui/return-offer-ui.test.ts` (2).
+- NEXT EXACT ACTION: merge the Run 105 PR when green. alkao.ca still needs the Coolify Redeploy (Run 102).
+
+
 ## Run 104 — price phases (2026-10-24)
 
 - Migration `20261124000100_alkao_price_phases.sql`:
@@ -16,7 +33,7 @@
   - `PresaleCell` shows "À venir" and "dès le …", and the start can be edited.
 - `duplicate.ts` moves the start with the sessions. `events:import` accepts `salesStartAt` through `CreateTicketType`.
 - Tests: `test/payments/price-phases.test.ts` (4), and the Run 104 cases in `test/ui/presale-ui.test.ts` and `test/ui/presale-ops.test.ts`.
-- NEXT EXACT ACTION: merge the Run 104 PR when green.
+- Merged 3f6fed5 (PR #99).
 
 
 ## Run 103 — codes for partner companies (2026-10-24)

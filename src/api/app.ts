@@ -697,6 +697,24 @@ export function createApp(deps: AppDeps) {
     return c.json({ promoCode });
   });
 
+  // Run 105: the return offer, chosen among the Brand's codes.
+  app.get(`${ADMIN}/events/:eventId/return-offer`, ...admin, can("ticketing.catalog.read"), async (c) => {
+    const eventId = param(c, "eventId");
+    if (!eventId || !(await inScope("ticketing_events", eventId, c.get("scope")))) return fail(c, 404, "event_not_found");
+    const scope = c.get("scope");
+    const [choice, live] = await Promise.all([promoDb.returnOfferChoices(deps.db, scope, eventId, now()), promoDb.returnOfferFor(deps.db, scope, eventId, now())]);
+    return c.json({ returnOffer: { ...choice, live } });
+  });
+
+  app.put(`${ADMIN}/events/:eventId/return-offer`, ...admin, can("ticketing.catalog.write"), async (c) => {
+    const eventId = param(c, "eventId");
+    if (!eventId) return fail(c, 404, "event_not_found");
+    const body = api.SetReturnOffer.parse(await readJson(c));
+    const scope = c.get("scope");
+    await withTransaction(deps.db, (tx) => promoDb.setReturnOffer(tx, scope, eventId, body.promoCodeId, actor(c)));
+    return c.json({ returnOffer: { promoCodeId: body.promoCodeId, live: await promoDb.returnOfferFor(deps.db, scope, eventId, now()) } });
+  });
+
   // Run 103: codes for partner companies, made, listed, sent and switched off as one batch.
   app.get(`${ADMIN}/events/:eventId/partner-codes`, ...admin, can("ticketing.catalog.read"), async (c) => {
     const eventId = param(c, "eventId");
@@ -1054,7 +1072,10 @@ export function createApp(deps: AppDeps) {
     const context = await delivery.publicOrderContext(deps.db, scope, orderId);
     // Run 55: the options bought, kept across session changes.
     const options = await orderOptions(deps.db, scope, orderId);
-    return c.json({ order: { ...publicOrder, tickets, ...context, options } });
+    // Run 105: the organizer's offer for next time, to a buyer whose order holds.
+    const returnOffer = ["paid", "partially_refunded"].includes(String(order.status))
+      ? await promoDb.returnOfferFor(deps.db, scope, String(order.eventId), now()) : null;
+    return c.json({ order: { ...publicOrder, tickets, ...context, options, ...(returnOffer ? { returnOffer } : {}) } });
   });
 
   // ── Run 80: transfer APIs; explicit global switch AND normal Client/Brand gate. ──────
