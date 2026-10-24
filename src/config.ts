@@ -115,8 +115,28 @@ export function frameAncestorOrigins(raw: string | undefined, nodeEnv: string | 
     .filter((s) => /^https:\/\/[a-z0-9.-]+(:\d+)?$/.test(s) || (nodeEnv !== "production" && /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(s)));
 }
 
+/**
+ * Run 102: what the operator set, as the server reads it. Spaces around a value are dropped
+ * (a pasted key often carries one), and a setting left empty counts as not set: a host such
+ * as Coolify keeps a cleared variable as "", and the server must still start.
+ */
+export function settingsOf(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const out: NodeJS.ProcessEnv = {};
+  for (const [name, value] of Object.entries(env)) {
+    const v = typeof value === "string" ? value.trim() : value;
+    if (v !== undefined && v !== "") out[name] = v;
+  }
+  return out;
+}
+
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
-  const e = EnvSchema.parse(env);
+  const parsed = EnvSchema.safeParse(settingsOf(env));
+  // Run 102: the names of the settings to fix, never their values.
+  if (!parsed.success) {
+    const names = [...new Set(parsed.error.issues.map((i) => String(i.path[0] ?? "?")))];
+    throw new Error(`ALKAO cannot start: fix ${names.join(", ")} (see npm run check:golive)`);
+  }
+  const e = parsed.data;
   return {
     databaseUrl: e.DATABASE_URL,
     operationalApiEnabled: e.ALKAO_OPERATIONAL_API_ENABLED,

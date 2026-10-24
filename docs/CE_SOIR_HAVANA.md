@@ -1,4 +1,25 @@
-# Halloween Havana en vente sur alkao.ca : votre liste (choix B, mise à jour le 22 octobre 2026)
+# Halloween Havana en vente sur alkao.ca : votre liste (choix B, mise à jour le 24 octobre 2026)
+
+## Urgent (24 octobre) : alkao.ca est en panne depuis le 22
+
+**Ce qu'on voit.** alkao.ca répond « no available server » (erreur 503) depuis le 22 octobre, entre 9 h 36 et 12 h. Le serveur Coolify tourne, mais le conteneur ALKAO ne démarre plus. Le contrôle « Live » de GitHub échoue depuis ce moment.
+
+**Ce que ça ne touche pas.** promohavana.ca vend encore avec **Weezevent**, ce soir comme d'habitude : le retrait de Weezevent n'a jamais été déployé. Personne ne perd de vente ce soir.
+
+**La cause probable.** Avant la version du Run 102, ALKAO refusait de démarrer si un réglage était **vidé au lieu d'être supprimé** dans Coolify. Par exemple : `ALKAO_HOME_URL` laissé vide à l'étape 4, ou une clé Stripe ou Resend collée vide ou mal formée.
+- Le code fusionné le 22 n'est pas en cause : la même base, avec les nouvelles migrations, démarre sans erreur (vérifié le 24).
+- La version du Run 102 démarre même avec un réglage vide, et elle nomme le réglage à corriger sans jamais afficher sa valeur.
+
+**Pour remettre alkao.ca en ligne (5 minutes, dans Coolify) :**
+1. Coolify, ressource ALKAO, onglet **Logs** (ou le dernier **Deployment**). Cherchez `ZodError`, ou la ligne `ALKAO cannot start: fix …` : elle nomme le réglage fautif.
+2. Onglet **Environment Variables** :
+   - un réglage **vide** : supprimez-le (icône poubelle), ne le laissez pas vide ;
+   - un réglage **mal collé** : recollez la valeur, sans espace ni guillemets ;
+   - `STRIPE_SECRET_KEY` commence par `sk_live_` ou `sk_test_`, et `STRIPE_WEBHOOK_SECRET` par `whsec_`.
+3. **Redeploy.** Attendez 2 minutes, puis ouvrez `https://alkao.ca/health`. On doit y lire `"service":"alkao"`.
+4. Si la page reste en 503, envoyez-moi les 20 dernières lignes des Logs (**sans aucune clé**), et je trouve la suite.
+
+**Ce soir et le 31.** Halloween du 24 se vend sur Weezevent : on ne change rien aujourd'hui. Pour le 31, on passe à ALKAO seulement si les étapes 1 à 6 ci-dessous sont faites d'ici mardi 28. Sinon, Weezevent vend aussi le 31, et ALKAO sert aux prochains événements (préventes, coupons, passes festival).
 
 ## Où on en est (vérifié le 22 octobre 2026)
 
@@ -26,7 +47,7 @@
 | 1 | **Vous** | Copier la clé `sk_live_…` du compte Stripe **TAKATAK** (mode live), avec Connect activé, dans `STRIPE_SECRET_KEY`. Ou donner à l'opérateur l'accès à ce compte : celui qu'il voit est un autre compte, « ALKAO.CA ». | Stripe, puis Coolify, ressource ALKAO |
 | 2 | **Vous** | Créer le webhook live de l'étape 2 et copier son `whsec_…` dans `STRIPE_WEBHOOK_SECRET`. | Stripe, puis Coolify |
 | 3 | **Vous** | Créer une nouvelle clé Resend pour un domaine vérifié, la mettre dans `RESEND_API_KEY`, et vérifier `ALKAO_EMAIL_FROM`. | resend.com, puis Coolify |
-| 4 | Opérateur | **Supprimer `ALKAO_HOME_URL`**, puis Redeploy d'ALKAO. | Coolify, ressource ALKAO |
+| 4 | Opérateur | **Supprimer `ALKAO_HOME_URL`** avec l'icône poubelle, sans la laisser vide, puis Redeploy d'ALKAO. | Coolify, ressource ALKAO |
 | 5 | **Vous** | Brancher le Stripe de Havana : Paiements, puis Connecter Stripe, avec les coordonnées de l'entreprise et du compte bancaire. | alkao.ca/ops |
 | 6 | **Vous** | Acheter un vrai billet enfant, vérifier le courriel, le code QR et un scan, puis le rembourser. | alkao.ca, puis /ops |
 | 7 | Vous ou l'opérateur | Mettre la capacité exacte (3 000 moins les billets Weezevent de chaque samedi), puis publier l'événement et ses deux séances. | /ops, Événements |

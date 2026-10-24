@@ -95,7 +95,9 @@ describe("go-live check: settings", () => {
     });
     const fails = of(checks, "fail");
     expect(fails).toContain("Configuration : STRIPE_SECRET_KEY : format invalide");
-    expect(fails).toContain("Configuration : STRIPE_WEBHOOK_SECRET est vide");
+    // Run 102: an empty setting no longer stops the server; it is reported and ignored.
+    expect(of(checks, "warn")).toContain("Configuration : STRIPE_WEBHOOK_SECRET est vide : ALKAO l'ignore");
+    expect(fails.some((m) => m.startsWith("Configuration : STRIPE_WEBHOOK_SECRET"))).toBe(false);
     expect(fails).toContain("Codes QR et liens : ALKAO_CREDENTIAL_MASTER_SECRET ressemble à un exemple");
     expect(of(checks, "warn")).toContain("Intégration au tableau de bord TAKATAK : Origine(s) ignorée(s) : https://bad.test/, http://bad.test");
     expect(text(checks)).not.toContain("pk_live_abc");

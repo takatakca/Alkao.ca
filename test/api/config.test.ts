@@ -31,6 +31,20 @@ describe("configuration hardening", () => {
     expect(() => loadConfig({ ...base, ALKAO_HOME_URL: "http://www.example.ca/billets" })).toThrow();
   });
 
+  it("starts with a setting left empty, and names the setting to fix without its value (Run 102)", () => {
+    // Coolify keeps a cleared variable as "": the server must still start, as if it were not set.
+    const cleared = loadConfig({ ...base, ALKAO_HOME_URL: "", STRIPE_SECRET_KEY: "", STRIPE_WEBHOOK_SECRET: "  ", RESEND_WEBHOOK_SECRET: "" });
+    expect(cleared.homeUrl).toBeNull();
+    expect(cleared.stripe).toBeNull();
+    expect(cleared.resendWebhookSecret).toBeNull();
+    // A pasted key with a space or a line break around it still works.
+    expect(loadConfig({ ...base, STRIPE_SECRET_KEY: " sk_live_abc\n", STRIPE_WEBHOOK_SECRET: "whsec_x " }).stripe).toMatchObject({ secretKey: "sk_live_abc", webhookSecret: "whsec_x", mode: "live" });
+    // A wrong value still stops it, naming the setting, never the value.
+    const wrong = () => loadConfig({ ...base, STRIPE_SECRET_KEY: "pk_live_secretvalue", ALKAO_HOME_URL: "http://x.test" });
+    expect(wrong).toThrow(/^ALKAO cannot start: fix STRIPE_SECRET_KEY, ALKAO_HOME_URL/);
+    expect(wrong).not.toThrow(/secretvalue/);
+  });
+
   it("knows Stripe test keys from live keys (Run 32)", () => {
     const webhook = { STRIPE_WEBHOOK_SECRET: "whsec_x" };
     expect(loadConfig({ ...base, ...webhook, STRIPE_SECRET_KEY: "sk_test_abc" }).stripe?.mode).toBe("test");
