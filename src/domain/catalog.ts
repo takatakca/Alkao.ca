@@ -28,6 +28,8 @@ export interface TicketTypeRule {
   presaleOf?: string | null;
   /** Run 97: no longer sold from this moment. */
   salesEndAt?: Date | null;
+  /** Run 104: not sold before this moment (a later price phase). */
+  salesStartAt?: Date | null;
   /** Run 97: tickets for the whole event; the database refuses a cart past it. */
   quantityLimit?: number | null;
   /** Run 98: a festival pass, valid once at every session on sale when bought. */
@@ -36,7 +38,8 @@ export interface TicketTypeRule {
 
 /** Run 97: a type whose sale has ended is sold no more (a cart with it is refused as inactive). */
 export function rulesOnSale(types: readonly TicketTypeRule[], now: Date): TicketTypeRule[] {
-  return types.map((t) => (t.salesEndAt && t.salesEndAt.getTime() <= now.getTime() ? { ...t, active: false } : t));
+  return types.map((t) =>
+    (t.salesEndAt && t.salesEndAt.getTime() <= now.getTime()) || (t.salesStartAt && t.salesStartAt.getTime() > now.getTime()) ? { ...t, active: false } : t);
 }
 
 export interface CartItem {

@@ -1,5 +1,10 @@
 # ALKAO — Project status
 
+## Run 104 — price phases (2026-10-24)
+
+An organizer sells in phases: an early-bird price, then a presale, then the regular price. Each phase starts on its own date. The shop announces the next price ("Ensuite : 25,00 $") and switches over by itself when the date comes. Buyers who buy early save the most, which is what brings them in early.
+
+
 ## Run 103 — coupons through partner companies (2026-10-24)
 
 An organizer gives a sponsor, an employer or a shop its own batch of unique codes, each with a personal link to the shop. The company hands them out, and the buyer sees "Offre Caisse Desjardins". The dashboard shows what each company sold. The buyer saves, the organizer gains buyers without advertising, and the partner offers its people a perk.

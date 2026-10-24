@@ -41,7 +41,14 @@ Pour un événement de plusieurs jours, la **passe festival** vend toutes les da
 - Un remboursement complet remet ses billets en vente.
 - Le prix régulier ne peut pas descendre au prix de prévente, ni plus bas.
 
-**Modifier** : dans le tableau des types de billets, la colonne **Prévente** permet de changer la date de fin et la quantité. La quantité ne peut pas descendre sous ce qui est déjà vendu ou réservé. Pour arrêter la prévente tout de suite, cliquez **Retirer de la vente**.
+**Des paliers de prix** (Run 104) : plusieurs préventes à la suite, par exemple **Lève-tôt** à 20 $ jusqu'au 1er novembre, puis **Prévente** à 25 $ jusqu'au 15, puis le prix régulier.
+
+1. Créez la première avec son nom (« Lève-tôt »), son prix et sa fin.
+2. Créez la seconde avec son nom (« Prévente »), son prix, un **Début** égal à la fin de la première, et sa propre fin.
+3. Avant son début, un palier n'est **jamais vendu**. La boutique l'annonce sur la ligne en cours : « Ensuite : 25,00 $ ». La date s'ajoute si le palier ne commence pas pile à la fin du précédent.
+4. À l'heure du changement, la page se met à jour d'elle-même : le nouveau palier remplace l'ancien, sur la boutique comme sur alkao.ca.
+
+**Modifier** : dans le tableau des types de billets, la colonne **Prévente** permet de changer le début, la date de fin et la quantité. La quantité ne peut pas descendre sous ce qui est déjà vendu ou réservé. Pour arrêter la prévente tout de suite, cliquez **Retirer de la vente**.
 
 Un événement dupliqué garde ses préventes. Leur date de fin est décalée avec les séances.
 

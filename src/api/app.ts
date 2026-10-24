@@ -388,6 +388,10 @@ export function createApp(deps: AppDeps) {
       ticketTypes: rulesOnSale(types, now())
         .filter((t) => t.active)
         .map(({ active: _a, ...t }) => ({ ...t, description: descriptionOf.get(t.id) ?? null, remaining: remaining.get(t.id) ?? null })),
+      // Run 104: the next price phases, announced with their date (never sold before it).
+      upcoming: types
+        .filter((t) => t.active && t.salesStartAt && t.salesStartAt.getTime() > now().getTime() && (!t.salesEndAt || t.salesEndAt > t.salesStartAt))
+        .map((t) => ({ id: t.id, name: t.name, presaleOf: t.presaleOf ?? null, priceCents: t.priceCents, salesStartAt: t.salesStartAt, salesEndAt: t.salesEndAt ?? null })),
       sessions,
       coupons,
     });

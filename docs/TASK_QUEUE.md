@@ -2,10 +2,10 @@
 
 ## Run 103 — partner company codes (2026-10-24)
 
-1. Merge the Run 103 PR when CI is green.
+1. Done: merged d58dec6 (PR #98). Run 104 (price phases): merge its PR when green.
 2. Still first: alkao.ca back online (Run 102, Coolify Redeploy).
 3. Next ideas, in the owner's direction (presales and coupons that bring buyers back):
-   - price phases (early bird → presale → regular), each starting when the previous ends;
+   - price phases: done in Run 104;
    - a "thank you" coupon after the event, unique per buyer, for the organizer's next event.
 
 

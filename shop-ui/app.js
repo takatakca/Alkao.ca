@@ -47,6 +47,8 @@ const T = {
       until: (d) => `Jusqu'au ${d}`, left: (n) => (n <= 25 ? `Plus que ${n} à ce prix` : `${n} restants à ce prix`),
       // Run 101: the last 48 hours of a presale, counted down to its real end.
       endsIn: (d, h, m) => `Se termine dans ${d ? `${d} j ${h} h` : h ? `${h} h ${m} min` : m ? `${m} min` : "moins d'une minute"}`,
+      // Run 104: the next price phase, as the organizer set it.
+      next: (price, date) => (date ? `Ensuite : ${price} dès le ${date}` : `Ensuite : ${price}`),
       soldOut: "Épuisé à ce prix",
     },
     coupons: {
@@ -256,6 +258,7 @@ const T = {
       presale: "Presale price", instead: (p) => `instead of ${p}`, save: (pct) => `−${pct}%`,
       until: (d) => `Until ${d}`, left: (n) => (n <= 25 ? `Only ${n} left at this price` : `${n} left at this price`),
       endsIn: (d, h, m) => `Ends in ${d ? `${d} d ${h} h` : h ? `${h} h ${m} min` : m ? `${m} min` : "less than a minute"}`,
+      next: (price, date) => (date ? `Then: ${price} from ${date}` : `Then: ${price}`),
       soldOut: "Sold out at this price",
     },
     coupons: {
@@ -925,6 +928,22 @@ function endsIn(iso, now) {
 }
 const presaleEnd = (iso, tz, now) => endsIn(iso, now) ?? T.deal.until(dayLong(iso, tz));
 
+/**
+ * Run 104: the next price phase of the same regular ticket, after this presale. Nothing when
+ * the regular price comes next: it is already shown, struck through. The date shows only when
+ * it is not the presale's own end.
+ */
+function nextPhase(t, regular, upcoming) {
+  if (!regular) return null;
+  const end = t.salesEndAt ? Date.parse(t.salesEndAt) : null;
+  const later = (upcoming ?? [])
+    .filter((u) => u.presaleOf === regular.id && u.id !== t.id && (end === null || Date.parse(u.salesStartAt) >= end - 60_000))
+    .sort((a, b) => Date.parse(a.salesStartAt) - Date.parse(b.salesStartAt))[0];
+  if (!later || later.priceCents <= t.priceCents) return null;
+  const from = Date.parse(later.salesStartAt);
+  return { cents: later.priceCents, from: end === null || Math.abs(from - end) > 3_600_000 ? later.salesStartAt : null };
+}
+
 const dayLong = (iso, tz) => {
   const text = fmt(iso, tz, { day: "numeric", month: "long", hour: "numeric", minute: "2-digit" });
   return LANG === "en" ? text : text.replace(/^1 /, "1er ");
@@ -1296,7 +1315,11 @@ function EventShop({ config }) {
   // Run 101: a presale in its last 48 hours counts down each minute; once it ends, the page
   // reloads the event so the presale row goes away and the regular price takes over.
   const [clock, setClock] = useState(() => Date.now());
-  const presaleEnds = (data?.ticketTypes ?? []).filter((t) => t.presaleOf && t.salesEndAt).map((t) => Date.parse(t.salesEndAt));
+  // Run 104: so does a price phase about to start.
+  const presaleEnds = [
+    ...(data?.ticketTypes ?? []).filter((t) => t.presaleOf && t.salesEndAt).map((t) => Date.parse(t.salesEndAt)),
+    ...(data?.upcoming ?? []).map((u) => Date.parse(u.salesStartAt)),
+  ];
   const soonEnd = presaleEnds.filter((at) => at > clock && at - clock <= SOON_MS).sort((a, b) => a - b)[0];
   useEffect(() => {
     if (!soonEnd) return;
@@ -1388,7 +1411,9 @@ function EventShop({ config }) {
     const limited = Number.isInteger(t.remaining) ? t.remaining : null;
     const gone = limited === 0;
     const meta = `${t.kind === "add_on" ? SCOPE_TEXT(t) : ""}${t.openDate ? T.openDate : ""}${t.pass ? ` · ${T.pass.covers(sessions.length)}` : ""}${t.minQuantity > 1 ? T.minimum(t.minQuantity) : ""}${left(t) !== null ? T.addOnLeft(left(t)) : ""}`.replace(/^ · /, "");
-    const dealMeta = deal ? [t.salesEndAt && presaleEnd(t.salesEndAt, tz, clock), limited !== null && !gone && T.deal.left(limited)].filter(Boolean) : [];
+    const next = deal ? nextPhase(t, regular, data.upcoming) : null;
+    const dealMeta = deal ? [t.salesEndAt && presaleEnd(t.salesEndAt, tz, clock), limited !== null && !gone && T.deal.left(limited),
+      next && T.deal.next(money(next.cents), next.from ? dayLong(next.from, tz) : null)].filter(Boolean) : [];
     return html`<div class=${`type${q > 0 ? " is-on" : ""}${deal ? " is-deal" : ""}${gone ? " is-gone" : ""}`}>
       <div class="type-info">
         ${deal && html`<p class="type-deal"><span class="deal-badge">${T.deal.presale}</span><span class="save">${T.deal.save(savePct(t.priceCents, deal.priceCents))}</span></p>`}
