@@ -1,8 +1,15 @@
 # ALKAO — Task queue (priority ordered)
 
+## Run 102 — alkao.ca back online (2026-10-24)
+
+1. Merge the Run 102 PR.
+2. Operator or owner, in Coolify (ALKAO): read the logs, delete the emptied variable or fix the malformed one, Redeploy. `https://alkao.ca/health` must show `"service":"alkao"` (`docs/CE_SOIR_HAVANA.md`, top).
+3. Halloween on the 24th stays on Weezevent. The 31st moves to ALKAO only if steps 1 to 6 of `CE_SOIR_HAVANA.md` are done by October 28.
+
+
 ## Run 101 — presale countdown and results (2026-10-22)
 
-1. Merge the Run 101 PR when CI is green.
+1. Done: merged f357d08 (PR #96).
 2. Owner: after a presale, read "Codes promo et coupons" in /ops → Tableau de bord to see what each coupon brought.
 
 

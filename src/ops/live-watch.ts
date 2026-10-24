@@ -34,6 +34,11 @@ export async function watchAddress(
     bad("injoignable (DNS, certificat ou serveur)");
     return { origin, ok, build: null, lines };
   }
+  // Run 102: 502–504 from the host's proxy means no ALKAO container is running behind it.
+  if ([502, 503, 504].includes(health.status)) {
+    bad(`/health répond ${health.status} : aucun conteneur ALKAO en marche (Coolify → ALKAO → Logs : la ligne « ALKAO cannot start » nomme le réglage à corriger)`);
+    return { origin, ok, build: null, lines };
+  }
   if (health.status !== 200 || h?.service !== "alkao") {
     bad(`/health répond ${health.status} : ce n'est pas ALKAO`);
     return { origin, ok, build: null, lines };

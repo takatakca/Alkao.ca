@@ -87,4 +87,11 @@ describe("live watch", () => {
     const r = await watchAddress("https://alkao.test", { doFetch: fakeFetch({ "/health": { status: 200, type: "text/html" } }) });
     expect(r).toMatchObject({ ok: false, lines: ["✘ /health répond 200 : ce n'est pas ALKAO"] });
   });
+
+  it("says when no ALKAO container runs behind the host's proxy (Run 102)", async () => {
+    const proxy = (async () => new Response("no available server", { status: 503 })) as unknown as typeof fetch;
+    const r = await watchAddress("https://alkao.test", { doFetch: proxy });
+    expect(r.ok).toBe(false);
+    expect(r.lines[0]).toMatch(/^✘ \/health répond 503 : aucun conteneur ALKAO en marche/);
+  });
 });

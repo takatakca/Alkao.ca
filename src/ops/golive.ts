@@ -1,4 +1,4 @@
-import { EnvSchema, frameAncestorOrigins, parseControlKeys, stripeKeyMode } from "../config.js";
+import { EnvSchema, frameAncestorOrigins, parseControlKeys, settingsOf, stripeKeyMode } from "../config.js";
 import { listMigrations } from "../db/migrate.js";
 import type { Db, Tx } from "../db/pool.js";
 
@@ -45,15 +45,19 @@ export function checkEnvironment(env: NodeJS.ProcessEnv): Check[] {
     monitoring: "Surveillance", embed: "Intégration au tableau de bord TAKATAK", sms: "Textos (SMS)",
   };
 
+  // Run 102: a setting left empty counts as not set (the server starts without it).
+  for (const [name, value] of Object.entries(env)) {
+    if (typeof value === "string" && value.trim() === "" && name in EnvSchema.shape) {
+      out.push(warn(area.config, `${name} est vide : ALKAO l'ignore`, `Donnez une valeur à ${name}, ou supprimez la variable pour garder la configuration lisible.`));
+    }
+  }
   // The server refuses to start on any of these: report them all, never the values.
-  const parsed = EnvSchema.safeParse(env);
+  const parsed = EnvSchema.safeParse(settingsOf(env));
   if (!parsed.success) {
     for (const issue of parsed.error.issues) {
       const name = String(issue.path[0] ?? "?");
-      if (env[name] === undefined) continue; // a missing required setting is reported below
-      out.push(env[name]!.trim() === ""
-        ? fail(area.config, `${name} est vide`, `Retirez ${name} ou donnez-lui une valeur : le serveur refuse de démarrer.`)
-        : fail(area.config, `${name} : ${ISSUE_TEXT[issue.code] ?? "valeur refusée"}`, `Corrigez ${name} : le serveur refuse de démarrer tant qu'elle est invalide.`));
+      if (!env[name]?.trim()) continue; // a missing required setting is reported below
+      out.push(fail(area.config, `${name} : ${ISSUE_TEXT[issue.code] ?? "valeur refusée"}`, `Corrigez ${name} : le serveur refuse de démarrer tant qu'elle est invalide.`));
     }
   }
 

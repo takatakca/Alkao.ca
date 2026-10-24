@@ -1,5 +1,22 @@
 # ALKAO — Agent handoff (mandatory)
 
+## Run 102 — alkao.ca down since 2026-10-22; empty settings no longer stop the server (2026-10-24)
+
+- **Live state (2026-10-24):**
+  - `https://alkao.ca/health` answers 503 "no available server" (Traefik: no healthy ALKAO container). The Live workflow is red since 2026-10-22 12:05 UTC.
+  - Verify deployment at 09:36 UTC on 10-22 still saw the old build 26a48ec, schema current. The container stopped between 09:36 and 12:05; nothing in GitHub says why.
+  - promohavana.ca still sells through Weezevent: Promo Havana PR #29 was never deployed.
+- **Ruled out:** the merged migrations (Runs 97–99). A database built at 26a48ec with data, then migrated with `main`, boots `scripts/container.ts` with `/health/ready` 200.
+- **Probable cause:** a Coolify variable cleared instead of deleted (step 4 of `CE_SOIR_HAVANA.md`: `ALKAO_HOME_URL`), or a malformed pasted key. `EnvSchema` threw a `ZodError` at boot for `""`.
+- **Fix:**
+  - `settingsOf` in `src/config.ts` trims values and treats empty ones as unset. A bad value throws "ALKAO cannot start: fix NAME…", with names only and never values.
+  - `check:golive` warns about an empty setting instead of failing.
+  - `live-watch` explains a proxy 502–504.
+- **Tests:** `test/api/config.test.ts`, `test/ops/golive.test.ts`, `test/ops/live-watch.test.ts`.
+- **Owner steps:** the top of `docs/CE_SOIR_HAVANA.md`. Read the Coolify logs, delete or fix the variable, Redeploy, check `/health`.
+- NEXT EXACT ACTION: merge the Run 102 PR. Then the operator redeploys ALKAO in Coolify, and `npm run check:golive -- --url https://alkao.ca` must pass the health lines.
+
+
 ## Run 101 — presale countdown, presale and coupon results (2026-10-22)
 
 - Shop (`shop-ui/app.js`):
@@ -10,7 +27,7 @@
   - new `promoCodes` rows: code, public, orders, discount, gross, refunded, under the same filters.
   - /ops shows both under "Détail des ventes".
 - Tests: the Run 101 cases in `test/payments/presale-coupons.test.ts` and `test/ui/presale-ui.test.ts`.
-- NEXT EXACT ACTION: merge the Run 101 PR when green.
+- Merged f357d08 (PR #96).
 
 
 ## Run 100 — festival passes in the e-mails and on alkao.ca (2026-10-22)

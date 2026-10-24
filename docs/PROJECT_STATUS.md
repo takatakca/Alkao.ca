@@ -1,5 +1,10 @@
 # ALKAO — Project status
 
+## Run 102 — alkao.ca outage (2026-10-24)
+
+alkao.ca has been down since October 22: the server stopped starting, most likely because a setting was emptied in Coolify. Promo Havana still sells through Weezevent, so no sale is lost. ALKAO now starts with an empty setting and names any bad one. Getting it back online takes one Redeploy in Coolify.
+
+
 ## Run 101 — presales that count down, results that add up (2026-10-22)
 
 In its last 48 hours, a presale shows the real time left ("Se termine dans 5 h 12 min"), then steps aside on its own. The organizer's dashboard shows what each coupon brought and gave away, and which tickets sold at the presale price.
