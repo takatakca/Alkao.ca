@@ -14,7 +14,7 @@
   - the tickets e-mail carries the same offer, in text and HTML (`offerLines`, absolute link from `publicUrl`).
 - /ops: the "Offre de retour" picker on the event page, with what buyers see now.
 - Tests: `test/payments/return-offer.test.ts` (3) and `test/ui/return-offer-ui.test.ts` (2).
-- NEXT EXACT ACTION: merge the Run 105 PR when green. alkao.ca still needs the Coolify Redeploy (Run 102).
+- Merged cd5f679 (PR #100). alkao.ca still needs the Coolify Redeploy (Run 102).
 
 
 ## Run 104 — price phases (2026-10-24)
