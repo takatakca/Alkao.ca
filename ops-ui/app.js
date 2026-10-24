@@ -686,7 +686,7 @@ function Dashboard({ api, base, prefix }) {
         ${promoCodes.length > 0 && html`<h3>Codes promo et coupons</h3>
           <p class="muted">Commandes payées avec chaque code. Rabais : ce que le code a retiré avant taxes. Brut : payé, taxes comprises.</p>
           <div class="table-scroll" role="region" aria-label="Codes promo et coupons" tabindex="0"><table><thead><tr><th>Code</th><th>Genre</th><th class="num">Commandes</th><th class="num">Rabais accordé</th><th class="num">Brut</th><th class="num">Remboursé</th></tr></thead>
-            <tbody>${promoCodes.map((p) => html`<tr><td><code>${p.code}</code></td><td>${p.public ? "Coupon public" : "Code privé"}</td><td class="num">${p.orders}</td><td class="num">${money(p.discountCents)}</td><td class="num">${money(p.grossCents)}</td><td class="num">${money(p.refundedCents)}</td></tr>`)}</tbody></table></div>`}
+            <tbody>${promoCodes.map((p) => html`<tr><td>${p.partner ? html`<strong>${p.partner}</strong><br /><span class="muted">${p.codesUsed} code${p.codesUsed > 1 ? "s" : ""} utilisé${p.codesUsed > 1 ? "s" : ""}</span>` : html`<code>${p.code}</code>`}</td><td>${p.partner ? "Entreprise" : p.public ? "Coupon public" : "Code privé"}</td><td class="num">${p.orders}</td><td class="num">${money(p.discountCents)}</td><td class="num">${money(p.grossCents)}</td><td class="num">${money(p.refundedCents)}</td></tr>`)}</tbody></table></div>`}
         ${days && html`<h3>Par jour</h3>
           <p class="muted">Ventes au jour du paiement, remboursements au jour où Stripe les a faits (heure de ${days.timeZone}).</p>
           ${days.days.length === 0 ? html`<p class="muted">Aucune vente ni aucun remboursement sur cette période.</p>` : html`
@@ -952,6 +952,51 @@ function PromoCodes({ api, base, eventId, shopUrl }) {
         <td>${p.excludesPresales ? "Non cumulable" : "Cumulable"}<br /><button class="link" onClick=${toggleStacking(p)}>${p.excludesPresales ? "Rendre cumulable" : "Rendre non cumulable"}</button></td>
         <td><span class="badge ${p.active ? "ok" : "bad"}">${p.active ? "Actif" : "Désactivé"}</span></td>
         <td><button class="secondary" onClick=${toggle(p)}>${p.active ? "Désactiver" : "Réactiver"}</button></td></tr>`)}</tbody></table></div>`}`;
+}
+
+/**
+ * Run 103: codes for a partner company (a sponsor, an employer, a shop). One batch of unique
+ * codes, each with its own use limit, sent as a file with each code's own link to the shop.
+ */
+function PartnerCodes({ api, base, eventId }) {
+  const [state, reload] = useLoad(() => api(`${base}/events/${eventId}/partner-codes`), [base, eventId]);
+  const [f, setF] = useState({ partner: "", count: "100", usesEach: "1", kind: "percent", value: "", endsAt: "", excludesPresales: false });
+  const [error, setError] = useState(null);
+  const [notice, setNotice] = useState(null);
+  const act = (fn) => async (e) => { e?.preventDefault?.(); setError(null); setNotice(null); try { await fn(); reload(); } catch (err) { setError(err); } };
+  const fileOf = (partner) => `alkao-codes-${partner.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "entreprise"}.csv`;
+  const create = act(async () => {
+    const value = Number(f.value.replace(",", "."));
+    const r = await api(`${base}/events/${eventId}/partner-codes`, { method: "POST", body: {
+      partner: f.partner.trim(), count: Number(f.count), usesEach: Number(f.usesEach), kind: f.kind,
+      ...(f.kind === "percent" ? { percent: Math.round(value) } : { amountCents: Math.round(value * 100) }),
+      endsAt: f.endsAt ? new Date(f.endsAt).toISOString() : null, excludesPresales: f.excludesPresales,
+    } });
+    setNotice(`${r.count} codes créés pour ${r.partner}. Téléchargez le fichier et envoyez-le à l'entreprise.`);
+    setF({ ...f, partner: "", value: "" });
+  });
+  const toggle = (p) => act(() => api(`${base}/events/${eventId}/partner-codes`, { method: "PATCH", body: { partner: p.partner, active: !p.active } }));
+  const file = (p) => act(() => download(api, `${base}/events/${eventId}/partner-codes.csv?partner=${encodeURIComponent(p.partner)}`, fileOf(p.partner)));
+  const list = state.data?.partners ?? [];
+  return html`<h2>Codes pour les entreprises</h2>
+    <p class="muted">Un commanditaire, un employeur ou un commerce partenaire reçoit ses propres codes uniques à remettre à ses employés ou à ses clients. Chaque code a son lien vers la boutique, qui l'applique à l'arrivée. Ses ventes sont comptées à part dans le tableau de bord.</p>
+    ${error && html`<${Failure} error=${error} />`}
+    ${notice && html`<div class="alert ok" role="status">${notice}</div>`}
+    <form class="inline card" aria-label="Codes pour une entreprise" onSubmit=${create}>
+      <label>Entreprise<input required maxlength="80" placeholder="Caisse Desjardins de Valleyfield" value=${f.partner} onInput=${(e) => setF({ ...f, partner: e.target.value })} /></label>
+      <label>Nombre de codes<input required type="number" min="1" max="2000" value=${f.count} onInput=${(e) => setF({ ...f, count: e.target.value })} /></label>
+      <label>Utilisations par code<input required type="number" min="1" value=${f.usesEach} onInput=${(e) => setF({ ...f, usesEach: e.target.value })} /></label>
+      <label>Genre<select value=${f.kind} onChange=${(e) => setF({ ...f, kind: e.target.value })}><option value="percent">Pourcentage</option><option value="amount">Montant</option></select></label>
+      <label>${f.kind === "percent" ? "Rabais (%)" : "Rabais ($)"}<input required inputmode="decimal" value=${f.value} onInput=${(e) => setF({ ...f, value: e.target.value })} /></label>
+      <label>Fin (facultatif)<input type="datetime-local" value=${f.endsAt} onInput=${(e) => setF({ ...f, endsAt: e.target.value })} /></label>
+      <label class="check"><input type="checkbox" checked=${f.excludesPresales} onChange=${(e) => setF({ ...f, excludesPresales: e.target.checked })} /> Non cumulable avec la prévente</label>
+      <button type="submit">Créer les codes</button>
+    </form>
+    ${state.loading ? html`<${Loading} />` : list.length === 0 ? html`<p class="muted">Aucune entreprise pour cet événement.</p>` : html`<div class="table-scroll" role="region" aria-label="Codes des entreprises" tabindex="0"><table><thead><tr><th>Entreprise</th><th class="num">Codes</th><th class="num">Utilisés</th><th>Rabais</th><th>Fin</th><th>Statut</th><th></th></tr></thead>
+      <tbody>${list.map((p) => html`<tr><td>${p.partner}${p.excludesPresales ? html`<br /><span class="muted">Non cumulable avec la prévente</span>` : ""}</td><td class="num">${p.codes}</td>
+        <td class="num">${p.used} / ${p.uses}</td><td>${p.kind === "percent" ? `${p.percent} %` : money(p.amountCents)}</td><td>${p.endsAt ? when(p.endsAt) : "—"}</td>
+        <td><span class="badge ${p.active ? "ok" : "bad"}">${p.active ? "Actifs" : "Désactivés"}</span></td>
+        <td><button class="secondary" onClick=${file(p)}>Télécharger les codes (CSV)</button> <button class="secondary" onClick=${toggle(p)}>${p.active ? "Désactiver tous" : "Réactiver tous"}</button></td></tr>`)}</tbody></table></div>`}`;
 }
 
 // ── Run 69: what a buyer wants to know before choosing (shop, ALKAO home, search engines) ──
@@ -1289,6 +1334,7 @@ function EventDetail({ api, base, eventId, assistant }) {
     </div>`}
 
     <${PromoCodes} api=${api} base=${base} eventId=${eventId} shopUrl=${shopUrl} />
+    <${PartnerCodes} api=${api} base=${base} eventId=${eventId} />
     <${PresaleCodes} api=${api} base=${base} eventId=${eventId} event=${event} />
 
     <h2>Types de billets</h2>

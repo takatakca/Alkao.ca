@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import type { AddressInfo } from "node:net";
 import { serve, type ServerType } from "@hono/node-server";
 import { chromium, type Browser, type Page } from "playwright-core";
@@ -41,7 +41,7 @@ afterAll(async () => {
 
 async function eventPage(): Promise<Page> {
   const token = await tokenFor(seed.users.havanaOwner, { expiresIn: "30m" });
-  const context = await browser.newContext({ locale: "fr-CA", viewport: { width: 1280, height: 900 } });
+  const context = await browser.newContext({ locale: "fr-CA", viewport: { width: 1280, height: 900 }, acceptDownloads: true });
   await context.grantPermissions(["clipboard-read", "clipboard-write"], { origin });
   await context.addInitScript((t) => {
     sessionStorage.setItem("alkao.ops.session", JSON.stringify({ accessToken: t, refreshToken: null, expiresAt: Date.now() + 1_800_000, email: "ops@example.com" }));
@@ -110,6 +110,31 @@ describe("Run 97: presales and coupons in /ops", () => {
     await row.getByRole("button", { name: "Montrer comme coupon" }).waitFor();
     const { rows } = await db.pool.query(`SELECT public, label, excludes_presales FROM public.ticketing_promo_codes WHERE code = 'PREVENTE15'`);
     expect(rows[0]).toEqual({ public: false, label: "Coupon prévente", excludes_presales: false });
+  });
+
+  it("makes a partner company's codes, downloads its file, and switches them off (Run 103)", async () => {
+    const page = await eventPage();
+    const form = page.getByRole("form", { name: "Codes pour une entreprise" });
+    await form.getByLabel("Entreprise").fill("Caisse Desjardins de Valleyfield");
+    await form.getByLabel("Nombre de codes").fill("25");
+    await form.getByLabel("Rabais (%)").fill("15");
+    await form.getByRole("button", { name: "Créer les codes" }).click();
+    await page.getByText("25 codes créés pour Caisse Desjardins de Valleyfield.", { exact: false }).waitFor();
+    const row = page.getByRole("region", { name: "Codes des entreprises" }).getByRole("row", { name: /^Caisse Desjardins de Valleyfield / });
+    expect(await row.textContent()).toMatch(/Caisse Desjardins de Valleyfield\s*25\s*0 \/ 25\s*15 %.*Actifs/s);
+    if (shots) await page.locator("form[aria-label='Codes pour une entreprise']").screenshot({ path: `${shots}/partner-codes-form.png` });
+
+    const [file] = await Promise.all([page.waitForEvent("download"), row.getByRole("button", { name: "Télécharger les codes (CSV)" }).click()]);
+    expect(file.suggestedFilename()).toBe("alkao-codes-caisse-desjardins-de-valleyfield.csv");
+    const text = readFileSync((await file.path())!, "utf8");
+    expect(text.trim().split("\r\n")).toHaveLength(26);
+    expect(text).toContain(`?coupon=CAISSEDE-`);
+
+    await row.getByRole("button", { name: "Désactiver tous" }).click();
+    await row.getByRole("button", { name: "Réactiver tous" }).waitFor();
+    const { rows } = await db.pool.query(`SELECT count(*)::int AS n FROM public.ticketing_promo_codes WHERE partner = 'Caisse Desjardins de Valleyfield' AND NOT active`);
+    expect(rows[0].n).toBe(25);
+    if (shots) await page.getByRole("region", { name: "Codes des entreprises" }).screenshot({ path: `${shots}/partner-codes-table.png` });
     expect(pageErrors).toEqual([]);
   });
 });

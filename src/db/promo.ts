@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { DomainError } from "../domain/errors.js";
 import type { PromoDiscount } from "../domain/pricing.js";
 import { toApi, writeAudit } from "./catalog.js";
@@ -14,6 +15,8 @@ type Queryable = Db | Tx;
 
 export interface PromoRow extends PromoDiscount {
   id: string;
+  /** Run 103: the partner company the code was made for, if any. */
+  partner: string | null;
   eventId: string;
   maxUses: number | null;
   usedCount: number;
@@ -22,13 +25,14 @@ export interface PromoRow extends PromoDiscount {
   active: boolean;
 }
 
-const COLUMNS = "id, event_id, code, kind, percent, amount_cents, max_uses, used_count, starts_at, ends_at, active, created_at, updated_at, public, label, excludes_presales";
+const COLUMNS = "id, event_id, code, kind, percent, amount_cents, max_uses, used_count, starts_at, ends_at, active, created_at, updated_at, public, label, excludes_presales, partner";
 const fromRow = (r: Record<string, unknown>): PromoRow => ({
   id: r.id as string, eventId: r.event_id as string, code: r.code as string, kind: r.kind as "percent" | "amount",
   percent: (r.percent as number | null) ?? null, amountCents: (r.amount_cents as number | null) ?? null,
   maxUses: (r.max_uses as number | null) ?? null, usedCount: r.used_count as number,
   startsAt: (r.starts_at as Date | null) ?? null, endsAt: (r.ends_at as Date | null) ?? null, active: r.active as boolean,
   excludesPresales: r.excludes_presales === true,
+  partner: (r.partner as string | null) ?? null,
 });
 
 /** Codes are typed by buyers: case and spaces around them do not matter. */
@@ -90,12 +94,94 @@ export async function promoOfHold(tx: Tx, s: TenantScope, holdId: string): Promi
 }
 
 // ── Staff ───────────────────────────────────────────────────────────────────
+/** The event's own codes; a partner company's batch is summed up by `partnerBatches` instead. */
 export async function listPromoCodes(q: Queryable, s: TenantScope, eventId: string) {
   const { rows } = await q.query(
-    `SELECT ${COLUMNS} FROM public.ticketing_promo_codes WHERE event_id = $1 AND client_id = $2 AND brand_id = $3 ORDER BY created_at DESC`,
+    `SELECT ${COLUMNS} FROM public.ticketing_promo_codes WHERE event_id = $1 AND client_id = $2 AND brand_id = $3 AND partner IS NULL ORDER BY created_at DESC`,
     [eventId, s.clientId, s.brandId],
   );
   return rows.map(toApi);
+}
+
+// ── Run 103: codes for partner companies ───────────────────────────────────
+/** Easy to read out and type: no 0/O, 1/I/L. */
+const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+const randomPart = (n: number) => Array.from(randomBytes(n), (b) => CODE_ALPHABET[b % CODE_ALPHABET.length]).join("");
+
+/** "Caisse Desjardins de Valleyfield" → "CAISSEDE": the company's name, as a code can hold it. */
+export const partnerPrefix = (partner: string) =>
+  partner.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8) || "PART";
+
+export interface PartnerBatch {
+  partner: string;
+  count: number;
+  usesEach: number;
+  kind: "percent" | "amount";
+  percent?: number | null | undefined;
+  amountCents?: number | null | undefined;
+  prefix?: string | undefined;
+  startsAt?: string | null | undefined;
+  endsAt?: string | null | undefined;
+  excludesPresales?: boolean | undefined;
+}
+
+/** Make `count` unique codes for one company, private, with `usesEach` uses each. */
+export async function createPartnerCodes(tx: Tx, s: TenantScope, eventId: string, p: PartnerBatch, actor: { type: "user" | "system"; id: string | null }) {
+  return mapDbErrors(async () => {
+    const { rows: ev } = await tx.query(`SELECT 1 FROM public.ticketing_events WHERE id = $1 AND client_id = $2 AND brand_id = $3`, [eventId, s.clientId, s.brandId]);
+    if (!ev[0]) throw new DomainError("event_not_found");
+    const prefix = p.prefix ?? partnerPrefix(p.partner);
+    const made: string[] = [];
+    // Random codes rarely collide; one already taken in this event is simply drawn again.
+    for (let round = 0; made.length < p.count && round < 6; round++) {
+      const wanted = Array.from({ length: p.count - made.length }, () => `${prefix}-${randomPart(6)}`);
+      const { rows } = await tx.query<{ code: string }>(
+        `INSERT INTO public.ticketing_promo_codes (client_id, brand_id, event_id, code, kind, percent, amount_cents, max_uses, starts_at, ends_at, public, excludes_presales, partner)
+         SELECT $1, $2, $3, c, $5, $6, $7, $8, $9, $10, false, $11, $12 FROM unnest($4::text[]) AS c
+         ON CONFLICT (event_id, code) DO NOTHING RETURNING code`,
+        [s.clientId, s.brandId, eventId, [...new Set(wanted)], p.kind, p.kind === "percent" ? p.percent : null, p.kind === "amount" ? p.amountCents : null,
+          p.usesEach, p.startsAt ?? null, p.endsAt ?? null, p.excludesPresales ?? false, p.partner],
+      );
+      made.push(...rows.map((r) => r.code));
+    }
+    if (made.length < p.count) throw new DomainError("conflict", { reason: "codes_exhausted" });
+    await writeAudit(tx, s, actor, "promo_code.partner_batch_created", { type: "event", id: eventId }, { partner: p.partner, count: made.length, kind: p.kind });
+    return made.sort();
+  });
+}
+
+/** One line per partner company: how many codes, how many used, what they take off. */
+export async function partnerBatches(q: Queryable, s: TenantScope, eventId: string) {
+  const { rows } = await q.query(
+    `SELECT partner, count(*)::int AS codes, sum(used_count)::int AS used, sum(coalesce(max_uses, 0))::int AS uses,
+            min(kind) AS kind, min(percent) AS percent, min(amount_cents) AS amount_cents, max(ends_at) AS ends_at,
+            bool_or(active) AS active, bool_and(excludes_presales) AS excludes_presales, min(created_at) AS created_at
+     FROM public.ticketing_promo_codes WHERE event_id = $1 AND client_id = $2 AND brand_id = $3 AND partner IS NOT NULL
+     GROUP BY partner ORDER BY min(created_at) DESC`,
+    [eventId, s.clientId, s.brandId],
+  );
+  return rows.map(toApi);
+}
+
+/** A partner company's codes, for the file the organizer sends it. */
+export async function partnerCodes(q: Queryable, s: TenantScope, eventId: string, partner: string) {
+  const { rows } = await q.query<{ code: string; kind: "percent" | "amount"; percent: number | null; amount_cents: number | null; max_uses: number | null; used_count: number; ends_at: Date | null; active: boolean }>(
+    `SELECT code, kind, percent, amount_cents, max_uses, used_count, ends_at, active FROM public.ticketing_promo_codes
+     WHERE event_id = $1 AND client_id = $2 AND brand_id = $3 AND partner = $4 ORDER BY code`,
+    [eventId, s.clientId, s.brandId, partner],
+  );
+  return rows;
+}
+
+/** Turn all of a partner company's codes off (or on again) at once. */
+export async function setPartnerActive(tx: Tx, s: TenantScope, eventId: string, partner: string, active: boolean, actor: { type: "user"; id: string | null }) {
+  const r = await tx.query(
+    `UPDATE public.ticketing_promo_codes SET active = $5, updated_at = now() WHERE event_id = $1 AND client_id = $2 AND brand_id = $3 AND partner = $4`,
+    [eventId, s.clientId, s.brandId, partner, active],
+  );
+  if (!r.rowCount) throw new DomainError("promo_code_not_found");
+  await writeAudit(tx, s, actor, "promo_code.partner_batch_updated", { type: "event", id: eventId }, { partner, active, count: r.rowCount });
+  return r.rowCount;
 }
 
 export async function createPromoCode(

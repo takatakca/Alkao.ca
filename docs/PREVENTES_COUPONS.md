@@ -73,6 +73,31 @@ Le rabais s'applique avant les taxes. La commission TAKATAK se calcule sur le mo
 
 Le serveur fait ce calcul à chaque étape (devis, panier, paiement) : le montant payé est toujours celui affiché.
 
+## Les codes pour les entreprises (Run 103)
+
+Un commanditaire, un employeur ou un commerce partenaire distribue vos billets à prix réduit : à ses employés, à ses membres, à ses clients. Chacun reçoit son propre code. Vous gagnez des acheteurs sans payer de publicité, l'entreprise offre un avantage, et l'acheteur économise.
+
+**Créer** : /ops → votre événement → **Codes pour les entreprises**.
+
+1. Le nom de l'entreprise, par exemple « Caisse Desjardins de Valleyfield ».
+2. Le **nombre de codes** (jusqu'à 2 000) et les **utilisations par code**. 1, c'est un code par personne. Plus, c'est un code pour une famille ou une équipe.
+3. Le rabais (en pourcentage ou en montant), au besoin une date de fin, et **Non cumulable avec la prévente**.
+4. **Créer les codes.** Chaque code commence par le nom de l'entreprise, par exemple `CAISSEDE-7KQ2MX`. Il n'utilise aucun caractère qu'on confond à la lecture (0 et O, 1, I et L).
+
+**Envoyer** : **Télécharger les codes (CSV)**. Le fichier donne, pour chaque code :
+
+- le rabais, les utilisations et ce qui a déjà servi ;
+- la date de fin ;
+- **son lien personnel vers la boutique**, qui applique le code à l'arrivée.
+
+L'entreprise envoie un lien par personne, par courriel ou sur son intranet.
+
+**Ce que voit l'acheteur** : « Code CAISSEDE-7KQ2MX appliqué · **Offre Caisse Desjardins de Valleyfield** ». Un code d'entreprise n'est jamais affiché comme coupon public, ni sur la page ni sur alkao.ca.
+
+**Arrêter** : **Désactiver tous** coupe tous les codes de l'entreprise d'un coup, et **Réactiver tous** les remet.
+
+**Les résultats** : dans le tableau de bord, l'entreprise a sa propre ligne dans « Codes promo et coupons » : les codes utilisés, les commandes, le rabais accordé, le montant payé et le remboursé.
+
 ## Les résultats (Run 101)
 
 /ops → **Tableau de bord** → **Détail des ventes** :
@@ -104,7 +129,10 @@ Elles ont leur propre filtre et leur propre photo sur alkao.ca.
 
 ## Côté technique
 
-- **Migrations** : `20261120000100_alkao_presales_coupons.sql`, puis `20261122000100_alkao_coupon_excludes_presales.sql` (Run 99, `excludes_presales` sur `ticketing_promo_codes`).
+- **Migrations** :
+  - `20261120000100_alkao_presales_coupons.sql` ;
+  - `20261122000100_alkao_coupon_excludes_presales.sql` (Run 99) : `excludes_presales` sur `ticketing_promo_codes` ;
+  - `20261123000100_alkao_partner_codes.sql` (Run 103) : `partner` sur `ticketing_promo_codes`, et une contrainte qui garde ces codes privés.
   - Sur `ticketing_ticket_types` : `presale_of`, `sales_end_at` et `quantity_limit`.
   - Une nouvelle table de comptage, `ticketing_ticket_type_counts`, réservée au serveur.
   - Sur `ticketing_promo_codes` : `public` et `label`.

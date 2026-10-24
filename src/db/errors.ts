@@ -70,6 +70,8 @@ export function toDomainError(error: unknown): DomainError | null {
     if (e.constraint === "ticketing_ticket_types_quantity_limit_ck") return new DomainError("quantity_limit_only_for_admissions");
     // Run 36: the code's last use went to another buyer first.
     if (e.constraint === "ticketing_promo_codes_uses_ck") return new DomainError("promo_code_invalid", { reason: "used_up" });
+    // Run 103: a partner company's codes are handed out, never shown as public coupons.
+    if (e.constraint === "ticketing_promo_codes_partner_private_ck") return new DomainError("partner_code_private");
     if (e.message && TRIGGER_CODES.has(e.message)) return new DomainError(e.message);
     return new DomainError("constraint_violation", { constraint: e.constraint });
   }

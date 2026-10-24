@@ -1,5 +1,14 @@
 # ALKAO — Task queue (priority ordered)
 
+## Run 103 — partner company codes (2026-10-24)
+
+1. Merge the Run 103 PR when CI is green.
+2. Still first: alkao.ca back online (Run 102, Coolify Redeploy).
+3. Next ideas, in the owner's direction (presales and coupons that bring buyers back):
+   - price phases (early bird → presale → regular), each starting when the previous ends;
+   - a "thank you" coupon after the event, unique per buyer, for the organizer's next event.
+
+
 ## Run 102 — alkao.ca back online (2026-10-24)
 
 1. Done: merged 5b02c28 (PR #97).

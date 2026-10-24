@@ -36,7 +36,7 @@ const T = {
     generic: "Une erreur est survenue. Réessayez dans un instant.",
     promo: {
       label: "Code promo", apply: "Appliquer", remove: "Retirer le code", discount: (c) => `Rabais (${c})`,
-      toggle: "J'ai un code promo", applied: (c) => `Code ${c} appliqué`,
+      toggle: "J'ai un code promo", applied: (c) => `Code ${c} appliqué`, offer: (p) => `Offre ${p}`,
       unknown: "Ce code n'existe pas pour cet événement.", inactive: "Ce code n'est plus actif.",
       not_started: "Ce code n'est pas encore valide.", ended: "Ce code a expiré.", used_up: "Ce code a atteint sa limite d'utilisations.",
       presale_only: "Ce code ne s'applique pas aux billets en prévente : il vaut pour les billets au prix régulier.",
@@ -247,7 +247,7 @@ const T = {
     generic: "Something went wrong. Please try again in a moment.",
     promo: {
       label: "Promo code", apply: "Apply", remove: "Remove the code", discount: (c) => `Discount (${c})`,
-      toggle: "I have a promo code", applied: (c) => `Code ${c} applied`,
+      toggle: "I have a promo code", applied: (c) => `Code ${c} applied`, offer: (p) => `${p} offer`,
       unknown: "This code does not exist for this event.", inactive: "This code is no longer active.",
       not_started: "This code is not valid yet.", ended: "This code has expired.", used_up: "This code has reached its limit.",
       presale_only: "This code does not apply to presale tickets: it is for regular-price tickets.",
@@ -1265,6 +1265,8 @@ function EventShop({ config }) {
   // Run 36: the code as typed, the code applied (checked by the server), and why it was refused.
   const [promoInput, setPromoInput] = useState(URL_COUPON ?? "");
   const [promo, setPromo] = useState(URL_COUPON);
+  // Run 103: the partner company whose code this is ("Offre Caisse Desjardins").
+  const [offer, setOffer] = useState(null);
   const [promoError, setPromoError] = useState(null);
   const [promoOpen, setPromoOpen] = useState(Boolean(URL_COUPON));
   // Run 72: a presale code that opens the sale before the public opening ({ code, opensAt }).
@@ -1326,7 +1328,7 @@ function EventShop({ config }) {
     if (!data || items.length === 0) { setQuote(null); setViolations([]); return; }
     const n = ++seq.current;
     const t = setTimeout(() => call(`/events/${route.eventId}/quote`, { method: "POST", body: { items, ...(promo ? { promoCode: promo } : {}) } }).then(
-      (r) => { if (n === seq.current) { setQuote(r.quote); setViolations([]); } },
+      (r) => { if (n === seq.current) { setQuote(r.quote); setOffer(r.offer ?? null); setViolations([]); } },
       (e) => {
         if (n !== seq.current) return;
         if (e.code === "promo_code_invalid") { setPromoError(e.details?.reason ?? "unknown"); setPromo(null); return; }
@@ -1550,7 +1552,7 @@ function EventShop({ config }) {
           <input id="promo-code" ref=${promoField} value=${promoInput} autocomplete="off" autocapitalize="characters" spellcheck="false" onInput=${(e) => setPromoInput(e.target.value)} />
           <button type="submit" class="btn-ghost">${T.promo.apply}</button>
         </div>
-        ${promo && html`<p class="promo-ok"><${Icon} n="check" /><span>${T.promo.applied(promo)}</span>
+        ${promo && html`<p class="promo-ok"><${Icon} n="check" /><span>${T.promo.applied(promo)}${offer ? html` · <strong>${T.promo.offer(offer)}</strong>` : ""}</span>
           <button type="button" class="link-btn" onClick=${() => { setPromo(null); setPromoInput(""); setPromoError(null); }}>${T.promo.remove}</button></p>`}
         ${promoError && html`<div class="alert" role="alert">${T.promo[promoError] ?? T.promo.unknown}</div>`}
       </form>`}

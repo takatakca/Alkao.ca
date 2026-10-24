@@ -70,14 +70,16 @@ export async function salesReport(db: Db, s: TenantScope, f: ReportFilter) {
        ORDER BY s.starts_at`,
       [s.clientId, s.brandId, f.eventId ?? null],
     ),
-    // Run 101: what each promo code or coupon brought, and what it gave away.
+    // Run 101: what each promo code or coupon brought, and what it gave away. Run 103: a
+    // partner company's codes count as one line, under the company's name.
     db.query(
-      `SELECT p.code, p.public, count(*)::int AS orders, sum(o.discount_cents)::bigint AS "discountCents",
+      `SELECT CASE WHEN p.partner IS NULL THEN p.code END AS code, p.partner, bool_or(p.public) AS public,
+              count(DISTINCT p.id)::int AS "codesUsed", count(*)::int AS orders, sum(o.discount_cents)::bigint AS "discountCents",
               sum(o.total_cents)::bigint AS "grossCents", sum(o.refunded_cents)::bigint AS "refundedCents"
        FROM public.ticketing_orders o
        JOIN public.ticketing_promo_codes p ON p.id = o.promo_code_id AND p.client_id = o.client_id AND p.brand_id = o.brand_id
        WHERE o.client_id = $1 AND o.brand_id = $2 AND ${PAID}${w.sql}
-       GROUP BY p.code, p.public ORDER BY sum(o.total_cents) DESC, p.code`,
+       GROUP BY CASE WHEN p.partner IS NULL THEN p.code END, p.partner ORDER BY sum(o.total_cents) DESC, 1, 2`,
       base,
     ),
   ]);
