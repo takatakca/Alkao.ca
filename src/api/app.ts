@@ -405,7 +405,8 @@ export function createApp(deps: AppDeps) {
     const result = buildQuote(rules, body.items, event.taxRegion, undefined, promo);
     if (!result.ok) return fail(c, 422, "cart_invalid", result.violations);
     if (!promoApplies(result.quote.lines, promo)) throw new DomainError("promo_code_invalid", { reason: "presale_only" });
-    return c.json({ quote: result.quote });
+    // Run 103: a partner company's code says whose offer it is.
+    return c.json({ quote: result.quote, ...(promo?.partner ? { offer: promo.partner } : {}) });
   });
 
   // Run 44: a website's newsletter form. The answer is the same whatever the address, and
@@ -690,6 +691,51 @@ export function createApp(deps: AppDeps) {
     const body = api.UpdatePromoCode.parse(await readJson(c));
     const promoCode = await withTransaction(deps.db, (tx) => promoDb.updatePromoCode(tx, c.get("scope"), id, body, actor(c)));
     return c.json({ promoCode });
+  });
+
+  // Run 103: codes for partner companies, made, listed, sent and switched off as one batch.
+  app.get(`${ADMIN}/events/:eventId/partner-codes`, ...admin, can("ticketing.catalog.read"), async (c) => {
+    const eventId = param(c, "eventId");
+    if (!eventId || !(await inScope("ticketing_events", eventId, c.get("scope")))) return fail(c, 404, "event_not_found");
+    return c.json({ partners: await promoDb.partnerBatches(deps.db, c.get("scope"), eventId) });
+  });
+
+  app.post(`${ADMIN}/events/:eventId/partner-codes`, ...admin, can("ticketing.catalog.write"), async (c) => {
+    const eventId = param(c, "eventId");
+    if (!eventId) return fail(c, 404, "event_not_found");
+    const body = api.CreatePartnerCodes.parse(await readJson(c));
+    const codes = await withTransaction(deps.db, (tx) => promoDb.createPartnerCodes(tx, c.get("scope"), eventId, body, actor(c)));
+    return c.json({ partner: body.partner, count: codes.length }, 201);
+  });
+
+  app.patch(`${ADMIN}/events/:eventId/partner-codes`, ...admin, can("ticketing.catalog.write"), async (c) => {
+    const eventId = param(c, "eventId");
+    if (!eventId) return fail(c, 404, "event_not_found");
+    const body = api.UpdatePartnerCodes.parse(await readJson(c));
+    const count = await withTransaction(deps.db, (tx) => promoDb.setPartnerActive(tx, c.get("scope"), eventId, body.partner, body.active, actor(c)));
+    return c.json({ partner: body.partner, active: body.active, count });
+  });
+
+  // The file for the company: each code, what it takes off, and its own link to the shop,
+  // which applies the code on arrival (Run 97).
+  app.get(`${ADMIN}/events/:eventId/partner-codes.csv`, ...admin, can("ticketing.catalog.write"), async (c) => {
+    const scope = c.get("scope");
+    const eventId = param(c, "eventId");
+    if (!eventId || !(await inScope("ticketing_events", eventId, scope))) return fail(c, 404, "event_not_found");
+    const { partner } = api.PartnerQuery.parse(c.req.query());
+    const rows = await promoDb.partnerCodes(deps.db, scope, eventId, partner);
+    if (rows.length === 0) return fail(c, 404, "promo_code_not_found");
+    const shop = `${(deps.publicUrl ?? new URL(c.req.url).origin).replace(/\/+$/, "")}/acheter/${scope.clientId}/${scope.brandId}/${eventId}`;
+    await catalog.writeAudit(deps.db, scope, actor(c), "promo_code.partner_exported", { type: "event", id: eventId }, { partner, rows: rows.length });
+    const value = (r: (typeof rows)[number]) => (r.kind === "percent" ? `${r.percent} %` : `${((r.amount_cents ?? 0) / 100).toFixed(2).replace(".", ",")} $`);
+    return csv(
+      c,
+      `alkao-codes-${promoDb.partnerPrefix(partner).toLowerCase()}.csv`,
+      toCsv(
+        ["code", "rabais", "utilisations", "utilise", "fin", "actif", "lien"],
+        rows.map((r) => [r.code, value(r), r.max_uses ?? "", r.used_count, r.ends_at ?? "", r.active ? "oui" : "non", `${shop}?coupon=${encodeURIComponent(r.code)}`]),
+      ),
+    );
   });
 
   // Run 72: presale codes, per event.

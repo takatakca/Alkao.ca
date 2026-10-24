@@ -40,6 +40,7 @@ const STATUS_BY_CODE: Record<string, ContentfulStatusCode> = {
   pass_no_session: 409,
   pass_cannot_change_session: 409,
   pass_not_transferable: 409,
+  partner_code_private: 409,
   appearance_low_contrast: 422,
   session_not_available: 409,
   // Run 72: the public sale is not open yet (a presale code may open it earlier).

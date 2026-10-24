@@ -1,5 +1,28 @@
 # ALKAO — Agent handoff (mandatory)
 
+## Run 103 — codes for partner companies (2026-10-24)
+
+- The owner's goal: presales with coupons given out through companies (sponsors, employers, shops), so the buyer saves, the organizer saves on advertising, and buyers come back. Owner guide: `docs/PREVENTES_COUPONS.md`, "Les codes pour les entreprises".
+- Migration `20261123000100_alkao_partner_codes.sql`:
+  - `ticketing_promo_codes.partner`;
+  - `ticketing_promo_codes_partner_private_ck` keeps partner codes private. It maps to `partner_code_private` (409).
+- `src/db/promo.ts`:
+  - `createPartnerCodes` makes 1 to 2,000 unique codes: the prefix from the company's name, then six characters from an alphabet without 0/O or 1/I/L. A collision is drawn again, and the audit gets one row per batch.
+  - `partnerBatches` sums each company up on one line.
+  - `partnerCodes` feeds the file, and `setPartnerActive` switches a whole batch.
+  - `listPromoCodes` now leaves partner codes out.
+- Routes (`/v1/admin/…/events/:id/`):
+  - `GET` and `POST partner-codes`;
+  - `PATCH partner-codes` `{ partner, active }`;
+  - `GET partner-codes.csv?partner=`: code, value, uses, used, end, active, and the shop link with `?coupon=`.
+  - Writes need `ticketing.catalog.write`, and so does the file.
+- The quote answers `offer` (the company's name), and the shop shows "Offre …".
+- `salesReport.promoCodes`: a partner's codes are one row (`code: null`, `partner`, `codesUsed`).
+- /ops: the "Codes pour les entreprises" section (form, table, file, switch). The dashboard shows partner rows.
+- Tests: `test/payments/partner-codes.test.ts` (6), and the Run 103 case in `test/ui/presale-ops.test.ts`.
+- NEXT EXACT ACTION: merge the Run 103 PR when green. alkao.ca still needs the Coolify Redeploy (Run 102).
+
+
 ## Run 102 — alkao.ca down since 2026-10-22; empty settings no longer stop the server (2026-10-24)
 
 - **Live state (2026-10-24):**
@@ -14,7 +37,7 @@
   - `live-watch` explains a proxy 502–504.
 - **Tests:** `test/api/config.test.ts`, `test/ops/golive.test.ts`, `test/ops/live-watch.test.ts`.
 - **Owner steps:** the top of `docs/CE_SOIR_HAVANA.md`. Read the Coolify logs, delete or fix the variable, Redeploy, check `/health`.
-- NEXT EXACT ACTION: merge the Run 102 PR. Then the operator redeploys ALKAO in Coolify, and `npm run check:golive -- --url https://alkao.ca` must pass the health lines.
+- Merged 5b02c28 (PR #97). NEXT EXACT ACTION: the operator redeploys ALKAO in Coolify, and `npm run check:golive -- --url https://alkao.ca` must pass the health lines.
 
 
 ## Run 101 — presale countdown, presale and coupon results (2026-10-22)

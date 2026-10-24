@@ -1,5 +1,10 @@
 # ALKAO — Project status
 
+## Run 103 — coupons through partner companies (2026-10-24)
+
+An organizer gives a sponsor, an employer or a shop its own batch of unique codes, each with a personal link to the shop. The company hands them out, and the buyer sees "Offre Caisse Desjardins". The dashboard shows what each company sold. The buyer saves, the organizer gains buyers without advertising, and the partner offers its people a perk.
+
+
 ## Run 102 — alkao.ca outage (2026-10-24)
 
 alkao.ca has been down since October 22: the server stopped starting, most likely because a setting was emptied in Coolify. Promo Havana still sells through Weezevent, so no sale is lost. ALKAO now starts with an empty setting and names any bad one. Getting it back online takes one Redeploy in Coolify.

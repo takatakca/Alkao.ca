@@ -383,6 +383,26 @@ export const CreatePromoCode = z
     message: "percent for kind percent, amountCents for kind amount", path: ["kind"],
   })
   .refine((p) => !p.startsAt || !p.endsAt || Date.parse(p.startsAt) < Date.parse(p.endsAt), { message: "endsAt must be after startsAt", path: ["endsAt"] });
+/** Run 103: a batch of unique codes for a partner company (private, `usesEach` uses each). */
+export const CreatePartnerCodes = z
+  .object({
+    partner: z.string().trim().min(1).max(80).regex(/^[^<>]*$/),
+    prefix: z.string().trim().toUpperCase().regex(/^[A-Z0-9]{2,12}$/).optional(),
+    count: z.number().int().min(1).max(2000),
+    usesEach: z.number().int().min(1).max(100_000).default(1),
+    kind: z.enum(["percent", "amount"]),
+    percent: z.number().int().min(1).max(100).nullish(),
+    amountCents: z.number().int().min(1).max(10_000_000).nullish(),
+    startsAt: timestamp.nullish(),
+    endsAt: timestamp.nullish(),
+    excludesPresales: z.boolean().default(false),
+  })
+  .refine((p) => (p.kind === "percent" ? p.percent != null && p.amountCents == null : p.amountCents != null && p.percent == null), {
+    message: "percent for kind percent, amountCents for kind amount", path: ["kind"],
+  })
+  .refine((p) => !p.startsAt || !p.endsAt || Date.parse(p.startsAt) < Date.parse(p.endsAt), { message: "endsAt must be after startsAt", path: ["endsAt"] });
+export const PartnerQuery = z.object({ partner: z.string().trim().min(1).max(80) });
+export const UpdatePartnerCodes = z.object({ partner: z.string().trim().min(1).max(80), active: z.boolean() });
 /** Run 72: presale codes, per event. */
 export const CreatePresaleCode = z.object({
   code: z.string().trim().toUpperCase().regex(/^[A-Z0-9-]{3,32}$/),
