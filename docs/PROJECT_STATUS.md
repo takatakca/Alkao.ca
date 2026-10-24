@@ -1,5 +1,10 @@
 # ALKAO — Project status
 
+## Run 105 — buyers come back (2026-10-24)
+
+Each buyer gets, with their tickets, a discount for the organizer's next event: on the tickets page and in the e-mail, with a link that applies the code. It shows only while the code can be used. The organizer picks it in one click in /ops.
+
+
 ## Run 104 — price phases (2026-10-24)
 
 An organizer sells in phases: an early-bird price, then a presale, then the regular price. Each phase starts on its own date. The shop announces the next price ("Ensuite : 25,00 $") and switches over by itself when the date comes. Buyers who buy early save the most, which is what brings them in early.

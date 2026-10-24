@@ -11,6 +11,7 @@ import { CredentialsService } from "../scanner/service.js";
 import { emailCodes } from "./codes.js";
 import { orderOptions } from "../db/options.js";
 import { orderPassDates } from "./db.js";
+import { returnOfferFor } from "../db/promo.js";
 
 export interface DeliveryConfig {
   sender: EmailSender;
@@ -40,6 +41,8 @@ interface DueRow extends LookRow {
   client_id: string;
   brand_id: string;
   order_id: string;
+  /** Run 105: for the return offer. */
+  event_id: string;
   kind: "order_tickets" | "exchange_tickets" | "session_cancelled" | "refund" | "reminder" | "session_changed";
   attempts: number;
   created_at: Date;
@@ -90,7 +93,7 @@ export async function deliverTicketEmails(db: Db, cfg: DeliveryConfig, now = new
         `SELECT x.id, x.client_id, x.brand_id, x.order_id, x.kind, x.attempts, x.created_at,
                 o.reference, o.status AS order_status, b.email, b.full_name, b.language, br.name AS brand_name,
                 ${APPEARANCE_COLUMNS}, e.image_url AS event_image_url,
-                e.title AS event_title, s.starts_at, v.name AS venue_name, v.city, v.timezone,
+                e.title AS event_title, e.id AS event_id, s.starts_at, v.name AS venue_name, v.city, v.timezone,
                 (SELECT count(*)::int FROM public.ticketing_tickets t
                   WHERE t.order_id = o.id AND t.client_id = o.client_id AND t.brand_id = o.brand_id AND t.status = 'valid') AS valid_tickets,
                 coalesce((SELECT i.amount_cents FROM public.ticketing_session_cancellation_orders i
@@ -204,6 +207,8 @@ export async function deliverTicketEmails(db: Db, cfg: DeliveryConfig, now = new
         });
       }
       const link = await personalLink();
+      // Run 105: the organizer's offer for next time, with its own link to the shop.
+      const offer = await returnOfferFor(tx, { clientId: row.client_id, brandId: row.brand_id }, row.event_id, now);
       const content = ticketsEmail({
         kind: row.kind,
         language: row.language,
@@ -221,6 +226,10 @@ export async function deliverTicketEmails(db: Db, cfg: DeliveryConfig, now = new
         codes: inline?.codes,
         addOns,
         passDates,
+        returnOffer: offer && {
+          eventTitle: offer.eventTitle, code: offer.code, kind: offer.kind, percent: offer.percent, amountCents: offer.amountCents, endsAt: offer.endsAt,
+          link: `${cfg.publicUrl.replace(/\/+$/, "")}/acheter/${row.client_id}/${row.brand_id}/${offer.eventId}?coupon=${encodeURIComponent(offer.code)}`,
+        },
       });
       return send({ ...content, attachments: inline?.attachments });
     });

@@ -103,6 +103,71 @@ export async function listPromoCodes(q: Queryable, s: TenantScope, eventId: stri
   return rows.map(toApi);
 }
 
+// ── Run 105: the return offer ──────────────────────────────────────────────
+export interface ReturnOffer {
+  eventId: string;
+  eventTitle: string;
+  code: string;
+  kind: "percent" | "amount";
+  percent: number | null;
+  amountCents: number | null;
+  label: string | null;
+  endsAt: Date | null;
+}
+
+/**
+ * What an event's buyers are offered for next time: the code the organizer chose, only while
+ * a buyer can use it (active, started, not ended, uses left) and its event has a date on sale.
+ */
+export async function returnOfferFor(q: Queryable, s: TenantScope, eventId: string, now: Date): Promise<ReturnOffer | null> {
+  const { rows } = await q.query(
+    `SELECT next.id AS event_id, next.title AS event_title, p.code, p.kind, p.percent, p.amount_cents, p.label, p.ends_at
+     FROM public.ticketing_events e
+     JOIN public.ticketing_promo_codes p ON p.id = e.return_offer_promo_id AND p.client_id = e.client_id AND p.brand_id = e.brand_id
+     JOIN public.ticketing_events next ON next.id = p.event_id AND next.client_id = p.client_id AND next.brand_id = p.brand_id AND next.status = 'published'
+     WHERE e.id = $1 AND e.client_id = $2 AND e.brand_id = $3 AND p.active AND p.partner IS NULL
+       AND (p.starts_at IS NULL OR p.starts_at <= $4) AND (p.ends_at IS NULL OR p.ends_at > $4)
+       AND (p.max_uses IS NULL OR p.used_count < p.max_uses)
+       AND EXISTS (SELECT 1 FROM public.ticketing_sessions se WHERE se.event_id = next.id AND se.status = 'on_sale' AND se.starts_at > $4)`,
+    [eventId, s.clientId, s.brandId, now],
+  );
+  const r = rows[0];
+  return r
+    ? { eventId: r.event_id, eventTitle: r.event_title, code: r.code, kind: r.kind, percent: r.percent ?? null, amountCents: r.amount_cents ?? null, label: r.label ?? null, endsAt: r.ends_at ?? null }
+    : null;
+}
+
+/** The Brand's codes an event can offer its buyers (not partner codes, not over), with their event. */
+export async function returnOfferChoices(q: Queryable, s: TenantScope, eventId: string, now: Date) {
+  const [{ rows: current }, { rows: choices }] = await Promise.all([
+    q.query(`SELECT return_offer_promo_id FROM public.ticketing_events WHERE id = $1 AND client_id = $2 AND brand_id = $3`, [eventId, s.clientId, s.brandId]),
+    q.query(
+      `SELECT p.id, p.code, p.kind, p.percent, p.amount_cents, p.ends_at, p.active, e.id AS event_id, e.title AS event_title
+       FROM public.ticketing_promo_codes p JOIN public.ticketing_events e ON e.id = p.event_id AND e.client_id = p.client_id AND e.brand_id = p.brand_id
+       WHERE p.client_id = $1 AND p.brand_id = $2 AND p.partner IS NULL AND (p.ends_at IS NULL OR p.ends_at > $3) AND e.status IN ('draft', 'published')
+       ORDER BY (e.id = $4), e.title, p.code`,
+      [s.clientId, s.brandId, now, eventId],
+    ),
+  ]);
+  if (!current[0]) throw new DomainError("event_not_found");
+  return { promoCodeId: (current[0].return_offer_promo_id as string | null) ?? null, choices: choices.map(toApi) };
+}
+
+export async function setReturnOffer(tx: Tx, s: TenantScope, eventId: string, promoCodeId: string | null, actor: { type: "user"; id: string | null }) {
+  return mapDbErrors(async () => {
+    if (promoCodeId) {
+      const { rows } = await tx.query(`SELECT partner FROM public.ticketing_promo_codes WHERE id = $1 AND client_id = $2 AND brand_id = $3`, [promoCodeId, s.clientId, s.brandId]);
+      if (!rows[0]) throw new DomainError("promo_code_not_found");
+      // A partner company's codes are given out by the company, never offered to every buyer.
+      if (rows[0].partner) throw new DomainError("partner_code_private");
+    }
+    const r = await tx.query(`UPDATE public.ticketing_events SET return_offer_promo_id = $4 WHERE id = $1 AND client_id = $2 AND brand_id = $3`, [eventId, s.clientId, s.brandId, promoCodeId]);
+    if (!r.rowCount) throw new DomainError("event_not_found");
+    await writeAudit(tx, s, actor, "event.return_offer_set", { type: "event", id: eventId }, { promoCodeId });
+    return promoCodeId;
+  });
+}
+
 // ── Run 103: codes for partner companies ───────────────────────────────────
 /** Easy to read out and type: no 0/O, 1/I/L. */
 const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";

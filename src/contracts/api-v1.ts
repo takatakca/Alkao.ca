@@ -406,6 +406,8 @@ export const CreatePartnerCodes = z
   })
   .refine((p) => !p.startsAt || !p.endsAt || Date.parse(p.startsAt) < Date.parse(p.endsAt), { message: "endsAt must be after startsAt", path: ["endsAt"] });
 export const PartnerQuery = z.object({ partner: z.string().trim().min(1).max(80) });
+/** Run 105: the code an event's buyers are offered for next time, or none. */
+export const SetReturnOffer = z.object({ promoCodeId: z.uuid().nullable() });
 export const UpdatePartnerCodes = z.object({ partner: z.string().trim().min(1).max(80), active: z.boolean() });
 /** Run 72: presale codes, per event. */
 export const CreatePresaleCode = z.object({
