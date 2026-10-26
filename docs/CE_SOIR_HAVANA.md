@@ -1,6 +1,10 @@
 # Halloween Havana en vente sur alkao.ca : votre liste (choix B, mise à jour le 24 octobre 2026)
 
-## Urgent (24 octobre) : alkao.ca est en panne depuis le 22
+## Réglé (26 octobre) : alkao.ca est de retour en ligne
+
+alkao.ca répond de nouveau depuis le 26 octobre, avec la dernière version (Run 105). La marche à suivre ci-dessous reste valable si la panne revient.
+
+### La panne qui a commencé le 22 octobre
 
 **Ce qu'on voit.** alkao.ca répond « no available server » (erreur 503) depuis le 22 octobre, entre 9 h 36 et 12 h. Le serveur Coolify tourne, mais le conteneur ALKAO ne démarre plus. Le contrôle « Live » de GitHub échoue depuis ce moment.
 
