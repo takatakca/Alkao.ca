@@ -1,8 +1,15 @@
 # ALKAO — Task queue (priority ordered)
 
+## alkao.ca back online (2026-10-26)
+
+1. Done: `/health` 200 with build `cd5f679`.
+2. Owner, by October 28 (`docs/CE_SOIR_HAVANA.md`): live Stripe keys and webhook, Resend, Havana's Stripe onboarding, a 1 $ test purchase and its refund, then publish Halloween of the 31st in /ops.
+3. Otherwise Weezevent also sells the 31st, and ALKAO takes the next events.
+
+
 ## Run 103 — partner company codes (2026-10-24)
 
-1. Done: merged d58dec6 (PR #98). Run 104 merged 3f6fed5 (PR #99). Run 105 (return offer): merge its PR when green.
+1. Done: merged d58dec6 (PR #98). Run 104 merged 3f6fed5 (PR #99). Run 105 (return offer) merged cd5f679 (PR #100).
 2. Still first: alkao.ca back online (Run 102, Coolify Redeploy).
 3. Next ideas, in the owner's direction (presales and coupons that bring buyers back):
    - price phases: done in Run 104;

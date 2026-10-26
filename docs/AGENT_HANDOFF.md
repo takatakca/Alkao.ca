@@ -1,5 +1,13 @@
 # ALKAO — Agent handoff (mandatory)
 
+## 2026-10-26 — alkao.ca back online
+
+- Checked 2026-10-26 07:50 UTC: `https://alkao.ca/health` and `/health/ready` answer 200, build `cd5f679` (Run 105). The outage that began on October 22 (Run 102) is over.
+- alkao.ca lists no event on sale yet: Halloween Havana is still a draft. promohavana.ca still sells through Weezevent.
+- Owner steps left, in `docs/CE_SOIR_HAVANA.md`: live Stripe keys and webhook, Resend, Havana's Stripe onboarding, a test purchase, then publish. The 31st moves to ALKAO only if they are done by October 28.
+- The full conversation since day 1 is kept by the owner, outside GitHub (this repository is public). Never commit it.
+
+
 ## Run 105 — the return offer (2026-10-24)
 
 - Migration `20261125000100_alkao_return_offer.sql`: `ticketing_events.return_offer_promo_id`, an FK to a promo code of the same Brand.
@@ -14,7 +22,7 @@
   - the tickets e-mail carries the same offer, in text and HTML (`offerLines`, absolute link from `publicUrl`).
 - /ops: the "Offre de retour" picker on the event page, with what buyers see now.
 - Tests: `test/payments/return-offer.test.ts` (3) and `test/ui/return-offer-ui.test.ts` (2).
-- NEXT EXACT ACTION: merge the Run 105 PR when green. alkao.ca still needs the Coolify Redeploy (Run 102).
+- Merged cd5f679 (PR #100). alkao.ca still needs the Coolify Redeploy (Run 102).
 
 
 ## Run 104 — price phases (2026-10-24)

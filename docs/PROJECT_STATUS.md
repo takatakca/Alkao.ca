@@ -1,5 +1,10 @@
 # ALKAO — Project status
 
+## alkao.ca back online (2026-10-26)
+
+alkao.ca answers again, with the latest version (Run 105). No event is on sale there yet: Halloween Havana waits for the live Stripe and Resend keys, Havana's Stripe onboarding and a test purchase. promohavana.ca keeps selling through Weezevent until then.
+
+
 ## Run 105 — buyers come back (2026-10-24)
 
 Each buyer gets, with their tickets, a discount for the organizer's next event: on the tickets page and in the e-mail, with a link that applies the code. It shows only while the code can be used. The organizer picks it in one click in /ops.
