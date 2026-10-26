@@ -3,7 +3,7 @@
 Newest first, one line per piece of work. Rule: `AGENTS.md` › Work log rule.
 Format: `YYYY-MM-DD | agent | branch → PR | status | what | next step`
 
-- 2026-10-26 | claude (Code, cloud) | claude/amazing-pascal-tppqd4 → PR pending | active | alkao.ca back online (build cd5f679), handoff docs updated; full transcript handed to the owner outside GitHub | owner: Stripe live, Resend, Havana onboarding, test purchase by Oct 28
+- 2026-10-26 | claude (Code, cloud) | claude/amazing-pascal-tppqd4 → PR #101 | done, merged 4b69190 (CI qa SUCCESS on d24a9b7) | alkao.ca back online (build cd5f679), handoff docs updated; full transcript handed to the owner outside GitHub | owner: Stripe live, Resend, Havana onboarding, test purchase by Oct 28
 - 2026-10-24 | claude (Code, cloud) | claude/amazing-pascal-tppqd4 → PR #100 | done, merged cd5f679 (CI qa SUCCESS on 075da09) | Run 105: return offer (a coupon for the organizer's next event on the tickets page and in the tickets e-mail, only while usable; /ops picker) | merge when green; alkao.ca Redeploy still pending
 - 2026-10-24 | claude (Code, cloud) | claude/amazing-pascal-tppqd4 → PR #99 | done, merged 3f6fed5 (CI qa SUCCESS on 16f5227) | Run 104: price phases (sales_start_at; early bird → presale → regular; never sold before its start; "Ensuite : …" in the shop; /ops phase name and start) | merge when green; alkao.ca Redeploy still pending
 - 2026-10-24 | claude (Code, cloud) | claude/amazing-pascal-tppqd4 → PR #98 | done, merged d58dec6 (CI qa SUCCESS on c5eb502) | Run 103: codes for partner companies (batches of unique private codes, file with personal shop links, one-click on/off, "Offre …" in the shop, one dashboard line per company) | merge when green; alkao.ca Redeploy still pending
