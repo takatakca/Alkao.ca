@@ -1,5 +1,15 @@
 # ALKAO — Deployment state and verification
 
+## Automatic deployment (2026-10-28)
+
+Before this change, no merge reached alkao.ca by itself. Every `Verify deployment` run since October 22 failed, and alkao.ca changed only after a manual **Redeploy** in Coolify. Now:
+
+- the `Deploy` workflow runs after each green `CI` on a push to `main`, checks that `main` has not moved on, and asks Coolify to deploy through its deploy webhook;
+- it then runs `Verify deployment`, which waits up to about 10 minutes for `/health` to show that commit.
+
+The owner sets this up once: the `COOLIFY_WEBHOOK` and `COOLIFY_TOKEN` repository secrets (a Deploy-only token), with Coolify's own Auto Deploy off. Steps are in [ALKAO_DEPLOY_COOLIFY.md](ALKAO_DEPLOY_COOLIFY.md#automatic-deployment). Until then, `Deploy` fails with "Automatic deployment is not set up".
+
+
 ## Run 89 — degraded device storage and gate safety (2026-10-16)
 
 No new database migration or provider environment variable. The Operations offline scanner must retain its local admission audit when an old incident report cannot be parsed or written, and signal `incidentArchiveFailed` rather than crash or silently delete. Recover/copy the local device's incident data before clearing browser storage; avoid private-mode or storage-quota deployments without actual device tests. QA for source `8b06cf83` passed CI 38962087021 and Package 38962086850. It is NOT live deployment proof. Strict live verifier for earlier Run 88 source 38961326402 FAILED: live `/health` did not attest Git SHA. Coolify issue #84 remains; no deployment/transfer activation proved.
@@ -147,8 +157,9 @@ Current source: `main`; production target: `https://alkao.ca` via Coolify
    on the validated ALKAO database. Use healthcheck `/health/ready`.
 4. Enable source commit inclusion in the Coolify image so `GET /health`
    returns `build` matching the desired 40-character `main` SHA.
-5. Deploy the main branch through authorized Coolify UI or its configured webhook.
-   The repository does not include credentials for us to trigger this directly.
+5. Deploy the main branch: the `Deploy` workflow does it after each green CI, using the
+   `COOLIFY_WEBHOOK` and `COOLIFY_TOKEN` GitHub secrets. Coolify's UI works too.
+   The repository itself holds no credentials.
 6. Check `GET /health` (ALKAO, same SHA), `GET /health/ready` (200, schema current
    or documented Supabase unknown), `/`, `/salles`, and a published venue page.
 7. Run `npm run check:golive -- --url https://alkao.ca` from a trusted environment.
@@ -162,9 +173,12 @@ Current source: `main`; production target: `https://alkao.ca` via Coolify
 - `CI`: typecheck/migrations/secret guard/Vitest against disposable PostgreSQL.
 - `Package`: ready-to-upload MochaHost tarball, **not** the Coolify live deployment.
 - `Live`: scheduled service availability; can warn about SHA lag.
-- `Verify deployment`: after CI success for `main` or manual dispatch. Retries and fails
-  unless the public endpoint has the matching SHA and readiness is healthy.
-  It skips CI runs superseded by a newer main commit. No write to production.
+- `Deploy`: after CI success on a push to `main`, or manual dispatch. Asks Coolify to deploy
+  `main`, skipping a CI run already superseded by a newer `main` commit, then runs
+  `Verify deployment` for that commit.
+- `Verify deployment`: called by `Deploy`, or manual dispatch (main's latest commit). Retries
+  for about 10 minutes and fails unless the public endpoint has the matching SHA and
+  readiness is healthy. No write to production.
 
 ## Operator-only permissions
 

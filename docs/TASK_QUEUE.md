@@ -1,5 +1,11 @@
 # ALKAO — Task queue (priority ordered)
 
+## Automatic deployment (2026-10-28)
+
+1. Merge the `claude/auto-deploy-coolify` PR.
+2. Owner, once (`docs/ALKAO_DEPLOY_COOLIFY.md`, "Automatic deployment"): Coolify API access on, a Deploy-only API token, the deploy webhook URL, the `COOLIFY_WEBHOOK` and `COOLIFY_TOKEN` GitHub secrets, Coolify's Auto Deploy off.
+3. Then **Actions → Deploy → Run workflow**: its verify job must end green.
+
 ## alkao.ca back online (2026-10-26)
 
 1. Done: `/health` 200 with build `cd5f679`.

@@ -1,5 +1,13 @@
 # ALKAO — Agent handoff (mandatory)
 
+## 2026-10-28 — automatic deployment
+
+- Found: no merge reached alkao.ca by itself. Every `Verify deployment` since 10-22 failed, and alkao.ca moved only after a manual Coolify Redeploy (cd5f679, then 4b69190).
+- `.github/workflows/deploy.yml`: after a green `CI` on a push to `main` (never a fork), check that `main` is still that commit, POST Coolify's deploy webhook with a Deploy-only token, then call `verify-deploy.yml` with the SHA.
+- `verify-deploy.yml` is now `workflow_call` + `workflow_dispatch` and waits 20 × 30 s.
+- Secrets `COOLIFY_WEBHOOK` and `COOLIFY_TOKEN` live only in GitHub. Owner steps: `docs/ALKAO_DEPLOY_COOLIFY.md`, "Automatic deployment". Until they are set, Deploy fails and names them.
+- Coolify's own Auto Deploy stays off, so a commit that fails CI is never deployed.
+
 ## 2026-10-26 — alkao.ca back online
 
 - Checked 2026-10-26 07:50 UTC: `https://alkao.ca/health` and `/health/ready` answer 200, build `cd5f679` (Run 105). The outage that began on October 22 (Run 102) is over.

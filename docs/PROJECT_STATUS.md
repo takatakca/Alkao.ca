@@ -1,5 +1,9 @@
 # ALKAO — Project status
 
+## Automatic deployment (2026-10-28)
+
+Once the owner adds two GitHub secrets, each change merged on GitHub goes live on alkao.ca by itself, but only after every test passes. GitHub then checks that alkao.ca really serves the new version. No more manual Redeploy in Coolify.
+
 ## alkao.ca back online (2026-10-26)
 
 alkao.ca answers again, with the latest version (Run 105). No event is on sale there yet: Halloween Havana waits for the live Stripe and Resend keys, Havana's Stripe onboarding and a test purchase. promohavana.ca keeps selling through Weezevent until then.

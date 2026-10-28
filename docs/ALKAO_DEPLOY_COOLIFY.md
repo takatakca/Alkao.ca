@@ -43,7 +43,8 @@ In Coolify, open the project, then **+ New**, then the repository `takatakca/Alk
 
 - Keep the health check on: Coolify then starts the new container and waits until it
   answers before stopping the old one.
-- With automatic deployment on, each merge to `main` deploys.
+- Each merge to `main` that passes CI deploys by itself once [Automatic deployment](#automatic-deployment)
+  is set up. Leave Coolify's own **Auto Deploy** off.
 
 ## 2. Database (once)
 
@@ -184,6 +185,33 @@ Applies, for example, to `billets.promohavana.ca`, which runs an older ALKAO on 
 4. Once Coolify answers on that address, stop the MochaHost application and remove its cron
    line.
    - If both run for a moment against the same database, the jobs still take turns (same lock).
+
+## Automatic deployment
+
+Each commit on `main` that passes CI goes live by itself:
+
+1. the **Deploy** workflow (GitHub, **Actions**) asks Coolify to deploy `main`;
+2. Coolify builds it and switches containers once `/health/ready` answers;
+3. **Verify deployment** waits until `https://alkao.ca/health` shows that commit (about 10 minutes at most).
+
+A commit that fails CI never reaches alkao.ca.
+
+**Set it up once:**
+
+1. Coolify, **Settings → Advanced**: under **API and MCP**, set **API access** to **Enabled**, then save. A self-hosted Coolify has it off by default.
+2. Coolify, **Keys & Tokens → API Tokens**: create a token with the **Deploy** permission only. Copy it right away: Coolify shows it once.
+3. Coolify, the ALKAO application, **Webhooks**: copy the **Deploy webhook** URL.
+4. GitHub, `takatakca/Alkao.ca`, **Settings → Secrets and variables → Actions → New repository secret**:
+   - `COOLIFY_WEBHOOK`: the URL from step 3;
+   - `COOLIFY_TOKEN`: the token from step 2.
+5. Coolify, the ALKAO application, **Advanced**: turn **Auto Deploy** off. Otherwise Coolify also deploys commits that have not passed CI.
+6. GitHub, **Actions → Deploy → Run workflow** (branch `main`): the first deployment. Its **verify** job must end green.
+
+- Keep **Include source commit in build** on (step 1): Verify deployment reads the commit from `/health`.
+- If a secret is missing or refused, Deploy fails and says which one, or what Coolify answered.
+- This repository is public: never put either value in a file, an issue or a chat.
+- Coolify's webhook builds the latest commit of `main`. If `main` moved on while CI ran, Deploy leaves it to the newer commit's CI.
+- To deploy without a new commit (after changing a variable, for example), use **Run workflow** as in step 6, or **Redeploy** in Coolify.
 
 ## Watching
 
