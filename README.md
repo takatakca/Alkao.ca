@@ -26,8 +26,10 @@ Previously imported entries can remain in third-party calendar apps.
   and [decisions](docs/DECISIONS.md).
 - The detailed prior record remains in [TAKATAK agent handoff](docs/TAKATAK_AGENT_HANDOFF.md)
   and [WORKLOG.md](WORKLOG.md).
-- Successful CI and a MochaHost package do not establish a Coolify deployment. Check the
-  independent `Verify deployment` workflow and the live service's `/health` build SHA.
+- Each green CI on `main` asks Coolify to deploy (`Deploy` workflow, set up in
+  [ALKAO_DEPLOY_COOLIFY.md](docs/ALKAO_DEPLOY_COOLIFY.md#automatic-deployment)). A green CI or a
+  MochaHost package alone is not a deployment: check `Verify deployment` and the live
+  service's `/health` build SHA.
 
 ## Stack
 

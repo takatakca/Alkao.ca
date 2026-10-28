@@ -1,0 +1,78 @@
+name: Deploy
+
+# Every main commit that passes CI goes live: GitHub asks Coolify to deploy main, then
+# Verify deployment waits until alkao.ca's /health shows that commit. Coolify's own
+# Auto Deploy stays off, so a commit that fails CI never reaches alkao.ca.
+# Two repository secrets, never in a file (docs/ALKAO_DEPLOY_COOLIFY.md, "Automatic
+# deployment"): COOLIFY_WEBHOOK, the application's deploy webhook, and COOLIFY_TOKEN, an
+# API token with the Deploy permission only.
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A newer main commit replaces a deployment still waiting for its check.
+concurrency:
+  group: alkao-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    # Only CI runs of a push to this repository's main, never a fork's branch named main.
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_repository.full_name == github.repository) }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      sha: ${{ steps.coolify.outputs.sha }}
+    steps:
+      - id: coolify
+        name: Ask Coolify to deploy main
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
+          COOLIFY_WEBHOOK: ${{ secrets.COOLIFY_WEBHOOK }}
+          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+        run: |
+          set -euo pipefail
+          MAIN="$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq .sha)"
+          # Coolify builds main's latest commit: deploy only the one CI just passed.
+          if [[ -n "$SOURCE_SHA" && "$SOURCE_SHA" != "$MAIN" ]]; then
+            echo "::notice::CI passed on ${SOURCE_SHA:0:12}, but main is now ${MAIN:0:12}: its own CI deploys it."
+            exit 0
+          fi
+          if [[ -z "$COOLIFY_WEBHOOK" || -z "$COOLIFY_TOKEN" ]]; then
+            echo "::error::Automatic deployment is not set up: add the COOLIFY_WEBHOOK and COOLIFY_TOKEN repository secrets (docs/ALKAO_DEPLOY_COOLIFY.md, \"Automatic deployment\")."
+            exit 1
+          fi
+          if [[ "$COOLIFY_WEBHOOK" != https://* ]]; then
+            echo "::warning::COOLIFY_WEBHOOK is not HTTPS: the Deploy token crosses the internet unencrypted. Give Coolify an HTTPS domain."
+          fi
+          echo "Asking Coolify to deploy main ${MAIN:0:12}"
+          # The answer stays out of this public log, except Coolify's message.
+          rm -f "$RUNNER_TEMP/coolify.json"
+          STATUS="$(curl --silent --show-error --max-time 30 --retry 3 --retry-connrefused \
+            --output "$RUNNER_TEMP/coolify.json" --write-out '%{http_code}' \
+            --request POST --header "Authorization: Bearer $COOLIFY_TOKEN" "$COOLIFY_WEBHOOK")" || true
+          MESSAGE="$(jq -r '[.deployments[]?.message, .message] | map(select(. != null)) | join(" ")' "$RUNNER_TEMP/coolify.json" 2>/dev/null || true)"
+          if [[ "$STATUS" == 000 ]]; then
+            echo "::error::Coolify did not answer. Check the address in COOLIFY_WEBHOOK and that the Coolify server is up."
+            exit 1
+          fi
+          if [[ "$STATUS" != 2?? ]]; then
+            echo "::error::Coolify answered HTTP $STATUS (${MESSAGE:-no message}). Check COOLIFY_TOKEN (Deploy permission, not expired), COOLIFY_WEBHOOK and Coolify's API access (Settings, Advanced)."
+            exit 1
+          fi
+          echo "Coolify: ${MESSAGE:-deployment queued}"
+          echo "sha=$MAIN" >> "$GITHUB_OUTPUT"
+
+  verify:
+    needs: deploy
+    if: ${{ needs.deploy.outputs.sha != '' }}
+    uses: ./.github/workflows/verify-deploy.yml
+    with:
+      sha: ${{ needs.deploy.outputs.sha }}
