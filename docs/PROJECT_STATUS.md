@@ -4,6 +4,11 @@
 
 Once the owner adds two GitHub secrets, each change merged on GitHub goes live on alkao.ca by itself, but only after every test passes. GitHub then checks that alkao.ca really serves the new version. No more manual Redeploy in Coolify.
 
+## Run 106 — past events and a better filter bar (2026-11-04)
+
+alkao.ca now has « À venir » and « Passés », with a count on each. Past events stay visible for a year with "Terminé", and lead to their page without selling. The filter bar adds "Quand" and "Catégorie", shows each active filter as a chip that comes off in one tap, and stays in view while scrolling. When nothing is on sale, the page says so and offers the past events.
+
+
 ## alkao.ca back online (2026-10-26)
 
 alkao.ca answers again, with the latest version (Run 105). No event is on sale there yet: Halloween Havana waits for the live Stripe and Resend keys, Havana's Stripe onboarding and a test purchase. promohavana.ca keeps selling through Weezevent until then.

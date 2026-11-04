@@ -453,6 +453,57 @@ export async function eventDeals(q: Queryable, s: TenantScope, now: Date): Promi
   return deals;
 }
 
+/** Run 106: the past events the platform home lists, at most a year back. */
+export interface PastEventRow {
+  id: string;
+  title: string;
+  description: string | null;
+  imageUrl: string | null;
+  venueId: string;
+  venueName: string | null;
+  venueCity: string | null;
+  venueAddress: string | null;
+  venueTimezone: string | null;
+  category: string | null;
+  minAge: number | null;
+  language: string | null;
+  /** The dates that took place, the latest first (at most six). */
+  dates: Date[];
+  count: number;
+}
+
+/**
+ * Run 106: a published event whose dates have all taken place, the last one since `since`. A
+ * cancelled or draft date never counts, and an event with a date still to come is not past.
+ */
+export async function listPastEvents(q: Queryable, s: TenantScope, now: Date, since: Date, limit = 24): Promise<PastEventRow[]> {
+  const { rows } = await q.query<{
+    id: string; title: string; description: string | null; image_url: string | null; venue_id: string; venue_name: string | null;
+    venue_city: string | null; venue_address: string | null; venue_timezone: string | null; category: string | null;
+    min_age: number | null; language: string | null; dates: Date[]; count: number;
+  }>(
+    `SELECT e.id, e.title, e.description, e.image_url, e.venue_id, v.name AS venue_name, v.city AS venue_city,
+            v.address_line1 AS venue_address, v.timezone AS venue_timezone, e.category, e.min_age, e.language,
+            (array_agg(s.starts_at ORDER BY s.starts_at DESC))[1:6] AS dates, count(*)::int AS count
+     FROM public.ticketing_events e
+     JOIN public.ticketing_venues v ON v.id = e.venue_id AND v.client_id = e.client_id AND v.brand_id = e.brand_id
+     JOIN public.ticketing_sessions s ON s.event_id = e.id AND s.client_id = e.client_id AND s.brand_id = e.brand_id
+       AND s.status NOT IN ('draft', 'cancelled')
+     WHERE e.client_id = $1 AND e.brand_id = $2 AND e.status = 'published'
+     GROUP BY e.id, v.id
+     HAVING max(s.starts_at) <= $3 AND max(s.starts_at) >= $4
+     ORDER BY max(s.starts_at) DESC, e.title
+     LIMIT $5`,
+    [s.clientId, s.brandId, now, since, limit],
+  );
+  return rows.map((r) => ({
+    id: r.id, title: r.title, description: r.description, imageUrl: r.image_url, venueId: r.venue_id,
+    venueName: r.venue_name, venueCity: r.venue_city, venueAddress: r.venue_address, venueTimezone: r.venue_timezone,
+    category: r.category, minAge: r.min_age === null ? null : Number(r.min_age), language: r.language,
+    dates: r.dates, count: Number(r.count),
+  }));
+}
+
 /** Sessions open for sale (future, on sale), with remaining availability only. */
 export const listPublicSessions = (q: Queryable, s: TenantScope, eventId: string, now: Date) =>
   many(

@@ -1713,12 +1713,14 @@ export function createApp(deps: AppDeps) {
       for (const b of opted) {
         if (!(await decide(b.client_id, b.brand_id)).active) continue;
         const scope = { clientId: b.client_id, brandId: b.brand_id };
-        const [look, listed, floors, deals] = await Promise.all([
+        const [look, listed, floors, deals, ended] = await Promise.all([
           appearanceDb.getAppearance(deps.db, scope),
           catalog.listPublicEvents(deps.db, scope),
           catalog.admissionPriceFloors(deps.db, scope, at),
           // Run 97: presales and coupons on now.
           catalog.eventDeals(deps.db, scope, at),
+          // Run 106: what took place this past year, for the "Passés" filter.
+          catalog.listPastEvents(deps.db, scope, at, new Date(at.getTime() - 365 * 86_400_000)),
         ]);
         const events: HomeBrand["events"] = [];
         for (const event of listed) {
@@ -1757,13 +1759,21 @@ export function createApp(deps: AppDeps) {
             shopPath: `/acheter/${b.client_id}/${b.brand_id}/${eventId}`,
           });
         }
-        if (events.length) {
+        const past: HomeBrand["events"] = ended.map((e) => ({
+          id: e.id, title: e.title, description: e.description, imageUrl: e.imageUrl, venueId: e.venueId,
+          venueName: e.venueName, venueCity: e.venueCity, venueAddress: e.venueAddress, category: e.category,
+          minAge: e.minAge, language: e.language, timezone: e.venueTimezone,
+          startsAt: e.dates[0]!, sessions: e.dates, dateCount: e.count, ended: true,
+          shopPath: `/acheter/${b.client_id}/${b.brand_id}/${e.id}`,
+        }));
+        if (events.length || past.length) {
           brands.push({
             clientId: b.client_id,
             brandId: b.brand_id,
             name: b.name ?? look.brandName ?? "ALKAO",
             logoUrl: look.logoUrl,
             events,
+            past,
           });
         }
       }
