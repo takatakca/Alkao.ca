@@ -8,6 +8,20 @@
 - Secrets `COOLIFY_WEBHOOK` and `COOLIFY_TOKEN` live only in GitHub. Owner steps: `docs/ALKAO_DEPLOY_COOLIFY.md`, "Automatic deployment". Until they are set, Deploy fails and names them.
 - Coolify's own Auto Deploy stays off, so a commit that fails CI is never deployed.
 
+## Run 106 — past events and the filter bar on alkao.ca (2026-11-04)
+
+- `src/db/catalog.ts` `listPastEvents`: published events whose non-draft, non-cancelled dates are all over, the last one within 365 days (24 per Brand, the last 6 dates each).
+- `src/api/app.ts`: `HomeBrand.past`; a Brand with only past events is still listed.
+- `src/api/home-view.ts`:
+  - `?periode=passes`, and `ask`, the query without date, price, sort or agenda in the past;
+  - `pastCard`: "Terminé", the last date, the date count, "Voir l'événement"; no price, purchase, favourite or quick view;
+  - the filter bar: « À venir / Passés » with counts, "Quand" and "Catégorie" menus (only choices with events), removable active-filter chips, "Tout effacer", sticky on wide screens (`home.css`);
+  - nothing on sale but a past: "Aucun événement à venir pour le moment" and "Voir les événements passés (N)".
+- Past events never enter the search data, favourites, the sitemap or JSON-LD.
+- Why an event is missing from alkao.ca, and the five conditions: `docs/ALKAO_CA_VITRINE.md`.
+- Tests: `test/api/home-past.test.ts` (5, with a mutation check on the cancelled-date rule) and `test/ui/home-past-ui.test.ts` (2, Chromium on a computer and a phone). `npm run qa`: 725 passed, 1 skipped (door sale at night).
+
+
 ## 2026-10-26 — alkao.ca back online
 
 - Checked 2026-10-26 07:50 UTC: `https://alkao.ca/health` and `/health/ready` answer 200, build `cd5f679` (Run 105). The outage that began on October 22 (Run 102) is over.

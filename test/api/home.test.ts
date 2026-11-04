@@ -283,7 +283,10 @@ describe("Run 66: filters, search-engine data, calendar and installable home", (
 
     const sorted = await page("tri=prix&prix=under25");
     expect(sorted).toContain(found(1));
-    expect(sorted).toContain("· Moins de 25 $ · Prix le plus bas</p>");
+    // Run 106: each filter on is a chip that takes it off, and one link clears them all.
+    expect(sorted).toMatch(/<a class="chip is-on" href="\/\?tri=prix#evenements" aria-label="Retirer le filtre : Moins de 25 \$">Moins de 25 \$<svg/);
+    expect(sorted).toMatch(/<a class="chip is-on" href="\/\?prix=under25#evenements" aria-label="Retirer le filtre : Prix le plus bas">Prix le plus bas<svg/);
+    expect(sorted).toContain('<a class="btn btn-ghost btn-sm" href="/?#evenements">Tout effacer</a>');
     expect(sorted).toContain('<input type="hidden" name="prix" value="under25" />');
     expect(sorted).toContain('<input type="hidden" name="tri" value="prix" />');
 

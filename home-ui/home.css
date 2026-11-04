@@ -184,6 +184,23 @@ p{margin:0}
 .view-switch .chip .i{color:currentColor}
 .chip.is-current{background:var(--brand);border-color:transparent;color:#fff}
 .chip img{width:22px;height:22px;border-radius:50%;object-fit:cover;background:var(--white)}
+/* Run 106: "À venir" / "Passés" with their counts, the filters on as removable chips, and past
+   events. On wide screens the bar stays in view while the list scrolls. */
+.period-switch{display:inline-flex;gap:4px;padding:4px;border-radius:999px;border:1px solid var(--line-2);background:rgba(6,13,31,.45)}
+.period-switch .chip{padding:7px 14px;border:0;background:none;font-size:.9rem}
+.period-switch .count{display:inline-grid;place-items:center;min-width:22px;height:22px;padding:0 6px;border-radius:999px;background:rgba(245,248,252,.12);font-size:.76rem;font-weight:800}
+.period-switch .chip.is-current .count{background:rgba(255,255,255,.24)}
+.active-filters{display:flex;flex-wrap:wrap;gap:8px;margin:0;padding:0;list-style:none;flex:1 1 auto}
+.chip.is-on{padding:6px 10px 6px 14px;border-color:rgba(41,195,255,.55);background:rgba(31,139,255,.16);font-size:.86rem}
+.chip.is-on .i{width:14px;height:14px;color:var(--ice)}
+.chip.is-on:hover{background:rgba(31,139,255,.3)}
+.card.is-past .card-media img{filter:saturate(.55) brightness(.85)}
+.card.is-past .date-badge{background:rgba(184,196,211,.92)}
+.ended-ribbon{display:inline-flex;align-items:center;gap:6px;align-self:flex-start;margin:0;padding:4px 10px 4px 8px;border-radius:999px;border:1px solid var(--line-2);background:rgba(245,248,252,.08);color:var(--silver);font-size:.78rem;font-weight:750;letter-spacing:.02em}
+.ended-ribbon .i{width:15px;height:15px;color:var(--silver)}
+@media (min-width:721px){
+  .filters{position:sticky;top:calc(var(--head) + 12px);margin:-10px -8px 30px;padding:8px;border-radius:30px;background:rgba(6,13,31,.74);border:1px solid var(--line);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px)}
+}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(285px,100%),1fr));gap:24px}
 .grid-title{font-size:1.5rem;font-weight:800;margin:0 0 18px}
 .card{position:relative;display:flex;flex-direction:column;border-radius:var(--radius);overflow:hidden;background:linear-gradient(180deg,rgba(14,35,80,.72),rgba(8,20,48,.86));border:1px solid var(--line);box-shadow:0 20px 50px rgba(0,0,0,.35);transition:transform .45s var(--ease),box-shadow .45s var(--ease),border-color .3s;height:100%}

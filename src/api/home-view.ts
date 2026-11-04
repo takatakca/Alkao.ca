@@ -41,6 +41,10 @@ export interface HomeEvent {
   coupon?: { label: string | null; percent: number | null; amountCents: number | null; endsAt: Date | string | null } | null;
   /** Run 100: the cheapest festival pass on sale (one ticket for every date). */
   pass?: { priceCents: number } | null;
+  /** Run 106: every date has taken place (`sessions` then lists them, the latest first). */
+  ended?: boolean;
+  /** Run 106: how many dates a past event had (`sessions` keeps the last six). */
+  dateCount?: number;
   shopPath: string;
 }
 
@@ -50,6 +54,8 @@ export interface HomeBrand {
   name: string;
   logoUrl: string | null;
   events: HomeEvent[];
+  /** Run 106: its events of the past year, for the "Passés" filter (never sold, never in search data). */
+  past?: HomeEvent[];
 }
 
 export type When = "" | "today" | "weekend" | "week" | "month";
@@ -67,6 +73,8 @@ export interface HomeQuery {
   organizer: string;
   /** Run 67: cards (default), or every date day by day. */
   view: "" | "agenda";
+  /** Run 106: what is on sale (default), or what took place this past year. */
+  period: "" | "past";
 }
 
 const WHENS: When[] = ["today", "weekend", "week", "month"];
@@ -87,6 +95,7 @@ export function parseQuery(get: (name: string) => string | undefined): HomeQuery
     sort: text("tri") === "prix" ? "price" : "",
     organizer: UUID.test(text("organisateur")) ? text("organisateur").toLowerCase() : "",
     view: text("vue") === "agenda" ? "agenda" : "",
+    period: text("periode") === "passes" ? "past" : "",
   };
 }
 
@@ -272,6 +281,8 @@ export interface Card {
   minAge: number | null;
   doorsOpenMinutes: number | null;
   language: string | null;
+  /** Run 106: a past event: no price, no purchase, its last date as "next". */
+  ended: boolean;
 }
 
 const dayKey = (d: Date, tz: string) => new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
@@ -305,12 +316,13 @@ function dealLabel(lang: Lang, e: HomeEvent): string | null {
   return null;
 }
 
-export function cardsOf(brands: HomeBrand[], lang: Lang, origin: string | null, asset: (name: string) => string): Card[] {
+export function cardsOf(brands: HomeBrand[], lang: Lang, origin: string | null, asset: (name: string) => string, which: "events" | "past" = "events"): Card[] {
   const t = COPY[lang];
   const locale = t.lang;
   const cards: Card[] = [];
   for (const b of brands) {
-    for (const e of b.events) {
+    for (const e of (which === "past" ? b.past : b.events) ?? []) {
+      const ended = which === "past";
       const timezone = e.timezone || "America/Toronto";
       const given = e.sessions?.length ? e.sessions : [e.startsAt];
       const sessions: Date[] = [];
@@ -324,7 +336,10 @@ export function cardsOf(brands: HomeBrand[], lang: Lang, origin: string | null, 
       });
       if (!sessions.length) continue;
       const next = sessions[0]!;
-      const full = new Intl.DateTimeFormat(locale, { timeZone: timezone, weekday: "long", day: "numeric", month: "long", hour: "numeric", minute: "2-digit" });
+      // Run 106: a past date may be last year's, and its hour no longer matters.
+      const full = new Intl.DateTimeFormat(locale, ended
+        ? { timeZone: timezone, weekday: "long", day: "numeric", month: "long", year: "numeric" }
+        : { timeZone: timezone, weekday: "long", day: "numeric", month: "long", hour: "numeric", minute: "2-digit" });
       const text = fold([e.title, e.description, e.venueName, e.venueCity, b.name].filter(Boolean).join(" "));
       // A word counts from its start ("tour" is not "autour"); punctuation splits words.
       // From the event's own words only: a venue or Brand name ("Havana Resort") says nothing of the event.
@@ -346,11 +361,11 @@ export function cardsOf(brands: HomeBrand[], lang: Lang, origin: string | null, 
       cards.push({
         id: e.id,
         title: e.title,
-        deal: dealLabel(lang, e),
-        pass: e.pass && (e.sessions?.length ?? 0) > 1 ? t.passRibbon(e.sessions!.length) : null,
+        deal: ended ? null : dealLabel(lang, e),
+        pass: !ended && e.pass && (e.sessions?.length ?? 0) > 1 ? t.passRibbon(e.sessions!.length) : null,
         brand: b.name,
         brandId: b.brandId,
-        fromCents: e.fromCents,
+        fromCents: ended ? undefined : e.fromCents,
         description: (e.description ?? "").replace(/\s+/g, " ").trim().slice(0, 420),
         image: safeHttps(e.imageUrl) ?? asset(`img/${fallback}`),
         photo: Boolean(safeHttps(e.imageUrl)),
@@ -363,13 +378,13 @@ export function cardsOf(brands: HomeBrand[], lang: Lang, origin: string | null, 
         city: e.venueCity ?? "",
         shop: e.shopPath,
         url: absolute(origin, e.shopPath),
-        price: priceLabel(lang, e.fromCents),
+        price: ended ? null : priceLabel(lang, e.fromCents),
         next,
         nextLabel: full.format(next),
         day: new Intl.DateTimeFormat(locale, { timeZone: timezone, day: "numeric" }).format(next),
         month: new Intl.DateTimeFormat(locale, { timeZone: timezone, month: "short" }).format(next).replace(".", ""),
         dates: sessions.slice(0, 6).map((s) => full.format(s)),
-        count: sessions.length,
+        count: ended ? Math.max(e.dateCount ?? 0, sessions.length) : sessions.length,
         categories,
         text,
         sessions,
@@ -380,10 +395,12 @@ export function cardsOf(brands: HomeBrand[], lang: Lang, origin: string | null, 
         minAge,
         doorsOpenMinutes: doors,
         language,
+        ended,
       });
     }
   }
-  return cards.sort((a, b) => a.next.getTime() - b.next.getTime() || a.title.localeCompare(b.title));
+  // Upcoming: the soonest first. Past: the latest first.
+  return cards.sort((a, b) => (which === "past" ? b.next.getTime() - a.next.getTime() : a.next.getTime() - b.next.getTime()) || a.title.localeCompare(b.title));
 }
 
 function inBand(card: Card, band: PriceBand): boolean {
@@ -413,6 +430,7 @@ function inWindow(s: Date, tz: string, when: When, now: Date): boolean {
 
 /** Run 90: one event card, the same on the home and on a venue's page (where the venue is not a link). */
 export function eventCard(t: Words, c: Card, { eager = false, venueLink = true } = {}): string {
+  if (c.ended) return pastCard(t, c, { eager });
   return `<article class="card reveal" data-id="${esc(c.id)}">
     <a class="card-media" href="${esc(c.shop)}" tabindex="-1" aria-hidden="true"><img src="${esc(c.image)}" alt="" ${eager ? "" : 'loading="lazy" '}decoding="async" /></a>
     <p class="date-badge" aria-hidden="true"><span>${esc(c.day)}</span>${esc(c.month)}</p>
@@ -430,6 +448,29 @@ export function eventCard(t: Words, c: Card, { eager = false, venueLink = true }
       <div class="card-actions">
         <a class="btn btn-primary btn-sm" href="${esc(c.shop)}">${esc(t.buy)}</a>
         <button class="btn btn-ghost btn-sm" type="button" data-preview="${esc(c.id)}" hidden>${esc(t.preview)}</button>
+      </div>
+    </div>
+  </article>`;
+}
+
+/**
+ * Run 106: a past event. It says "Terminé" with its last date, and leads to its page: no price,
+ * no purchase, no favourite and no quick view (those are for what is on sale).
+ */
+function pastCard(t: Words, c: Card, { eager = false } = {}): string {
+  // A venue page lists only what is on sale: a past event's venue is plain text.
+  return `<article class="card is-past reveal" data-id="${esc(c.id)}">
+    <a class="card-media" href="${esc(c.shop)}" tabindex="-1" aria-hidden="true"><img src="${esc(c.image)}" alt="" ${eager ? "" : 'loading="lazy" '}decoding="async" /></a>
+    <p class="date-badge" aria-hidden="true"><span>${esc(c.day)}</span>${esc(c.month)}</p>
+    <div class="card-body">
+      <p class="ended-ribbon">${icon("check")}<span>${esc(t.ended)}</span></p>
+      <p class="card-brand">${c.logo ? `<img src="${esc(c.logo)}" alt="" loading="lazy" decoding="async" />` : ""}${esc(c.brand)}</p>
+      <h3 class="card-title"><a href="${esc(c.shop)}">${esc(c.title)}</a></h3>
+      <p class="card-meta">${icon("calendar")}<time datetime="${esc(c.next.toISOString())}">${esc(c.nextLabel)}</time></p>
+      ${c.place ? `<p class="card-meta">${icon("pin")}<span>${esc(c.place)}</span></p>` : ""}
+      <div class="card-foot"><span></span><span class="pills">${c.count > 1 ? `<span class="pill">${esc(t.dates(c.count))}</span>` : ""}</span></div>
+      <div class="card-actions">
+        <a class="btn btn-ghost btn-sm" href="${esc(c.shop)}" aria-label="${esc(t.seeEventLabel(c.title))}">${esc(t.seeEvent)}</a>
       </div>
     </div>
   </article>`;
@@ -501,61 +542,105 @@ export function renderHome({ origin, lang, brands, query, now, asset }: RenderOp
   const langQuery = (l: Lang) => (l === "en" ? "?lang=en" : "");
   const home = `/${langQuery(lang)}`;
   const otherHome = `/${langQuery(t.other)}`;
-  // A sort alone also lists the results (no rail), in its order.
-  const filtered = Boolean(query.q || query.city || query.when || query.category || query.price || query.organizer || query.sort);
+  // Run 106: the past year's events, behind the "Passés" filter. Dates, prices, sort and the
+  // agenda are about what is on sale, so they do not apply there.
+  const past = query.period === "past";
+  const ask: HomeQuery = past ? { ...query, when: "", price: "", sort: "", view: "" } : query;
+  // A sort alone also lists the results (no rail), in its order; so does the past.
+  const filtered = past || Boolean(ask.q || ask.city || ask.when || ask.category || ask.price || ask.organizer || ask.sort);
+  // `all` is what is on sale: the hero, the rails, the search data and the search-engine data
+  // never show a past event.
   const all = cardsOf(brands, lang, origin, asset);
+  const ended = cardsOf(brands, lang, origin, asset, "past");
+  const pool = past ? ended : all;
   const cheapest = (c: Card) => (c.fromCents === undefined ? Number.POSITIVE_INFINITY : (c.fromCents ?? 0));
-  const shown = filtered ? all.filter((c) => matches(c, query, now)) : all;
-  if (query.sort === "price") shown.sort((a, b) => cheapest(a) - cheapest(b) || a.next.getTime() - b.next.getTime());
+  const shown = filtered ? pool.filter((c) => matches(c, ask, now)) : pool;
+  if (ask.sort === "price") shown.sort((a, b) => cheapest(a) - cheapest(b) || a.next.getTime() - b.next.getTime());
   const week = all.filter((c) => c.next.getTime() - now.getTime() <= 7 * 86_400_000);
   // Run 97: presales and coupons on now.
   const deals = all.filter((c) => c.deal);
-  const cities = [...new Set(all.map((c) => c.city).filter(Boolean))].sort((a, b) => a.localeCompare(b, t.lang));
+  const cities = [...new Set(pool.map((c) => c.city).filter(Boolean))].sort((a, b) => a.localeCompare(b, t.lang));
   const link = (params: Record<string, string>) => {
     const p = new URLSearchParams({ ...(lang === "en" ? { lang: "en" } : {}), ...params });
     return `/?${p}#evenements`;
   };
   // Run 66: the current search with one value changed ("" removes it), for the filter chips.
   const current: Record<string, string> = {
-    q: query.q, ville: query.city, quand: query.when, categorie: query.category,
-    prix: query.price, tri: query.sort === "price" ? "prix" : "", organisateur: query.organizer, vue: query.view,
+    q: ask.q, ville: ask.city, quand: ask.when, categorie: ask.category,
+    prix: ask.price, tri: ask.sort === "price" ? "prix" : "", organisateur: ask.organizer, vue: ask.view,
+    periode: past ? "passes" : "",
   };
   const refine = (change: Record<string, string>) =>
     link(Object.fromEntries(Object.entries({ ...current, ...change }).filter(([, v]) => v)));
   const organizers = brands
-    .filter((b) => all.some((c) => c.brandId === b.brandId))
+    .filter((b) => pool.some((c) => c.brandId === b.brandId))
     .map((b) => ({
       id: b.brandId.toLowerCase(), name: b.name, logo: safeHttps(b.logoUrl),
       // Run 67: "Suivre", the Brand's newsletter sign-up (Run 44, confirmed by e-mail).
       follow: `/v1/public/clients/${b.clientId.toLowerCase()}/brands/${b.brandId.toLowerCase()}/newsletter`,
     }));
-  const organizer = organizers.find((o) => o.id === query.organizer);
-  const priced = all.some((c) => c.fromCents !== undefined);
-  const bands = PRICES.filter((band) => band === query.price || all.some((c) => inBand(c, band)));
+  const organizer = organizers.find((o) => o.id === ask.organizer);
+  const priced = !past && all.some((c) => c.fromCents !== undefined);
+  const bands = PRICES.filter((band) => band === ask.price || all.some((c) => inBand(c, band)));
   const chip = (href: string, label: string, on: boolean, extra = "") =>
     `<a class="chip${on ? " is-current" : ""}" href="${esc(href)}"${on ? ' aria-current="true"' : ""}>${extra}${esc(label)}</a>`;
   // Run 90: one compact row, a menu per filter (<details>: it works without JavaScript) and the view switch.
   const menu = (id: string, label: string, value: string, set: boolean, items: string, note = "") =>
     `<details class="dd${set ? " is-set" : ""}"><summary><span class="dd-label" id="${id}">${esc(label)}</span><span class="dd-value">${esc(value)}</span>${icon("down", "i dd-chev")}</summary>
           <div class="dd-menu" role="group" aria-labelledby="${id}">${note ? `<p class="dd-note">${esc(note)}</p>` : ""}<div class="chips">${items}</div></div></details>`;
-  const filterBar = all.length
+  // Run 106: "À venir" and "Passés", each with its count; going to the past drops what only
+  // applies to sales (dates, price, sort, agenda).
+  const periodChip = (href: string, label: string, on: boolean, n: number) =>
+    `<a class="chip${on ? " is-current" : ""}" href="${esc(href)}"${on ? ' aria-current="true"' : ""}>${esc(label)}<span class="count">${n}</span></a>`;
+  const periodSwitch = ended.length || past
+    ? `<div class="period-switch" role="group" aria-labelledby="f-period"><span class="sr-only" id="f-period">${esc(t.periodTitle)}</span>${periodChip(refine({ periode: "" }), t.periodOptions.upcoming, !past, all.length)}${periodChip(refine({ periode: "passes", quand: "", prix: "", tri: "", vue: "" }), t.periodOptions.past, past, ended.length)}</div>`
+    : "";
+  // Run 106: the date window and the category, right in the bar (also in the search form above).
+  const whens = (["today", "weekend", "week", "month"] as const).filter((w) => w === ask.when || all.some((c) => c.sessions.some((s) => inWindow(s, c.timezone, w, now))));
+  const whenMenu = !past && whens.length
+    ? menu("f-when", t.when, ask.when ? t.whenOptions[ask.when] : t.whenOptions.all, Boolean(ask.when),
+      `${chip(refine({ quand: "" }), t.whenOptions.all, !ask.when)}${whens.map((w) => chip(refine({ quand: w }), t.whenOptions[w], ask.when === w)).join("")}`)
+    : "";
+  const kinds = CATEGORIES.filter((c) => c.id === ask.category || pool.some((e) => e.categories.includes(c.id)));
+  const categoryMenu = kinds.length
+    ? menu("f-cat", t.categoryTitle, CATEGORIES.find((c) => c.id === ask.category)?.label[lang] ?? t.allCategories, Boolean(ask.category),
+      `${chip(refine({ categorie: "" }), t.allCategories, !ask.category)}${kinds.map((c) => chip(refine({ categorie: c.id }), c.label[lang], ask.category === c.id)).join("")}`)
+    : "";
+  const filterBar = all.length || ended.length
     ? `<div class="filters reveal" role="group" aria-label="${esc(t.filters)}">
-        ${priced ? `${menu("f-price", t.priceTitle, query.price ? t.priceOptions[query.price] : t.priceOptions.all, Boolean(query.price),
-          `${chip(refine({ prix: "" }), t.priceOptions.all, !query.price)}${bands.map((band) => chip(refine({ prix: band }), t.priceOptions[band as Exclude<PriceBand, "">], query.price === band)).join("")}`, t.priceNote)}
-        ${menu("f-sort", t.sortTitle, query.sort === "price" ? t.sortOptions.price : t.sortOptions.date, query.sort === "price",
-          `${chip(refine({ tri: "" }), t.sortOptions.date, query.sort !== "price")}${chip(refine({ tri: "prix" }), t.sortOptions.price, query.sort === "price")}`)}` : ""}
+        ${periodSwitch}
+        ${whenMenu}
+        ${categoryMenu}
+        ${priced ? `${menu("f-price", t.priceTitle, ask.price ? t.priceOptions[ask.price] : t.priceOptions.all, Boolean(ask.price),
+          `${chip(refine({ prix: "" }), t.priceOptions.all, !ask.price)}${bands.map((band) => chip(refine({ prix: band }), t.priceOptions[band as Exclude<PriceBand, "">], ask.price === band)).join("")}`, t.priceNote)}
+        ${menu("f-sort", t.sortTitle, ask.sort === "price" ? t.sortOptions.price : t.sortOptions.date, ask.sort === "price",
+          `${chip(refine({ tri: "" }), t.sortOptions.date, ask.sort !== "price")}${chip(refine({ tri: "prix" }), t.sortOptions.price, ask.sort === "price")}`)}` : ""}
         ${organizers.length > 1 || organizer ? menu("f-org", t.organizersTitle, organizer?.name ?? t.allOrganizers, Boolean(organizer),
-          `${chip(refine({ organisateur: "" }), t.allOrganizers, !query.organizer)}${organizers.map((o) => chip(refine({ organisateur: o.id }), o.name, o.id === query.organizer, o.logo ? `<img src="${esc(o.logo)}" alt="" loading="lazy" decoding="async" />` : "")).join("")}`) : ""}
-        <div class="view-switch" role="group" aria-labelledby="f-view"><span class="sr-only" id="f-view">${esc(t.viewTitle)}</span>${chip(refine({ vue: "" }), t.viewOptions.grid, query.view !== "agenda", icon("grid"))}${chip(refine({ vue: "agenda" }), t.viewOptions.agenda, query.view === "agenda", icon("list"))}</div>
+          `${chip(refine({ organisateur: "" }), t.allOrganizers, !ask.organizer)}${organizers.map((o) => chip(refine({ organisateur: o.id }), o.name, o.id === ask.organizer, o.logo ? `<img src="${esc(o.logo)}" alt="" loading="lazy" decoding="async" />` : "")).join("")}`) : ""}
+        ${past || !all.length ? "" : `<div class="view-switch" role="group" aria-labelledby="f-view"><span class="sr-only" id="f-view">${esc(t.viewTitle)}</span>${chip(refine({ vue: "" }), t.viewOptions.grid, ask.view !== "agenda", icon("grid"))}${chip(refine({ vue: "agenda" }), t.viewOptions.agenda, ask.view === "agenda", icon("list"))}</div>`}
       </div>`
     : "";
+  // Run 106: each filter on, as a chip that takes it off, and one link that clears them all.
+  const active: { label: string; off: Record<string, string> }[] = [
+    ...(ask.q ? [{ label: `« ${ask.q} »`, off: { q: "" } }] : []),
+    ...(ask.category ? [{ label: CATEGORIES.find((c) => c.id === ask.category)!.label[lang], off: { categorie: "" } }] : []),
+    ...(ask.city ? [{ label: ask.city, off: { ville: "" } }] : []),
+    ...(ask.when ? [{ label: t.whenOptions[ask.when], off: { quand: "" } }] : []),
+    ...(ask.price ? [{ label: t.priceOptions[ask.price], off: { prix: "" } }] : []),
+    ...(organizer ? [{ label: organizer.name, off: { organisateur: "" } }] : []),
+    ...(ask.sort === "price" ? [{ label: t.sortOptions.price, off: { tri: "" } }] : []),
+  ];
+  const activeChips = active.length
+    ? `<ul class="active-filters" aria-label="${esc(t.activeFilters)}">${active.map((a) => `<li><a class="chip is-on" href="${esc(refine(a.off))}" aria-label="${esc(t.removeFilter(a.label))}">${esc(a.label)}${icon("close")}</a></li>`).join("")}</ul>`
+    : "";
+  const clearAll = link(past ? { periode: "passes" } : {});
 
   const card = (c: Card, eager = false) => eventCard(t, c, { eager });
 
   const AGENDA_MAX = 120;
   const agendaRows = shown
     .flatMap((c) => c.sessions.map((start) => ({ c, start })))
-    .filter(({ c, start }) => inWindow(start, c.timezone, query.when, now))
+    .filter(({ c, start }) => inWindow(start, c.timezone, ask.when, now))
     .sort((x, y) => x.start.getTime() - y.start.getTime() || x.c.title.localeCompare(y.c.title));
   const agenda = () => {
     const days: { key: string; label: string; rows: typeof agendaRows }[] = [];
@@ -605,7 +690,7 @@ export function renderHome({ origin, lang, brands, query, now, asset }: RenderOp
   ];
 
   const whenSelect = (Object.entries(t.whenOptions) as [string, string][])
-    .map(([v, label]) => `<option value="${v === "all" ? "" : v}"${(v === "all" ? "" : v) === query.when ? " selected" : ""}>${esc(label)}</option>`).join("");
+    .map(([v, label]) => `<option value="${v === "all" ? "" : v}"${(v === "all" ? "" : v) === ask.when ? " selected" : ""}>${esc(label)}</option>`).join("");
 
   const counts = new Map(CATEGORIES.map((c) => [c.id, all.filter((e) => e.categories.includes(c.id)).length]));
   const faq = help(lang);
@@ -711,7 +796,7 @@ ${siteHeader(frame)}
             <label class="field"><span>${esc(t.what)}</span><input name="q" type="search" value="${esc(query.q)}" placeholder="${esc(t.whatHint)}" autocomplete="off" maxlength="80" /></label>
             <label class="field"><span>${esc(t.where)}</span><input name="ville" type="text" value="${esc(query.city)}" placeholder="${esc(t.whereHint)}" list="alkao-cities" autocomplete="address-level2" maxlength="80" /></label>
             <label class="field"><span>${esc(t.when)}</span><select name="quand">${whenSelect}</select></label>
-            ${(["categorie", "prix", "tri", "organisateur", "vue"] as const).filter((k) => current[k]).map((k) => `<input type="hidden" name="${k}" value="${esc(current[k])}" />`).join("")}
+            ${(["categorie", "prix", "tri", "organisateur", "vue", "periode"] as const).filter((k) => current[k]).map((k) => `<input type="hidden" name="${k}" value="${esc(current[k])}" />`).join("")}
             <button class="btn btn-primary btn-search" type="submit">${icon("search")}<span>${esc(t.search)}</span></button>
           </form>
           <datalist id="alkao-cities">${cities.map((c) => `<option value="${esc(c)}"></option>`).join("")}</datalist>
@@ -752,24 +837,33 @@ ${siteHeader(frame)}
 
     <section class="section events" id="evenements" aria-labelledby="events-title">
       <div class="wrap">
-        <div class="section-head reveal"><p class="kicker">${esc(t.featuredTag)}</p><h2 id="events-title">${esc(t.eventsTitle)}</h2><p>${esc(t.featuredLead)}</p></div>
+        <div class="section-head reveal"><p class="kicker">${esc(past ? t.periodOptions.past : t.featuredTag)}</p><h2 id="events-title">${esc(past ? t.pastTitle : t.eventsTitle)}</h2><p>${esc(past ? t.pastLead : t.featuredLead)}</p></div>
         ${filterBar}
-        ${filtered ? `<div class="results" role="status">
-            <p><strong>${esc(t.results(shown.length))}</strong>${query.q ? ` ${esc(t.resultsFor)} « ${esc(query.q)} »` : ""}${query.category ? ` · ${esc(CATEGORIES.find((c) => c.id === query.category)!.label[lang])}` : ""}${query.city ? ` · ${esc(query.city)}` : ""}${query.when ? ` · ${esc(t.whenOptions[query.when])}` : ""}${query.price ? ` · ${esc(t.priceOptions[query.price])}` : ""}${organizer ? ` · ${esc(organizer.name)}` : ""}${query.sort === "price" ? ` · ${esc(t.sortOptions.price)}` : ""}</p>
-            <div class="actions">${organizer ? `<button class="btn btn-primary btn-sm" type="button" data-follow="${esc(organizer.id)}" hidden>${icon("bell")}${esc(t.follow(organizer.name))}</button>` : ""}<a class="btn btn-ghost btn-sm" href="${esc(`${home}#evenements`)}">${esc(t.showAll)}</a></div>
+        ${filtered && (all.length || past) ? `<div class="results" role="status">
+            <p><strong>${esc(t.results(shown.length))}</strong>${ask.q ? ` ${esc(t.resultsFor)} « ${esc(ask.q)} »` : ""}</p>
+            ${activeChips}
+            <div class="actions">${organizer ? `<button class="btn btn-primary btn-sm" type="button" data-follow="${esc(organizer.id)}" hidden>${icon("bell")}${esc(t.follow(organizer.name))}</button>` : ""}${active.length ? `<a class="btn btn-ghost btn-sm" href="${esc(clearAll)}">${esc(t.clearAll)}</a>` : past ? "" : `<a class="btn btn-ghost btn-sm" href="${esc(`${home}#evenements`)}">${esc(t.showAll)}</a>`}</div>
           </div>` : ""}
         ${cities.length > 1 && !filtered ? `<nav class="chips" aria-label="${esc(t.citiesTitle)}">${cities.map((c) => `<a class="chip" href="${esc(link({ ville: c }))}">${icon("pin")}${esc(c)}</a>`).join("")}</nav>` : ""}
-        ${!all.length
-          ? `<div class="empty reveal">
+        ${!all.length && !past
+          ? ended.length
+            // Run 106: nothing on sale, but past events to show: say so, and lead to them.
+            ? `<div class="empty reveal">
+              <div class="empty-art" aria-hidden="true">${logoMark("lg-empty")}</div>
+              <p class="empty-title">${esc(t.emptyUpcoming)}</p>
+              <p>${esc(t.emptyUpcomingLead)}</p>
+              <div class="actions"><a class="btn btn-primary" href="${esc(refine({ periode: "passes", quand: "", prix: "", tri: "", vue: "" }))}">${esc(t.seePast(ended.length))}</a><a class="btn btn-ghost" href="https://takatak.ca/register">${esc(t.signup)}</a></div>
+            </div>`
+            : `<div class="empty reveal">
               <div class="empty-art" aria-hidden="true">${logoMark("lg-empty")}</div>
               <p class="empty-title">${esc(t.empty)}</p>
               <p>${esc(t.emptyLead)}</p>
               <div class="actions"><a class="btn btn-primary" href="https://takatak.ca/register">${esc(t.signup)}</a><a class="btn btn-ghost" href="/ops">${esc(t.signin)}</a></div>
             </div>`
-          : query.view === "agenda"
+          : ask.view === "agenda"
             ? agendaRows.length ? agenda() : `<p class="empty-inline">${esc(t.noResults)}</p>`
           : filtered
-            ? shown.length ? `<div class="grid">${shown.map((c) => card(c)).join("")}</div>` : `<p class="empty-inline">${esc(t.noResults)}</p>`
+            ? shown.length ? `<div class="grid">${shown.map((c, i) => card(c, past && i < 3)).join("")}</div>` : `<p class="empty-inline">${esc(past ? t.noPast : t.noResults)}</p>`
             : `${rail("recent", t.recentTitle, "", [], `<button class="link-btn" type="button" data-recent-clear aria-label="${esc(t.clearRecentLabel)}">${esc(t.clearRecent)}</button>`).replace('<div class="rail-block">', '<div class="rail-block" data-recent hidden>')}
                ${deals.length && all.length > 3 ? rail("deals", t.dealsTitle, t.dealsLead, deals) : ""}
                ${week.length && all.length > 3 ? `${rail("week", t.weekTitle, "", week)}<h3 class="grid-title">${esc(t.allEvents)}</h3>` : ""}

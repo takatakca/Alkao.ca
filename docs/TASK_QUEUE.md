@@ -6,6 +6,15 @@
 2. Owner, once (`docs/ALKAO_DEPLOY_COOLIFY.md`, "Automatic deployment"): Coolify API access on, a Deploy-only API token, the deploy webhook URL, the `COOLIFY_WEBHOOK` and `COOLIFY_TOKEN` GitHub secrets, Coolify's Auto Deploy off.
 3. Then **Actions → Deploy → Run workflow**: its verify job must end green.
 
+## Run 106 — past events and the filter bar (2026-11-04)
+
+1. Merge the Run 106 PR when CI is green.
+2. Owner, in /ops, for Havana to show on alkao.ca (`docs/ALKAO_CA_VITRINE.md`):
+   - create the next event with its dates and prices, then **Publier**;
+   - Apparence → ALKAO → **Afficher mes événements sur ALKAO**.
+3. Still the owner's: live Stripe keys and webhook, Resend, Havana's Stripe onboarding, a test purchase.
+
+
 ## alkao.ca back online (2026-10-26)
 
 1. Done: `/health` 200 with build `cd5f679`.
