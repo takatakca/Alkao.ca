@@ -1,5 +1,7 @@
 # Work log
 
+- 2026-11-07 | Codex — ChatGPT Work | codex/sequential-release-20261107 → PR pending | active | Sequential release review, reconcile historical #105 note and current source/runtime evidence; preserve orders, database and provider configuration | next: exact CI, native idle-target deployment if verified safe, signed before/during/after receipt; no paid test or event activation
+
 Newest first, one line per piece of work. Rule: `AGENTS.md` › Work log rule.
 Format: `YYYY-MM-DD | agent | branch → PR | status | what | next step`
 
