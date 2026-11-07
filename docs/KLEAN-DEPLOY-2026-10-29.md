@@ -1,5 +1,7 @@
 # KLEAN — Déploiement 4/10 — alkao.ca — 2026-10-29
 
+> Note historique du 29 octobre, intégrée le 7 novembre. État actuel et cible vérifiée : `docs/DEPLOYMENT.md`; résultat final dans le reçu de release GitHub/Drive. Signature de contextualisation : Codex — ChatGPT Work.
+
 Mission déploiement KLEAN 4/10, 2026-10-29 vers 17:14 EDT. Signé KLEAN. Aucun secret, mot de passe ou code dans cette note (noms de secrets seulement).
 
 ## Carte de déploiement — alkao.ca

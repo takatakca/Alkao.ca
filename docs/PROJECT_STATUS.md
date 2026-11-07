@@ -1,5 +1,15 @@
 # ALKAO — Project status
 
+## Verified checkpoint — 2026-11-07
+
+Source main d95a50f includes Run106, with exact CI/Package green. The old WORKLOG active label is corrected by merging Claude's already-pushed completed note. PR105 is a historical October29 deployment note, not fresh production proof.
+
+Current live checks: `/health` HTTP200 reports old build4b69190; readiness200 says database up/schema current. The confirmed existing production target is Coolify VPS2 application16 (`vrwfovdfdu9xnfl3pfmrxyfd`, main/Dockerfile/8787). The last automatic Deploy failed due to absent deploy secrets, so scheduled Live successes only attest availability. This source checkpoint precedes native release; use the final signed GitHub/Drive receipt for its exact outcome.
+
+The source-to-runtime delta adds the already-reviewed past-events UI; no new migration or dependency. Existing orders and credentials must remain intact. Transfers stay off; paid/provider acceptance and publication of a real future Havana event are not implied by this release.
+
+Signature : Codex — ChatGPT Work.
+
 ## Automatic deployment (2026-10-28)
 
 Once the owner adds two GitHub secrets, each change merged on GitHub goes live on alkao.ca by itself, but only after every test passes. GitHub then checks that alkao.ca really serves the new version. No more manual Redeploy in Coolify.

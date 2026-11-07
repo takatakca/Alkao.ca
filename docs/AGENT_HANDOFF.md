@@ -1,5 +1,21 @@
 # ALKAO — Agent handoff (mandatory)
 
+## Current release checkpoint — 2026-11-07
+
+Owner-authorized sequential review, signed before/during/after notes. Baseline main `d95a50f5e2eba7e1184bd5cd4a2c32576cc05066` already includes Run106 (#106): CI 41776523038 and Package 41776522688 succeeded. Integrate historical PR #105 and Claude's completed Run106 WORKLOG commit `a1158588389348ada05848bec58dfcfc556a5ae4` in separate merge commits, preserving ancestry. Prior catalog/CI and KLEAN note branches have their file content already integrated; an old Oct8 MochaHost operations claim is historical, not new deployable application code.
+
+Preceding pushed claim: `a8339717e444a8c20907317100abe812a9ac6983` on `codex/sequential-release-20261107`. This integration changes documentation only. Local Node22 typecheck, migration policy and secret checks pass; exact candidate/main CI is still required. No test was invented for a documentation-only edit.
+
+**Actual host found:** Contabo VPS2, Coolify production application 16, UUID `vrwfovdfdu9xnfl3pfmrxyfd`, `takatakca/Alkao.ca`, branch main, `/Dockerfile`, port8787. Domains alkao.ca/www.alkao.ca and billets.promohavana.ca/www.billets.promohavana.ca. Separate old trial application14 is not production. `/health` reports old SHA `4b69190ad47ec487174cc0d5faff6332291b48ae`; `/health/ready` reports database up/schema current. Native last deployment `gvmtvr6be7nqbxgmehr85bhp` finished 2026-10-26. Observed workers/migrate-on-start true, transfers false; no settings changed.
+
+**Deploy failure explained:** run41776955361 failed because both GitHub deploy secrets were absent; verify job skipped. Do not claim automatic deployment repaired by a manual native deployment. A future token/setup task remains separate; never print secret values.
+
+**Next exact steps:** complete private same-host database backup/restore check and retain old image; compare final app diff (no dependency, Docker or migration changes since old runtime), require full exact-SHA CI, queue only the verified idle production target, verify exact `/health` SHA, ready, homepage/past filters/assets and domain aliases. Append final provider/job/SHA receipt on PR #105/new integration PR, issue #84 and the authorized Drive ledger after release; do not create a docs-deploy loop merely to embed its own SHA. Current checkpoint does not claim publication yet.
+
+No paid ticket purchase, event publication, Stripe/Resend credential change, transfer activation, DNS change, or customer data disclosure is authorized by a repo note. Existing provider acceptance work remains separate.
+
+Signature : Codex — ChatGPT Work.
+
 ## 2026-10-28 — automatic deployment
 
 - Found: no merge reached alkao.ca by itself. Every `Verify deployment` since 10-22 failed, and alkao.ca moved only after a manual Coolify Redeploy (cd5f679, then 4b69190).

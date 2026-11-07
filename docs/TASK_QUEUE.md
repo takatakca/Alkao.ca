@@ -1,5 +1,14 @@
 # ALKAO — Task queue (priority ordered)
 
+## Release continuation — 2026-11-07
+
+1. Integrate PR105 historical note and completed Run106 handoff; exact candidate/main CI must pass.
+2. On confirmed production app16, finish private backup/restore verification, retain old image, then native source-aligned deploy and exact live SHA/readiness/UI proof. No schema change is expected.
+3. Record signed final receipt on GitHub and authorized Drive. Future automatic deployments still need the existing Deploy workflow's missing secrets; manual success is separate.
+4. Preserve existing data/provider settings. Validate live ticket/email/Stripe/transfer flow with owner-approved test scope before activation; do not publish expired Halloween dates from old notes.
+
+Signature : Codex — ChatGPT Work.
+
 ## Automatic deployment (2026-10-28)
 
 1. Merge the `claude/auto-deploy-coolify` PR.
