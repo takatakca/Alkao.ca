@@ -1,6 +1,6 @@
 # Work log
 
-- 2026-11-07 | Codex — ChatGPT Work | codex/sequential-release-20261107 → PR pending | source reconciliation complete; exact CI/live release pending | Integrate historical #105 and completed Run106 note; target app16 confirmed, old live4b69190 healthy; local Node22 type/migration/secret checks pass | next: private backup/restore, exact CI, idle-target native deploy and signed receipt; no commercial activation
+- 2026-11-07 | Codex — ChatGPT Work | codex/sequential-release-20261107 → PR pending | source reconciliation complete; exact CI/live release pending | Integrate historical #105 and completed Run106 note; target app16 confirmed, old live4b69190 healthy; local Node22 type/migration/secret checks pass; CI found old English checkout test missing month selection, corrected with J+65 fixture and all assertions preserved | next: private backup/restore, exact CI, idle-target native deploy and signed receipt; no commercial activation
 
 Newest first, one line per piece of work. Rule: `AGENTS.md` › Work log rule.
 Format: `YYYY-MM-DD | agent | branch → PR | status | what | next step`
