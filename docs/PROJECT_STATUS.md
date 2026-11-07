@@ -1,5 +1,23 @@
 # ALKAO — Project status
 
+### CI correction — 2026-11-07
+
+Candidate681d3de CI42361152569 passed725 tests but timed out in the unchanged English checkout test: J+25 crossed from November into December, while the test skipped the month selector. `test/ui/shop-ui.test.ts` now deliberately uses J+65 and selects its English calendar month before the existing session, free-checkout, buyer-language, QR and French-switch assertions. No application behavior, assertion or timeout was weakened. Re-run exact updated-candidate CI before merge/deployment. Earlier documentation-only scope now also includes this focused test correction.
+
+Backup follow-through: initial public/meta archive missed private helper functions; the completed archive includes public, alkao_meta and alkao_private,330631 bytes/mode600, SHA2568739e5ff87b4503bcc1171050ba60a819ae39965ad3fe56142deae971d32c91f. Restored successfully in network-isolated disposable PostgreSQL17:48 application tables,45 migrations. Temporary restore container removed; private archive and old image retained. No production restore.
+
+Signature: Codex — ChatGPT Work.
+
+## Verified checkpoint — 2026-11-07
+
+Source main d95a50f includes Run106, with exact CI/Package green. The old WORKLOG active label is corrected by merging Claude's already-pushed completed note. PR105 is a historical October29 deployment note, not fresh production proof.
+
+Current live checks: `/health` HTTP200 reports old build4b69190; readiness200 says database up/schema current. The confirmed existing production target is Coolify VPS2 application16 (`vrwfovdfdu9xnfl3pfmrxyfd`, main/Dockerfile/8787). The last automatic Deploy failed due to absent deploy secrets, so scheduled Live successes only attest availability. This source checkpoint precedes native release; use the final signed GitHub/Drive receipt for its exact outcome.
+
+The source-to-runtime delta adds the already-reviewed past-events UI; no new migration or dependency. Existing orders and credentials must remain intact. Transfers stay off; paid/provider acceptance and publication of a real future Havana event are not implied by this release.
+
+Signature : Codex — ChatGPT Work.
+
 ## Automatic deployment (2026-10-28)
 
 Once the owner adds two GitHub secrets, each change merged on GitHub goes live on alkao.ca by itself, but only after every test passes. GitHub then checks that alkao.ca really serves the new version. No more manual Redeploy in Coolify.

@@ -1,9 +1,11 @@
 # Work log
 
+- 2026-11-07 | Codex — ChatGPT Work | codex/sequential-release-20261107 → PR pending | source reconciliation complete; exact CI/live release pending | Integrate historical #105 and completed Run106 note; target app16 confirmed, old live4b69190 healthy; local Node22 type/migration/secret checks pass; CI found old English checkout test missing month selection, corrected with J+65 fixture and all assertions preserved | next: private backup/restore, exact CI, idle-target native deploy and signed receipt; no commercial activation
+
 Newest first, one line per piece of work. Rule: `AGENTS.md` › Work log rule.
 Format: `YYYY-MM-DD | agent | branch → PR | status | what | next step`
 
-- 2026-11-04 | claude (Code, cloud) | claude/amazing-pascal-tppqd4 → PR pending | active | Run 106: « Passés » filter on alkao.ca (past year's published events, never sold), filter bar with counts, Quand/Catégorie menus, removable chips, sticky; why Havana is missing (docs/ALKAO_CA_VITRINE.md) | merge when green; owner publishes Havana's next event and turns on Afficher sur ALKAO
+- 2026-11-04 | claude (Code, cloud) | claude/amazing-pascal-tppqd4 → PR #106 | done, merged d95a50f (CI qa SUCCESS on 26ff581); live after a Coolify Redeploy | Run 106: « Passés » filter on alkao.ca (past year's published events, never sold), filter bar with counts, Quand/Catégorie menus, removable chips, sticky; why Havana is missing (docs/ALKAO_CA_VITRINE.md) | merge when green; owner publishes Havana's next event and turns on Afficher sur ALKAO
 - 2026-10-28 | claude (Code, cloud) | claude/auto-deploy-coolify → PR pending | done in code, branch pushed; not live until merged and secrets set | automatic deployment: every main commit that passes CI asks Coolify to deploy, then Verify deployment checks /health | merge; owner adds COOLIFY_WEBHOOK and COOLIFY_TOKEN (docs/ALKAO_DEPLOY_COOLIFY.md), then Actions → Deploy → Run workflow
 - 2026-10-26 | claude (Code, cloud) | claude/amazing-pascal-tppqd4 → PR #101 | done, merged 4b69190 (CI qa SUCCESS on d24a9b7) | alkao.ca back online (build cd5f679), handoff docs updated; full transcript handed to the owner outside GitHub | owner: Stripe live, Resend, Havana onboarding, test purchase by Oct 28
 - 2026-10-24 | claude (Code, cloud) | claude/amazing-pascal-tppqd4 → PR #100 | done, merged cd5f679 (CI qa SUCCESS on 075da09) | Run 105: return offer (a coupon for the organizer's next event on the tickets page and in the tickets e-mail, only while usable; /ops picker) | merge when green; alkao.ca Redeploy still pending

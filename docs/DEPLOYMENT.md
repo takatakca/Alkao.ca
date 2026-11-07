@@ -1,5 +1,17 @@
 # ALKAO — Deployment state and verification
 
+## Verified target and release gate — 2026-11-07
+
+- **Production:** Contabo VPS2 / Coolify application16, UUID `vrwfovdfdu9xnfl3pfmrxyfd`, repository `takatakca/Alkao.ca`, main, `/Dockerfile`, port8787. Domains: https://alkao.ca, https://www.alkao.ca, https://billets.promohavana.ca, https://www.billets.promohavana.ca. Application14 is an old trial, not the production target.
+- **Before release:** healthy container/image `4b69190ad47ec487174cc0d5faff6332291b48ae`, matching public `/health`; `/health/ready`200/database up/schema current. Native deployment `gvmtvr6be7nqbxgmehr85bhp` finished October26. No newer release inferred from green CI.
+- **Backup/rollback:** retain old image tag `codex-rollback-20261107`; private same-host backup under `/data/agent-backups/alkao/release-20261107`, mode700 directory/600 files. Require a successful backup and restoration check before publication; no customer data or connection values in GitHub. No migration/dependency/Docker delta between old runtime and current main. Preserve the existing CA mount and provider settings.
+- **Automation:** Deploy41776955361 failed because `COOLIFY_WEBHOOK` and `COOLIFY_TOKEN` were absent. Manual native deployment does not prove automation repaired. No token was created or authorization broadened in this review.
+- **Acceptance:** wait for exact candidate/main CI, check no active queue, deploy existing app once; require full live SHA, ready, public UI/aliases and read-only database continuity. Record resulting native job, times and SHA in final GitHub/Drive receipt. Roll back only image/application if needed; no production schema/data reversal.
+
+Payments, e-mail, transfer/provider activation and future event publication retain their own acceptance requirements; an old Halloween deadline is not a new instruction to sell an expired event.
+
+Signature : Codex — ChatGPT Work.
+
 ## Automatic deployment (2026-10-28)
 
 Before this change, no merge reached alkao.ca by itself. Every `Verify deployment` run since October 22 failed, and alkao.ca changed only after a manual **Redeploy** in Coolify. Now:

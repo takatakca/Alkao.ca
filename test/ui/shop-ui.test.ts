@@ -371,15 +371,17 @@ describe("hosted ticket shop", () => {
 
   it("serves English buyers in English, from the shop to their tickets (Run 16)", async () => {
     const h = seed.havana;
-    const s = await session(h, 25);
+    // Always cross a month boundary: the calendar initially shows an earlier session.
+    const s = await session(h, 65);
     const context = await browser.newContext({ locale: "en-US" });
     const page = await context.newPage();
     page.on("pageerror", (e) => pageErrors.push(e.message));
     await page.goto(`${origin}/acheter/${h.clientId}/${h.brandId}/${h.eventId}`);
     await page.getByRole("heading", { name: "1. Choose your session" }).waitFor();
-    const label = new Intl.DateTimeFormat("en-CA", { dateStyle: "full", timeStyle: "short", timeZone: "America/Toronto" }).format(
-      (await db.pool.query(`SELECT starts_at FROM public.ticketing_sessions WHERE id = $1`, [s.id])).rows[0].starts_at,
-    );
+    const startsAt = (await db.pool.query(`SELECT starts_at FROM public.ticketing_sessions WHERE id = $1`, [s.id])).rows[0].starts_at;
+    const month = new Intl.DateTimeFormat("en-CA", { month: "long", year: "numeric", timeZone: "America/Toronto" }).format(startsAt);
+    await page.getByRole("group", { name: "Months", exact: true }).getByRole("button", { name: month, exact: true }).click();
+    const label = new Intl.DateTimeFormat("en-CA", { dateStyle: "full", timeStyle: "short", timeZone: "America/Toronto" }).format(startsAt);
     await page.getByRole("button", { name: new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")) }).click();
     const toddler = h.types.find((x) => x.code === "TODDLER")!;
     await page.getByRole("button", { name: `Add ${toddler.name}`, exact: true }).click();

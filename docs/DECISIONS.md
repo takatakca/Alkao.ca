@@ -1,5 +1,11 @@
 # ALKAO — Decisions and non-negotiable constraints
 
+## 2026-11-07 — source release is separate from commercial activation
+
+Use the verified existing Coolify production application16, not old trial14. Source updates preserve orders, database, CA and provider configuration. A native source-aligned deployment may restore code freshness while automatic deployment remains unconfigured; report those separately. Keep historical notes and prior author signatures, with a current checkpoint rather than overwriting history. Never infer sale readiness, provider acceptance, or permission to publish an expired event from CI or an older checklist.
+
+Signature : Codex — ChatGPT Work.
+
 ## Run 89 — unavailable incident archive is a recoverable blocked state
 
 On a scanner device, a broken/over-quota incident-report localStorage value must not erase the original admission audit or make the scanner UI unusable. During automatic expiry, catch that specific archival failure, return the retained offline audit with `incidentArchiveFailed=true` and visibly direct the operator to repair/reconcile local storage. Attempts to leave offline mode still fail closed until archiving succeeds; do not silently overwrite a corrupted report. No server-side persistence is inferred from a local report.
