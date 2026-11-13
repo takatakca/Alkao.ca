@@ -75,6 +75,8 @@ export interface HomeQuery {
   view: "" | "agenda";
   /** Run 106: what is on sale (default), or what took place this past year. */
   period: "" | "past";
+  /** Run 107: only the events with a presale or a public coupon on now. */
+  deals: boolean;
 }
 
 const WHENS: When[] = ["today", "weekend", "week", "month"];
@@ -96,6 +98,7 @@ export function parseQuery(get: (name: string) => string | undefined): HomeQuery
     organizer: UUID.test(text("organisateur")) ? text("organisateur").toLowerCase() : "",
     view: text("vue") === "agenda" ? "agenda" : "",
     period: text("periode") === "passes" ? "past" : "",
+    deals: text("offres") === "1",
   };
 }
 
@@ -197,27 +200,37 @@ export function headAssets(asset: (name: string) => string): string {
 
 const langPath = (language: string) => `/salles${language === "en-CA" ? "?lang=en" : ""}`;
 
+/**
+ * Run 107: "Préventes" takes "Catégories"' place in the wide header, which had no room for a sixth
+ * link at 1101–1280 px (the categories sit right under the deals; the phone menu and footer keep them).
+ */
 export function siteHeader({ t, base, home, here, otherHere }: Frame): string {
   const a = (hash: string, label: string) => `<a href="${esc(`${base}#${hash}`)}">${esc(label)}</a>`;
   return `  <header class="site-head" data-head>
     <div class="wrap head-row">
       <a class="logo" href="${esc(home)}" aria-label="ALKAO">${logoMark("lg-head")}<span class="word">ALKAO</span></a>
-      <nav class="main-nav" aria-label="${esc(t.menu)}">${a("evenements", t.nav.events)}${a("categories", t.nav.categories)}${a("organisateurs", t.nav.organizers)}<a href="${langPath(t.lang)}">${esc(t.nav.venues)}</a>${a("aide", t.nav.help)}</nav>
+      <nav class="main-nav" aria-label="${esc(t.menu)}">${a("evenements", t.nav.events)}${a("preventes", t.nav.deals)}${a("organisateurs", t.nav.organizers)}<a href="${langPath(t.lang)}">${esc(t.nav.venues)}</a>${a("aide", t.nav.help)}</nav>
       <div class="head-actions">
         <a class="icon-btn" href="${esc(`${base}#evenements`)}" data-open-search aria-label="${esc(t.search)}">${icon("search")}</a>
-        <a class="btn btn-ghost btn-sm tickets-btn" href="${esc(`${base}#aide`)}" data-open-tickets>${icon("ticket")}<span>${esc(t.myTickets)}</span></a>
+        <a class="btn btn-ghost btn-sm tickets-btn" href="${esc(`${base}#aide`)}" data-open-tickets aria-label="${esc(t.myTickets)}">${icon("ticket")}<span>${esc(t.myTickets)}</span></a>
         <div class="lang-switch" role="group" aria-label="Langue / Language">
           <a href="${esc(here)}" aria-current="page" lang="${t.lang}">${t.short}</a><a href="${esc(otherHere)}" lang="${COPY[t.other].lang}" aria-label="${esc(t.otherLabel)}">${t.otherShort}</a>
         </div>
         <a class="btn btn-primary btn-sm head-cta" href="/ops">${esc(t.signin)}</a>
         <details class="mobile-menu">
           <summary aria-label="${esc(t.menu)}">${icon("menu")}</summary>
-          <div class="mobile-panel">${a("evenements", t.nav.events)}${a("categories", t.nav.categories)}${a("comment", t.nav.how)}${a("organisateurs", t.nav.organizers)}<a href="${langPath(t.lang)}">${esc(t.nav.venues)}</a>${a("aide", t.nav.help)}<a href="/ops">${esc(t.signin)}</a><a href="${esc(otherHere)}" lang="${COPY[t.other].lang}">${icon("globe")} ${esc(t.otherLabel)}</a></div>
+          <div class="mobile-panel">${a("evenements", t.nav.events)}${a("preventes", t.nav.deals)}${a("categories", t.nav.categories)}${a("comment", t.nav.how)}${a("organisateurs", t.nav.organizers)}<a href="${langPath(t.lang)}">${esc(t.nav.venues)}</a>${a("aide", t.nav.help)}<a href="/ops">${esc(t.signin)}</a><a href="${esc(otherHere)}" lang="${COPY[t.other].lang}">${icon("globe")} ${esc(t.otherLabel)}</a></div>
         </details>
       </div>
     </div>
   </header>`;
 }
+
+/**
+ * Run 107: a page of takatak.ca (GROUPE TAKATAK V1, takatak-v1 main). Its routes are read from
+ * that repository; takatak.ca picks its language itself, so one address serves both.
+ */
+export const takatakUrl = (path: string) => `https://takatak.ca${path}`;
 
 export function siteFooter({ t, lang, base, home, here, otherHere, year }: Frame): string {
   const a = (hash: string, label: string) => `<a href="${esc(`${base}#${hash}`)}">${esc(label)}</a>`;
@@ -231,6 +244,7 @@ export function siteFooter({ t, lang, base, home, here, otherHere, year }: Frame
       <nav aria-label="${esc(t.footerDiscover)}"><p class="foot-title">${esc(t.footerDiscover)}</p>${a("evenements", t.nav.events)}${a("categories", t.nav.categories)}${a("comment", t.nav.how)}</nav>
       <nav aria-label="${esc(t.footerHelp)}"><p class="foot-title">${esc(t.footerHelp)}</p>${a("aide", t.faqTitle)}${a("faq-billets", t.myTickets)}${a("faq-paiement", t.trust[2]!)}<a href="${esc(`/accessibilite${lang === "en" ? "?lang=en" : ""}`)}">${esc(t.a11y.link)}</a></nav>
       <nav aria-label="${esc(t.footerOrganizers)}"><p class="foot-title">${esc(t.footerOrganizers)}</p><a href="https://takatak.ca/register">${esc(t.signup)}</a><a href="/ops">${esc(t.signin)}</a>${a("organisateurs", t.footerFeatures)}</nav>
+      <nav aria-label="${esc(t.footerTakatak)}"><p class="foot-title">${esc(t.footerTakatak)}</p><a href="https://takatak.ca">takatak.ca</a><a href="${esc(takatakUrl("/services"))}">${esc(t.footerServices)}</a><a href="${esc(takatakUrl("/deals"))}">${esc(t.footerDeals)}</a><a href="${esc(takatakUrl("/contact"))}">${esc(t.footerContact)}</a></nav>
       <nav aria-label="${esc(t.footerLanguage)}"><p class="foot-title">${esc(t.footerLanguage)}</p><a href="${esc(lang === "fr" ? here : otherHere)}" lang="fr-CA"${lang === "fr" ? ' aria-current="page"' : ""}>Français</a><a href="${esc(lang === "en" ? here : otherHere)}" lang="en-CA"${lang === "en" ? ' aria-current="page"' : ""}>English</a></nav>
     </div>
     <div class="wrap foot-legal"><p>${esc(t.rights(year))}</p><p>Digital Solutions. Real Results.</p></div>
@@ -283,10 +297,58 @@ export interface Card {
   language: string | null;
   /** Run 106: a past event: no price, no purchase, its last date as "next". */
   ended: boolean;
+  /** Run 107: the deal behind `deal`, for the spotlight; null without one. */
+  offer: Offer | null;
+  /** Run 107: the regular price, struck next to "From" when that price is the presale's. */
+  was: string | null;
+}
+
+/** Run 107: a presale or a public coupon on now, exactly as the organizer set it. */
+export interface Offer {
+  kind: "presale" | "coupon";
+  /** The saving per ticket in percent, rounded down; 0 for an amount off the order. */
+  pct: number;
+  priceCents: number | null;
+  regularCents: number | null;
+  endsAt: Date | null;
+  /** A presale capped by a quantity. */
+  limited: boolean;
+  label: string | null;
 }
 
 const dayKey = (d: Date, tz: string) => new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
 const weekday = (d: Date, tz: string) => new Intl.DateTimeFormat("en-US", { timeZone: tz, weekday: "short" }).format(d);
+
+/** Run 107: an amount in dollars, without cents when it is whole. */
+function money(lang: Lang, cents: number): string {
+  const whole = cents % 100 === 0;
+  return new Intl.NumberFormat(COPY[lang].lang, { style: "currency", currency: "CAD", minimumFractionDigits: whole ? 0 : 2, maximumFractionDigits: 2 }).format(cents / 100);
+}
+
+/**
+ * Run 107: the same presale-first rule as `dealLabel`, with what the spotlight shows: the saving,
+ * the prices and the end. Nothing is shown that the organizer did not set.
+ */
+function offerOf(e: HomeEvent): Offer | null {
+  const p = e.presale;
+  const when = (v: Date | string | null | undefined) => {
+    const d = v ? new Date(v) : null;
+    return d && !Number.isNaN(d.getTime()) ? d : null;
+  };
+  if (p && p.regularCents > p.priceCents && p.remaining !== 0) {
+    return {
+      kind: "presale", pct: Math.floor(((p.regularCents - p.priceCents) / p.regularCents) * 100),
+      priceCents: p.priceCents, regularCents: p.regularCents, endsAt: when(p.endsAt), limited: p.remaining !== null, label: null,
+    };
+  }
+  const c = e.coupon;
+  if (c?.percent || c?.amountCents) {
+    // An amount comes off the whole order once (src/domain/pricing.ts): its saving per ticket is
+    // unknown, so it ranks after every percentage.
+    return { kind: "coupon", pct: c.percent ?? 0, priceCents: null, regularCents: null, endsAt: when(c.endsAt), limited: false, label: (c.label ?? "").trim() || null };
+  }
+  return null;
+}
 
 function priceLabel(lang: Lang, fromCents: number | null | undefined): string | null {
   const t = COPY[lang];
@@ -358,6 +420,7 @@ export function cardsOf(brands: HomeBrand[], lang: Lang, origin: string | null, 
         language ? t.languages[language as keyof typeof t.languages] : null,
       ].filter((x): x is string => Boolean(x));
       const fallback = CATEGORIES.find((c) => c.id === categories[0])?.image ?? "event-fallback.webp";
+      const offer = ended ? null : offerOf(e);
       cards.push({
         id: e.id,
         title: e.title,
@@ -396,6 +459,8 @@ export function cardsOf(brands: HomeBrand[], lang: Lang, origin: string | null, 
         doorsOpenMinutes: doors,
         language,
         ended,
+        offer,
+        was: offer?.kind === "presale" && e.fromCents === offer.priceCents && offer.regularCents ? money(lang, offer.regularCents) : null,
       });
     }
   }
@@ -412,6 +477,8 @@ function inBand(card: Card, band: PriceBand): boolean {
 
 function matches(card: Card, query: HomeQuery, now: Date): boolean {
   if (query.organizer && card.brandId.toLowerCase() !== query.organizer) return false;
+  // Run 107: a presale or a public coupon on now.
+  if (query.deals && !card.deal) return false;
   if (!inBand(card, query.price)) return false;
   if (query.q && !fold(query.q).split(" ").every((word) => card.text.includes(word))) return false;
   if (query.city && !fold(card.city).includes(fold(query.city))) return false;
@@ -442,7 +509,7 @@ export function eventCard(t: Words, c: Card, { eager = false, venueLink = true }
       <p class="card-meta">${icon("clock")}<time datetime="${esc(c.next.toISOString())}">${esc(c.nextLabel)}</time></p>
       ${c.place ? `<p class="card-meta">${icon("pin")}${venueLink ? `<a href="${esc(c.venuePath)}">${esc(c.place)}</a>` : `<span>${esc(c.place)}</span>`}</p>` : ""}
       <div class="card-foot">
-        ${c.price ? `<p class="price">${esc(c.price)}</p>` : "<span></span>"}
+        ${c.price ? (c.was ? `<p class="price has-was">${esc(c.price)} <s class="was"><span class="sr-only">${esc(t.dealsRegular)} </span>${esc(c.was)}</s></p>` : `<p class="price">${esc(c.price)}</p>`) : "<span></span>"}
         <span class="pills">${c.minAge ? `<span class="pill pill-age" title="${esc(t.age(c.minAge))}">${esc(t.agePill(c.minAge))}</span>` : ""}${c.count > 1 ? `<span class="pill">${esc(t.dates(c.count))}</span>` : ""}</span>
       </div>
       <div class="card-actions">
@@ -525,6 +592,105 @@ export function clientWords(t: Words) {
   };
 }
 
+// ── Run 107: presales and discounts, organizers' tools, GROUPE TAKATAK ───────
+
+/**
+ * The presales and coupons on now: the best one in full (its saving, both prices and its end),
+ * then the others as cards. With none on, how ALKAO's discounts work, and nothing invented.
+ */
+function dealsSection(t: Words, lang: Lang, deals: Card[], { link, card }: { link: (params: Record<string, string>) => string; card: (c: Card) => string }): string {
+  const head = `<div class="section-head reveal"><p class="kicker">${esc(t.dealsTitle)}</p><h2 id="deals-title">${esc(t.dealsHeadline)}</h2><p>${esc(t.dealsLead)}</p></div>`;
+  if (!deals.length) {
+    return `    <section class="section deals" id="preventes" aria-labelledby="deals-title">
+      <div class="wrap">
+        ${head}
+        <ul class="deal-how">${t.dealsHow.map((h) => `<li class="feature reveal">${icon(h.icon)}<h3>${esc(h.title)}</h3><p>${esc(h.text)}</p></li>`).join("")}</ul>
+        <p class="deals-waiting">${icon("bell")}<span>${esc(t.dealsWaiting)}</span></p>
+      </div>
+    </section>`;
+  }
+  // The largest saving first; on a tie, the soonest date (deals come soonest first).
+  const best = [...deals].sort((a, b) => (b.offer?.pct ?? 0) - (a.offer?.pct ?? 0))[0]!;
+  const others = deals.filter((c) => c !== best);
+  const o = best.offer!;
+  const ends = o.endsAt
+    ? new Intl.DateTimeFormat(t.lang, { timeZone: best.timezone, day: "numeric", month: "long", hour: "numeric", minute: "2-digit" }).format(o.endsAt)
+    : null;
+  const price = o.kind === "presale" && o.priceCents !== null && o.regularCents !== null
+    ? `<div class="spot-price">
+            <p class="spot-now"><span class="sr-only">${esc(t.dealsPresalePrice)} </span>${esc(money(lang, o.priceCents))}<small>${esc(t.plusTax)}</small></p>
+            <p class="spot-was">${esc(t.dealsRegular)} <s>${esc(money(lang, o.regularCents))}</s></p>
+            <p class="spot-save">${esc(t.dealsSave(money(lang, o.regularCents - o.priceCents)))}</p>
+          </div>`
+    : `<div class="spot-price">
+            <p class="spot-now">${esc(best.deal ?? "")}</p>
+            ${o.label ? `<p class="spot-was">${esc(o.label)}</p>` : ""}
+            <p class="spot-save">${esc(t.dealsCoupon)}</p>
+          </div>`;
+  const facts = [
+    ends ? `<li>${icon("clock")}<span>${esc(t.dealsUntil(ends))}</span></li>` : "",
+    o.limited ? `<li>${icon("ticket")}<span>${esc(t.dealsLimited)}</span></li>` : "",
+  ].join("");
+  return `    <section class="section deals" id="preventes" aria-labelledby="deals-title">
+      <div class="wrap">
+        ${head}
+        <article class="spotlight reveal" aria-labelledby="spot-title">
+          <a class="spot-media" href="${esc(best.shop)}" tabindex="-1" aria-hidden="true"><img src="${esc(best.image)}" alt="" loading="lazy" decoding="async" /><p class="date-badge"><span>${esc(best.day)}</span>${esc(best.month)}</p></a>
+          <div class="spot-body">
+            <p class="spot-tag">${icon("bolt")}<span>${esc(t.dealsBest)}</span></p>
+            <p class="deal-ribbon">${icon("tag")}<span>${esc(best.deal ?? "")}</span></p>
+            <p class="card-brand">${best.logo ? `<img src="${esc(best.logo)}" alt="" loading="lazy" decoding="async" />` : ""}${esc(best.brand)}</p>
+            <h3 class="spot-title" id="spot-title"><a href="${esc(best.shop)}">${esc(best.title)}</a></h3>
+            <p class="card-meta">${icon("calendar")}<time datetime="${esc(best.next.toISOString())}">${esc(best.nextLabel)}</time></p>
+            ${best.place ? `<p class="card-meta">${icon("pin")}<span>${esc(best.place)}</span></p>` : ""}
+            ${price}
+            ${facts ? `<ul class="spot-facts">${facts}</ul>` : ""}
+            <div class="actions"><a class="btn btn-primary" href="${esc(best.shop)}">${esc(t.buy)}${icon("arrow")}</a>${others.length ? `<a class="btn btn-ghost" href="${esc(link({ offres: "1" }))}">${esc(t.dealsSeeAll(deals.length))}</a>` : ""}</div>
+          </div>
+        </article>
+        ${others.length ? `<h3 class="grid-title deals-others">${esc(t.dealsOthers)}</h3>
+        <div class="grid" id="deals-list">${others.slice(0, 6).map((c) => card(c)).join("")}</div>` : ""}
+      </div>
+    </section>`;
+}
+
+/** The discount tools an organizer has in /ops (Runs 97 to 105), each one already built. */
+function toolsSection(t: Words): string {
+  return `    <section class="section tools" id="outils-rabais" aria-labelledby="tools-title">
+      <div class="wrap">
+        <div class="section-head reveal"><p class="kicker">${esc(t.toolsKicker)}</p><h2 id="tools-title">${esc(t.toolsTitle)}</h2><p>${esc(t.toolsLead)}</p></div>
+        <div class="features">
+          ${t.tools.map((f) => `<div class="feature reveal">${icon(f.icon)}<h3>${esc(f.title)}</h3><p>${esc(f.text)}</p></div>`).join("")}
+        </div>
+        <p class="tools-results reveal">${icon("chart")}<span>${esc(t.toolsResults)}</span></p>
+        <div class="actions"><a class="btn btn-primary" href="https://takatak.ca/register">${esc(t.signup)}${icon("arrow")}</a><a class="btn btn-ghost" href="/ops">${esc(t.signin)}</a></div>
+      </div>
+    </section>`;
+}
+
+/**
+ * GROUPE TAKATAK's services for an event, and its own discounts, as takatak.ca states them
+ * (takatak-v1 main: src/lib/website/service-pages.ts and src/lib/promotions/catalog.ts).
+ * Text only: the official logo files are not in this repository (BRAND.md).
+ */
+function takatakSection(t: Words): string {
+  const k = t.takatak;
+  return `    <section class="section tk" id="takatak" aria-labelledby="tk-title">
+      <div class="wrap">
+        <div class="section-head reveal"><p class="kicker">${esc(k.kicker)}</p><h2 id="tk-title">${esc(k.title)}</h2><p>${esc(k.lead)}</p><p class="tk-tagline">Digital Solutions. Real Results.</p></div>
+        <div class="tk-grid">
+          ${k.services.map((s) => `<a class="tk-service reveal" href="${esc(takatakUrl(`/services/${s.slug}`))}" aria-label="${esc(k.serviceLink(s.title))}">${icon(s.icon)}<h3>${esc(s.title)}</h3><p>${esc(s.text)}</p><span class="tk-more" aria-hidden="true">takatak.ca${icon("arrow")}</span></a>`).join("")}
+          <div class="tk-offers reveal">
+            <h3>${esc(k.offersTitle)}</h3>
+            <ul>${k.offers.map((o) => `<li><span class="tk-big">${esc(o.big)}</span><span class="tk-text">${esc(o.text)}${o.code ? ` <span class="tk-code">${esc(k.codeLabel)} <b>${esc(o.code)}</b></span>` : ""}</span></li>`).join("")}</ul>
+            <p class="tk-note">${esc(k.offersNote)}</p>
+            <div class="actions"><a class="btn btn-primary btn-sm" href="${esc(takatakUrl("/deals"))}">${esc(k.deals)}${icon("arrow")}</a><a class="btn btn-ghost btn-sm" href="${esc(takatakUrl("/contact"))}">${esc(k.contact)}</a></div>
+          </div>
+        </div>
+      </div>
+    </section>`;
+}
+
 // ── Page ───────────────────────────────────────────────────────────────────
 export interface RenderOptions {
   origin: string | null;
@@ -545,9 +711,9 @@ export function renderHome({ origin, lang, brands, query, now, asset }: RenderOp
   // Run 106: the past year's events, behind the "Passés" filter. Dates, prices, sort and the
   // agenda are about what is on sale, so they do not apply there.
   const past = query.period === "past";
-  const ask: HomeQuery = past ? { ...query, when: "", price: "", sort: "", view: "" } : query;
+  const ask: HomeQuery = past ? { ...query, when: "", price: "", sort: "", view: "", deals: false } : query;
   // A sort alone also lists the results (no rail), in its order; so does the past.
-  const filtered = past || Boolean(ask.q || ask.city || ask.when || ask.category || ask.price || ask.organizer || ask.sort);
+  const filtered = past || Boolean(ask.q || ask.city || ask.when || ask.category || ask.price || ask.organizer || ask.sort || ask.deals);
   // `all` is what is on sale: the hero, the rails, the search data and the search-engine data
   // never show a past event.
   const all = cardsOf(brands, lang, origin, asset);
@@ -569,6 +735,7 @@ export function renderHome({ origin, lang, brands, query, now, asset }: RenderOp
     q: ask.q, ville: ask.city, quand: ask.when, categorie: ask.category,
     prix: ask.price, tri: ask.sort === "price" ? "prix" : "", organisateur: ask.organizer, vue: ask.view,
     periode: past ? "passes" : "",
+    offres: ask.deals ? "1" : "",
   };
   const refine = (change: Record<string, string>) =>
     link(Object.fromEntries(Object.entries({ ...current, ...change }).filter(([, v]) => v)));
@@ -593,7 +760,11 @@ export function renderHome({ origin, lang, brands, query, now, asset }: RenderOp
   const periodChip = (href: string, label: string, on: boolean, n: number) =>
     `<a class="chip${on ? " is-current" : ""}" href="${esc(href)}"${on ? ' aria-current="true"' : ""}>${esc(label)}<span class="count">${n}</span></a>`;
   const periodSwitch = ended.length || past
-    ? `<div class="period-switch" role="group" aria-labelledby="f-period"><span class="sr-only" id="f-period">${esc(t.periodTitle)}</span>${periodChip(refine({ periode: "" }), t.periodOptions.upcoming, !past, all.length)}${periodChip(refine({ periode: "passes", quand: "", prix: "", tri: "", vue: "" }), t.periodOptions.past, past, ended.length)}</div>`
+    ? `<div class="period-switch" role="group" aria-labelledby="f-period"><span class="sr-only" id="f-period">${esc(t.periodTitle)}</span>${periodChip(refine({ periode: "" }), t.periodOptions.upcoming, !past, all.length)}${periodChip(refine({ periode: "passes", quand: "", prix: "", tri: "", vue: "", offres: "" }), t.periodOptions.past, past, ended.length)}</div>`
+    : "";
+  // Run 107: only the events with a presale or a coupon on now, with their count.
+  const dealsChip = !past && (deals.length || ask.deals)
+    ? `<a class="chip deal-chip${ask.deals ? " is-current" : ""}" href="${esc(refine({ offres: ask.deals ? "" : "1" }))}"${ask.deals ? ' aria-current="true"' : ""}>${icon("tag")}${esc(t.dealsTitle)}<span class="count">${deals.length}</span></a>`
     : "";
   // Run 106: the date window and the category, right in the bar (also in the search form above).
   const whens = (["today", "weekend", "week", "month"] as const).filter((w) => w === ask.when || all.some((c) => c.sessions.some((s) => inWindow(s, c.timezone, w, now))));
@@ -609,6 +780,7 @@ export function renderHome({ origin, lang, brands, query, now, asset }: RenderOp
   const filterBar = all.length || ended.length
     ? `<div class="filters reveal" role="group" aria-label="${esc(t.filters)}">
         ${periodSwitch}
+        ${dealsChip}
         ${whenMenu}
         ${categoryMenu}
         ${priced ? `${menu("f-price", t.priceTitle, ask.price ? t.priceOptions[ask.price] : t.priceOptions.all, Boolean(ask.price),
@@ -629,6 +801,7 @@ export function renderHome({ origin, lang, brands, query, now, asset }: RenderOp
     ...(ask.price ? [{ label: t.priceOptions[ask.price], off: { prix: "" } }] : []),
     ...(organizer ? [{ label: organizer.name, off: { organisateur: "" } }] : []),
     ...(ask.sort === "price" ? [{ label: t.sortOptions.price, off: { tri: "" } }] : []),
+    ...(ask.deals ? [{ label: t.dealsTitle, off: { offres: "" } }] : []),
   ];
   const activeChips = active.length
     ? `<ul class="active-filters" aria-label="${esc(t.activeFilters)}">${active.map((a) => `<li><a class="chip is-on" href="${esc(refine(a.off))}" aria-label="${esc(t.removeFilter(a.label))}">${esc(a.label)}${icon("close")}</a></li>`).join("")}</ul>`
@@ -673,10 +846,11 @@ export function renderHome({ origin, lang, brands, query, now, asset }: RenderOp
 
   // Hero slides: up to three real events with a photo, then ALKAO's own.
   type Slide = { image: string; mobile: string | null; tag: string; title: string; text: string; href: string; cta: string; preview?: string };
-  const featured = all.filter((c) => c.photo).slice(0, 3);
+  // Run 107: a deal on now comes first, and its slide says it.
+  const featured = all.filter((c) => c.photo).sort((a, b) => Number(Boolean(b.deal)) - Number(Boolean(a.deal))).slice(0, 3);
   const slides: Slide[] = [
     ...featured.map((c) => ({
-      image: c.image, mobile: null, tag: `${t.featuredTag} · ${c.brand}`, title: c.title,
+      image: c.image, mobile: null, tag: `${c.deal ?? t.featuredTag} · ${c.brand}`, title: c.title,
       text: [c.nextLabel, c.city, c.price].filter(Boolean).join(" · "), href: c.shop, cta: t.buy, preview: c.id,
     })),
     // With real events up front, three of ALKAO's own slides are enough.
@@ -796,7 +970,7 @@ ${siteHeader(frame)}
             <label class="field"><span>${esc(t.what)}</span><input name="q" type="search" value="${esc(query.q)}" placeholder="${esc(t.whatHint)}" autocomplete="off" maxlength="80" /></label>
             <label class="field"><span>${esc(t.where)}</span><input name="ville" type="text" value="${esc(query.city)}" placeholder="${esc(t.whereHint)}" list="alkao-cities" autocomplete="address-level2" maxlength="80" /></label>
             <label class="field"><span>${esc(t.when)}</span><select name="quand">${whenSelect}</select></label>
-            ${(["categorie", "prix", "tri", "organisateur", "vue", "periode"] as const).filter((k) => current[k]).map((k) => `<input type="hidden" name="${k}" value="${esc(current[k])}" />`).join("")}
+            ${(["categorie", "prix", "tri", "organisateur", "vue", "periode", "offres"] as const).filter((k) => current[k]).map((k) => `<input type="hidden" name="${k}" value="${esc(current[k])}" />`).join("")}
             <button class="btn btn-primary btn-search" type="submit">${icon("search")}<span>${esc(t.search)}</span></button>
           </form>
           <datalist id="alkao-cities">${cities.map((c) => `<option value="${esc(c)}"></option>`).join("")}</datalist>
@@ -821,6 +995,8 @@ ${siteHeader(frame)}
     <ul class="trust wrap" aria-label="ALKAO">
       ${t.trust.map((item, i) => `<li>${icon(["bolt", "offline", "lock", "check", "pin"][i]!)}<span>${esc(item)}</span></li>`).join("")}
     </ul>
+
+${dealsSection(t, lang, deals, { link, card })}
 
     <section class="section" id="categories" aria-labelledby="categories-title">
       <div class="wrap">
@@ -863,9 +1039,8 @@ ${siteHeader(frame)}
           : ask.view === "agenda"
             ? agendaRows.length ? agenda() : `<p class="empty-inline">${esc(t.noResults)}</p>`
           : filtered
-            ? shown.length ? `<div class="grid">${shown.map((c, i) => card(c, past && i < 3)).join("")}</div>` : `<p class="empty-inline">${esc(past ? t.noPast : t.noResults)}</p>`
+            ? shown.length ? `<div class="grid">${shown.map((c, i) => card(c, past && i < 3)).join("")}</div>` : `<p class="empty-inline">${esc(past ? t.noPast : ask.deals ? t.noDeals : t.noResults)}</p>`
             : `${rail("recent", t.recentTitle, "", [], `<button class="link-btn" type="button" data-recent-clear aria-label="${esc(t.clearRecentLabel)}">${esc(t.clearRecent)}</button>`).replace('<div class="rail-block">', '<div class="rail-block" data-recent hidden>')}
-               ${deals.length && all.length > 3 ? rail("deals", t.dealsTitle, t.dealsLead, deals) : ""}
                ${week.length && all.length > 3 ? `${rail("week", t.weekTitle, "", week)}<h3 class="grid-title">${esc(t.allEvents)}</h3>` : ""}
                <div class="grid">${all.map((c, i) => card(c, i < 3)).join("")}</div>`}
       </div>
@@ -913,6 +1088,10 @@ ${siteHeader(frame)}
         </div>
       </div>
     </section>
+
+${toolsSection(t)}
+
+${takatakSection(t)}
 
     <section class="section faq" id="aide" aria-labelledby="faq-title">
       <div class="wrap faq-row">

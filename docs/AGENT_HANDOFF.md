@@ -1,5 +1,16 @@
 # ALKAO — Agent handoff (mandatory)
 
+## Run 107 — alkao.ca premium: presales and discounts up front, GROUPE TAKATAK (2026-11-13)
+
+- **Owner's request (2026-11-13):** "Finish ALKAO to a premium level (presale discount for events and all). We offer discount. Promote with TAKATAK-V1 information." Report on main, signed, on GitHub and Google Drive.
+- **Code:** `src/api/home-view.ts` (`dealsSection`, `toolsSection`, `takatakSection`, `offerOf`, `takatakUrl`, the `offres=1` filter, the struck regular price, deals first in the carousel, header and footer links), `src/api/home-copy.ts` (FR/EN words, FAQ `preventes`), `home-ui/home.css` (Run 107 block, header fix 1101–1300 px).
+- **Rules kept:** every price, saving, end date and limit comes from the organizer's settings through the gated catalog; nothing appears without an offer on; the featured offer is the largest saving per ticket in percent, and an amount coupon (off the whole order, `src/domain/pricing.ts`) never outranks a percentage. No countdown on the home (the shop keeps its own, Run 101). Brand colours only (BRAND.md): no status colour for a saving.
+- **TAKATAK information:** read-only from takatak-v1 main `ecc7d48` (`service-pages.ts`, `promotions/catalog.ts`); takatak-v1 was not changed. Its live site could not be reached from the cloud session; the routes were checked in its source and in its own proof folders.
+- **Tests:** `test/api/home-deals.test.ts` (8 new Run 107 tests, Run 97 tests moved to the new section) and `test/api/home.test.ts` (spotlight from the database's prices).
+- **Next:** see `docs/TASK_QUEUE.md`, Run 107.
+
+Signature: Claude (Claude Code, cloud session), 2026-11-13.
+
 ### CI correction — 2026-11-07
 
 Candidate681d3de CI42361152569 passed725 tests but timed out in the unchanged English checkout test: J+25 crossed from November into December, while the test skipped the month selector. `test/ui/shop-ui.test.ts` now deliberately uses J+65 and selects its English calendar month before the existing session, free-checkout, buyer-language, QR and French-switch assertions. No application behavior, assertion or timeout was weakened. Re-run exact updated-candidate CI before merge/deployment. Earlier documentation-only scope now also includes this focused test correction.

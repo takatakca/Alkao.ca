@@ -1,5 +1,21 @@
 # ALKAO — Project status
 
+## Run 107 — alkao.ca premium: presales and discounts up front, organizers' tools, GROUPE TAKATAK (2026-11-13)
+
+The owner asked to finish ALKAO at a premium level, with presales and discounts for events, and to promote it with TAKATAK's information. alkao.ca now puts discounts first, without inventing any:
+
+- **Préventes et rabais**, right under the top of the page: the featured offer in full (presale price, regular price struck, the saving per ticket, its real end date, "Quantité limitée à ce prix" when the organizer set a quantity), then the other offers as cards. With no offer on, the section explains presales, early-bird tiers and coupons, and says offers appear there as soon as an organizer launches one.
+- Cards strike the regular price next to "À partir de" when that price is the presale's. The carousel starts with an event on offer, and its slide says so.
+- A **Préventes et rabais** filter (`?offres=1`) in the filter bar, and a **Préventes** link in the header.
+- **For organizers**: the six discount tools already built (presale, price tiers, coupons, company codes, return offer, festival pass).
+- **GROUPE TAKATAK**: "Faites connaître votre événement", five takatak.ca services (marketing, social media, websites, flyers and visuals, QMAPS) and TAKATAK's real discounts: 10 % on the first service (code FIRST10) and 15 % on a monthly service paid 12 months ahead; seasonal offers link to takatak.ca/deals. A GROUPE TAKATAK column in the footer.
+- The help answers "Comment profiter d'une prévente ou d'un coupon?".
+- Fix: from 1101 to about 1260 px, the "Connexion organisateur" button ran off the screen in French; it now stays in view. The "Mes billets" button has an accessible name on phones.
+
+No migration, dependency or server setting. It goes live with the next ALKAO deploy in Coolify (automatic deployment still waits for its GitHub secrets).
+
+Signature: Claude (Claude Code, cloud session), 2026-11-13.
+
 ### CI correction — 2026-11-07
 
 Candidate681d3de CI42361152569 passed725 tests but timed out in the unchanged English checkout test: J+25 crossed from November into December, while the test skipped the month selector. `test/ui/shop-ui.test.ts` now deliberately uses J+65 and selects its English calendar month before the existing session, free-checkout, buyer-language, QR and French-switch assertions. No application behavior, assertion or timeout was weakened. Re-run exact updated-candidate CI before merge/deployment. Earlier documentation-only scope now also includes this focused test correction.

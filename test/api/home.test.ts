@@ -194,9 +194,13 @@ describe("Run 64: the premium platform home", () => {
       // 1495 against 2995 is 50.08 % off: shown as 50 %, never rounded up.
       expect(fr).toContain('<p class="deal-ribbon">');
       expect(fr).toContain("<span>Prévente −50 %</span>");
-      // One event: its card says it; a rail would only repeat it.
+      // Run 97's rail is gone: Run 107 shows the offer in full near the top, from the database's prices.
       expect(fr).not.toContain('id="deals"');
-      expect(fr).toMatch(/À partir de 14,95\s\$ \+ taxes/);
+      expect(fr).toContain('<article class="spotlight reveal"');
+      expect(fr).toMatch(/Prix régulier <s>29,95\s\$<\/s>/);
+      expect(fr).toMatch(/15\s\$ de moins par billet/);
+      expect(fr).toContain("Quantité limitée à ce prix");
+      expect(fr).toMatch(/À partir de 14,95\s\$ \+ taxes <s class="was">/);
       expect(await page("lang=en")).toContain("<span>Presale −50%</span>");
 
       // Every presale ticket held or sold: no ribbon, and its price is no longer "From".
@@ -210,6 +214,7 @@ describe("Run 64: the premium platform home", () => {
       );
       let after = await page();
       expect(after).not.toContain('class="deal-ribbon"');
+      expect(after).not.toContain('class="spotlight');
       expect(after).toMatch(/À partir de 17,95\s\$ \+ taxes/);
       // A public coupon shows instead.
       await db.pool.query(`UPDATE public.ticketing_promo_codes SET public = true WHERE code = 'PRIVE10'`);

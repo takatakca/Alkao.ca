@@ -57,3 +57,16 @@ Quand rien n'est à venir mais que des événements passés existent, la page le
 - Tests :
   - `test/api/home-past.test.ts` (5) : brouillon, date annulée, plus d'un an, date encore à venir et organisateur non affiché exclus. Une mutation de la règle « annulée » fait échouer 4 tests ;
   - `test/ui/home-past-ui.test.ts` (2) : Chromium, sur ordinateur (barre qui reste visible) et sur téléphone (aucun débordement, puce retirée d'un toucher).
+
+## Préventes et rabais en vedette (Run 107, 13 novembre 2026)
+
+Juste sous le haut de la page, la section **Préventes et rabais** (`#preventes`) :
+
+- **Une offre en cours** : l'offre à la une en grand, avec le prix prévente, le prix régulier barré, l'économie par billet, la vraie date de fin et « Quantité limitée à ce prix » si l'organisateur a fixé une quantité. Les autres offres suivent en cartes, et **Voir les N offres en cours** ouvre le filtre.
+- **L'offre à la une** est celle qui fait économiser le plus par billet, en pourcentage. Un coupon en montant (« −5 $ ») se retire de la commande entière : il passe après les pourcentages.
+- **Aucune offre en cours** : la section explique les préventes, les paliers lève-tôt et les coupons, sans prix ni rabais.
+- Sur la carte de l'événement, le prix régulier est barré à côté de « À partir de » quand ce prix est celui de la prévente.
+- Le carrousel commence par un événement en offre, et sa diapositive affiche « Prévente −20 % ».
+- Le filtre **Préventes et rabais** (`?offres=1`) ne garde que les événements en offre ; le menu a un lien **Préventes**.
+
+Plus bas, pour les organisateurs : les six outils de rabais (`#outils-rabais`) et la section **GROUPE TAKATAK** (`#takatak`), avec cinq services de takatak.ca et les rabais de TAKATAK (FIRST10, 15 % à l'année). Le pied de page a une colonne GROUPE TAKATAK.
