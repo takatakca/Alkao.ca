@@ -36,6 +36,8 @@ export interface TicketTypeRule {
   pass?: boolean;
   /** Run 109: a voucher's face value ("valeur 80 $"), always above its price; null = not said. */
   valueCents?: number | null;
+  /** Run 110: at most this many per buyer (same e-mail), all their orders together; null = no limit. */
+  limitPerBuyer?: number | null;
 }
 
 /** Run 97: a type whose sale has ended is sold no more (a cart with it is refused as inactive). */
@@ -60,7 +62,9 @@ export type CartViolationCode =
   | "max_adults_exceeded"
   | "add_on_without_admission"
   | "add_on_quantity_mismatch"
-  | "order_too_large";
+  | "order_too_large"
+  // Run 110: more than one buyer may take in a single order.
+  | "above_limit_per_buyer";
 
 export interface CartViolation {
   code: CartViolationCode;
@@ -143,6 +147,9 @@ export function validateCart(
     }
     if (quantity > type.maxQuantity) {
       violations.push({ code: "above_maximum", ...ref, limit: type.maxQuantity, actual: quantity });
+    }
+    if (type.limitPerBuyer != null && quantity > type.limitPerBuyer && quantity <= type.maxQuantity) {
+      violations.push({ code: "above_limit_per_buyer", ...ref, limit: type.limitPerBuyer, actual: quantity });
     }
     if (type.maxAdultsInOrder !== null && adults > type.maxAdultsInOrder) {
       violations.push({ code: "max_adults_exceeded", ...ref, limit: type.maxAdultsInOrder, actual: adults });

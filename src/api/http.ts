@@ -45,6 +45,8 @@ const STATUS_BY_CODE: Record<string, ContentfulStatusCode> = {
   // Run 109: a voucher's face value.
   value_must_exceed_price: 422,
   voucher_needs_end: 422,
+  // Run 110: this buyer already has their share of this ticket.
+  limit_per_buyer: 409,
   appearance_low_contrast: 422,
   session_not_available: 409,
   // Run 72: the public sale is not open yet (a presale code may open it earlier).

@@ -1,5 +1,18 @@
 # ALKAO — Agent handoff (mandatory)
 
+## Run 110 — limit per buyer (2026-11-13)
+
+- **Model:** `ticketing_ticket_types.limit_per_buyer` (1–1000), and `TicketTypeRule.limitPerBuyer`.
+- **Cart:** `validateCart` adds `above_limit_per_buyer` when one cart passes the limit.
+- **Checkout** (`createOrderFromHold`, after the buyer upsert, which locks the buyer row):
+  - it sums the buyer's order lines for each limited type, counting `paid`, `partially_refunded`, and `pending_payment` while their hold is active and unexpired;
+  - past the limit it throws `limit_per_buyer` (409);
+  - it returns no details, on purpose: checkout is anonymous, so an e-mail's purchases must never leak.
+- **Known limit:** the limit is per e-mail address. A second address is a second buyer, as on Groupon. Identity checks (LIVE ID) are a later roadmap item.
+- **Tests:** `test/payments/limit-per-buyer.test.ts` (4).
+
+Signature: Claude (Claude Code, cloud session), 2026-11-13.
+
 ## Run 109 — merchant vouchers (2026-11-13)
 
 - **Model:**

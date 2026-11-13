@@ -1,5 +1,11 @@
 # ALKAO — Project status
 
+## Run 110 — a limit per person (2026-11-13)
+
+An organizer or a business sets « 2 par personne » on a ticket or a voucher. ALKAO adds up all the orders of the same e-mail: paid ones, and those still being paid until their cart lapses. It refuses at checkout once the limit would be passed, even with two payments at the same moment. The shop shows the limit and stops the + button there. The refusal never says what that address bought.
+
+Signature: Claude (Claude Code, cloud session), 2026-11-13.
+
 ## Run 109 — merchant vouchers, as on Groupon, Tuango and PromoRabais (2026-11-13)
 
 A restaurant, a spa, a shop or an activity sells a voucher on ALKAO:

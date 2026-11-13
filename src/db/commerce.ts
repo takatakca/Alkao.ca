@@ -141,6 +141,27 @@ export async function createOrderFromHold(tx: Tx, input: CreateOrderInput, now =
     const buyerId = buyers[0]!.id;
 
     const q = input.quote;
+    // Run 110: a limit per buyer counts their other orders for the same ticket: paid, or still
+    // being paid (their hold not lapsed). The buyer's row, locked by the upsert above, keeps two
+    // checkouts of the same buyer from both passing it.
+    const { rows: limited } = await tx.query<{ id: string; name: string; limit_per_buyer: number; bought: number }>(
+      `SELECT t.id, t.name, t.limit_per_buyer,
+              coalesce((SELECT sum(l.quantity) FROM public.ticketing_order_lines l
+                        JOIN public.ticketing_orders o ON o.id = l.order_id AND o.client_id = l.client_id AND o.brand_id = l.brand_id
+                        LEFT JOIN public.ticketing_holds h ON h.id = o.hold_id
+                        WHERE l.ticket_type_id = t.id AND o.buyer_id = $3
+                          AND (o.status IN ('paid', 'partially_refunded')
+                               OR (o.status = 'pending_payment' AND h.status = 'active' AND h.expires_at > $5))), 0)::int AS bought
+       FROM public.ticketing_ticket_types t
+       WHERE t.client_id = $1 AND t.brand_id = $2 AND t.id = ANY($4::uuid[]) AND t.limit_per_buyer IS NOT NULL`,
+      [input.clientId, input.brandId, buyerId, q.lines.map((l) => l.ticketTypeId), now],
+    );
+    for (const t of limited) {
+      const wanted = q.lines.filter((l) => l.ticketTypeId === t.id).reduce((n, l) => n + l.quantity, 0);
+      if (t.bought + wanted > t.limit_per_buyer) {
+        throw new DomainError("limit_per_buyer", { ticketTypeId: t.id, name: t.name, limit: t.limit_per_buyer, already: t.bought });
+      }
+    }
     let order: { id: string; reference: string } | undefined;
     for (let attempt = 0; attempt < 5 && !order; attempt++) {
       await tx.query("SAVEPOINT order_reference");

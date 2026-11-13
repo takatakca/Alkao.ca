@@ -121,6 +121,25 @@ Un client qui a aimé revient, surtout avec une raison de le faire. Chaque achet
 
 **Ses résultats** : le code est un code promo ordinaire. Ses ventes paraissent dans le tableau de bord, sous « Codes promo et coupons ».
 
+## Limite par personne (Run 110)
+
+« 2 bons par personne », comme sur Groupon, Tuango et PromoRabais : la même personne ne peut pas acheter plus que la limite de ce billet. Toutes ses commandes sont additionnées.
+
+**Régler** : /ops → votre événement → **Types de billets** → **Limite par personne** (de 1 à 1 000), en créant le billet. On peut aussi la changer plus tard par l'API (`limitPerBuyer`).
+
+**Ce qui compte** :
+- la même adresse courriel, peu importe les majuscules ;
+- les commandes payées ou partiellement remboursées ;
+- un paiement en cours, tant que son panier n'est pas expiré. Un panier abandonné ne bloque personne.
+
+**Ce que voit l'acheteur** :
+- « limite de 2 par personne » à côté du billet ;
+- le bouton + s'arrête à la limite ;
+- au paiement, si cette adresse a déjà sa part : « Cette adresse courriel a déjà atteint la limite par personne pour ce billet ».
+- Le message ne dit jamais combien cette adresse a acheté, parce que n'importe qui peut taper un courriel (vie privée, Loi 25).
+
+**Ce que la base garantit** : deux paiements simultanés de la même personne ne peuvent pas passer tous les deux. Le second attend le premier, sous le verrou de l'acheteur (`createOrderFromHold`).
+
 ## Les résultats (Run 101)
 
 /ops → **Tableau de bord** → **Détail des ventes** :
