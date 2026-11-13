@@ -136,6 +136,28 @@ describe.each(["light", "dark"] as const)("accessibility (%s)", (scheme) => {
     await home.locator("details.dd summary").first().click();
     await home.waitForTimeout(1100);
     problems.push(...report("ALKAO home, filter menu open", await audit(home)));
+    // Run 107: a presale on, so the « Préventes et rabais » spotlight, the struck regular price and
+    // the offers filter are audited as buyers see them.
+    const general = h.types.find((t) => t.code === "GENERAL")!;
+    const { rows: presale } = await db.pool.query<{ id: string }>(
+      `INSERT INTO public.ticketing_ticket_types (client_id, brand_id, event_id, code, name, kind, price_cents, max_quantity, counts_as_adult, presale_of, sales_end_at, quantity_limit)
+       VALUES ($1, $2, $3, $4, 'Admission générale — Prévente', 'admission', 1495, 10, true, $5, now() + interval '10 days', 50) RETURNING id`,
+      [h.clientId, h.brandId, h.eventId, `A11Y_PRE_${scheme.toUpperCase()}`, general.id],
+    );
+    try {
+      // A new browser: the home is cached for 60 s, so the page above would come back without the presale.
+      const deals = await pageFor(scheme);
+      for (const [where, path] of [["ALKAO home, presale spotlight", "/"], ["ALKAO home, offers filter", "/?offres=1"]] as const) {
+        await deals.goto(`${origin}${path}`);
+        await deals.getByRole("heading", { level: 1 }).waitFor();
+        await deals.locator(".spotlight").waitFor();
+        await deals.evaluate(() => (globalThis as any).document.querySelectorAll(".reveal").forEach((el: any) => el.classList.add("is-visible")));
+        await deals.waitForTimeout(1100);
+        problems.push(...report(where, await audit(deals)));
+      }
+    } finally {
+      await db.pool.query(`DELETE FROM public.ticketing_ticket_types WHERE id = $1`, [presale[0]!.id]);
+    }
     await db.pool.query(`UPDATE public.ticketing_brand_settings SET show_on_alkao = false WHERE client_id = $1 AND brand_id = $2`, [h.clientId, h.brandId]);
 
     const shop = await pageFor(scheme);

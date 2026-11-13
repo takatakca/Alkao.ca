@@ -1,5 +1,13 @@
 # ALKAO — Agent handoff (mandatory)
 
+## Run 108 — ALKAO Offres roadmap (2026-11-13)
+
+- Owner's order: Groupon/Tuango/PromoRabais-style presale and discount platform; most premium and secure; recycle takatakca repos; TAKATAK-V1 stays the control plane; signed notes on GitHub and Drive before, during and after every step.
+- Read `docs/ALKAO_OFFRES_ROADMAP.md` and issue #109 before starting an offers item; tick it in the issue when merged.
+- `test/a11y/axe.test.ts` adds a presale and audits the spotlight and `?offres=1` in a new browser context (the home is cached 60 s by the browser).
+
+Signature: Claude (Claude Code, cloud session), 2026-11-13.
+
 ## Run 107 — alkao.ca premium: presales and discounts up front, GROUPE TAKATAK (2026-11-13)
 
 - **Owner's request (2026-11-13):** "Finish ALKAO to a premium level (presale discount for events and all). We offer discount. Promote with TAKATAK-V1 information." Report on main, signed, on GitHub and Google Drive.

@@ -1,5 +1,11 @@
 # ALKAO — Project status
 
+## Run 108 — the offers platform roadmap; offers audited for accessibility (2026-11-13)
+
+The owner ordered ALKAO to become a presale and discount platform like Groupon, Tuango and PromoRabais, for TAKATAK's marketing and social media. `docs/ALKAO_OFFRES_ROADMAP.md` lists what is built, then the MUST, NEED and WANT items and the takatakca repos to recycle; issue #109 tracks it. The « Préventes et rabais » spotlight and the `?offres=1` filter are now checked by axe (WCAG 2.1 AA, light and dark) on every change.
+
+Signature: Claude (Claude Code, cloud session), 2026-11-13.
+
 ## Run 107 — alkao.ca premium: presales and discounts up front, organizers' tools, GROUPE TAKATAK (2026-11-13)
 
 The owner asked to finish ALKAO at a premium level, with presales and discounts for events, and to promote it with TAKATAK's information. alkao.ca now puts discounts first, without inventing any:

@@ -1,5 +1,11 @@
 # ALKAO — Task queue (priority ordered)
 
+## ALKAO Offres — the owner's order of 2026-11-13 (issue #109)
+
+Work in the order of `docs/ALKAO_OFFRES_ROADMAP.md`: MUST first (Run 109 merchant vouchers, Run 110 per-customer limit, Run 111 `/offres` page and social sharing), then NEED, then WANT. Every step leaves a signed note on GitHub (the PR and issue #109) and in Google Drive (« 00 — Opérations TAKATAK »), before, during and after.
+
+Signature: Claude (Claude Code, cloud session), 2026-11-13.
+
 ## Run 107 — alkao.ca premium (2026-11-13)
 
 1. Done: PR #108, merged into main once CI qa was green. It goes live with the next ALKAO deploy in Coolify: **Redeploy**, or Actions → Deploy once its secrets exist (`docs/ALKAO_DEPLOY_COOLIFY.md`). Then check `/health` shows the new build.
