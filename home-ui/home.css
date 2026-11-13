@@ -316,7 +316,8 @@ p{margin:0}
 
 /* Footer */
 .site-foot{border-top:1px solid var(--line);background:linear-gradient(180deg,rgba(6,13,31,0),rgba(11,27,61,.6));padding:64px 0 28px}
-.foot-grid{display:grid;grid-template-columns:1.6fr repeat(4,1fr);gap:32px}
+/* Run 107: five columns of links, GROUPE TAKATAK's among them. */
+.foot-grid{display:grid;grid-template-columns:1.5fr repeat(5,1fr);gap:28px}
 .foot-brand p{margin-top:14px;color:var(--silver);max-width:34ch}
 .site-foot nav{display:grid;align-content:start;gap:10px}
 .site-foot nav a{color:var(--silver);font-size:.94rem;transition:color .2s}
@@ -601,4 +602,89 @@ dialog[open]{animation:pop .35s var(--ease) both}
 @media (prefers-reduced-motion:reduce){
   .venue-hero-media img{animation:none}
   .zoom-stage img{transition:none}
+}
+
+/* Run 107: presales and discounts up front, the organizers' discount tools and GROUPE TAKATAK.
+   Electric blue and cyan only (BRAND.md): a saving is never shown in a status colour. */
+.price.has-was{white-space:normal}
+.was{margin-left:4px;color:var(--muted);font-weight:600;font-size:.88rem;white-space:nowrap}
+.deal-chip{min-height:44px;border-color:rgba(41,195,255,.55);background:rgba(31,139,255,.14)}
+.deal-chip .count{display:inline-grid;place-items:center;min-width:22px;height:22px;padding:0 6px;border-radius:999px;background:rgba(245,248,252,.14);font-size:.76rem;font-weight:800}
+.deal-chip.is-current .i{color:#fff}
+.deals{position:relative;isolation:isolate}
+.deals::before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;background:radial-gradient(900px 420px at 15% 30%,rgba(31,139,255,.16),transparent 70%)}
+.spotlight{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);border-radius:30px;overflow:hidden;border:1px solid rgba(41,195,255,.38);background:linear-gradient(135deg,rgba(21,101,216,.28),rgba(8,20,48,.94) 55%);box-shadow:var(--shadow)}
+.spot-media{position:relative;display:block;min-height:360px}
+.spot-media img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.spot-media::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(6,13,31,0) 55%,rgba(8,20,48,.9))}
+.spot-media .date-badge{z-index:1}
+.spot-body{display:flex;flex-direction:column;align-items:flex-start;gap:10px;padding:clamp(24px,3.4vw,44px)}
+.spot-tag{display:inline-flex;align-items:center;gap:8px;font-size:.74rem;font-weight:800;letter-spacing:.2em;text-transform:uppercase;color:var(--cyan)}
+.spot-tag .i{width:16px;height:16px}
+.spot-title{font-size:clamp(1.5rem,2.6vw,2.1rem);font-weight:900;line-height:1.15}
+.spot-title a{background:linear-gradient(90deg,var(--cyan),var(--cyan)) no-repeat 0 100%/0 2px;transition:background-size .35s var(--ease)}
+.spot-title a:hover{background-size:100% 2px}
+.spot-price{display:grid;gap:4px;align-self:stretch;margin:8px 0 2px;padding:16px 20px;border-radius:18px;background:rgba(6,13,31,.55);border:1px solid var(--line-2)}
+.spot-now{font-family:var(--font-head);font-size:clamp(2.1rem,4.2vw,3rem);font-weight:900;line-height:1.05;color:#fff}
+.spot-now small{margin-left:8px;font-family:var(--font-body);font-size:.9rem;font-weight:600;color:var(--silver)}
+.spot-was{color:var(--silver);font-weight:600}
+.spot-was s{color:var(--white)}
+.spot-save{color:var(--ice);font-weight:700}
+.spot-facts{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:8px 18px;color:var(--silver);font-size:.92rem}
+.spot-facts li{display:flex;align-items:center;gap:8px}
+.spot-facts .i{width:17px;height:17px;color:var(--ice)}
+.spot-body .actions{margin-top:auto;padding-top:8px}
+.deals-others{margin-top:44px}
+.deal-how{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+.deals-waiting{display:flex;align-items:center;gap:10px;margin-top:22px;color:var(--silver)}
+.deals-waiting .i{color:var(--cyan)}
+/* A tile's words start at its top, however tall its row. */
+.feature{align-content:start}
+.tools-results{display:flex;align-items:center;gap:10px;margin:28px 0 24px;color:var(--silver)}
+.tools-results .i{color:var(--cyan)}
+.tk{position:relative;isolation:isolate;border-top:1px solid var(--line)}
+.tk::before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;background:radial-gradient(900px 500px at 85% 0%,rgba(31,139,255,.2),transparent 65%),linear-gradient(180deg,rgba(11,27,61,.55),rgba(6,13,31,0))}
+.section-head p.tk-tagline{font-size:.78rem;font-weight:800;letter-spacing:.22em;text-transform:uppercase;color:var(--cyan)}
+.tk-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px}
+.tk-service{display:grid;align-content:start;gap:10px;padding:26px;border-radius:var(--radius);background:linear-gradient(180deg,rgba(14,35,80,.55),rgba(8,20,48,.55));border:1px solid var(--line);transition:transform .4s var(--ease),border-color .3s}
+.tk-service:hover{transform:translateY(-3px);border-color:rgba(41,195,255,.5)}
+.tk-service > .i{width:44px;height:44px;padding:11px;border-radius:12px;color:var(--ice);background:rgba(41,195,255,.1);border:1px solid rgba(41,195,255,.25)}
+.tk-service h3{font-size:1.12rem;font-weight:800}
+.tk-service p{color:var(--silver);font-size:.95rem}
+.tk-more{display:inline-flex;align-items:center;gap:6px;margin-top:4px;font-size:.86rem;font-weight:700;color:var(--cyan)}
+.tk-more .i{width:16px;height:16px}
+.tk-offers{display:grid;align-content:start;gap:14px;padding:26px;border-radius:var(--radius);background:linear-gradient(150deg,rgba(21,101,216,.42),rgba(11,27,61,.92));border:1px solid rgba(41,195,255,.45)}
+.tk-offers h3{font-size:1.12rem;font-weight:800}
+.tk-offers ul{list-style:none;margin:0;padding:0;display:grid;gap:12px}
+.tk-offers li{display:grid;grid-template-columns:4.6rem minmax(0,1fr);align-items:center;gap:12px}
+.tk-big{font-family:var(--font-head);font-size:1.9rem;font-weight:900;color:#fff;line-height:1}
+.tk-text{color:#dbe6f3;font-weight:600}
+.tk-code{display:inline-block;margin-top:4px;padding:2px 10px;border-radius:999px;border:1px dashed rgba(41,195,255,.7);font-size:.82rem;color:var(--ice);white-space:nowrap}
+.tk-code b{color:#fff;letter-spacing:.08em}
+.tk-note{color:var(--silver);font-size:.88rem}
+/* Between the phone menu and a wide screen, the header keeps its sign-in button in view (it ran
+   off the right edge in French from 1101 to about 1260 px). */
+@media (min-width:1101px) and (max-width:1300px){
+  .tickets-btn span{display:none}
+  .tickets-btn{width:42px;padding:0}
+  .main-nav{margin-left:4px;gap:2px}
+  .main-nav a{padding:8px 9px}
+  .main-nav a::after{left:9px;right:9px}
+}
+@media (max-width:1100px){
+  .tk-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media (max-width:900px){
+  .spotlight{grid-template-columns:minmax(0,1fr)}
+  .spot-media{min-height:0;aspect-ratio:16/9}
+  .spot-media::after{background:linear-gradient(180deg,rgba(6,13,31,0) 55%,rgba(8,20,48,.9))}
+  .deal-how{grid-template-columns:minmax(0,1fr)}
+}
+@media (max-width:720px){
+  .tk-grid{grid-template-columns:minmax(0,1fr);gap:14px}
+  /* On a phone: the icon beside the words, so five services stay short. */
+  .tk-service{grid-template-columns:44px minmax(0,1fr);column-gap:14px;row-gap:6px;padding:20px}
+  .tk-service > .i{grid-row:1/span 3}
+  .tk-service > :not(.i){grid-column:2}
+  .tk-offers{padding:22px}
 }

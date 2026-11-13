@@ -1,5 +1,14 @@
 # ALKAO — Task queue (priority ordered)
 
+## Run 107 — alkao.ca premium (2026-11-13)
+
+1. Done: merged into main once CI qa was green (Run 107 PR). It goes live with the next ALKAO deploy in Coolify: **Redeploy**, or Actions → Deploy once its secrets exist (`docs/ALKAO_DEPLOY_COOLIFY.md`). Then check `/health` shows the new build.
+2. Owner: for an offer to show in « Préventes et rabais », create a presale or a public coupon in /ops on a published event shown on ALKAO (`docs/PREVENTES_COUPONS.md`, `docs/ALKAO_CA_VITRINE.md`). Until then, the section explains how offers work.
+3. If takatak.ca changes its discounts (FIRST10, 15 % for a year paid ahead) or its service addresses, update `takatak` in `src/api/home-copy.ts`. Source: takatak-v1 `src/lib/promotions/catalog.ts` and `src/lib/website/service-pages.ts` (read at main `ecc7d48`).
+4. Later: the official TAKATAK logo files are not yet in `knowledgeAI/brand`; the TAKATAK section stays text until they are.
+
+Signature: Claude (Claude Code, cloud session), 2026-11-13.
+
 ### CI correction — 2026-11-07
 
 Candidate681d3de CI42361152569 passed725 tests but timed out in the unchanged English checkout test: J+25 crossed from November into December, while the test skipped the month selector. `test/ui/shop-ui.test.ts` now deliberately uses J+65 and selects its English calendar month before the existing session, free-checkout, buyer-language, QR and French-switch assertions. No application behavior, assertion or timeout was weakened. Re-run exact updated-candidate CI before merge/deployment. Earlier documentation-only scope now also includes this focused test correction.
