@@ -1,5 +1,12 @@
 # ALKAO — Task queue (priority ordered)
 
+## Run 110 — limit per person (2026-11-13)
+
+1. Done: merged into main once CI qa was green. One additive migration (`20261127000100_alkao_limit_per_buyer.sql`) runs at the next deploy.
+2. Next MUST (issue #109): Run 111, the `/offres` page and social sharing with UTM links.
+
+Signature: Claude (Claude Code, cloud session), 2026-11-13.
+
 ## Run 109 — merchant vouchers (2026-11-13)
 
 1. Done: merged into main once CI qa was green. One additive migration (`20261126000100_alkao_vouchers.sql`) runs at the next deploy (`ALKAO_MIGRATE_ON_START=true`, or `npm run db:migrate`).

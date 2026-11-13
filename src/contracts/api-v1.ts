@@ -210,6 +210,8 @@ const ticketTypeFields = {
   salesStartAt: timestamp.nullish(),
   /** Run 109, admissions only: a voucher's face value ("valeur 80 $"), above its price. */
   valueCents: z.number().int().min(1).max(100_000_000).nullish(),
+  /** Run 110: at most this many per buyer (same e-mail), all their orders together ("2 par personne"). */
+  limitPerBuyer: z.number().int().min(1).max(1000).nullish(),
 };
 export const CreateTicketType = z
   .object(ticketTypeFields)
@@ -241,6 +243,7 @@ export const UpdateTicketType = z
     quantityLimit: z.number().int().min(1).max(1_000_000).nullable(),
     // Run 109: the database keeps it above the price (ticketing_ticket_types_value_ck).
     valueCents: z.number().int().min(1).max(100_000_000).nullable(),
+    limitPerBuyer: z.number().int().min(1).max(1000).nullable(),
   })
   .partial()
   .refine((o) => o.valueCents == null || o.priceCents == null || o.valueCents > o.priceCents, { message: "a face value is above the price", path: ["valueCents"] })

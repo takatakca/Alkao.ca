@@ -14,6 +14,8 @@ document.documentElement.lang = LANG === "en" ? "en-CA" : "fr-CA";
 const T = {
   fr: {
     errors: {
+      // Run 110: never says how many this address bought (anyone can type an e-mail here).
+      limit_per_buyer: "Cette adresse courriel a déjà atteint la limite par personne pour ce billet. Réduisez la quantité.",
       ticketing_unavailable: "La billetterie de cet organisateur est fermée pour le moment.",
       event_not_found: "Cet événement n'est pas en vente.",
       sold_out: "Il ne reste plus assez de places pour cette séance.",
@@ -70,6 +72,7 @@ const T = {
       add_on_without_admission: (n) => `${n} s'ajoute à une entrée : choisissez d'abord vos billets.`,
       add_on_quantity_mismatch: (n, l, scope) => scope === "up_to_admissions" ? `${n} : ${l} au maximum, un par entrée.` : `${n} : choisissez-en ${l}, un par entrée.`,
       order_too_large: () => "Commande trop grande.",
+      above_limit_per_buyer: (n, l) => `${n} : ${l} au maximum par personne.`,
       other: () => "Sélection invalide.",
     },
     loading: "Chargement…",
@@ -79,6 +82,8 @@ const T = {
     release: "Libérer mes places",
     ticketsTitle: "Billets",
     step1: "Choisissez votre séance",
+    // Run 110: a limit per buyer, as the organizer set it.
+    perPerson: (n) => `limite de ${n} par personne`,
     noSessions: "Aucune séance en vente pour le moment.",
     // Run 98: festival passes.
     pass: {
@@ -235,6 +240,7 @@ const T = {
   },
   en: {
     errors: {
+      limit_per_buyer: "This email address has already reached the per-person limit for this ticket. Lower the quantity.",
       ticketing_unavailable: "This organizer's ticketing is closed for now.",
       event_not_found: "This event is not on sale.",
       sold_out: "Not enough seats are left for this session.",
@@ -287,6 +293,7 @@ const T = {
       add_on_without_admission: (n) => `${n} goes with an admission: choose your tickets first.`,
       add_on_quantity_mismatch: (n, l, scope) => scope === "up_to_admissions" ? `${n}: ${l} at most, one per admission.` : `${n}: choose ${l}, one per admission.`,
       order_too_large: () => "Order too large.",
+      above_limit_per_buyer: (n, l) => `${n}: at most ${l} per person.`,
       other: () => "Invalid selection.",
     },
     loading: "Loading…",
@@ -296,6 +303,7 @@ const T = {
     release: "Release my seats",
     ticketsTitle: "Tickets",
     step1: "Choose your session",
+    perPerson: (n) => `limit ${n} per person`,
     noSessions: "No session on sale right now.",
     pass: {
       modes: "Ticket type", day: "One-day ticket", pass: "Festival pass", dates: "The pass's dates",
@@ -665,6 +673,7 @@ function violationText(v, types) {
     case "add_on_without_admission":
     case "add_on_quantity_mismatch":
     case "order_too_large":
+    case "above_limit_per_buyer":
       return T.v[v.code](name, v.limit);
     default: return T.v.other();
   }
@@ -1460,7 +1469,7 @@ function EventShop({ config }) {
     const deal = regular && t.priceCents < regular.priceCents ? regular : null;
     const limited = Number.isInteger(t.remaining) ? t.remaining : null;
     const gone = limited === 0;
-    const meta = `${t.kind === "add_on" ? SCOPE_TEXT(t) : ""}${t.openDate ? T.openDate : ""}${t.pass ? ` · ${T.pass.covers(sessions.length)}` : ""}${t.minQuantity > 1 ? T.minimum(t.minQuantity) : ""}${left(t) !== null ? T.addOnLeft(left(t)) : ""}`.replace(/^ · /, "");
+    const meta = `${t.kind === "add_on" ? SCOPE_TEXT(t) : ""}${t.openDate ? T.openDate : ""}${t.pass ? ` · ${T.pass.covers(sessions.length)}` : ""}${t.minQuantity > 1 ? T.minimum(t.minQuantity) : ""}${left(t) !== null ? T.addOnLeft(left(t)) : ""}${Number.isInteger(t.limitPerBuyer) ? ` · ${T.perPerson(t.limitPerBuyer)}` : ""}`.replace(/^ · /, "");
     const next = deal ? nextPhase(t, regular, data.upcoming) : null;
     // Run 109: a voucher shows its face value, struck, when no presale price is shown.
     const worth = !deal && Number.isInteger(t.valueCents) && t.valueCents > t.priceCents ? t.valueCents : null;
@@ -1477,7 +1486,7 @@ function EventShop({ config }) {
       <div class="stepper">
         <button type="button" class="step-btn" aria-label=${T.remove(t.name)} disabled=${!(q > 0)} onClick=${() => set(t.id, q - 1)}><${Icon} n="minus" /></button>
         <output aria-label=${T.quantity(t.name)}><${Num} value=${q} /></output>
-        <button type="button" class="step-btn plus" aria-label=${T.add(t.name)} disabled=${(t.kind === "add_on" && wanted === 0) || q >= Math.min(t.maxQuantity, left(t) ?? Infinity, limited ?? Infinity, t.pass ? passLeft - (wanted - q) : Infinity)} onClick=${() => set(t.id, q + 1)}><${Icon} n="plus" /></button>
+        <button type="button" class="step-btn plus" aria-label=${T.add(t.name)} disabled=${(t.kind === "add_on" && wanted === 0) || q >= Math.min(t.maxQuantity, t.limitPerBuyer ?? Infinity, left(t) ?? Infinity, limited ?? Infinity, t.pass ? passLeft - (wanted - q) : Infinity)} onClick=${() => set(t.id, q + 1)}><${Icon} n="plus" /></button>
       </div></div>`;
   };
   // Run 97: a coupon goes into the promo code, checked by the server like a typed one.

@@ -33,8 +33,8 @@ const TYPE_COLUMNS =
   "presale_of, sales_end_at, quantity_limit, pass, " +
   // Run 104: price phases.
   "sales_start_at, " +
-  // Run 109: a voucher's face value.
-  "value_cents";
+  // Run 109: a voucher's face value. Run 110: a limit per buyer.
+  "value_cents, limit_per_buyer";
 
 /** camelCase body field → column, for whitelisted updates. */
 function updateSet(fields: Record<string, unknown>, allowed: Record<string, string>, startAt: number) {
@@ -197,6 +197,7 @@ export function createTicketType(q: Queryable, s: TenantScope, eventId: string, 
   pass?: boolean | undefined;
   salesStartAt?: string | null | undefined;
   valueCents?: number | null | undefined;
+  limitPerBuyer?: number | null | undefined;
 }) {
   return mapDbErrors(() =>
     one(
@@ -204,12 +205,12 @@ export function createTicketType(q: Queryable, s: TenantScope, eventId: string, 
       `INSERT INTO public.ticketing_ticket_types
          (client_id, brand_id, event_id, code, name, description, kind, price_cents, min_quantity, max_quantity,
           max_adults_in_order, counts_as_adult, add_on_scope, active, sort_order, grants_session_change, open_date, stock_per_session,
-          presale_of, sales_end_at, quantity_limit, pass, sales_start_at, value_cents)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24) RETURNING ${TYPE_COLUMNS}`,
+          presale_of, sales_end_at, quantity_limit, pass, sales_start_at, value_cents, limit_per_buyer)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25) RETURNING ${TYPE_COLUMNS}`,
       [s.clientId, s.brandId, eventId, t.code, t.name, t.description ?? null, t.kind, t.priceCents, t.minQuantity, t.maxQuantity,
         t.maxAdultsInOrder ?? null, t.countsAsAdult, t.addOnScope ?? null, t.active, t.sortOrder, t.grantsSessionChange ?? false, t.openDate ?? false,
         t.stockPerSession ?? null, t.presaleOf ?? null, t.salesEndAt ?? null, t.quantityLimit ?? null, t.pass ?? false, t.salesStartAt ?? null,
-        t.valueCents ?? null],
+        t.valueCents ?? null, t.limitPerBuyer ?? null],
       "ticket_type_not_found",
     ),
   );
@@ -220,7 +221,7 @@ export function updateTicketType(q: Queryable, s: TenantScope, ticketTypeId: str
     name: "name", description: "description", priceCents: "price_cents", minQuantity: "min_quantity",
     maxQuantity: "max_quantity", maxAdultsInOrder: "max_adults_in_order", active: "active", sortOrder: "sort_order",
     openDate: "open_date", stockPerSession: "stock_per_session", salesEndAt: "sales_end_at", quantityLimit: "quantity_limit",
-    salesStartAt: "sales_start_at", valueCents: "value_cents",
+    salesStartAt: "sales_start_at", valueCents: "value_cents", limitPerBuyer: "limit_per_buyer",
   }, 4);
   return mapDbErrors(async () => {
     const row = await one(q, `UPDATE public.ticketing_ticket_types SET ${set.sql} WHERE id = $1 AND client_id = $2 AND brand_id = $3 RETURNING ${TYPE_COLUMNS}`,
@@ -312,10 +313,10 @@ export async function loadTicketTypeRules(q: Queryable, s: TenantScope, eventId:
     id: string; code: string; name: string; kind: "admission" | "add_on"; price_cents: number; min_quantity: number;
     max_quantity: number; max_adults_in_order: number | null; counts_as_adult: boolean; add_on_scope: TicketTypeRule["addOnScope"]; active: boolean;
     open_date: boolean; presale_of: string | null; sales_end_at: Date | null; quantity_limit: number | null; pass: boolean; sales_start_at: Date | null;
-    value_cents: number | null;
+    value_cents: number | null; limit_per_buyer: number | null;
   }>(
     `SELECT id, code, name, kind, price_cents, min_quantity, max_quantity, max_adults_in_order, counts_as_adult, add_on_scope, active, open_date,
-            presale_of, sales_end_at, quantity_limit, pass, sales_start_at, value_cents
+            presale_of, sales_end_at, quantity_limit, pass, sales_start_at, value_cents, limit_per_buyer
      FROM public.ticketing_ticket_types WHERE event_id = $1 AND client_id = $2 AND brand_id = $3 ORDER BY sort_order, code`,
     [eventId, s.clientId, s.brandId],
   );
@@ -324,7 +325,7 @@ export async function loadTicketTypeRules(q: Queryable, s: TenantScope, eventId:
     maxQuantity: r.max_quantity, maxAdultsInOrder: r.max_adults_in_order, countsAsAdult: r.counts_as_adult,
     addOnScope: r.add_on_scope, active: r.active, openDate: r.open_date,
     presaleOf: r.presale_of, salesEndAt: r.sales_end_at, quantityLimit: r.quantity_limit, pass: r.pass, salesStartAt: r.sales_start_at,
-    valueCents: r.value_cents,
+    valueCents: r.value_cents, limitPerBuyer: r.limit_per_buyer,
   }));
 }
 

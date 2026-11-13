@@ -165,6 +165,7 @@ const ERRORS_FR = {
   sales_window_invalid: "La fin de la vente doit venir après son début.",
   value_must_exceed_price: "La valeur du bon doit être plus élevée que son prix (une admission seulement).",
   voucher_needs_end: "Un bon d'achat a une période de validité : donnez la date de fin.",
+  limit_per_buyer: "Cette adresse courriel a déjà atteint la limite par personne pour ce billet.",
   partner_code_private: "Un code d'entreprise reste privé : il ne peut pas devenir un coupon public.",
   presale_of_invalid: "Une prévente se rattache à un billet régulier du même genre.",
   presale_must_end: "Une prévente se termine : donnez une date de fin, une quantité, ou les deux.",
@@ -1201,7 +1202,7 @@ function EventDetail({ api, base, eventId, assistant }) {
   const [types, reloadTypes] = useLoad(() => api(`${base}/events/${eventId}/ticket-types`), [base, eventId]);
   const [error, setError] = useState(null);
   const [sess, setSess] = useState({ startsAt: "", capacity: 100 });
-  const [tt, setTt] = useState({ code: "", name: "", price: "", value: "", maxQuantity: 10, minQuantity: 0, kind: "admission", countsAsAdult: true, grantsSessionChange: false, openDate: false, pass: false, addOnScope: "up_to_admissions", stock: "", active: true });
+  const [tt, setTt] = useState({ code: "", name: "", price: "", value: "", perBuyer: "", maxQuantity: 10, minQuantity: 0, kind: "admission", countsAsAdult: true, grantsSessionChange: false, openDate: false, pass: false, addOnScope: "up_to_admissions", stock: "", active: true });
   const [cancelling, setCancelling] = useState(null);
   const [copied, setCopied] = useState(false);
   // Run 97: a presale price for a regular ticket, ending on a date, after a quantity, or both.
@@ -1257,8 +1258,10 @@ function EventDetail({ api, base, eventId, assistant }) {
       stockPerSession: addOn && String(tt.stock).trim() !== "" ? Number(tt.stock) : null, active: tt.active,
       // Run 109: a voucher's face value ("valeur 80 $"), above its price.
       ...(!addOn && String(tt.value).trim() !== "" ? { valueCents: Math.round(Number(String(tt.value).replace(",", ".")) * 100) } : {}),
+      // Run 110: at most this many per buyer (same e-mail), all their orders together.
+      ...(String(tt.perBuyer).trim() !== "" ? { limitPerBuyer: Number(tt.perBuyer) } : {}),
     } });
-    setTt({ ...tt, code: "", name: "", price: "", value: "", stock: "" }); reloadTypes();
+    setTt({ ...tt, code: "", name: "", price: "", value: "", perBuyer: "", stock: "" }); reloadTypes();
   });
   const addPresale = act(async () => {
     const all = types.data?.ticketTypes ?? [];
@@ -1403,6 +1406,7 @@ function EventDetail({ api, base, eventId, assistant }) {
       ${tt.kind === "admission" && html`<label title="Pour un bon d’achat : la valeur du bon, plus élevée que son prix (« valeur 80 $ pour 45 $ »).">Valeur du bon ($, facultatif)<input inputmode="decimal" value=${tt.value} onInput=${(e) => setTt({ ...tt, value: e.target.value })} /></label>`}
       <label>Min<input type="number" min="0" value=${tt.minQuantity} onInput=${(e) => setTt({ ...tt, minQuantity: e.target.value })} /></label>
       <label>Max<input type="number" min="1" value=${tt.maxQuantity} onInput=${(e) => setTt({ ...tt, maxQuantity: e.target.value })} /></label>
+      <label title="Toutes ses commandes ensemble, pour la même adresse courriel (« 2 bons par personne »).">Limite par personne (facultatif)<input type="number" min="1" max="1000" placeholder="sans limite" value=${tt.perBuyer} onInput=${(e) => setTt({ ...tt, perBuyer: e.target.value })} /></label>
       <label>Genre<select value=${tt.kind} onChange=${(e) => setTt({ ...tt, kind: e.target.value })}><option value="admission">Admission</option><option value="add_on">Option (ajout)</option></select></label>
       ${tt.kind === "admission"
         ? html`<label class="check"><input type="checkbox" checked=${tt.countsAsAdult} onChange=${(e) => setTt({ ...tt, countsAsAdult: e.target.checked })} /> Adulte</label>
