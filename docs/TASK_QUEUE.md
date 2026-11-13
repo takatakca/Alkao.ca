@@ -2,7 +2,7 @@
 
 ## Run 107 — alkao.ca premium (2026-11-13)
 
-1. Done: merged into main once CI qa was green (Run 107 PR). It goes live with the next ALKAO deploy in Coolify: **Redeploy**, or Actions → Deploy once its secrets exist (`docs/ALKAO_DEPLOY_COOLIFY.md`). Then check `/health` shows the new build.
+1. Done: PR #108, merged into main once CI qa was green. It goes live with the next ALKAO deploy in Coolify: **Redeploy**, or Actions → Deploy once its secrets exist (`docs/ALKAO_DEPLOY_COOLIFY.md`). Then check `/health` shows the new build.
 2. Owner: for an offer to show in « Préventes et rabais », create a presale or a public coupon in /ops on a published event shown on ALKAO (`docs/PREVENTES_COUPONS.md`, `docs/ALKAO_CA_VITRINE.md`). Until then, the section explains how offers work.
 3. If takatak.ca changes its discounts (FIRST10, 15 % for a year paid ahead) or its service addresses, update `takatak` in `src/api/home-copy.ts`. Source: takatak-v1 `src/lib/promotions/catalog.ts` and `src/lib/website/service-pages.ts` (read at main `ecc7d48`).
 4. Later: the official TAKATAK logo files are not yet in `knowledgeAI/brand`; the TAKATAK section stays text until they are.
