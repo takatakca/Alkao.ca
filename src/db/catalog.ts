@@ -23,14 +23,18 @@ const VENUE_COLUMNS = "id, name, address_line1, city, region, postal_code, count
 const EVENT_COLUMNS =
   "id, venue_id, slug, title, description, status, sales_open_at, sales_close_at, admission_opens_before_minutes, admission_closes_after_minutes, image_url, " +
   // Run 69: what a buyer wants to know before choosing.
-  "category, min_age, doors_open_minutes, language, accessibility, duration_minutes, format, page, created_at, updated_at";
+  "category, min_age, doors_open_minutes, language, accessibility, duration_minutes, format, page, created_at, updated_at, " +
+  // Run 109: a merchant voucher (its session is the validity window).
+  "voucher";
 const SESSION_COLUMNS = "id, event_id, starts_at, ends_at, capacity, reserved_count, sold_count, status, created_at, updated_at";
 const TYPE_COLUMNS =
   "id, event_id, code, name, description, kind, price_cents, min_quantity, max_quantity, max_adults_in_order, counts_as_adult, add_on_scope, grants_session_change, open_date, active, sort_order, created_at, updated_at, stock_per_session, " +
   // Run 97: presale tickets. Run 98: festival passes.
   "presale_of, sales_end_at, quantity_limit, pass, " +
   // Run 104: price phases.
-  "sales_start_at";
+  "sales_start_at, " +
+  // Run 109: a voucher's face value.
+  "value_cents";
 
 /** camelCase body field → column, for whitelisted updates. */
 function updateSet(fields: Record<string, unknown>, allowed: Record<string, string>, startAt: number) {
@@ -100,6 +104,7 @@ export function createEvent(q: Queryable, s: TenantScope, e: {
   category?: string | null | undefined; minAge?: number | null | undefined; doorsOpenMinutes?: number | null | undefined;
   language?: string | null | undefined; accessibility?: string | null | undefined;
   durationMinutes?: number | null | undefined; format?: string | null | undefined; page?: Record<string, unknown> | undefined;
+  voucher?: boolean | undefined;
 }) {
   return mapDbErrors(() =>
     one(
@@ -107,13 +112,13 @@ export function createEvent(q: Queryable, s: TenantScope, e: {
       `INSERT INTO public.ticketing_events
          (client_id, brand_id, venue_id, slug, title, description, sales_open_at, sales_close_at,
           admission_opens_before_minutes, admission_closes_after_minutes, image_url,
-          category, min_age, doors_open_minutes, language, accessibility, duration_minutes, format, page)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, coalesce($9, 60), coalesce($10, 120), $11, $12, $13, $14, $15, $16, $17, $18, coalesce($19::jsonb, '{}'::jsonb))
+          category, min_age, doors_open_minutes, language, accessibility, duration_minutes, format, page, voucher)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, coalesce($9, 60), coalesce($10, 120), $11, $12, $13, $14, $15, $16, $17, $18, coalesce($19::jsonb, '{}'::jsonb), $20)
        RETURNING ${EVENT_COLUMNS}`,
       [s.clientId, s.brandId, e.venueId, e.slug, e.title, e.description ?? null, e.salesOpenAt ?? null, e.salesCloseAt ?? null,
         e.admissionOpensBeforeMinutes ?? null, e.admissionClosesAfterMinutes ?? null, e.imageUrl ?? null,
         e.category ?? null, e.minAge ?? null, e.doorsOpenMinutes ?? null, e.language ?? null, e.accessibility ?? null,
-        e.durationMinutes ?? null, e.format ?? null, e.page ? JSON.stringify(e.page) : null],
+        e.durationMinutes ?? null, e.format ?? null, e.page ? JSON.stringify(e.page) : null, e.voucher ?? false],
       "event_not_found",
     ),
   );
@@ -125,7 +130,7 @@ export function updateEvent(q: Queryable, s: TenantScope, eventId: string, field
     admissionOpensBeforeMinutes: "admission_opens_before_minutes", admissionClosesAfterMinutes: "admission_closes_after_minutes",
     imageUrl: "image_url",
     category: "category", minAge: "min_age", doorsOpenMinutes: "doors_open_minutes", language: "language", accessibility: "accessibility",
-    durationMinutes: "duration_minutes", format: "format", page: "page",
+    durationMinutes: "duration_minutes", format: "format", page: "page", voucher: "voucher",
   }, 4);
   return mapDbErrors(() =>
     one(q, `UPDATE public.ticketing_events SET ${set.sql} WHERE id = $1 AND client_id = $2 AND brand_id = $3 RETURNING ${EVENT_COLUMNS}`,
@@ -139,15 +144,21 @@ export const listSessions = (q: Queryable, s: TenantScope, eventId: string) =>
     [eventId, s.clientId, s.brandId]);
 
 export function createSession(q: Queryable, s: TenantScope, eventId: string, v: { startsAt: string; endsAt?: string | null; capacity: number }) {
-  return mapDbErrors(() =>
-    one(
+  return mapDbErrors(async () => {
+    // Run 109: a voucher's session is a validity window ("valide du … au …"): it needs its end.
+    if (!v.endsAt) {
+      const { rows } = await q.query<{ voucher: boolean }>(
+        `SELECT voucher FROM public.ticketing_events WHERE id = $1 AND client_id = $2 AND brand_id = $3`, [eventId, s.clientId, s.brandId]);
+      if (rows[0]?.voucher) throw new DomainError("voucher_needs_end");
+    }
+    return one(
       q,
       `INSERT INTO public.ticketing_sessions (client_id, brand_id, event_id, starts_at, ends_at, capacity)
        VALUES ($1, $2, $3, $4, $5, $6) RETURNING ${SESSION_COLUMNS}`,
       [s.clientId, s.brandId, eventId, v.startsAt, v.endsAt ?? null, v.capacity],
       "session_not_found",
-    ),
-  );
+    );
+  });
 }
 
 export function updateSession(q: Queryable, s: TenantScope, sessionId: string, fields: Record<string, unknown>) {
@@ -185,6 +196,7 @@ export function createTicketType(q: Queryable, s: TenantScope, eventId: string, 
   quantityLimit?: number | null | undefined;
   pass?: boolean | undefined;
   salesStartAt?: string | null | undefined;
+  valueCents?: number | null | undefined;
 }) {
   return mapDbErrors(() =>
     one(
@@ -192,11 +204,12 @@ export function createTicketType(q: Queryable, s: TenantScope, eventId: string, 
       `INSERT INTO public.ticketing_ticket_types
          (client_id, brand_id, event_id, code, name, description, kind, price_cents, min_quantity, max_quantity,
           max_adults_in_order, counts_as_adult, add_on_scope, active, sort_order, grants_session_change, open_date, stock_per_session,
-          presale_of, sales_end_at, quantity_limit, pass, sales_start_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23) RETURNING ${TYPE_COLUMNS}`,
+          presale_of, sales_end_at, quantity_limit, pass, sales_start_at, value_cents)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24) RETURNING ${TYPE_COLUMNS}`,
       [s.clientId, s.brandId, eventId, t.code, t.name, t.description ?? null, t.kind, t.priceCents, t.minQuantity, t.maxQuantity,
         t.maxAdultsInOrder ?? null, t.countsAsAdult, t.addOnScope ?? null, t.active, t.sortOrder, t.grantsSessionChange ?? false, t.openDate ?? false,
-        t.stockPerSession ?? null, t.presaleOf ?? null, t.salesEndAt ?? null, t.quantityLimit ?? null, t.pass ?? false, t.salesStartAt ?? null],
+        t.stockPerSession ?? null, t.presaleOf ?? null, t.salesEndAt ?? null, t.quantityLimit ?? null, t.pass ?? false, t.salesStartAt ?? null,
+        t.valueCents ?? null],
       "ticket_type_not_found",
     ),
   );
@@ -207,7 +220,7 @@ export function updateTicketType(q: Queryable, s: TenantScope, ticketTypeId: str
     name: "name", description: "description", priceCents: "price_cents", minQuantity: "min_quantity",
     maxQuantity: "max_quantity", maxAdultsInOrder: "max_adults_in_order", active: "active", sortOrder: "sort_order",
     openDate: "open_date", stockPerSession: "stock_per_session", salesEndAt: "sales_end_at", quantityLimit: "quantity_limit",
-    salesStartAt: "sales_start_at",
+    salesStartAt: "sales_start_at", valueCents: "value_cents",
   }, 4);
   return mapDbErrors(async () => {
     const row = await one(q, `UPDATE public.ticketing_ticket_types SET ${set.sql} WHERE id = $1 AND client_id = $2 AND brand_id = $3 RETURNING ${TYPE_COLUMNS}`,
@@ -299,9 +312,10 @@ export async function loadTicketTypeRules(q: Queryable, s: TenantScope, eventId:
     id: string; code: string; name: string; kind: "admission" | "add_on"; price_cents: number; min_quantity: number;
     max_quantity: number; max_adults_in_order: number | null; counts_as_adult: boolean; add_on_scope: TicketTypeRule["addOnScope"]; active: boolean;
     open_date: boolean; presale_of: string | null; sales_end_at: Date | null; quantity_limit: number | null; pass: boolean; sales_start_at: Date | null;
+    value_cents: number | null;
   }>(
     `SELECT id, code, name, kind, price_cents, min_quantity, max_quantity, max_adults_in_order, counts_as_adult, add_on_scope, active, open_date,
-            presale_of, sales_end_at, quantity_limit, pass, sales_start_at
+            presale_of, sales_end_at, quantity_limit, pass, sales_start_at, value_cents
      FROM public.ticketing_ticket_types WHERE event_id = $1 AND client_id = $2 AND brand_id = $3 ORDER BY sort_order, code`,
     [eventId, s.clientId, s.brandId],
   );
@@ -310,6 +324,7 @@ export async function loadTicketTypeRules(q: Queryable, s: TenantScope, eventId:
     maxQuantity: r.max_quantity, maxAdultsInOrder: r.max_adults_in_order, countsAsAdult: r.counts_as_adult,
     addOnScope: r.add_on_scope, active: r.active, openDate: r.open_date,
     presaleOf: r.presale_of, salesEndAt: r.sales_end_at, quantityLimit: r.quantity_limit, pass: r.pass, salesStartAt: r.sales_start_at,
+    valueCents: r.value_cents,
   }));
 }
 
@@ -320,12 +335,14 @@ export interface PublicEventContext {
   salesOpenAt: Date | null;
   salesCloseAt: Date | null;
   taxRegion: TaxRegion;
+  /** Run 109: a merchant voucher: each session sells until its end (its validity window). */
+  voucher: boolean;
 }
 
 /** A published event with its venue tax region, or null when it is not public. */
 export async function loadPublicEvent(q: Queryable, s: TenantScope, eventId: string): Promise<PublicEventContext | null> {
-  const { rows } = await q.query<{ id: string; status: PublicEventContext["status"]; sales_open_at: Date | null; sales_close_at: Date | null; tax_region: string }>(
-    `SELECT e.id, e.status, e.sales_open_at, e.sales_close_at, v.tax_region
+  const { rows } = await q.query<{ id: string; status: PublicEventContext["status"]; sales_open_at: Date | null; sales_close_at: Date | null; tax_region: string; voucher: boolean }>(
+    `SELECT e.id, e.status, e.sales_open_at, e.sales_close_at, v.tax_region, e.voucher
      FROM public.ticketing_events e
      JOIN public.ticketing_venues v ON v.id = e.venue_id AND v.client_id = e.client_id AND v.brand_id = e.brand_id
      WHERE e.id = $1 AND e.client_id = $2 AND e.brand_id = $3 AND e.status = 'published'`,
@@ -334,7 +351,7 @@ export async function loadPublicEvent(q: Queryable, s: TenantScope, eventId: str
   const r = rows[0];
   if (!r) return null;
   if (!isTaxRegion(r.tax_region)) throw new DomainError("unsupported_tax_region");
-  return { id: r.id, status: r.status, salesOpenAt: r.sales_open_at, salesCloseAt: r.sales_close_at, taxRegion: r.tax_region };
+  return { id: r.id, status: r.status, salesOpenAt: r.sales_open_at, salesCloseAt: r.sales_close_at, taxRegion: r.tax_region, voucher: r.voucher };
 }
 
 /** Brand (Run 50: with its look) and venue shown on the hosted shop (Run 08). */
@@ -356,7 +373,7 @@ export const listPublicEvents = (q: Queryable, s: TenantScope) =>
   many(
     q,
     `SELECT e.id, e.venue_id, e.slug, e.title, e.description, e.sales_open_at, e.sales_close_at, e.image_url,
-            e.category, e.min_age, e.doors_open_minutes, e.language, e.accessibility,
+            e.category, e.min_age, e.doors_open_minutes, e.language, e.accessibility, e.voucher,
             v.name AS venue_name, v.address_line1 AS venue_address, v.city AS venue_city, v.timezone AS venue_timezone
      FROM public.ticketing_events e
      JOIN public.ticketing_venues v ON v.id = e.venue_id AND v.client_id = e.client_id AND v.brand_id = e.brand_id
@@ -404,10 +421,12 @@ export interface EventDeal {
   coupon: { label: string | null; percent: number | null; amountCents: number | null; endsAt: Date | null } | null;
   /** Run 100: the cheapest festival pass on sale now. */
   pass?: { priceCents: number } | null;
+  /** Run 109: the voucher on sale now with the biggest saving on its face value. */
+  value?: { priceCents: number; valueCents: number } | null;
 }
 
 export async function eventDeals(q: Queryable, s: TenantScope, now: Date): Promise<Map<string, EventDeal>> {
-  const [{ rows: presales }, { rows: coupons }, { rows: passes }] = await Promise.all([
+  const [{ rows: presales }, { rows: coupons }, { rows: passes }, { rows: values }] = await Promise.all([
     q.query<{ event_id: string; price_cents: number; regular_cents: number; sales_end_at: Date | null; remaining: number | null }>(
       `SELECT DISTINCT ON (t.event_id) t.event_id, t.price_cents, r.price_cents AS regular_cents, t.sales_end_at,
               CASE WHEN t.quantity_limit IS NULL THEN NULL
@@ -440,6 +459,17 @@ export async function eventDeals(q: Queryable, s: TenantScope, now: Date): Promi
        ORDER BY t.event_id, t.price_cents`,
       [s.clientId, s.brandId, now],
     ),
+    // Run 109: a voucher's face value against its price, the biggest saving first.
+    q.query<{ event_id: string; price_cents: number; value_cents: number }>(
+      `SELECT DISTINCT ON (t.event_id) t.event_id, t.price_cents, t.value_cents
+       FROM public.ticketing_ticket_types t
+       LEFT JOIN public.ticketing_ticket_type_counts c ON c.ticket_type_id = t.id
+       WHERE t.client_id = $1 AND t.brand_id = $2 AND t.kind = 'admission' AND t.active AND t.value_cents > t.price_cents
+         AND (t.sales_end_at IS NULL OR t.sales_end_at > $3) AND (t.sales_start_at IS NULL OR t.sales_start_at <= $3)
+         AND (t.quantity_limit IS NULL OR t.quantity_limit > coalesce(c.sold_count, 0) + coalesce(c.reserved_count, 0))
+       ORDER BY t.event_id, (t.value_cents - t.price_cents)::numeric / t.value_cents DESC, t.price_cents`,
+      [s.clientId, s.brandId, now],
+    ),
   ]);
   const deals = new Map<string, EventDeal>();
   const of = (id: string) => deals.get(id) ?? (deals.set(id, { presale: null, coupon: null }), deals.get(id)!);
@@ -450,6 +480,7 @@ export async function eventDeals(q: Queryable, s: TenantScope, now: Date): Promi
     of(c.event_id).coupon = { label: c.label, percent: c.percent, amountCents: c.amount_cents, endsAt: c.ends_at };
   }
   for (const p of passes) of(p.event_id).pass = { priceCents: Number(p.price_cents) };
+  for (const v of values) of(v.event_id).value = { priceCents: Number(v.price_cents), valueCents: Number(v.value_cents) };
   return deals;
 }
 
@@ -529,7 +560,10 @@ export const listPublicSessions = (q: Queryable, s: TenantScope, eventId: string
              + coalesce((SELECT sum(p.quantity) FROM public.ticketing_hold_pass_seats p JOIN public.ticketing_holds h ON h.id = p.hold_id
                          WHERE p.session_id = s.id AND h.status = 'active' AND h.expires_at <= $4), 0))::int AS quantity
      ) lapsed ON true
-     WHERE s.event_id = $1 AND s.client_id = $2 AND s.brand_id = $3 AND s.status = 'on_sale' AND s.starts_at > $4
+     WHERE s.event_id = $1 AND s.client_id = $2 AND s.brand_id = $3 AND s.status = 'on_sale'
+       AND (s.starts_at > $4
+            -- Run 109: a voucher's validity window sells until it ends.
+            OR (s.ends_at > $4 AND EXISTS (SELECT 1 FROM public.ticketing_events ev WHERE ev.id = s.event_id AND ev.voucher)))
      ORDER BY s.starts_at`,
     [eventId, s.clientId, s.brandId, now],
   );
@@ -538,16 +572,18 @@ export interface SellableSession {
   id: string;
   eventId: string;
   startsAt: Date;
+  /** Run 109: a voucher's validity ends here (its session sells until then). */
+  endsAt?: Date | null;
   status: "draft" | "on_sale" | "paused" | "cancelled" | "closed";
 }
 
 export async function loadSession(q: Queryable, s: TenantScope, sessionId: string): Promise<SellableSession | null> {
-  const { rows } = await q.query<{ id: string; event_id: string; starts_at: Date; status: SellableSession["status"] }>(
-    `SELECT id, event_id, starts_at, status FROM public.ticketing_sessions WHERE id = $1 AND client_id = $2 AND brand_id = $3`,
+  const { rows } = await q.query<{ id: string; event_id: string; starts_at: Date; ends_at: Date | null; status: SellableSession["status"] }>(
+    `SELECT id, event_id, starts_at, ends_at, status FROM public.ticketing_sessions WHERE id = $1 AND client_id = $2 AND brand_id = $3`,
     [sessionId, s.clientId, s.brandId],
   );
   const r = rows[0];
-  return r ? { id: r.id, eventId: r.event_id, startsAt: r.starts_at, status: r.status } : null;
+  return r ? { id: r.id, eventId: r.event_id, startsAt: r.starts_at, endsAt: r.ends_at, status: r.status } : null;
 }
 
 // ── Orders and audit (read-only in Run 01) ──────────────────────────────────

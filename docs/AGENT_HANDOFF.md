@@ -1,5 +1,26 @@
 # ALKAO — Agent handoff (mandatory)
 
+## Run 109 — merchant vouchers (2026-11-13)
+
+- **Model:**
+  - `ticketing_events.voucher`: the event's sessions are validity windows, not show times.
+  - `ticketing_ticket_types.value_cents`: the face value, admissions only, above the price (`ticketing_ticket_types_value_ck` → `value_must_exceed_price`).
+  - `page.terms`: the fine print.
+- **Sale:**
+  - `isSessionSellable` and `listPublicSessions` sell a voucher's window until it ends.
+  - `createSession` requires an end for a voucher (`voucher_needs_end`).
+  - The scanner window already follows the session; no gate change.
+- **Display:**
+  - `offerOf` (home-view) ranks presale → value → coupon.
+  - Vouchers stay out of the week rail, the agenda and the Event JSON-LD.
+  - The shop shows the validity, the struck value and the Terms section.
+  - The tickets e-mail and page say « Bon valide jusqu'au … ».
+- **Emails:** `queueReminders` skips vouchers. An expiry reminder is a NEED item (roadmap 5).
+- **Not changed:** transfers of a voucher are refused once its window has begun (transfers are off by default). « Offrir un bon » is a WANT item.
+- **Tests:** `test/api/vouchers.test.ts` and `test/ui/voucher-ui.test.ts`.
+
+Signature: Claude (Claude Code, cloud session), 2026-11-13.
+
 ## Run 108 — ALKAO Offres roadmap (2026-11-13)
 
 - Owner's order: Groupon/Tuango/PromoRabais-style presale and discount platform; most premium and secure; recycle takatakca repos; TAKATAK-V1 stays the control plane; signed notes on GitHub and Drive before, during and after every step.

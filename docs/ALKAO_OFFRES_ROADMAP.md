@@ -27,7 +27,7 @@
 
 ## MUST : ce qui fait une plateforme de type Groupon
 
-1. **Bons d'achat de commerces** (Run 109) : un restaurant, un spa ou une activité vend un bon avec une **valeur** (« valeur 80 $ ») et un **prix** (« 45 $ »), une **période de validité** (du… au…) et des **conditions** (les petites lignes). Le bon s'échange **une fois**, par code QR au commerce, avec le scanner qui existe déjà : une séance couvre toute la période de validité, et la fenêtre d'entrée du scanner suit la séance. Il reste à ajouter la valeur, les conditions, le format « bon » et l'affichage « Valide jusqu'au … » partout (accueil, boutique, billets, courriel).
+1. ✅ **Bons d'achat de commerces** (Run 109, fait, `docs/BONS_ACHAT.md`) : un restaurant, un spa ou une activité vend un bon avec une **valeur** (« valeur 80 $ ») et un **prix** (« 45 $ »), une **période de validité** (du… au…) et des **conditions** (les petites lignes). Le bon s'échange **une fois**, par code QR au commerce, avec le scanner qui existe déjà : une séance couvre toute la période de validité, et la fenêtre d'entrée du scanner suit la séance. Il reste à ajouter la valeur, les conditions, le format « bon » et l'affichage « Valide jusqu'au … » partout (accueil, boutique, billets, courriel).
 2. **Limite par client** (Run 110) : par exemple 2 bons par personne pour toute l'offre, et pas seulement par commande. Elle est gardée par la base, comme la quantité des préventes.
 3. **Page Offres dédiée** (Run 111) : `/offres`, toutes les offres en cours, triées par rabais, par fin la plus proche, par ville ou par catégorie, avec leur propre aperçu de partage pour les médias sociaux.
 4. **Partage social qui vend** (Run 111) : sur chaque offre, des boutons de partage avec les liens UTM déjà comptés (Run 49) et un aperçu qui montre le vrai rabais.
@@ -67,5 +67,6 @@
 ## Journal de cette feuille de route
 
 - 2026-11-13 — Claude : créée ; Run 108 (axe sur « Préventes et rabais ») ; Run 109 (bons d'achat) commencé.
+- 2026-11-13 — Claude : Run 109 terminé, avec valeur, période de validité, conditions, vente pendant la période, badge « Bon » et « Valide jusqu'au » partout (`docs/BONS_ACHAT.md`). Prochain MUST : la limite par client (Run 110).
 
 — Signé : Claude (Claude Code, session cloud du dépôt takatakca/Alkao.ca), 2026-11-13.

@@ -42,6 +42,9 @@ const STATUS_BY_CODE: Record<string, ContentfulStatusCode> = {
   pass_not_transferable: 409,
   partner_code_private: 409,
   sales_window_invalid: 422,
+  // Run 109: a voucher's face value.
+  value_must_exceed_price: 422,
+  voucher_needs_end: 422,
   appearance_low_contrast: 422,
   session_not_available: 409,
   // Run 72: the public sale is not open yet (a presale code may open it earlier).

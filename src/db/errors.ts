@@ -70,6 +70,8 @@ export function toDomainError(error: unknown): DomainError | null {
     // Run 104: a price phase ends after it starts.
     if (e.constraint === "ticketing_ticket_types_sales_window_ck") return new DomainError("sales_window_invalid");
     if (e.constraint === "ticketing_ticket_types_quantity_limit_ck") return new DomainError("quantity_limit_only_for_admissions");
+    // Run 109: a voucher's face value is an admission's, above its price.
+    if (e.constraint === "ticketing_ticket_types_value_ck") return new DomainError("value_must_exceed_price");
     // Run 36: the code's last use went to another buyer first.
     if (e.constraint === "ticketing_promo_codes_uses_ck") return new DomainError("promo_code_invalid", { reason: "used_up" });
     // Run 103: a partner company's codes are handed out, never shown as public coupons.

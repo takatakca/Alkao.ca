@@ -163,6 +163,8 @@ const ERRORS_FR = {
   // Run 97: presales.
   presale_price_not_lower: "Le prix de prévente doit rester plus bas que le prix régulier.",
   sales_window_invalid: "La fin de la vente doit venir après son début.",
+  value_must_exceed_price: "La valeur du bon doit être plus élevée que son prix (une admission seulement).",
+  voucher_needs_end: "Un bon d'achat a une période de validité : donnez la date de fin.",
   partner_code_private: "Un code d'entreprise reste privé : il ne peut pas devenir un coupon public.",
   presale_of_invalid: "Une prévente se rattache à un billet régulier du même genre.",
   presale_must_end: "Une prévente se termine : donnez une date de fin, une quantité, ou les deux.",
@@ -1113,6 +1115,8 @@ function EventPageEditor({ api, base, eventId, event, assistant }) {
     const p = event.page ?? {};
     const rows = (key) => (p[key] ?? []).map((r) => Object.fromEntries(Object.keys(PAGE_LISTS[key].blank).map((k) => [k, r[k] ?? ""])));
     return { duration: event.durationMinutes == null ? "" : String(event.durationMinutes), format: event.format ?? "", summary: p.summary ?? "", notice: p.notice ?? "",
+      // Run 109: a merchant voucher, and the offer's conditions (one per line).
+      voucher: Boolean(event.voucher), terms: p.terms ?? "",
       highlights: rows("highlights"), gallery: rows("gallery"), steps: rows("steps"), faq: rows("faq") };
   };
   const [f, setF] = useState(initial);
@@ -1132,8 +1136,8 @@ function EventPageEditor({ api, base, eventId, event, assistant }) {
       if (d !== "" && !(Number.isInteger(Number(d)) && Number(d) >= 5 && Number(d) <= 1440)) throw new Error("Durée : un nombre de minutes entre 5 et 1440.");
       const list = (key, required) => f[key].filter((r) => clean(r[required])).map((r) => Object.fromEntries(Object.entries(r).map(([k, v]) => [k, clean(v)])));
       await api(`${base}/events/${eventId}`, { method: "PATCH", body: {
-        durationMinutes: d === "" ? null : Number(d), format: clean(f.format),
-        page: { summary: clean(f.summary), notice: clean(f.notice), highlights: list("highlights", "title"), gallery: list("gallery", "url"), steps: list("steps", "title"), faq: list("faq", "question") },
+        durationMinutes: d === "" ? null : Number(d), format: clean(f.format), voucher: f.voucher,
+        page: { summary: clean(f.summary), notice: clean(f.notice), terms: clean(f.terms), highlights: list("highlights", "title"), gallery: list("gallery", "url"), steps: list("steps", "title"), faq: list("faq", "question") },
       } });
       setMsg("Enregistré. La page de l’événement est à jour.");
     } catch (err) { setError(err); }
@@ -1175,6 +1179,12 @@ function EventPageEditor({ api, base, eventId, event, assistant }) {
     </div>
     <label>Résumé (une ligne sous le titre)<input maxlength="120" placeholder="18 tableaux · 20 étapes · réalité virtuelle en option" value=${f.summary} onInput=${(e) => set({ summary: e.target.value })} /></label>
     <label>À savoir avant de réserver (facultatif)<textarea rows="2" maxlength="600" placeholder="Contenu qui peut choquer, parcours dans le noir, renonciation à signer…" value=${f.notice} onInput=${(e) => set({ notice: e.target.value })}></textarea></label>
+    <fieldset class="page-list" aria-label="Bon d'achat">
+      <legend>Bon d’achat (offre de commerce)</legend>
+      <label class="check"><input type="checkbox" checked=${f.voucher} onChange=${(e) => set({ voucher: e.target.checked })} /> Cet événement est un bon d’achat : sa séance est la période de validité (du… au…), et chaque bon s’échange une fois par code QR au commerce</label>
+      <p class="muted">Pour un bon : ajoutez une séance avec son début et sa fin de validité, et donnez à chaque billet sa « valeur » (plus élevée que le prix) dans Types de billets.</p>
+      <label>Conditions de l’offre (une par ligne, facultatif)<textarea rows="4" maxlength="3000" placeholder=${"Valide du lundi au jeudi\nUn bon par table\nRéservation requise"} value=${f.terms} onInput=${(e) => set({ terms: e.target.value })}></textarea></label>
+    </fieldset>
     ${assistant && html`<div class="assistant-row">
       <label>Notes pour rédiger la page (facultatif)<input maxlength="1000" placeholder="Ce qu’on y vit, ce qui est inclus, le déroulement…" value=${notes} onInput=${(e) => setNotes(e.target.value)} /></label>
       <button type="button" class="secondary" disabled=${busy} onClick=${draft}>${busy ? "Rédaction…" : "Rédiger la page avec l’assistant"}</button>
@@ -1191,7 +1201,7 @@ function EventDetail({ api, base, eventId, assistant }) {
   const [types, reloadTypes] = useLoad(() => api(`${base}/events/${eventId}/ticket-types`), [base, eventId]);
   const [error, setError] = useState(null);
   const [sess, setSess] = useState({ startsAt: "", capacity: 100 });
-  const [tt, setTt] = useState({ code: "", name: "", price: "", maxQuantity: 10, minQuantity: 0, kind: "admission", countsAsAdult: true, grantsSessionChange: false, openDate: false, pass: false, addOnScope: "up_to_admissions", stock: "", active: true });
+  const [tt, setTt] = useState({ code: "", name: "", price: "", value: "", maxQuantity: 10, minQuantity: 0, kind: "admission", countsAsAdult: true, grantsSessionChange: false, openDate: false, pass: false, addOnScope: "up_to_admissions", stock: "", active: true });
   const [cancelling, setCancelling] = useState(null);
   const [copied, setCopied] = useState(false);
   // Run 97: a presale price for a regular ticket, ending on a date, after a quantity, or both.
@@ -1231,7 +1241,11 @@ function EventDetail({ api, base, eventId, assistant }) {
     await api(`${base}/sessions/${id}`, { method: "PATCH", body: { capacity: Number(value) } }); reloadSessions();
   });
   const addSession = act(async () => {
-    await api(`${base}/events/${eventId}/sessions`, { method: "POST", body: { startsAt: new Date(sess.startsAt).toISOString(), capacity: Number(sess.capacity) } });
+    await api(`${base}/events/${eventId}/sessions`, { method: "POST", body: {
+      startsAt: new Date(sess.startsAt).toISOString(), capacity: Number(sess.capacity),
+      // Run 109: an end (required for a voucher: the end of its validity).
+      ...(sess.endsAt ? { endsAt: new Date(sess.endsAt).toISOString() } : {}),
+    } });
     reloadSessions();
   });
   const addType = act(async () => {
@@ -1241,8 +1255,10 @@ function EventDetail({ api, base, eventId, assistant }) {
       minQuantity: Number(tt.minQuantity), maxQuantity: Number(tt.maxQuantity), countsAsAdult: !addOn && tt.countsAsAdult,
       addOnScope: addOn ? tt.addOnScope : null, grantsSessionChange: addOn && tt.grantsSessionChange, openDate: !addOn && !tt.pass && tt.openDate, pass: !addOn && tt.pass,
       stockPerSession: addOn && String(tt.stock).trim() !== "" ? Number(tt.stock) : null, active: tt.active,
+      // Run 109: a voucher's face value ("valeur 80 $"), above its price.
+      ...(!addOn && String(tt.value).trim() !== "" ? { valueCents: Math.round(Number(String(tt.value).replace(",", ".")) * 100) } : {}),
     } });
-    setTt({ ...tt, code: "", name: "", price: "", stock: "" }); reloadTypes();
+    setTt({ ...tt, code: "", name: "", price: "", value: "", stock: "" }); reloadTypes();
   });
   const addPresale = act(async () => {
     const all = types.data?.ticketTypes ?? [];
@@ -1347,8 +1363,9 @@ function EventDetail({ api, base, eventId, assistant }) {
 
     <h2>Séances</h2>
     <form class="inline card" onSubmit=${addSession}>
-      <label>Début<input type="datetime-local" required value=${sess.startsAt} onInput=${(e) => setSess({ ...sess, startsAt: e.target.value })} /></label>
-      <label>Capacité<input type="number" min="0" required value=${sess.capacity} onInput=${(e) => setSess({ ...sess, capacity: e.target.value })} /></label>
+      <label>${ev.data?.event?.voucher ? "Valide à partir du" : "Début"}<input type="datetime-local" required value=${sess.startsAt} onInput=${(e) => setSess({ ...sess, startsAt: e.target.value })} /></label>
+      <label>${ev.data?.event?.voucher ? "Valide jusqu’au" : "Fin (facultatif)"}<input type="datetime-local" required=${Boolean(ev.data?.event?.voucher)} value=${sess.endsAt ?? ""} onInput=${(e) => setSess({ ...sess, endsAt: e.target.value })} /></label>
+      <label>${ev.data?.event?.voucher ? "Nombre de bons" : "Capacité"}<input type="number" min="0" required value=${sess.capacity} onInput=${(e) => setSess({ ...sess, capacity: e.target.value })} /></label>
       <button type="submit">Ajouter la séance</button>
     </form>
     <${SessionBatch} api=${api} base=${base} eventId=${eventId} onDone=${reloadSessions} />
@@ -1383,6 +1400,7 @@ function EventDetail({ api, base, eventId, assistant }) {
       <label>Code<input required pattern="[A-Za-z0-9_]{1,40}" value=${tt.code} onInput=${(e) => setTt({ ...tt, code: e.target.value })} /></label>
       <label>Nom<input required value=${tt.name} onInput=${(e) => setTt({ ...tt, name: e.target.value })} /></label>
       <label>Prix ($)<input required inputmode="decimal" value=${tt.price} onInput=${(e) => setTt({ ...tt, price: e.target.value })} /></label>
+      ${tt.kind === "admission" && html`<label title="Pour un bon d’achat : la valeur du bon, plus élevée que son prix (« valeur 80 $ pour 45 $ »).">Valeur du bon ($, facultatif)<input inputmode="decimal" value=${tt.value} onInput=${(e) => setTt({ ...tt, value: e.target.value })} /></label>`}
       <label>Min<input type="number" min="0" value=${tt.minQuantity} onInput=${(e) => setTt({ ...tt, minQuantity: e.target.value })} /></label>
       <label>Max<input type="number" min="1" value=${tt.maxQuantity} onInput=${(e) => setTt({ ...tt, maxQuantity: e.target.value })} /></label>
       <label>Genre<select value=${tt.kind} onChange=${(e) => setTt({ ...tt, kind: e.target.value })}><option value="admission">Admission</option><option value="add_on">Option (ajout)</option></select></label>

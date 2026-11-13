@@ -41,6 +41,14 @@ const T = {
       not_started: "Ce code n'est pas encore valide.", ended: "Ce code a expiré.", used_up: "Ce code a atteint sa limite d'utilisations.",
       presale_only: "Ce code ne s'applique pas aux billets en prévente : il vaut pour les billets au prix régulier.",
     },
+    // Run 109: a merchant voucher (bon d'achat): valid over a window, worth its face value.
+    voucher: {
+      badge: "Bon d'achat", value: "Valeur",
+      valid: (from, until) => `Valide du ${from} au ${until}`, until: (d) => `Valide jusqu'au ${d}`,
+      save: (m) => `${m} d'économie par bon`, step1: "Période de validité", step2: "Vos bons",
+      once: "Un code QR par bon, échangé une seule fois au commerce, pendant la période de validité.",
+      terms: "Conditions de l'offre", termsEyebrow: "À lire avant d'acheter",
+    },
     // Run 97: presale prices and coupons, always as the organizer set them.
     deal: {
       presale: "Prix prévente", instead: (p) => `au lieu de ${p}`, save: (pct) => `−${pct} %`,
@@ -188,7 +196,7 @@ const T = {
     other: "English",
     // Run 93: the event page in full.
     sectionsLabel: "Sections de la page",
-    tabs: { highlights: "Points forts", gallery: "Galerie", steps: "Le jour J", about: "Description", venue: "Lieu", faq: "FAQ" },
+    tabs: { highlights: "Points forts", gallery: "Galerie", steps: "Le jour J", about: "Description", terms: "Conditions", venue: "Lieu", faq: "FAQ" },
     duration: "Durée", format: "Format", experience: "Expérience", ageReq: "Âge requis", language: "Langue",
     book: "Réserver",
     hlEyebrow: "Points forts", hlTitle: "L'expérience",
@@ -253,6 +261,13 @@ const T = {
       unknown: "This code does not exist for this event.", inactive: "This code is no longer active.",
       not_started: "This code is not valid yet.", ended: "This code has expired.", used_up: "This code has reached its limit.",
       presale_only: "This code does not apply to presale tickets: it is for regular-price tickets.",
+    },
+    voucher: {
+      badge: "Voucher", value: "Value",
+      valid: (from, until) => `Valid from ${from} to ${until}`, until: (d) => `Valid until ${d}`,
+      save: (m) => `${m} off per voucher`, step1: "Validity period", step2: "Your vouchers",
+      once: "One QR code per voucher, redeemed once at the business, during the validity period.",
+      terms: "Terms of the offer", termsEyebrow: "Read before you buy",
     },
     deal: {
       presale: "Presale price", instead: (p) => `instead of ${p}`, save: (pct) => `−${pct}%`,
@@ -392,7 +407,7 @@ const T = {
     findSent: "If an upcoming order matches this address, your tickets have just been sent again. Also check your spam folder.",
     other: "Français",
     sectionsLabel: "Page sections",
-    tabs: { highlights: "Highlights", gallery: "Gallery", steps: "On the day", about: "Description", venue: "Venue", faq: "FAQ" },
+    tabs: { highlights: "Highlights", gallery: "Gallery", steps: "On the day", about: "Description", terms: "Terms", venue: "Venue", faq: "FAQ" },
     duration: "Duration", format: "Format", experience: "Experience", ageReq: "Age", language: "Language",
     book: "Book",
     hlEyebrow: "Highlights", hlTitle: "The experience",
@@ -579,6 +594,22 @@ function presaleFrom(types) {
   return d ? { cents: d.t.priceCents, regularCents: d.regular.priceCents, endsAt: d.t.salesEndAt ?? null, remaining: d.t.remaining ?? null } : null;
 }
 /** Run 98: the dates a festival pass covers (every date on sale), and what is left. */
+/**
+ * Run 109: the voucher with the biggest saving on its face value, on sale now. Its value is the
+ * organizer's, kept above the price by the database.
+ */
+function valueFrom(types) {
+  const list = (types ?? []).filter((t) => t.kind === "admission" && Number.isInteger(t.valueCents) && t.valueCents > t.priceCents && t.remaining !== 0);
+  const best = list.sort((a, b) => savePct(b.priceCents, b.valueCents) - savePct(a.priceCents, a.valueCents) || a.priceCents - b.priceCents)[0];
+  return best ? { cents: best.priceCents, valueCents: best.valueCents } : null;
+}
+/** Run 109: a voucher's validity window: "Valide du … au …", or "jusqu'au …" once it has begun. */
+function validity(session, tz) {
+  if (!session?.endsAt) return null;
+  const until = dayLong(session.endsAt, tz);
+  return Date.parse(session.startsAt) > Date.now() ? T.voucher.valid(dayLong(session.startsAt, tz), until) : T.voucher.until(until);
+}
+
 function PassDates({ sessions, tz, left }) {
   return html`<div class="pass-dates">
     <ul class="pass-list">${sessions.map((s) => html`<li><${Icon} n="calendar" /><span>${fmt(s.startsAt, tz, { weekday: "long", day: "numeric", month: "long", hour: "numeric", minute: "2-digit" })}</span></li>`)}</ul>
@@ -646,7 +677,9 @@ function summary(id) {
   if (!summaries.has(id)) {
     summaries.set(id, call(`/events/${id}`).then((d) => {
       const next = d.sessions.find((s) => s.available > 0) ?? d.sessions[0] ?? null;
-      return { next: next?.startsAt ?? null, last: d.sessions[d.sessions.length - 1]?.startsAt ?? null, count: d.sessions.length, tz: d.event.venue?.timezone, from: priceFrom(d.ticketTypes) };
+      return { next: next?.startsAt ?? null, last: d.sessions[d.sessions.length - 1]?.startsAt ?? null, count: d.sessions.length, tz: d.event.venue?.timezone, from: priceFrom(d.ticketTypes),
+        // Run 109: a voucher reads as its validity, not a date and time.
+        valid: d.event.voucher ? validity(next, d.event.venue?.timezone) : null };
     }, () => null));
   }
   return summaries.get(id);
@@ -881,12 +914,12 @@ function EventCard({ e, sum, level = 3 }) {
   return html`<a class="ev-card" href=${`/acheter/${route.c}/${route.b}/${e.id}`}>
     <span class="ev-media">
       <img src=${src} alt="" width="640" height="400" loading="lazy" decoding="async" onError=${broken} />
-      ${p && html`<span class="date-badge" aria-hidden="true"><b>${p.day}</b>${p.mon}</span>`}
+      ${p && !sum?.valid && html`<span class="date-badge" aria-hidden="true"><b>${p.day}</b>${p.mon}</span>`}
       ${e.venueName && html`<span class="ev-chip"><${Icon} n="pin" />${e.venueName}</span>`}
     </span>
     <span class="ev-body">
       ${level === 2 ? html`<h2 class="ev-title">${e.title}</h2>` : html`<h3 class="ev-title">${e.title}</h3>`}
-      <span class="ev-when">${range ?? (p ? `${shortDate(sum.next, tz)} · ${p.time}${sum.count > 1 ? ` · ${T.moreDates(sum.count - 1)}` : ""}` : sum ? T.noDate : "")}</span>
+      <span class="ev-when">${sum?.valid ?? range ?? (p ? `${shortDate(sum.next, tz)} · ${p.time}${sum.count > 1 ? ` · ${T.moreDates(sum.count - 1)}` : ""}` : sum ? T.noDate : "")}</span>
       ${place && html`<span class="ev-place">${place}</span>`}
       <span class="ev-from">${sum?.from ? (sum.from.free ? T.free : html`${T.from} <strong>${money(sum.from.cents)}</strong>`) : ""}</span>
     </span>
@@ -957,9 +990,11 @@ function dateRange(sessions, tz) {
 }
 
 /** Run 93: the hero as the organizer describes the outing, with the price and a way to the tickets. */
-function Hero({ ev, src, own, onBroken, sessions, address, from, presale, pass, compact, zoomRef, onZoom, onBook, onPass, now = Date.now() }) {
+function Hero({ ev, src, own, onBroken, sessions, address, from, presale, value, pass, compact, zoomRef, onZoom, onBook, onPass, now = Date.now() }) {
   const tz = ev.venue?.timezone;
-  const when = dateRange(sessions, tz);
+  // Run 109: a voucher says how long it is valid, not when a show starts.
+  const valid = ev.voucher ? validity(sessions[0], tz) : null;
+  const when = valid ?? dateRange(sessions, tz);
   const place = [address || ev.venue?.name, ev.venue?.city].filter(Boolean).join(", ");
   const facts = [
     Number.isInteger(ev.durationMinutes) && ["clock", T.duration, span(ev.durationMinutes)],
@@ -976,16 +1011,16 @@ function Hero({ ev, src, own, onBroken, sessions, address, from, presale, pass, 
     <button type="button" class="hero-zoom" ref=${zoomRef} aria-label=${T.zoom} onClick=${onZoom}><${Icon} n="expand" /></button>
     <div class="wrap hero-inner">
       <div class="hero-text">
-        ${T.categories[ev.category] && html`<p class="eyebrow">${T.categories[ev.category]}</p>`}
+        ${(ev.voucher || T.categories[ev.category]) && html`<p class="eyebrow">${[ev.voucher && T.voucher.badge, T.categories[ev.category]].filter(Boolean).join(" · ")}</p>`}
         <h1 id="event-title">${ev.title}</h1>
         ${(when || place) && html`<div class="hero-where">
-          ${when && html`<p><${Icon} n="calendar" /><span>${when}${sessions.length > 1 ? html` <span class="more">· ${T.sessionsCount(sessions.length)}</span>` : ""}</span></p>`}
+          ${when && html`<p><${Icon} n="calendar" /><span>${when}${sessions.length > 1 && !valid ? html` <span class="more">· ${T.sessionsCount(sessions.length)}</span>` : ""}</span></p>`}
           ${place && html`<p><${Icon} n="pin" /><span>${place}</span></p>`}
         </div>`}
         ${facts.length > 0 && !compact && html`<ul class="hero-facts">${facts.map(([icon, label, value]) => html`<li>
           <${Icon} n=${icon} /><span><span class="hf-label">${label}</span><span class="hf-value">${value}</span></span></li>`)}</ul>`}
       </div>
-      ${from && !compact && html`<div class=${`hero-book${presale || pass ? " has-deal" : ""}`}>
+      ${from && !compact && html`<div class=${`hero-book${presale || pass || value ? " has-deal" : ""}`}>
         <p class="hb-from"><span class="hb-label">${from.free ? T.ticketsTitle : T.from}</span>
           <span class="hb-price">${from.free ? T.free : money(from.cents)}</span>${!from.free && html`<span class="hb-tax">${T.plusTax}</span>`}</p>
         <button type="button" class="hb-btn" onClick=${onBook}>${T.book}</button>
@@ -994,6 +1029,11 @@ function Hero({ ev, src, own, onBroken, sessions, address, from, presale, pass, 
           <span class="hb-deal-was"><span class="sr-only">${T.deal.instead("")}</span><s>${money(presale.regularCents)}</s></span>
           <span class="save">${T.deal.save(savePct(presale.cents, presale.regularCents))}</span>
           ${presale.endsAt && html`<span class="hb-deal-until">${endsIn(presale.endsAt, now) ?? T.coupons.until(dayLong(presale.endsAt, ev.venue?.timezone))}</span>`}</p>`}
+        ${!presale && value && html`<p class="hb-deal"><span class="deal-badge">${T.voucher.badge}</span>
+          <span class="hb-deal-price">${money(value.cents)}</span>
+          <span class="hb-deal-was"><span class="sr-only">${T.voucher.value} </span><s>${money(value.valueCents)}</s></span>
+          <span class="save">${T.deal.save(savePct(value.cents, value.valueCents))}</span>
+          <span class="hb-deal-until">${T.voucher.save(money(value.valueCents - value.cents))}</span></p>`}
         ${pass && html`<button type="button" class="hb-deal hb-pass" aria-label=${`${T.pass.see} — ${T.pass.hero(pass.dates)}, ${money(pass.cents)}`} onClick=${onPass}>
           <span class="deal-badge">${T.pass.pass}</span><span class="hb-deal-price">${money(pass.cents)}</span>
           <span class="hb-deal-until">${T.pass.hero(pass.dates)}</span><${Icon} n="arrow" /></button>`}
@@ -1094,6 +1134,16 @@ function About({ text, notice }) {
   </section>`;
 }
 
+/** Run 109: the offer's fine print, one condition per line, read before buying. */
+function Terms({ ev }) {
+  const lines = String(ev.page?.terms ?? "").split(/\n+/).map((l) => l.replace(/^[\s•·*\-–—]+/, "").trim()).filter(Boolean);
+  if (!lines.length) return null;
+  return html`<section class="block terms" id="conditions" aria-labelledby="terms-title">
+    <${SecHead} eyebrow=${T.voucher.termsEyebrow} id="terms-title" title=${ev.voucher ? T.voucher.terms : T.tabs.terms} />
+    <ul class="terms-list">${lines.map((l) => html`<li><${Icon} n="check" /><span>${l}</span></li>`)}</ul>
+  </section>`;
+}
+
 // ── Run 69: category, age, doors, language and accessibility, as the organizer set them ──
 function Facts({ ev }) {
   const items = [
@@ -1147,7 +1197,7 @@ function Faq({ ev }) {
     Number.isInteger(ev.doorsOpenMinutes) && ev.doorsOpenMinutes > 0 && [A.doors[0], A.doors[1](span(ev.doorsOpenMinutes))],
     access && [A.access, access],
     policy && [A.refund, policy],
-    A.tickets, A.fees, !DOOR && A.pick,
+    A.tickets, A.fees, !DOOR && !ev.voucher && A.pick,
   ].filter(Boolean);
   const all = [...own, ...derived];
   const shown = open ? all : all.slice(0, 5);
@@ -1412,13 +1462,16 @@ function EventShop({ config }) {
     const gone = limited === 0;
     const meta = `${t.kind === "add_on" ? SCOPE_TEXT(t) : ""}${t.openDate ? T.openDate : ""}${t.pass ? ` · ${T.pass.covers(sessions.length)}` : ""}${t.minQuantity > 1 ? T.minimum(t.minQuantity) : ""}${left(t) !== null ? T.addOnLeft(left(t)) : ""}`.replace(/^ · /, "");
     const next = deal ? nextPhase(t, regular, data.upcoming) : null;
+    // Run 109: a voucher shows its face value, struck, when no presale price is shown.
+    const worth = !deal && Number.isInteger(t.valueCents) && t.valueCents > t.priceCents ? t.valueCents : null;
     const dealMeta = deal ? [t.salesEndAt && presaleEnd(t.salesEndAt, tz, clock), limited !== null && !gone && T.deal.left(limited),
       next && T.deal.next(money(next.cents), next.from ? dayLong(next.from, tz) : null)].filter(Boolean) : [];
-    return html`<div class=${`type${q > 0 ? " is-on" : ""}${deal ? " is-deal" : ""}${gone ? " is-gone" : ""}`}>
+    return html`<div class=${`type${q > 0 ? " is-on" : ""}${deal || worth ? " is-deal" : ""}${gone ? " is-gone" : ""}`}>
       <div class="type-info">
         ${deal && html`<p class="type-deal"><span class="deal-badge">${T.deal.presale}</span><span class="save">${T.deal.save(savePct(t.priceCents, deal.priceCents))}</span></p>`}
+        ${worth && html`<p class="type-deal"><span class="deal-badge">${T.voucher.badge}</span><span class="save">${T.deal.save(savePct(t.priceCents, worth))}</span></p>`}
         <div class="name">${t.name}</div>
-        <div class="type-price"><span class="price">${t.priceCents === 0 ? T.free : money(t.priceCents)}</span>${deal && html` <span class="was"><span class="sr-only">${T.deal.instead("")}</span><s>${money(deal.priceCents)}</s></span>`}${meta && html`<span class="meta"> · ${meta}</span>`}</div>
+        <div class="type-price"><span class="price">${t.priceCents === 0 ? T.free : money(t.priceCents)}</span>${deal && html` <span class="was"><span class="sr-only">${T.deal.instead("")}</span><s>${money(deal.priceCents)}</s></span>`}${worth && html` <span class="was"><span class="sr-only">${T.voucher.value} </span><s>${money(worth)}</s></span>`}${meta && html`<span class="meta"> · ${meta}</span>`}</div>
         ${(dealMeta.length > 0 || gone) && html`<p class="deal-meta">${gone ? T.deal.soldOut : dealMeta.map((m) => html`<span>${m}</span>`)}</p>`}
         ${about && html`<details class="type-more"><summary>${T.moreInfo}</summary><p>${about}</p></details>`}</div>
       <div class="stepper">
@@ -1619,15 +1672,16 @@ function EventShop({ config }) {
       </div>`}
       ${canBuy && html`
         <div class="step">
-          <h3 class="step-title">${stepNo(1)}${passMode ? T.pass.dates : T.step1}</h3>
+          <h3 class="step-title">${stepNo(1)}${passMode ? T.pass.dates : ev.voucher ? T.voucher.step1 : T.step1}</h3>
           ${sessions.length === 0 ? html`<p class="step-hint">${DOOR ? T.noSessionsToday : T.noSessions}</p>`
             : passMode ? html`<${PassDates} sessions=${sessions} tz=${tz} left=${passLeft} />`
+            : ev.voucher && sessions.length === 1 && validity(sessions[0], tz) ? html`<p class="voucher-window"><${Icon} n="calendar" /><span>${validity(sessions[0], tz)}</span></p><p class="step-hint">${T.voucher.once}</p>`
             : DOOR ? html`<${TimeSlots} sessions=${sessions} tz=${tz} value=${sessionId} onPick=${setSessionId} />`
             : html`<${SessionCalendar} sessions=${sessions} tz=${tz} value=${sessionId} onPick=${setSessionId} />`}
           ${!DOOR && !passMode && sessions.some((s) => s.available === 0) && html`<${Waitlist} sessions=${sessions.filter((s) => s.available === 0)} tz=${tz} onFree=${load} />`}
         </div>
         ${sessions.length > 0 && html`<div class=${`step${sessionId ? "" : " is-idle"}`}>
-          <h3 class="step-title">${stepNo(2)}${T.step2}</h3>
+          <h3 class="step-title">${stepNo(2)}${ev.voucher ? T.voucher.step2 : T.step2}</h3>
           ${!sessionId ? html`<p class="step-hint">${T.pickDateFirst}</p>` : html`<div class="step-in" key=${sessionId}>
             <div class="types">${admissions.map(typeRow)}</div>
             ${addOns.length > 0 && !passMode && html`<section class="options" aria-labelledby="options-title">
@@ -1651,13 +1705,14 @@ function EventShop({ config }) {
     gallery.length > 0 && ["galerie", T.tabs.gallery],
     (ev.page?.steps ?? []).length > 0 && ["le-jour-j", T.tabs.steps],
     (ev.description?.trim() || ev.page?.notice) && ["description", T.tabs.about],
+    String(ev.page?.terms ?? "").trim() && ["conditions", T.tabs.terms],
     ev.venue?.name && ["lieu", T.tabs.venue],
     ["faq", T.tabs.faq],
   ].filter(Boolean);
   return html`<${Top} brand=${ev.brand} extra=${doorBadge} />
   <main class=${`event-main${canBuy && sessions.length > 0 ? " with-bar" : ""}`}>
     <${Hero} ev=${ev} src=${photo} own=${photo === own} onBroken=${(e) => (photo === own ? setPhotoBroken(true) : hideBroken(e))}
-      sessions=${sessions} address=${address} from=${from} presale=${presaleDeal} compact=${DOOR}
+      sessions=${sessions} address=${address} from=${from} presale=${presaleDeal} value=${DOOR ? null : valueFrom(data.ticketTypes)} compact=${DOOR}
       pass=${passOffer} onPass=${() => { if (!passMode) pickMode("pass"); book(); }} now=${clock}
       zoomRef=${zoomButton} onZoom=${() => setZoom({ photos: [{ src: photo, alt: ev.title }], start: 0 })} onBook=${book} />
     <div class="wrap layout">
@@ -1668,6 +1723,7 @@ function EventShop({ config }) {
         ${!DOOR && html`<${Gallery} photos=${gallery} onOpen=${openGallery} />`}
         ${!DOOR && html`<${Steps} steps=${ev.page?.steps ?? []} />`}
         <${About} text=${ev.description} notice=${ev.page?.notice} />
+        <${Terms} ev=${ev} />
         <${Facts} ev=${ev} />
         <${Venue} venue=${ev.venue} address=${address} />
         ${!DOOR && html`<${Faq} ev=${ev} />`}

@@ -1755,7 +1755,9 @@ export function createApp(deps: AppDeps) {
             ends: open.slice(0, 60).map((session) => (session.endsAt ?? null) as Date | string | null),
             timezone: event.venueTimezone == null ? null : String(event.venueTimezone),
             ...(floors.has(eventId) ? { fromCents: floors.get(eventId)! } : {}),
-            ...(deals.has(eventId) ? { presale: deals.get(eventId)!.presale, coupon: deals.get(eventId)!.coupon, pass: deals.get(eventId)!.pass ?? null } : {}),
+            ...(deals.has(eventId) ? { presale: deals.get(eventId)!.presale, coupon: deals.get(eventId)!.coupon, pass: deals.get(eventId)!.pass ?? null, value: deals.get(eventId)!.value ?? null } : {}),
+            // Run 109: a merchant voucher (its session's end is when it stops being valid).
+            ...(event.voucher ? { voucher: true } : {}),
             shopPath: `/acheter/${b.client_id}/${b.brand_id}/${eventId}`,
           });
         }

@@ -699,3 +699,10 @@ table.quote tr.total td { padding-top: 10px; border-top: 1px solid var(--soft-2)
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
   .hero-img { animation: none; transform: none; }
 }
+
+/* Run 109: a merchant voucher's validity window, and the offer's conditions (fine print). */
+.voucher-window { display: flex; align-items: center; gap: 10px; margin: 4px 0 6px; padding: 12px 14px; border-radius: 14px; background: var(--panel); border: 1px solid var(--line); font-weight: 700; }
+.voucher-window .i { flex: none; }
+.terms-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; max-width: 68ch; }
+.terms-list li { display: flex; gap: 10px; align-items: flex-start; line-height: 1.55; }
+.terms-list .i { flex: none; width: 18px; height: 18px; margin-top: 3px; }

@@ -65,7 +65,7 @@ export async function requestTicketsEmail(tx: Tx, s: TenantScope, orderId: strin
 /** What the buyer's ticket page shows besides the order itself. */
 export async function publicOrderContext(q: Queryable, s: TenantScope, orderId: string) {
   const { rows } = await q.query(
-    `SELECT br.name AS brand_name, ${APPEARANCE_COLUMNS}, e.image_url AS event_image_url, e.id AS event_id, e.title AS event_title, se.starts_at, se.ends_at,
+    `SELECT br.name AS brand_name, ${APPEARANCE_COLUMNS}, e.image_url AS event_image_url, e.id AS event_id, e.title AS event_title, se.starts_at, se.ends_at, e.voucher,
             v.name AS venue_name, v.address_line1, v.city, v.timezone, o.exchange_of_order_id,
             EXISTS (SELECT 1 FROM public.ticketing_order_lines l
                     JOIN public.ticketing_ticket_types t ON t.id = l.ticket_type_id AND t.client_id = l.client_id AND t.brand_id = l.brand_id
@@ -103,6 +103,8 @@ export async function publicOrderContext(q: Queryable, s: TenantScope, orderId: 
       imageUrl: r.event_image_url ?? null,
       startsAt: r.starts_at,
       endsAt: r.ends_at,
+      /** Run 109: a merchant voucher: valid until `endsAt`, not a show at `startsAt`. */
+      voucher: Boolean(r.voucher),
       venue: { name: r.venue_name, addressLine1: r.address_line1, city: r.city, timezone: r.timezone },
     },
     exchangeOfOrderId: r.exchange_of_order_id,

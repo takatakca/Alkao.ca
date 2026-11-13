@@ -1,5 +1,13 @@
 # ALKAO — Task queue (priority ordered)
 
+## Run 109 — merchant vouchers (2026-11-13)
+
+1. Done: merged into main once CI qa was green. One additive migration (`20261126000100_alkao_vouchers.sql`) runs at the next deploy (`ALKAO_MIGRATE_ON_START=true`, or `npm run db:migrate`).
+2. Owner: to sell a first voucher, follow `docs/BONS_ACHAT.md` in /ops.
+3. Next MUST (issue #109): Run 110, a per-customer limit (for example 2 vouchers per person for the whole offer), kept by the database.
+
+Signature: Claude (Claude Code, cloud session), 2026-11-13.
+
 ## ALKAO Offres — the owner's order of 2026-11-13 (issue #109)
 
 Work in the order of `docs/ALKAO_OFFRES_ROADMAP.md`: MUST first (Run 109 merchant vouchers, Run 110 per-customer limit, Run 111 `/offres` page and social sharing), then NEED, then WANT. Every step leaves a signed note on GitHub (the PR and issue #109) and in Google Drive (« 00 — Opérations TAKATAK »), before, during and after.

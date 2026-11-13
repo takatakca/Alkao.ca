@@ -688,3 +688,7 @@ dialog[open]{animation:pop .35s var(--ease) both}
   .tk-service > :not(.i){grid-column:2}
   .tk-offers{padding:22px}
 }
+/* Run 109: a merchant voucher's badge in place of a date (it is valid over a window). */
+.date-badge.is-voucher{gap:2px;font-size:.7rem;letter-spacing:.14em}
+.date-badge.is-voucher .i{width:20px;height:20px;color:var(--brand)}
+.date-badge.is-voucher span{font-family:var(--font-body);font-size:.72rem;font-weight:800;letter-spacing:.14em}

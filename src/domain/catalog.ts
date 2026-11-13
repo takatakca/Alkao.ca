@@ -34,6 +34,8 @@ export interface TicketTypeRule {
   quantityLimit?: number | null;
   /** Run 98: a festival pass, valid once at every session on sale when bought. */
   pass?: boolean;
+  /** Run 109: a voucher's face value ("valeur 80 $"), always above its price; null = not said. */
+  valueCents?: number | null;
 }
 
 /** Run 97: a type whose sale has ended is sold no more (a cart with it is refused as inactive). */

@@ -114,6 +114,8 @@ export interface TicketsEmailData {
   addOns?: { name: string; quantity: number }[] | null;
   /** Run 100: a festival pass's other dates, after the order's own. */
   passDates?: Date[] | null;
+  /** Run 109: a voucher: when its validity ends, said instead of a show time. */
+  voucherUntil?: Date | null;
   /** Run 105: the organizer's offer for next time. */
   returnOffer?: { eventTitle: string; code: string; kind: "percent" | "amount"; percent: number | null; amountCents: number | null; endsAt: Date | null; link: string } | null;
 }
@@ -121,6 +123,7 @@ export interface TicketsEmailData {
 const TICKETS = {
   fr: {
     title: (changed: boolean) => (changed ? "Vos nouveaux billets" : "Vos billets"),
+    validUntil: (when: string) => `Bon valide jusqu'au ${when}`,
     hello: (name: string | null) => (name ? `Bonjour ${name},` : "Bonjour,"),
     intro: (changed: boolean, ref: string) =>
       changed
@@ -145,6 +148,7 @@ const TICKETS = {
   },
   en: {
     title: (changed: boolean) => (changed ? "Your new tickets" : "Your tickets"),
+    validUntil: (when: string) => `Voucher valid until ${when}`,
     hello: (name: string | null) => (name ? `Hello ${name},` : "Hello,"),
     intro: (changed: boolean, ref: string) =>
       changed
@@ -206,7 +210,7 @@ export function ticketsEmail(d: TicketsEmailData): Content {
   const l = d.language ?? "fr";
   const t = TICKETS[l];
   const changed = d.kind === "exchange_tickets";
-  const when = fullDate(l, d.startsAt, d.timezone);
+  const when = d.voucherUntil ? t.validUntil(fullDate(l, d.voucherUntil, d.timezone)) : fullDate(l, d.startsAt, d.timezone);
   const where = d.city ? `${d.venueName}, ${d.city}` : d.venueName;
   const count = t.count(d.validTickets);
   const hello = t.hello(d.buyerName);
