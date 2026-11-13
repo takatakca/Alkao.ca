@@ -1,5 +1,16 @@
 # ALKAO — Agent handoff (mandatory)
 
+## Run 112 — voucher expiry reminder (2026-11-13)
+
+- **Queue:** `queueReminders` now runs `queueSessionReminders` (Run 23, unchanged) plus `queueVoucherExpiry`.
+  - `queueVoucherExpiry` inserts outbox kind `voucher_expiry` for paid voucher orders whose session `ends_at` falls within `VOUCHER_EXPIRY_DAYS_BEFORE` (7) days.
+  - Only orders paid more than 12 h ago, with a valid ticket not yet admitted. The Brand's `reminder_emails` and buyer erasures are respected.
+  - One per order: the outbox's unique key.
+- **Worker:** the `voucher_expiry` branch skips `session_cancelled`, `voucher_expired` (window over) and `vouchers_redeemed` (all scanned since). It sends `voucherExpiryEmail` with the unredeemed count and the QR codes.
+- **Tests:** `test/delivery/voucher-expiry.test.ts` (4). The worker drops e-mails waiting more than 72 h, so delivery tests use a clock near the real one.
+
+Signature: Claude (Claude Code, cloud session), 2026-11-13.
+
 ## Run 111 — /offres and share links (2026-11-13)
 
 - **Page:** `renderHome({ mode: "offres" })` forces `deals` and drops `period`.

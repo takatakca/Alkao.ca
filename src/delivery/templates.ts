@@ -277,6 +277,53 @@ export function reminderEmail(d: ReminderEmailData): Content {
   return { fromName: d.brandName, subject: r.subject(d.eventTitle, when), text, html };
 }
 
+// ── Run 112: before a voucher expires ───────────────────────────────────────
+export type VoucherExpiryEmailData = Omit<TicketsEmailData, "kind" | "voucherUntil" | "returnOffer"> & {
+  /** When the voucher stops being valid. */
+  validUntil: Date;
+  /** How many of the order's vouchers have not been redeemed yet. */
+  unredeemed: number;
+};
+
+const VOUCHER_EXPIRY = {
+  fr: {
+    title: "Votre bon expire bientôt",
+    left: (n: number) => (n > 1 ? `Il vous reste ${n} bons non utilisés` : "Il vous reste 1 bon non utilisé"),
+    intro: (ref: string, until: string) => `Petit rappel pour votre commande ${ref} : ils sont valides jusqu'au ${until}.`,
+    advice: "Présentez le code QR au commerce avant cette date. Après, le bon n'est plus accepté.",
+    subject: (event: string, until: string) => `Votre bon expire le ${until} — ${event}`,
+  },
+  en: {
+    title: "Your voucher expires soon",
+    left: (n: number) => (n > 1 ? `You have ${n} unused vouchers left` : "You have 1 unused voucher left"),
+    intro: (ref: string, until: string) => `A quick reminder for your order ${ref}: they are valid until ${until}.`,
+    advice: "Show the QR code at the business before that date. After it, the voucher is no longer accepted.",
+    subject: (event: string, until: string) => `Your voucher expires on ${until} — ${event}`,
+  },
+};
+
+export function voucherExpiryEmail(d: VoucherExpiryEmailData): Content {
+  const l = d.language ?? "fr";
+  const t = TICKETS[l];
+  const v = VOUCHER_EXPIRY[l];
+  const until = fullDate(l, d.validUntil, d.timezone);
+  const day = new Intl.DateTimeFormat(locale(l), { dateStyle: "long", timeZone: d.timezone }).format(d.validUntil);
+  const where = d.city ? `${d.venueName}, ${d.city}` : d.venueName;
+  const hello = t.hello(d.buyerName);
+  const intro = `${v.left(d.unredeemed)}. ${v.intro(d.reference, until)}`;
+  const codes = d.codes?.length ? ["", t.codesText] : [];
+  const text = [hello, "", intro, "", d.eventTitle, t.validUntil(until), where, "", `${t.linkLine}${d.link}`, ...codes, "", v.advice, ...policyText(l, d.look), "", footerText(l, d.brandName, d.look)].join("\n");
+  const html = layout(l, d.brandName, v.title, [
+    paragraph(`${esc(hello)}<br>${esc(intro)}`),
+    box(`<strong>${esc(d.eventTitle)}</strong><br>${esc(t.validUntil(until))}<br>${esc(where)}<br>${esc(v.left(d.unredeemed))} · ${t.order} ${esc(d.reference)}`),
+    button(d.link, t.show, d.look),
+    ...codeRows(t, d.codes),
+    note(esc(v.advice), Boolean(d.codes?.length)),
+    ...policyRows(l, d.look),
+  ], d.look);
+  return { fromName: d.brandName, subject: v.subject(d.eventTitle, day), text, html };
+}
+
 // ── Session cancelled ───────────────────────────────────────────────────────
 export interface SessionCancelledEmailData {
   /** Run 50: the Brand's logo, colours, contact (and the event's photo). */

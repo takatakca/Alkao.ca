@@ -1,5 +1,11 @@
 # ALKAO — Project status
 
+## Run 112 — a reminder before a voucher expires (2026-11-13)
+
+Seven days before a voucher's validity ends, its buyer gets one e-mail: « Il vous reste 2 bons non utilisés. Ils sont valides jusqu'au … », with the QR codes. It goes only if one voucher is still unredeemed, and follows the organizer's reminder setting. Fewer forgotten vouchers means happier buyers and merchants who see them come in.
+
+Signature: Claude (Claude Code, cloud session), 2026-11-13.
+
 ## Run 111 — the offers page and social sharing (2026-11-13)
 
 `/offres` lists every offer on now (presales, coupons, vouchers), with its own title and share preview, made to be posted on social media. The featured offer and `/offres` have Facebook, X, WhatsApp, e-mail and copy-link buttons. Each link is tagged with its network, so the sales report shows which network sold what. With Runs 107 to 111, the four MUST items of the offers roadmap are done.
