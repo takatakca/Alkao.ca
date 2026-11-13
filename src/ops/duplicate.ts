@@ -41,12 +41,12 @@ export async function duplicateEvent(
       `INSERT INTO public.ticketing_events
          (client_id, brand_id, venue_id, slug, title, description, status, sales_open_at, sales_close_at,
           admission_opens_before_minutes, admission_closes_after_minutes,
-          image_url, category, min_age, doors_open_minutes, language, accessibility, duration_minutes, format, page)
+          image_url, category, min_age, doors_open_minutes, language, accessibility, duration_minutes, format, page, voucher)
        SELECT client_id, brand_id, venue_id, $4, $5, description, 'draft',
               CASE WHEN $6::int IS NULL THEN NULL ELSE sales_open_at + make_interval(days => $6::int) END,
               CASE WHEN $6::int IS NULL THEN NULL ELSE sales_close_at + make_interval(days => $6::int) END,
               admission_opens_before_minutes, admission_closes_after_minutes,
-              image_url, category, min_age, doors_open_minutes, language, accessibility, duration_minutes, format, page
+              image_url, category, min_age, doors_open_minutes, language, accessibility, duration_minutes, format, page, voucher
        FROM public.ticketing_events WHERE id = $1 AND client_id = $2 AND brand_id = $3
        RETURNING id`,
       [eventId, s.clientId, s.brandId, slug, title, shift],
@@ -58,12 +58,13 @@ export async function duplicateEvent(
       `INSERT INTO public.ticketing_ticket_types
          (client_id, brand_id, event_id, code, name, description, kind, price_cents, min_quantity, max_quantity,
           max_adults_in_order, counts_as_adult, add_on_scope, active, sort_order, grants_session_change, open_date,
-          quantity_limit, pass, sales_end_at, sales_start_at)
+          quantity_limit, pass, sales_end_at, sales_start_at, value_cents)
        SELECT client_id, brand_id, $4, code, name, description, kind, price_cents, min_quantity, max_quantity,
               max_adults_in_order, counts_as_adult, add_on_scope, active, sort_order, grants_session_change, open_date,
               quantity_limit, pass, CASE WHEN $5::int IS NULL THEN sales_end_at ELSE sales_end_at + make_interval(days => $5::int) END,
               -- Run 104: a later price phase starts later in the copy too.
-              CASE WHEN $5::int IS NULL THEN sales_start_at ELSE sales_start_at + make_interval(days => $5::int) END
+              CASE WHEN $5::int IS NULL THEN sales_start_at ELSE sales_start_at + make_interval(days => $5::int) END,
+              value_cents
        FROM public.ticketing_ticket_types WHERE event_id = $1 AND client_id = $2 AND brand_id = $3`,
       [eventId, s.clientId, s.brandId, newId, shift],
     );

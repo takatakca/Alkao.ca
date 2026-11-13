@@ -1,5 +1,25 @@
 # ALKAO — Project status
 
+## Run 109 — merchant vouchers, as on Groupon, Tuango and PromoRabais (2026-11-13)
+
+A restaurant, a spa, a shop or an activity sells a voucher on ALKAO:
+
+- a face value against its price (« valeur 80 $ pour 45 $ »);
+- a validity window (du… au…);
+- its conditions (the fine print).
+
+The buyer gets one QR code per voucher. The business scans it once, any time in the window, with the existing ALKAO scanner (offline too). The database refuses a value at or under the price.
+
+What buyers see:
+
+- **alkao.ca:** a « Bon » badge, « Valide jusqu'au … », a « Bon −43 % » ribbon and the value struck. Vouchers join « Préventes et rabais ».
+- **Shop:** the validity instead of a calendar, the value and the saving, and a « Conditions de l'offre » section.
+- **Tickets e-mail and page:** « Bon valide jusqu'au … ».
+
+Owner's guide: `docs/BONS_ACHAT.md`. It goes live with the next ALKAO deploy (one additive migration).
+
+Signature: Claude (Claude Code, cloud session), 2026-11-13.
+
 ## Run 108 — the offers platform roadmap; offers audited for accessibility (2026-11-13)
 
 The owner ordered ALKAO to become a presale and discount platform like Groupon, Tuango and PromoRabais, for TAKATAK's marketing and social media. `docs/ALKAO_OFFRES_ROADMAP.md` lists what is built, then the MUST, NEED and WANT items and the takatakca repos to recycle; issue #109 tracks it. The « Préventes et rabais » spotlight and the `?offres=1` filter are now checked by axe (WCAG 2.1 AA, light and dark) on every change.

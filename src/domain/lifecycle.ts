@@ -75,13 +75,15 @@ export function availability(session: { capacity: number; reservedCount: number;
  * gives a presale code, is when that code opens the sale (before the public opening).
  */
 export function isSessionSellable(
-  event: { status: EventStatus; salesOpenAt: Date | null; salesCloseAt: Date | null },
-  session: { status: SessionStatus; startsAt: Date },
+  event: { status: EventStatus; salesOpenAt: Date | null; salesCloseAt: Date | null; voucher?: boolean },
+  session: { status: SessionStatus; startsAt: Date; endsAt?: Date | null },
   now: Date,
   presaleFrom: Date | null = null,
 ): boolean {
   if (event.status !== "published" || session.status !== "on_sale") return false;
   if (event.salesOpenAt && now < event.salesOpenAt && !(presaleFrom && now >= presaleFrom)) return false;
   if (event.salesCloseAt && now >= event.salesCloseAt) return false;
+  // Run 109: a voucher's session is its validity window: it sells until the window ends.
+  if (event.voucher && session.endsAt) return now < session.endsAt;
   return now < session.startsAt;
 }

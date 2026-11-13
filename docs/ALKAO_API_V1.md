@@ -92,7 +92,7 @@ How a payment works:
 | GET / PATCH | `/events/:eventId` | `catalog.read` / `catalog.write` |
 | GET / POST | `/events/:eventId/sessions` | `inventory.read` / `catalog.write` (always created as `draft`) |
 | PATCH | `/sessions/:sessionId` | `catalog.write`; `409 capacity_below_committed` if capacity drops below what is held + sold; answers `{ session, buyersNotified }`: a new end time e-mails the session's buyers (Run 65, OPC) |
-| GET / POST | `/events/:eventId/ticket-types` | `catalog.read` / `catalog.write`; `openDate: true` makes an admission type a "billet ouvert" (Run 37, admission types only, off by default) |
+| GET / POST | `/events/:eventId/ticket-types` | `catalog.read` / `catalog.write`; `openDate: true` makes an admission type a "billet ouvert" (Run 37, admission types only, off by default); Run 109: `valueCents`, a voucher's face value, admissions only and above `priceCents` (`value_must_exceed_price`) |
 | PATCH | `/ticket-types/:ticketTypeId` | `catalog.write` |
 | GET | `/orders?limit&before` | `orders.read` |
 | GET | `/orders/:orderId` | `orders.read` (buyer, lines, taxes, tickets) |

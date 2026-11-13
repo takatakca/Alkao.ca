@@ -12,6 +12,8 @@ const LANG = pickLanguage();
 document.documentElement.lang = LANG === "en" ? "en-CA" : "fr-CA";
 const T = {
   fr: {
+    // Run 109: a merchant voucher is valid until a date, not a show at a time.
+    validUntil: (d) => `Bon valide jusqu'au ${d}`,
     errors: {
       order_not_found: "Ce lien n'est plus valide. Utilisez le lien du courriel le plus récent.",
       ticketing_unavailable: "La billetterie de cet organisateur est momentanément indisponible.",
@@ -117,6 +119,7 @@ const T = {
     optionRight: "Droit de changer de séance, rien à recevoir sur place",
   },
   en: {
+    validUntil: (d) => `Voucher valid until ${d}`,
     errors: {
       order_not_found: "This link no longer works. Use the link from your most recent email.",
       ticketing_unavailable: "This organizer's ticketing is temporarily unavailable.",
@@ -792,9 +795,10 @@ function Hero({ o, image, own, onZoom }) {
   const [loaded, setLoaded] = useState(null);
   const [failed, setFailed] = useState(null);
   const tz = o.event.venue.timezone;
+  const voucher = o.event.voucher && o.event.endsAt;
   const chips = [
-    ["calendar", capital(fmt({ dateStyle: "full" }, tz).format(new Date(o.event.startsAt)))],
-    ["clock", hours(o.event, tz)],
+    ["calendar", voucher ? T.validUntil(fmt({ dateStyle: "long" }, tz).format(new Date(o.event.endsAt))) : capital(fmt({ dateStyle: "full" }, tz).format(new Date(o.event.startsAt)))],
+    ["clock", voucher ? null : hours(o.event, tz)],
     ["pin", [o.event.venue.name, o.event.venue.city].filter(Boolean).join(", ")],
   ].filter(([, text]) => text);
   const show = image && failed !== image;

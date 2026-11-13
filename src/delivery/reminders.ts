@@ -17,6 +17,8 @@ export async function queueReminders(db: Db, now = new Date()): Promise<number> 
      SELECT o.client_id, o.brand_id, o.event_id, o.id, 'reminder'
      FROM public.ticketing_sessions se
      JOIN public.ticketing_orders o ON o.session_id = se.id AND o.client_id = se.client_id AND o.brand_id = se.brand_id
+     -- Run 109: a voucher's start is when it becomes valid, not an outing: no "see you tomorrow".
+     JOIN public.ticketing_events ev ON ev.id = o.event_id AND NOT ev.voucher
      LEFT JOIN public.ticketing_brand_settings bs ON bs.client_id = o.client_id AND bs.brand_id = o.brand_id
      WHERE se.status IN ('on_sale', 'paused', 'closed')
        AND se.starts_at > $1 AND se.starts_at <= $1::timestamptz + make_interval(hours => ${REMINDER_HOURS_BEFORE})

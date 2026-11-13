@@ -43,6 +43,10 @@ export interface HomeEvent {
   pass?: { priceCents: number } | null;
   /** Run 106: every date has taken place (`sessions` then lists them, the latest first). */
   ended?: boolean;
+  /** Run 109: a merchant voucher: valid until its first session's end, not a show at a time. */
+  voucher?: boolean;
+  /** Run 109: the voucher on sale now with the biggest saving on its face value. */
+  value?: { priceCents: number; valueCents: number } | null;
   /** Run 106: how many dates a past event had (`sessions` keeps the last six). */
   dateCount?: number;
   shopPath: string;
@@ -301,11 +305,18 @@ export interface Card {
   offer: Offer | null;
   /** Run 107: the regular price, struck next to "From" when that price is the presale's. */
   was: string | null;
+  /** Run 109: what the struck price is ("Prix régulier" or a voucher's "Valeur"). */
+  wasLabel: string;
+  /** Run 109: a merchant voucher, valid until `validUntil`. */
+  voucher: boolean;
+  validUntil: Date | null;
+  validLabel: string | null;
 }
 
 /** Run 107: a presale or a public coupon on now, exactly as the organizer set it. */
 export interface Offer {
-  kind: "presale" | "coupon";
+  /** Run 109: "value", a voucher's face value against its price. */
+  kind: "presale" | "value" | "coupon";
   /** The saving per ticket in percent, rounded down; 0 for an amount off the order. */
   pct: number;
   priceCents: number | null;
@@ -314,6 +325,8 @@ export interface Offer {
   /** A presale capped by a quantity. */
   limited: boolean;
   label: string | null;
+  /** A coupon's amount off the order. */
+  amountCents: number | null;
 }
 
 const dayKey = (d: Date, tz: string) => new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
@@ -338,14 +351,22 @@ function offerOf(e: HomeEvent): Offer | null {
   if (p && p.regularCents > p.priceCents && p.remaining !== 0) {
     return {
       kind: "presale", pct: Math.floor(((p.regularCents - p.priceCents) / p.regularCents) * 100),
-      priceCents: p.priceCents, regularCents: p.regularCents, endsAt: when(p.endsAt), limited: p.remaining !== null, label: null,
+      priceCents: p.priceCents, regularCents: p.regularCents, endsAt: when(p.endsAt), limited: p.remaining !== null, label: null, amountCents: null,
+    };
+  }
+  // Run 109: a voucher's face value, above its price (the database keeps it so).
+  const v = e.value;
+  if (v && v.valueCents > v.priceCents) {
+    return {
+      kind: "value", pct: Math.floor(((v.valueCents - v.priceCents) / v.valueCents) * 100),
+      priceCents: v.priceCents, regularCents: v.valueCents, endsAt: null, limited: false, label: null, amountCents: null,
     };
   }
   const c = e.coupon;
   if (c?.percent || c?.amountCents) {
     // An amount comes off the whole order once (src/domain/pricing.ts): its saving per ticket is
     // unknown, so it ranks after every percentage.
-    return { kind: "coupon", pct: c.percent ?? 0, priceCents: null, regularCents: null, endsAt: when(c.endsAt), limited: false, label: (c.label ?? "").trim() || null };
+    return { kind: "coupon", pct: c.percent ?? 0, priceCents: null, regularCents: null, endsAt: when(c.endsAt), limited: false, label: (c.label ?? "").trim() || null, amountCents: c.amountCents ?? null };
   }
   return null;
 }
@@ -360,22 +381,17 @@ function priceLabel(lang: Lang, fromCents: number | null | undefined): string | 
 }
 
 /**
- * Run 97: the presale first (its saving against the regular price, rounded down), else the
- * best public coupon; both only while on.
+ * Run 97: the presale first (its saving against the regular price, rounded down), else (Run 109)
+ * a voucher's saving on its face value, else the best public coupon; each only while on. Built
+ * from the same offer the spotlight shows, so the two always agree.
  */
-function dealLabel(lang: Lang, e: HomeEvent): string | null {
+function dealLabel(lang: Lang, o: Offer | null): string | null {
   const t = COPY[lang];
-  const p = e.presale;
-  if (p && p.regularCents > p.priceCents && p.remaining !== 0) {
-    return t.presaleRibbon(Math.floor(((p.regularCents - p.priceCents) / p.regularCents) * 100));
-  }
-  const c = e.coupon;
-  if (c?.percent) return t.couponRibbon(lang === "en" ? `${c.percent}%` : `${c.percent} %`);
-  if (c?.amountCents) {
-    const whole = c.amountCents % 100 === 0;
-    return t.couponRibbon(new Intl.NumberFormat(t.lang, { style: "currency", currency: "CAD", minimumFractionDigits: whole ? 0 : 2, maximumFractionDigits: 2 }).format(c.amountCents / 100));
-  }
-  return null;
+  if (!o) return null;
+  if (o.kind === "presale") return t.presaleRibbon(o.pct);
+  if (o.kind === "value") return t.valueRibbon(o.pct);
+  if (o.pct) return t.couponRibbon(lang === "en" ? `${o.pct}%` : `${o.pct} %`);
+  return o.amountCents ? t.couponRibbon(money(lang, o.amountCents)) : null;
 }
 
 export function cardsOf(brands: HomeBrand[], lang: Lang, origin: string | null, asset: (name: string) => string, which: "events" | "past" = "events"): Card[] {
@@ -421,10 +437,16 @@ export function cardsOf(brands: HomeBrand[], lang: Lang, origin: string | null, 
       ].filter((x): x is string => Boolean(x));
       const fallback = CATEGORIES.find((c) => c.id === categories[0])?.image ?? "event-fallback.webp";
       const offer = ended ? null : offerOf(e);
+      // Run 109: a voucher is valid until its first window's end.
+      const voucher = Boolean(e.voucher) && !ended;
+      const validUntil = voucher ? ends[0] ?? null : null;
+      const validLabel = validUntil
+        ? t.voucherUntil(new Intl.DateTimeFormat(locale, { timeZone: timezone, day: "numeric", month: "long", year: "numeric" }).format(validUntil))
+        : null;
       cards.push({
         id: e.id,
         title: e.title,
-        deal: ended ? null : dealLabel(lang, e),
+        deal: dealLabel(lang, offer),
         pass: !ended && e.pass && (e.sessions?.length ?? 0) > 1 ? t.passRibbon(e.sessions!.length) : null,
         brand: b.name,
         brandId: b.brandId,
@@ -443,10 +465,10 @@ export function cardsOf(brands: HomeBrand[], lang: Lang, origin: string | null, 
         url: absolute(origin, e.shopPath),
         price: ended ? null : priceLabel(lang, e.fromCents),
         next,
-        nextLabel: full.format(next),
+        nextLabel: validLabel ?? full.format(next),
         day: new Intl.DateTimeFormat(locale, { timeZone: timezone, day: "numeric" }).format(next),
         month: new Intl.DateTimeFormat(locale, { timeZone: timezone, month: "short" }).format(next).replace(".", ""),
-        dates: sessions.slice(0, 6).map((s) => full.format(s)),
+        dates: validLabel ? [validLabel] : sessions.slice(0, 6).map((s) => full.format(s)),
         count: ended ? Math.max(e.dateCount ?? 0, sessions.length) : sessions.length,
         categories,
         text,
@@ -460,7 +482,11 @@ export function cardsOf(brands: HomeBrand[], lang: Lang, origin: string | null, 
         language,
         ended,
         offer,
-        was: offer?.kind === "presale" && e.fromCents === offer.priceCents && offer.regularCents ? money(lang, offer.regularCents) : null,
+        was: (offer?.kind === "presale" || offer?.kind === "value") && e.fromCents === offer.priceCents && offer.regularCents ? money(lang, offer.regularCents) : null,
+        wasLabel: offer?.kind === "value" ? t.voucherValue : t.dealsRegular,
+        voucher,
+        validUntil,
+        validLabel,
       });
     }
   }
@@ -500,16 +526,16 @@ export function eventCard(t: Words, c: Card, { eager = false, venueLink = true }
   if (c.ended) return pastCard(t, c, { eager });
   return `<article class="card reveal" data-id="${esc(c.id)}">
     <a class="card-media" href="${esc(c.shop)}" tabindex="-1" aria-hidden="true"><img src="${esc(c.image)}" alt="" ${eager ? "" : 'loading="lazy" '}decoding="async" /></a>
-    <p class="date-badge" aria-hidden="true"><span>${esc(c.day)}</span>${esc(c.month)}</p>
+    ${c.voucher ? `<p class="date-badge is-voucher" aria-hidden="true">${icon("ticket")}<span>${esc(t.voucherBadge)}</span></p>` : `<p class="date-badge" aria-hidden="true"><span>${esc(c.day)}</span>${esc(c.month)}</p>`}
     <button class="fav" type="button" data-fav="${esc(c.id)}" aria-pressed="false" aria-label="${esc(`${t.favorite} : ${c.title}`)}" hidden>${icon("heart")}</button>
     <div class="card-body">
       ${c.deal ? `<p class="deal-ribbon">${icon("tag")}<span>${esc(c.deal)}</span></p>` : c.pass ? `<p class="deal-ribbon is-pass">${icon("ticket")}<span>${esc(c.pass)}</span></p>` : ""}
       <p class="card-brand">${c.logo ? `<img src="${esc(c.logo)}" alt="" loading="lazy" decoding="async" />` : ""}${esc(c.brand)}</p>
       <h3 class="card-title"><a href="${esc(c.shop)}">${esc(c.title)}</a></h3>
-      <p class="card-meta">${icon("clock")}<time datetime="${esc(c.next.toISOString())}">${esc(c.nextLabel)}</time></p>
+      <p class="card-meta">${icon("clock")}<time datetime="${esc((c.validUntil ?? c.next).toISOString())}">${esc(c.nextLabel)}</time></p>
       ${c.place ? `<p class="card-meta">${icon("pin")}${venueLink ? `<a href="${esc(c.venuePath)}">${esc(c.place)}</a>` : `<span>${esc(c.place)}</span>`}</p>` : ""}
       <div class="card-foot">
-        ${c.price ? (c.was ? `<p class="price has-was">${esc(c.price)} <s class="was"><span class="sr-only">${esc(t.dealsRegular)} </span>${esc(c.was)}</s></p>` : `<p class="price">${esc(c.price)}</p>`) : "<span></span>"}
+        ${c.price ? (c.was ? `<p class="price has-was">${esc(c.price)} <s class="was"><span class="sr-only">${esc(c.wasLabel)} </span>${esc(c.was)}</s></p>` : `<p class="price">${esc(c.price)}</p>`) : "<span></span>"}
         <span class="pills">${c.minAge ? `<span class="pill pill-age" title="${esc(t.age(c.minAge))}">${esc(t.agePill(c.minAge))}</span>` : ""}${c.count > 1 ? `<span class="pill">${esc(t.dates(c.count))}</span>` : ""}</span>
       </div>
       <div class="card-actions">
@@ -616,11 +642,12 @@ function dealsSection(t: Words, lang: Lang, deals: Card[], { link, card }: { lin
   const ends = o.endsAt
     ? new Intl.DateTimeFormat(t.lang, { timeZone: best.timezone, day: "numeric", month: "long", hour: "numeric", minute: "2-digit" }).format(o.endsAt)
     : null;
-  const price = o.kind === "presale" && o.priceCents !== null && o.regularCents !== null
+  const value = o.kind === "value";
+  const price = (o.kind === "presale" || value) && o.priceCents !== null && o.regularCents !== null
     ? `<div class="spot-price">
-            <p class="spot-now"><span class="sr-only">${esc(t.dealsPresalePrice)} </span>${esc(money(lang, o.priceCents))}<small>${esc(t.plusTax)}</small></p>
-            <p class="spot-was">${esc(t.dealsRegular)} <s>${esc(money(lang, o.regularCents))}</s></p>
-            <p class="spot-save">${esc(t.dealsSave(money(lang, o.regularCents - o.priceCents)))}</p>
+            <p class="spot-now"><span class="sr-only">${esc(value ? t.buy : t.dealsPresalePrice)} </span>${esc(money(lang, o.priceCents))}<small>${esc(t.plusTax)}</small></p>
+            <p class="spot-was">${esc(value ? t.voucherValue : t.dealsRegular)} <s>${esc(money(lang, o.regularCents))}</s></p>
+            <p class="spot-save">${esc(value ? t.voucherSave(money(lang, o.regularCents - o.priceCents)) : t.dealsSave(money(lang, o.regularCents - o.priceCents)))}</p>
           </div>`
     : `<div class="spot-price">
             <p class="spot-now">${esc(best.deal ?? "")}</p>
@@ -629,19 +656,21 @@ function dealsSection(t: Words, lang: Lang, deals: Card[], { link, card }: { lin
           </div>`;
   const facts = [
     ends ? `<li>${icon("clock")}<span>${esc(t.dealsUntil(ends))}</span></li>` : "",
+    // Run 109: a voucher's own validity.
+    best.validLabel ? `<li>${icon("calendar")}<span>${esc(best.validLabel)}</span></li>` : "",
     o.limited ? `<li>${icon("ticket")}<span>${esc(t.dealsLimited)}</span></li>` : "",
   ].join("");
   return `    <section class="section deals" id="preventes" aria-labelledby="deals-title">
       <div class="wrap">
         ${head}
         <article class="spotlight reveal" aria-labelledby="spot-title">
-          <a class="spot-media" href="${esc(best.shop)}" tabindex="-1" aria-hidden="true"><img src="${esc(best.image)}" alt="" loading="lazy" decoding="async" /><p class="date-badge"><span>${esc(best.day)}</span>${esc(best.month)}</p></a>
+          <a class="spot-media" href="${esc(best.shop)}" tabindex="-1" aria-hidden="true"><img src="${esc(best.image)}" alt="" loading="lazy" decoding="async" />${best.voucher ? `<p class="date-badge is-voucher">${icon("ticket")}<span>${esc(t.voucherBadge)}</span></p>` : `<p class="date-badge"><span>${esc(best.day)}</span>${esc(best.month)}</p>`}</a>
           <div class="spot-body">
             <p class="spot-tag">${icon("bolt")}<span>${esc(t.dealsBest)}</span></p>
             <p class="deal-ribbon">${icon("tag")}<span>${esc(best.deal ?? "")}</span></p>
             <p class="card-brand">${best.logo ? `<img src="${esc(best.logo)}" alt="" loading="lazy" decoding="async" />` : ""}${esc(best.brand)}</p>
             <h3 class="spot-title" id="spot-title"><a href="${esc(best.shop)}">${esc(best.title)}</a></h3>
-            <p class="card-meta">${icon("calendar")}<time datetime="${esc(best.next.toISOString())}">${esc(best.nextLabel)}</time></p>
+            ${best.voucher ? "" : `<p class="card-meta">${icon("calendar")}<time datetime="${esc(best.next.toISOString())}">${esc(best.nextLabel)}</time></p>`}
             ${best.place ? `<p class="card-meta">${icon("pin")}<span>${esc(best.place)}</span></p>` : ""}
             ${price}
             ${facts ? `<ul class="spot-facts">${facts}</ul>` : ""}
@@ -722,7 +751,8 @@ export function renderHome({ origin, lang, brands, query, now, asset }: RenderOp
   const cheapest = (c: Card) => (c.fromCents === undefined ? Number.POSITIVE_INFINITY : (c.fromCents ?? 0));
   const shown = filtered ? pool.filter((c) => matches(c, ask, now)) : pool;
   if (ask.sort === "price") shown.sort((a, b) => cheapest(a) - cheapest(b) || a.next.getTime() - b.next.getTime());
-  const week = all.filter((c) => c.next.getTime() - now.getTime() <= 7 * 86_400_000);
+  // Run 109: a voucher is not an outing on a date: not in "Cette semaine", the agenda or the Event data.
+  const week = all.filter((c) => !c.voucher && c.next.getTime() - now.getTime() <= 7 * 86_400_000);
   // Run 97: presales and coupons on now.
   const deals = all.filter((c) => c.deal);
   const cities = [...new Set(pool.map((c) => c.city).filter(Boolean))].sort((a, b) => a.localeCompare(b, t.lang));
@@ -812,6 +842,7 @@ export function renderHome({ origin, lang, brands, query, now, asset }: RenderOp
 
   const AGENDA_MAX = 120;
   const agendaRows = shown
+    .filter((c) => !c.voucher)
     .flatMap((c) => c.sessions.map((start) => ({ c, start })))
     .filter(({ c, start }) => inWindow(start, c.timezone, ask.when, now))
     .sort((x, y) => x.start.getTime() - y.start.getTime() || x.c.title.localeCompare(y.c.title));
@@ -883,7 +914,7 @@ export function renderHome({ origin, lang, brands, query, now, asset }: RenderOp
 
   // Run 66: one Event per date (the next ten of each), with the lowest price as its offer. The
   // listed dates all have seats left (src/api/app.ts), so each offer is in stock.
-  const jsonLd = all.flatMap((c) => {
+  const jsonLd = all.filter((c) => !c.voucher).flatMap((c) => {
     const { venue, street } = c;
     const offers = c.fromCents === undefined ? {} : {
       offers: {

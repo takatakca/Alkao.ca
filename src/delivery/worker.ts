@@ -54,6 +54,9 @@ interface DueRow extends LookRow {
   brand_name: string;
   event_title: string;
   starts_at: Date;
+  /** Run 109: a voucher, and when its validity ends. */
+  voucher: boolean;
+  session_ends_at: Date | null;
   venue_name: string;
   city: string | null;
   timezone: string;
@@ -93,7 +96,7 @@ export async function deliverTicketEmails(db: Db, cfg: DeliveryConfig, now = new
         `SELECT x.id, x.client_id, x.brand_id, x.order_id, x.kind, x.attempts, x.created_at,
                 o.reference, o.status AS order_status, b.email, b.full_name, b.language, br.name AS brand_name,
                 ${APPEARANCE_COLUMNS}, e.image_url AS event_image_url,
-                e.title AS event_title, e.id AS event_id, s.starts_at, v.name AS venue_name, v.city, v.timezone,
+                e.title AS event_title, e.id AS event_id, s.starts_at, e.voucher, s.ends_at AS session_ends_at, v.name AS venue_name, v.city, v.timezone,
                 (SELECT count(*)::int FROM public.ticketing_tickets t
                   WHERE t.order_id = o.id AND t.client_id = o.client_id AND t.brand_id = o.brand_id AND t.status = 'valid') AS valid_tickets,
                 coalesce((SELECT i.amount_cents FROM public.ticketing_session_cancellation_orders i
@@ -218,6 +221,7 @@ export async function deliverTicketEmails(db: Db, cfg: DeliveryConfig, now = new
         reference: row.reference,
         eventTitle: row.event_title,
         startsAt: row.starts_at,
+        voucherUntil: row.voucher ? row.session_ends_at : null,
         venueName: row.venue_name,
         city: row.city,
         timezone: row.timezone,

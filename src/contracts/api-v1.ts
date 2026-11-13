@@ -118,6 +118,8 @@ export const EventPage = z.object({
   steps: z.array(z.object({ title: plain(80), text: plain(400).nullish(), imageUrl: displayUrl.nullish() })).max(10).default([]),
   /** FAQ: the organizer's own questions and answers. */
   faq: z.array(z.object({ question: plain(200), answer: plain(1500) })).max(20).default([]),
+  /** Run 109: the fine print ("Conditions"): one per line, shown before buying. */
+  terms: z.string().trim().min(1).max(3000).regex(/^[^<>]*$/, "plain text only").nullish(),
 });
 export type EventPage = z.infer<typeof EventPage>;
 
@@ -137,6 +139,8 @@ export const CreateEvent = z
     imageUrl: displayUrl.nullish(),
     ...EventDetails.partial().shape,
     page: EventPage.optional(),
+    /** Run 109: a merchant voucher ("bon d'achat"): each session is a validity window, not a show time. */
+    voucher: z.boolean().optional(),
   })
   .refine((e) => !e.salesOpenAt || !e.salesCloseAt || Date.parse(e.salesOpenAt) < Date.parse(e.salesCloseAt), {
     message: "salesOpenAt must be before salesCloseAt",
@@ -153,6 +157,7 @@ export const UpdateEvent = z
     imageUrl: displayUrl.nullable(),
     ...EventDetails.shape,
     page: EventPage,
+    voucher: z.boolean(),
   })
   .partial()
   .refine((o) => Object.keys(o).length > 0, "empty update");
@@ -203,6 +208,8 @@ const ticketTypeFields = {
   pass: z.boolean().default(false),
   /** Run 104: not sold before this moment (a later price phase: early bird, then presale, then regular). */
   salesStartAt: timestamp.nullish(),
+  /** Run 109, admissions only: a voucher's face value ("valeur 80 $"), above its price. */
+  valueCents: z.number().int().min(1).max(100_000_000).nullish(),
 };
 export const CreateTicketType = z
   .object(ticketTypeFields)
@@ -214,7 +221,8 @@ export const CreateTicketType = z
   .refine((t) => t.quantityLimit == null || t.kind === "admission", { message: "only admissions have a quantity limit" })
   .refine((t) => !t.pass || (t.kind === "admission" && !t.openDate), { message: "a pass is an admission with fixed dates" })
   .refine((t) => !t.presaleOf || t.salesEndAt != null || t.quantityLimit != null, { message: "a presale ends on a date or after a quantity", path: ["salesEndAt"] })
-  .refine((t) => !t.salesStartAt || !t.salesEndAt || Date.parse(t.salesStartAt) < Date.parse(t.salesEndAt), { message: "salesEndAt must be after salesStartAt", path: ["salesEndAt"] });
+  .refine((t) => !t.salesStartAt || !t.salesEndAt || Date.parse(t.salesStartAt) < Date.parse(t.salesEndAt), { message: "salesEndAt must be after salesStartAt", path: ["salesEndAt"] })
+  .refine((t) => t.valueCents == null || (t.kind === "admission" && t.valueCents > t.priceCents), { message: "a face value is an admission's, above its price", path: ["valueCents"] });
 export const UpdateTicketType = z
   .object({
     name,
@@ -231,8 +239,11 @@ export const UpdateTicketType = z
     salesEndAt: timestamp.nullable(),
     salesStartAt: timestamp.nullable(),
     quantityLimit: z.number().int().min(1).max(1_000_000).nullable(),
+    // Run 109: the database keeps it above the price (ticketing_ticket_types_value_ck).
+    valueCents: z.number().int().min(1).max(100_000_000).nullable(),
   })
   .partial()
+  .refine((o) => o.valueCents == null || o.priceCents == null || o.valueCents > o.priceCents, { message: "a face value is above the price", path: ["valueCents"] })
   .refine((o) => Object.keys(o).length > 0, "empty update");
 
 export const ListQuery = z.object({
