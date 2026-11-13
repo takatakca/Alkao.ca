@@ -1,5 +1,12 @@
 # ALKAO — Task queue (priority ordered)
 
+## Run 112 — voucher expiry reminder (2026-11-13)
+
+1. Done: merged into main once CI qa was green. One migration (`20261128000100_alkao_voucher_expiry.sql`) widens the e-mail outbox's kinds at the next deploy.
+2. Next NEED (issue #109): 6. unredeemed-voucher liability (sold, redeemed, expired) on the dashboard and as a 4CCOUNTING-ready export.
+
+Signature: Claude (Claude Code, cloud session), 2026-11-13.
+
 ## Run 111 — offers page and sharing (2026-11-13)
 
 1. Done: merged into main once CI qa was green. No migration.

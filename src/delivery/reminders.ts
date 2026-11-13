@@ -10,8 +10,45 @@ import type { Db, Tx } from "../db/pool.js";
 export const REMINDER_HOURS_BEFORE = 24;
 export const REMINDER_MIN_HOURS_SINCE_PAID = 12;
 
-/** Queue the reminders now due. Safe to run as often as wanted: one reminder per order, ever. */
+/** Run 112: a voucher's reminder goes this many days before its validity window ends. */
+export const VOUCHER_EXPIRY_DAYS_BEFORE = 7;
+
+/**
+ * Queue the reminders now due: before a dated session (Run 23) and (Run 112) before a voucher
+ * expires. Safe to run as often as wanted: one of each per order, ever.
+ */
 export async function queueReminders(db: Db, now = new Date()): Promise<number> {
+  return (await queueSessionReminders(db, now)) + (await queueVoucherExpiry(db, now));
+}
+
+/**
+ * Run 112: "Il vous reste 2 bons, valides jusqu'au …", once per order, 7 days before the
+ * voucher's window ends, while one of its vouchers has not been redeemed. Like the session
+ * reminder, it follows the Brand's reminder setting and never writes to an erased buyer.
+ */
+export async function queueVoucherExpiry(db: Db, now = new Date()): Promise<number> {
+  const r = await db.query(
+    `INSERT INTO public.ticketing_email_outbox (client_id, brand_id, event_id, order_id, kind)
+     SELECT o.client_id, o.brand_id, o.event_id, o.id, 'voucher_expiry'
+     FROM public.ticketing_sessions se
+     JOIN public.ticketing_orders o ON o.session_id = se.id AND o.client_id = se.client_id AND o.brand_id = se.brand_id
+     JOIN public.ticketing_events ev ON ev.id = o.event_id AND ev.voucher
+     LEFT JOIN public.ticketing_brand_settings bs ON bs.client_id = o.client_id AND bs.brand_id = o.brand_id
+     WHERE se.status IN ('on_sale', 'paused', 'closed')
+       AND se.ends_at > $1 AND se.ends_at <= $1::timestamptz + make_interval(days => ${VOUCHER_EXPIRY_DAYS_BEFORE})
+       AND o.status IN ('paid', 'partially_refunded')
+       AND o.paid_at < $1::timestamptz - make_interval(hours => ${REMINDER_MIN_HOURS_SINCE_PAID})
+       AND coalesce(bs.reminder_emails, true)
+       AND EXISTS (SELECT 1 FROM public.ticketing_tickets k WHERE k.order_id = o.id AND k.status = 'valid'
+                   AND NOT EXISTS (SELECT 1 FROM public.ticketing_scans sc WHERE sc.ticket_id = k.id AND sc.result = 'admitted'))
+       AND NOT EXISTS (SELECT 1 FROM public.ticketing_buyer_erasures e WHERE e.buyer_id = o.buyer_id)
+     ON CONFLICT (order_id, kind, refund_id, change_id) DO NOTHING`,
+    [now],
+  );
+  return r.rowCount ?? 0;
+}
+
+async function queueSessionReminders(db: Db, now: Date): Promise<number> {
   const r = await db.query(
     `INSERT INTO public.ticketing_email_outbox (client_id, brand_id, event_id, order_id, kind)
      SELECT o.client_id, o.brand_id, o.event_id, o.id, 'reminder'

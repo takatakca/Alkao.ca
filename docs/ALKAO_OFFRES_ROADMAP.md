@@ -34,7 +34,7 @@
 
 ## BESOIN : ce qui la rend sûre et rentable
 
-5. **Rappel avant l'expiration d'un bon** : un courriel 7 jours avant la fin de la validité, sur le modèle des rappels d'événement (Run 45).
+5. ✅ **Rappel avant l'expiration d'un bon** (Run 112, fait, `docs/BONS_ACHAT.md`) : un courriel 7 jours avant la fin de la validité, sur le modèle des rappels d'événement (Run 45).
 6. **Passif des bons non échangés** : bons vendus, échangés et expirés, au tableau de bord et dans un export prêt pour 4CCOUNTING.
 7. **Validation au comptoir sans appareil** : le commerçant entre le code du bon, sur le modèle de l'entrée manuelle (Run 22).
 8. **Vérification des commerçants** avant leur première offre, avec TAKATAK LIVE ID (`takatakca/LIVEID-TAKATAK`) contre la fraude.
@@ -70,5 +70,6 @@
 - 2026-11-13 — Claude : Run 109 terminé, avec valeur, période de validité, conditions, vente pendant la période, badge « Bon » et « Valide jusqu'au » partout (`docs/BONS_ACHAT.md`). Prochain MUST : la limite par client (Run 110).
 - 2026-11-13 — Claude : Run 110 terminé. La limite par personne compte toutes les commandes de la même adresse courriel, au paiement, sous le verrou de l'acheteur, et le message ne révèle rien sur cette adresse. Prochain MUST : la page `/offres` et le partage social (Run 111).
 - 2026-11-13 — Claude : Run 111 terminé. La page `/offres` a son titre, son adresse et son aperçu, et figure au plan du site. Des boutons Facebook, X, WhatsApp, Courriel et Copier le lien, chacun marqué de sa source UTM, sont sur l'offre à la une et sur `/offres` ; le lien partagé depuis la boutique est marqué aussi. Les 4 MUST sont faits. Prochain : les BESOINS, à commencer par le rappel avant l'expiration d'un bon (no 5).
+- 2026-11-13 — Claude : Run 112 terminé, avec le rappel 7 jours avant l'expiration d'un bon tant qu'il en reste un non échangé. Prochain BESOIN : le passif des bons non échangés et son export pour 4CCOUNTING (no 6).
 
 — Signé : Claude (Claude Code, session cloud du dépôt takatakca/Alkao.ca), 2026-11-13.

@@ -755,7 +755,7 @@ function TransferSettings({ api, base }) {
 }
 
 // Run 21: everything that waits on staff, with a link to where it is handled.
-const EMAIL_KIND_FR = { order_tickets: "billets", exchange_tickets: "billets du changement de séance", session_cancelled: "annulation de séance", refund: "remboursement", reminder: "rappel" };
+const EMAIL_KIND_FR = { order_tickets: "billets", exchange_tickets: "billets du changement de séance", session_cancelled: "annulation de séance", refund: "remboursement", reminder: "rappel", session_changed: "changement de séance", voucher_expiry: "rappel avant l'expiration du bon" };
 function Attention({ a, prefix }) {
   const order = (id, reference) => html`<a href=${`#${prefix}/order/${id}`}>${reference}</a>`;
   const group = (title, items, line) => items.length > 0 && html`<h3>${title} (${items.length})</h3><ul>${items.map((x) => html`<li>${line(x)}</li>`)}</ul>`;

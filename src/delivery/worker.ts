@@ -5,7 +5,7 @@ import { deliverRecipientInvitations } from "./transfer-invitations.js";
 import { deliverCampaignEmails } from "./campaigns.js";
 import { deliverSignupConfirmations } from "./newsletter.js";
 import { queueReminders } from "./reminders.js";
-import { refundEmail, reminderEmail, sessionCancelledEmail, sessionChangedEmail, ticketsEmail } from "./templates.js";
+import { refundEmail, reminderEmail, sessionCancelledEmail, sessionChangedEmail, ticketsEmail, voucherExpiryEmail } from "./templates.js";
 import { APPEARANCE_COLUMNS, appearanceJoin, appearanceOf, type LookRow } from "../db/appearance.js";
 import { CredentialsService } from "../scanner/service.js";
 import { emailCodes } from "./codes.js";
@@ -43,7 +43,7 @@ interface DueRow extends LookRow {
   order_id: string;
   /** Run 105: for the return offer. */
   event_id: string;
-  kind: "order_tickets" | "exchange_tickets" | "session_cancelled" | "refund" | "reminder" | "session_changed";
+  kind: "order_tickets" | "exchange_tickets" | "session_cancelled" | "refund" | "reminder" | "session_changed" | "voucher_expiry";
   attempts: number;
   created_at: Date;
   reference: string;
@@ -196,6 +196,27 @@ export async function deliverTicketEmails(db: Db, cfg: DeliveryConfig, now = new
       const addOns = await orderOptions(tx, { clientId: row.client_id, brandId: row.brand_id }, row.order_id);
       // Run 100: a festival pass's other dates.
       const passDates = await orderPassDates(tx, { clientId: row.client_id, brandId: row.brand_id }, row.order_id);
+      // Run 112: before a voucher expires, while one of its vouchers is still unredeemed.
+      if (row.kind === "voucher_expiry") {
+        if (row.session_status === "cancelled") return skip("session_cancelled");
+        if (!row.session_ends_at || row.session_ends_at.getTime() <= now.getTime()) return skip("voucher_expired");
+        const { rows: left } = await tx.query<{ n: number }>(
+          `SELECT count(*)::int AS n FROM public.ticketing_tickets k
+           WHERE k.order_id = $1 AND k.client_id = $2 AND k.brand_id = $3 AND k.status = 'valid'
+             AND NOT EXISTS (SELECT 1 FROM public.ticketing_scans sc WHERE sc.ticket_id = k.id AND sc.result = 'admitted')`,
+          [row.order_id, row.client_id, row.brand_id],
+        );
+        const unredeemed = left[0]?.n ?? 0;
+        if (unredeemed === 0) return skip("vouchers_redeemed");
+        return send({
+          ...voucherExpiryEmail({
+            language: row.language, brandName: row.brand_name, look, buyerName: row.full_name, reference: row.reference, eventTitle: row.event_title,
+            startsAt: row.starts_at, validUntil: row.session_ends_at, unredeemed, venueName: row.venue_name, city: row.city, timezone: row.timezone,
+            validTickets: row.valid_tickets, link: await personalLink(), codes: inline?.codes,
+          }),
+          attachments: inline?.attachments,
+        });
+      }
       if (row.kind === "reminder") {
         // Run 23: too late once the session has started, pointless if it was cancelled.
         if (row.session_status === "cancelled") return skip("session_cancelled");

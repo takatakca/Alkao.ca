@@ -45,7 +45,11 @@ Les autres outils marchent aussi sur un bon :
   - l'étape 1 s'appelle **Période de validité**. Il n'y a pas de calendrier : la seule période est déjà choisie.
   - La section **Conditions de l'offre** a son onglet.
 - **Le courriel et la page des billets** disent « Bon valide jusqu'au … » au lieu d'une date de spectacle.
-- **Aucun rappel « à demain »** n'est envoyé pour un bon. Le rappel avant l'expiration est le prochain BESOIN de la feuille de route.
+- **Aucun rappel « à demain »** n'est envoyé pour un bon.
+- **Le rappel avant l'expiration** (Run 112) part une seule fois, 7 jours avant la fin de la validité, si la commande a encore un bon non échangé.
+  - Il dit : « Il vous reste 2 bons non utilisés. Ils sont valides jusqu'au … », avec les codes QR et le lien vers les billets.
+  - Il suit la case « Courriels de rappel » de l'organisateur et n'écrit jamais à un acheteur effacé.
+  - Rien ne part si la période est finie, si la séance est annulée ou si tous les bons ont été scannés entre-temps.
 
 ## Côté technique
 
