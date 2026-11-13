@@ -28,6 +28,9 @@ const UNGATED = new Set([
   // Run 61: public ALKAO landing page. It exposes no mutation and re-checks the normal
   // Client/Brand/entitlement gate before including any event. With Ticketing disabled it is empty.
   "GET /",
+  // Run 111: the home on its offers, from the same gated loader (opted-in, operational Brands
+  // only). It exposes no mutation; with Ticketing disabled it lists nothing.
+  "GET /offres",
   // Run 67: the accessibility statement, static text in the home's look.
   "GET /accessibilite",
   // Run 68: for search engines. The sitemap lists only what the home lists (same gated loader).
