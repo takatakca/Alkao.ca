@@ -147,7 +147,8 @@ describe.each(["light", "dark"] as const)("accessibility (%s)", (scheme) => {
     try {
       // A new browser: the home is cached for 60 s, so the page above would come back without the presale.
       const deals = await pageFor(scheme);
-      for (const [where, path] of [["ALKAO home, presale spotlight", "/"], ["ALKAO home, offers filter", "/?offres=1"]] as const) {
+      // Run 111: the offers page, with its share links.
+      for (const [where, path] of [["ALKAO home, presale spotlight", "/"], ["ALKAO home, offers filter", "/?offres=1"], ["ALKAO offers page", "/offres"]] as const) {
         await deals.goto(`${origin}${path}`);
         await deals.getByRole("heading", { level: 1 }).waitFor();
         await deals.locator(".spotlight").waitFor();

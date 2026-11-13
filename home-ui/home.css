@@ -692,3 +692,14 @@ dialog[open]{animation:pop .35s var(--ease) both}
 .date-badge.is-voucher{gap:2px;font-size:.7rem;letter-spacing:.14em}
 .date-badge.is-voucher .i{width:20px;height:20px;color:var(--brand)}
 .date-badge.is-voucher span{font-family:var(--font-body);font-size:.72rem;font-weight:800;letter-spacing:.14em}
+
+/* Run 111: share an offer (plain links to each network; copy is home.js). */
+.share-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:4px}
+.share-title{display:inline-flex;align-items:center;gap:8px;margin-right:4px;font-size:.78rem;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--silver)}
+.share-title .i{width:16px;height:16px;color:var(--cyan)}
+.share-btn{display:inline-flex;align-items:center;min-height:36px;padding:0 14px;border-radius:999px;border:1px solid var(--line-2);background:rgba(245,248,252,.06);color:var(--white);font-size:.86rem;font-weight:700;cursor:pointer;transition:background .2s,border-color .2s}
+.share-btn:hover{background:rgba(31,139,255,.2);border-color:var(--cyan)}
+.hero-copy .share-row{margin:0 0 18px}
+/* Over the hero's photo, the share buttons keep their contrast whatever the image. */
+.hero-copy .share-btn{background:rgba(6,13,31,.72);border-color:rgba(245,248,252,.32);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+.hero-copy .share-title{color:var(--white);text-shadow:0 1px 8px rgba(0,0,0,.7)}

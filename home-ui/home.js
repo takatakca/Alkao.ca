@@ -733,6 +733,21 @@
     form.addEventListener("submit", (e) => { e.preventDefault(); send(ask.value); ask.value = ""; });
   }
 
+  // ── Run 111: copy an offer's link (its UTM tags included) in one tap ──
+  if (navigator.clipboard) {
+    $$("[data-copy-link]").forEach((b) => {
+      b.hidden = false;
+      b.addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(b.dataset.copyLink);
+          const label = b.textContent;
+          b.textContent = b.dataset.copied;
+          setTimeout(() => { b.textContent = label; }, 2000);
+        } catch { /* refused by the browser: the other share links stay */ }
+      });
+    });
+  }
+
   // ── Install (where the browser offers it) ──
   let installEvent = null;
   const installButtons = $$("[data-install]");

@@ -245,7 +245,7 @@ export function siteFooter({ t, lang, base, home, here, otherHere, year }: Frame
         <p>${esc(t.footerTagline)}</p>
         <button class="btn btn-ghost btn-sm" type="button" data-install hidden>${icon("arrow")}${esc(t.install)}</button>
       </div>
-      <nav aria-label="${esc(t.footerDiscover)}"><p class="foot-title">${esc(t.footerDiscover)}</p>${a("evenements", t.nav.events)}${a("categories", t.nav.categories)}${a("comment", t.nav.how)}</nav>
+      <nav aria-label="${esc(t.footerDiscover)}"><p class="foot-title">${esc(t.footerDiscover)}</p>${a("evenements", t.nav.events)}<a href="${esc(`/offres${lang === "en" ? "?lang=en" : ""}`)}">${esc(t.allOffers)}</a>${a("categories", t.nav.categories)}${a("comment", t.nav.how)}</nav>
       <nav aria-label="${esc(t.footerHelp)}"><p class="foot-title">${esc(t.footerHelp)}</p>${a("aide", t.faqTitle)}${a("faq-billets", t.myTickets)}${a("faq-paiement", t.trust[2]!)}<a href="${esc(`/accessibilite${lang === "en" ? "?lang=en" : ""}`)}">${esc(t.a11y.link)}</a></nav>
       <nav aria-label="${esc(t.footerOrganizers)}"><p class="foot-title">${esc(t.footerOrganizers)}</p><a href="https://takatak.ca/register">${esc(t.signup)}</a><a href="/ops">${esc(t.signin)}</a>${a("organisateurs", t.footerFeatures)}</nav>
       <nav aria-label="${esc(t.footerTakatak)}"><p class="foot-title">${esc(t.footerTakatak)}</p><a href="https://takatak.ca">takatak.ca</a><a href="${esc(takatakUrl("/services"))}">${esc(t.footerServices)}</a><a href="${esc(takatakUrl("/deals"))}">${esc(t.footerDeals)}</a><a href="${esc(takatakUrl("/contact"))}">${esc(t.footerContact)}</a></nav>
@@ -618,13 +618,49 @@ export function clientWords(t: Words) {
   };
 }
 
+// ── Run 111: sharing on social media, every link tagged for the sales report (Run 49) ──
+/** The page's address with its UTM tags: the shop records them with the order (Run 49). */
+export function sharedUrl(url: string, source: string, content: string): string {
+  try {
+    const u = new URL(url);
+    u.searchParams.set("utm_source", source);
+    u.searchParams.set("utm_medium", source === "courriel" ? "email" : "social");
+    u.searchParams.set("utm_campaign", "alkao-offres");
+    u.searchParams.set("utm_content", content);
+    return u.toString();
+  } catch {
+    return url;
+  }
+}
+
+/**
+ * Plain links to each network's own share page (no script of theirs runs here), and a copy
+ * button (home-ui/home.js). Each link carries its own source, so the sales report tells which
+ * network sold what.
+ */
+function shareRow(t: Words, url: string, text: string, content: string, title = t.shareOffer.title): string {
+  const s = t.shareOffer;
+  const nets = [
+    ["facebook", s.facebook, `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(sharedUrl(url, "facebook", content))}`],
+    ["x", s.x, `https://twitter.com/intent/tweet?url=${encodeURIComponent(sharedUrl(url, "x", content))}&text=${encodeURIComponent(text)}`],
+    ["whatsapp", s.whatsapp, `https://wa.me/?text=${encodeURIComponent(`${text} ${sharedUrl(url, "whatsapp", content)}`)}`],
+  ] as const;
+  const mail = `mailto:?subject=${encodeURIComponent(text)}&body=${encodeURIComponent(sharedUrl(url, "courriel", content))}`;
+  return `<div class="share-row" role="group" aria-label="${esc(title)}">
+              <span class="share-title">${icon("share")}${esc(title)}</span>
+              ${nets.map(([id, name, href]) => `<a class="share-btn" data-net="${id}" href="${esc(href)}" target="_blank" rel="noopener noreferrer" aria-label="${esc(s.label(name))}">${esc(name)}</a>`).join("")}
+              <a class="share-btn" data-net="courriel" href="${esc(mail)}">${esc(s.email)}</a>
+              <button class="share-btn" type="button" data-copy-link="${esc(sharedUrl(url, "lien", content))}" data-copied="${esc(s.copied)}" hidden>${esc(s.copy)}</button>
+            </div>`;
+}
+
 // ── Run 107: presales and discounts, organizers' tools, GROUPE TAKATAK ───────
 
 /**
  * The presales and coupons on now: the best one in full (its saving, both prices and its end),
  * then the others as cards. With none on, how ALKAO's discounts work, and nothing invented.
  */
-function dealsSection(t: Words, lang: Lang, deals: Card[], { link, card }: { link: (params: Record<string, string>) => string; card: (c: Card) => string }): string {
+function dealsSection(t: Words, lang: Lang, deals: Card[], { link, card, origin }: { link: (params: Record<string, string>) => string; card: (c: Card) => string; origin: string | null }): string {
   const head = `<div class="section-head reveal"><p class="kicker">${esc(t.dealsTitle)}</p><h2 id="deals-title">${esc(t.dealsHeadline)}</h2><p>${esc(t.dealsLead)}</p></div>`;
   if (!deals.length) {
     return `    <section class="section deals" id="preventes" aria-labelledby="deals-title">
@@ -674,6 +710,7 @@ function dealsSection(t: Words, lang: Lang, deals: Card[], { link, card }: { lin
             ${best.place ? `<p class="card-meta">${icon("pin")}<span>${esc(best.place)}</span></p>` : ""}
             ${price}
             ${facts ? `<ul class="spot-facts">${facts}</ul>` : ""}
+            ${origin ? shareRow(t, absolute(origin, best.shop), `${best.title} — ${best.deal ?? ""}`, best.id.slice(0, 8)) : ""}
             <div class="actions"><a class="btn btn-primary" href="${esc(best.shop)}">${esc(t.buy)}${icon("arrow")}</a>${others.length ? `<a class="btn btn-ghost" href="${esc(link({ offres: "1" }))}">${esc(t.dealsSeeAll(deals.length))}</a>` : ""}</div>
           </div>
         </article>
@@ -729,14 +766,24 @@ export interface RenderOptions {
   now: Date;
   /** The versioned URL of a file in home-ui/ (src/api/home.ts). */
   asset: (name: string) => string;
+  /** Run 111: "offres" is `/offres`, the page of every offer on now (always filtered on offers). */
+  mode?: "home" | "offres";
 }
 
-export function renderHome({ origin, lang, brands, query, now, asset }: RenderOptions): string {
+export function renderHome({ origin, lang, brands, query: asked, now, asset, mode = "home" }: RenderOptions): string {
   const t = COPY[lang];
-  const canonical = origin ? `${origin}/` : null;
+  // Run 111: `/offres` is this page, always on the offers, with its own title and address.
+  const offres = mode === "offres";
+  const query: HomeQuery = offres ? { ...asked, deals: true, period: "" } : asked;
+  const basePath = offres ? "/offres" : "/";
+  const canonical = origin ? `${origin}${basePath}` : null;
   const langQuery = (l: Lang) => (l === "en" ? "?lang=en" : "");
   const home = `/${langQuery(lang)}`;
   const otherHome = `/${langQuery(t.other)}`;
+  const here = `${basePath}${langQuery(lang)}`;
+  const otherHere = `${basePath}${langQuery(t.other)}`;
+  const page = offres ? { title: t.offresPage.title, description: t.offresPage.description, eyebrow: t.offresPage.eyebrow, h1: t.offresPage.h1, lead: t.offresPage.lead }
+    : { title: t.title, description: t.description, eyebrow: t.eyebrow, h1: t.h1, lead: t.lead };
   // Run 106: the past year's events, behind the "Passés" filter. Dates, prices, sort and the
   // agenda are about what is on sale, so they do not apply there.
   const past = query.period === "past";
@@ -758,7 +805,7 @@ export function renderHome({ origin, lang, brands, query, now, asset }: RenderOp
   const cities = [...new Set(pool.map((c) => c.city).filter(Boolean))].sort((a, b) => a.localeCompare(b, t.lang));
   const link = (params: Record<string, string>) => {
     const p = new URLSearchParams({ ...(lang === "en" ? { lang: "en" } : {}), ...params });
-    return `/?${p}#evenements`;
+    return `${basePath}?${p}#evenements`;
   };
   // Run 66: the current search with one value changed ("" removes it), for the filter chips.
   const current: Record<string, string> = {
@@ -789,11 +836,11 @@ export function renderHome({ origin, lang, brands, query, now, asset }: RenderOp
   // applies to sales (dates, price, sort, agenda).
   const periodChip = (href: string, label: string, on: boolean, n: number) =>
     `<a class="chip${on ? " is-current" : ""}" href="${esc(href)}"${on ? ' aria-current="true"' : ""}>${esc(label)}<span class="count">${n}</span></a>`;
-  const periodSwitch = ended.length || past
+  const periodSwitch = !offres && (ended.length || past)
     ? `<div class="period-switch" role="group" aria-labelledby="f-period"><span class="sr-only" id="f-period">${esc(t.periodTitle)}</span>${periodChip(refine({ periode: "" }), t.periodOptions.upcoming, !past, all.length)}${periodChip(refine({ periode: "passes", quand: "", prix: "", tri: "", vue: "", offres: "" }), t.periodOptions.past, past, ended.length)}</div>`
     : "";
   // Run 107: only the events with a presale or a coupon on now, with their count.
-  const dealsChip = !past && (deals.length || ask.deals)
+  const dealsChip = !past && !offres && (deals.length || ask.deals)
     ? `<a class="chip deal-chip${ask.deals ? " is-current" : ""}" href="${esc(refine({ offres: ask.deals ? "" : "1" }))}"${ask.deals ? ' aria-current="true"' : ""}>${icon("tag")}${esc(t.dealsTitle)}<span class="count">${deals.length}</span></a>`
     : "";
   // Run 106: the date window and the category, right in the bar (also in the search form above).
@@ -831,7 +878,7 @@ export function renderHome({ origin, lang, brands, query, now, asset }: RenderOp
     ...(ask.price ? [{ label: t.priceOptions[ask.price], off: { prix: "" } }] : []),
     ...(organizer ? [{ label: organizer.name, off: { organisateur: "" } }] : []),
     ...(ask.sort === "price" ? [{ label: t.sortOptions.price, off: { tri: "" } }] : []),
-    ...(ask.deals ? [{ label: t.dealsTitle, off: { offres: "" } }] : []),
+    ...(ask.deals && !offres ? [{ label: t.dealsTitle, off: { offres: "" } }] : []),
   ];
   const activeChips = active.length
     ? `<ul class="active-filters" aria-label="${esc(t.activeFilters)}">${active.map((a) => `<li><a class="chip is-on" href="${esc(refine(a.off))}" aria-label="${esc(t.removeFilter(a.label))}">${esc(a.label)}${icon("close")}</a></li>`).join("")}</ul>`
@@ -952,24 +999,24 @@ export function renderHome({ origin, lang, brands, query, now, asset }: RenderOp
     }));
   });
 
-  const frame: Frame = { t, lang, base: "", home, here: home, otherHere: otherHome, year };
+  const frame: Frame = { t, lang, base: offres ? home : "", home, here, otherHere, year };
 
   return `<!doctype html>
 <html lang="${t.lang}">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>${esc(t.title)}</title>
-  <meta name="description" content="${esc(t.description)}" />
+  <title>${esc(page.title)}</title>
+  <meta name="description" content="${esc(page.description)}" />
   ${canonical ? `<link rel="canonical" href="${esc(lang === "en" ? `${canonical}?lang=en` : canonical)}" />
   <link rel="alternate" hreflang="fr-CA" href="${esc(canonical)}" />
   <link rel="alternate" hreflang="en-CA" href="${esc(`${canonical}?lang=en`)}" />
-  <link rel="alternate" hreflang="x-default" href="${esc(canonical)}" />` : `<link rel="alternate" hreflang="${lang === "fr" ? "en-CA" : "fr-CA"}" href="${esc(otherHome)}" />`}
+  <link rel="alternate" hreflang="x-default" href="${esc(canonical)}" />` : `<link rel="alternate" hreflang="${lang === "fr" ? "en-CA" : "fr-CA"}" href="${esc(otherHere)}" />`}
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="ALKAO" />
   <meta property="og:locale" content="${lang === "fr" ? "fr_CA" : "en_CA"}" />
-  <meta property="og:title" content="${esc(t.title)}" />
-  <meta property="og:description" content="${esc(t.description)}" />
+  <meta property="og:title" content="${esc(page.title)}" />
+  <meta property="og:description" content="${esc(page.description)}" />
   ${canonical ? `<meta property="og:url" content="${esc(canonical)}" />
   <meta property="og:image" content="${esc(absolute(origin, asset("img/hero-festival.webp")))}" />` : ""}
   <meta name="twitter:card" content="summary_large_image" />
@@ -993,10 +1040,11 @@ ${siteHeader(frame)}
       <div class="hero-shade" aria-hidden="true"></div>
       <div class="wrap hero-inner">
         <div class="hero-copy">
-          <p class="eyebrow">${esc(t.eyebrow)}</p>
-          <h1 id="hero-title">${esc(t.h1)}</h1>
-          <p class="lead">${esc(t.lead)}</p>
-          <form class="search-bar" action="/#evenements" method="get" role="search" aria-label="${esc(t.search)}">
+          <p class="eyebrow">${esc(page.eyebrow)}</p>
+          <h1 id="hero-title">${esc(page.h1)}</h1>
+          <p class="lead">${esc(page.lead)}</p>
+          ${offres && origin ? shareRow(t, `${origin}/offres${langQuery(lang)}`, page.title, "offres", t.offresPage.shareTitle) : ""}
+          <form class="search-bar" action="${esc(basePath)}#evenements" method="get" role="search" aria-label="${esc(t.search)}">
             ${lang === "en" ? '<input type="hidden" name="lang" value="en" />' : ""}
             <label class="field"><span>${esc(t.what)}</span><input name="q" type="search" value="${esc(query.q)}" placeholder="${esc(t.whatHint)}" autocomplete="off" maxlength="80" /></label>
             <label class="field"><span>${esc(t.where)}</span><input name="ville" type="text" value="${esc(query.city)}" placeholder="${esc(t.whereHint)}" list="alkao-cities" autocomplete="address-level2" maxlength="80" /></label>
@@ -1027,7 +1075,7 @@ ${siteHeader(frame)}
       ${t.trust.map((item, i) => `<li>${icon(["bolt", "offline", "lock", "check", "pin"][i]!)}<span>${esc(item)}</span></li>`).join("")}
     </ul>
 
-${dealsSection(t, lang, deals, { link, card })}
+${dealsSection(t, lang, deals, { link, card, origin })}
 
     <section class="section" id="categories" aria-labelledby="categories-title">
       <div class="wrap">

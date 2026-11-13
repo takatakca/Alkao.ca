@@ -1,5 +1,11 @@
 # ALKAO — Project status
 
+## Run 111 — the offers page and social sharing (2026-11-13)
+
+`/offres` lists every offer on now (presales, coupons, vouchers), with its own title and share preview, made to be posted on social media. The featured offer and `/offres` have Facebook, X, WhatsApp, e-mail and copy-link buttons. Each link is tagged with its network, so the sales report shows which network sold what. With Runs 107 to 111, the four MUST items of the offers roadmap are done.
+
+Signature: Claude (Claude Code, cloud session), 2026-11-13.
+
 ## Run 110 — a limit per person (2026-11-13)
 
 An organizer or a business sets « 2 par personne » on a ticket or a voucher. ALKAO adds up all the orders of the same e-mail: paid ones, and those still being paid until their cart lapses. It refuses at checkout once the limit would be passed, even with two payments at the same moment. The shop shows the limit and stops the + button there. The refusal never says what that address bought.

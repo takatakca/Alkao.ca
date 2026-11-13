@@ -1,5 +1,13 @@
 # ALKAO — Task queue (priority ordered)
 
+## Run 111 — offers page and sharing (2026-11-13)
+
+1. Done: merged into main once CI qa was green. No migration.
+2. Owner: post `https://alkao.ca/offres` (or the featured offer's share buttons) on TAKATAK's social media. /ops → Tableau de bord → Provenance des ventes then shows each network's sales.
+3. Next (issue #109, NEED): 5. a reminder e-mail before a voucher expires; 6. unredeemed-voucher liability and its 4CCOUNTING export; 7. counter validation by code; 8. merchant checks with LIVE ID; 9. ALKAO offers on takatak.ca/deals; 10. verified reviews.
+
+Signature: Claude (Claude Code, cloud session), 2026-11-13.
+
 ## Run 110 — limit per person (2026-11-13)
 
 1. Done: merged into main once CI qa was green. One additive migration (`20261127000100_alkao_limit_per_buyer.sql`) runs at the next deploy.

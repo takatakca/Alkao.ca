@@ -1550,7 +1550,8 @@ function EventShop({ config }) {
   };
   // Run 90: share the page (never the door-sale or campaign address).
   const share = async () => {
-    const url = `${config.publicUrl ?? location.origin}${location.pathname}`;
+    // Run 111: a shared link says where it came from, for the organizer's sales report (Run 49).
+    const url = `${config.publicUrl ?? location.origin}${location.pathname}?utm_source=partage&utm_medium=social&utm_campaign=alkao-boutique`;
     if (navigator.share) {
       try { await navigator.share({ title: ev.title, url }); return; } catch (e) { if (e?.name === "AbortError") return; }
     }
