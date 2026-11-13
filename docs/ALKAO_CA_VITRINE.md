@@ -70,3 +70,13 @@ Juste sous le haut de la page, la section **Préventes et rabais** (`#preventes`
 - Le filtre **Préventes et rabais** (`?offres=1`) ne garde que les événements en offre ; le menu a un lien **Préventes**.
 
 Plus bas, pour les organisateurs : les six outils de rabais (`#outils-rabais`) et la section **GROUPE TAKATAK** (`#takatak`), avec cinq services de takatak.ca et les rabais de TAKATAK (FIRST10, 15 % à l'année). Le pied de page a une colonne GROUPE TAKATAK.
+
+## La page Offres et le partage (Run 111, 13 novembre 2026)
+
+- **`/offres`** (et `/offres?lang=en`) : toutes les offres en cours, soit les préventes, les coupons et les bons d'achat.
+  - Elle a son titre (« Préventes, rabais et bons d'achat — ALKAO »), son adresse canonique, son aperçu de partage et sa place dans le plan du site.
+  - Ses filtres restent sur `/offres`. Le pied de page y mène (« Toutes les offres »).
+- **Partager** : des boutons Facebook, X, WhatsApp, Courriel et Copier le lien sur l'offre à la une, et en haut de `/offres`.
+  - Ce sont de simples liens vers la page de partage de chaque réseau : aucun script de ces réseaux ne tourne sur ALKAO, et aucun référent ne leur est envoyé.
+  - Chaque lien porte `utm_source` (facebook, x, whatsapp, courriel, lien), `utm_medium` (social ou email), `utm_campaign=alkao-offres` et `utm_content`. Le rapport « Provenance des ventes » de /ops (Run 49) montre ainsi quel réseau a vendu quoi.
+  - Le lien partagé depuis la boutique porte `utm_source=partage`.

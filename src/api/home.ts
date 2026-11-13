@@ -84,6 +84,22 @@ export function mountHome(app: Hono<any>, cfg: HomeConfig): void {
     return c.html(html, 200, PAGE_HEADERS);
   });
 
+  // Run 111: every offer on now (presales, coupons, vouchers), as its own page to share.
+  app.get("/offres", async (c) => {
+    if (cfg.homeUrl) return c.json({ error: { code: "not_found" } }, 404);
+    const lang = c.req.query("lang") === "en" ? "en" : "fr";
+    const html = renderHome({
+      origin: cfg.publicUrl ? new URL(cfg.publicUrl).origin : null,
+      lang,
+      brands: await cfg.load(),
+      query: parseQuery((name) => c.req.query(name)),
+      now: cfg.now?.() ?? new Date(),
+      asset: homeAsset,
+      mode: "offres",
+    });
+    return c.html(html, 200, PAGE_HEADERS);
+  });
+
   // Run 73: venue discovery uses only already-gated, opted-in events. White-label domains
   // do not expose the ALKAO directory. Unknown venues never reveal a private catalog.
   app.get("/salles", async (c) => {
@@ -184,6 +200,7 @@ export function mountHome(app: Hono<any>, cfg: HomeConfig): void {
       '<?xml version="1.0" encoding="UTF-8"?>',
       '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">',
       ...(cfg.homeUrl ? [] : pair("/")),
+      ...(cfg.homeUrl ? [] : pair("/offres")),
       ...pair("/accessibilite"),
       ...(venuePages.length ? pair("/salles") : []),
       ...venuePages,

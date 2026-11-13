@@ -29,8 +29,8 @@
 
 1. ✅ **Bons d'achat de commerces** (Run 109, fait, `docs/BONS_ACHAT.md`) : un restaurant, un spa ou une activité vend un bon avec une **valeur** (« valeur 80 $ ») et un **prix** (« 45 $ »), une **période de validité** (du… au…) et des **conditions** (les petites lignes). Le bon s'échange **une fois**, par code QR au commerce, avec le scanner qui existe déjà : une séance couvre toute la période de validité, et la fenêtre d'entrée du scanner suit la séance. Il reste à ajouter la valeur, les conditions, le format « bon » et l'affichage « Valide jusqu'au … » partout (accueil, boutique, billets, courriel).
 2. ✅ **Limite par client** (Run 110, fait, `docs/PREVENTES_COUPONS.md`) : par exemple 2 bons par personne pour toute l'offre, et pas seulement par commande. Elle est gardée par la base, comme la quantité des préventes.
-3. **Page Offres dédiée** (Run 111) : `/offres`, toutes les offres en cours, triées par rabais, par fin la plus proche, par ville ou par catégorie, avec leur propre aperçu de partage pour les médias sociaux.
-4. **Partage social qui vend** (Run 111) : sur chaque offre, des boutons de partage avec les liens UTM déjà comptés (Run 49) et un aperçu qui montre le vrai rabais.
+3. ✅ **Page Offres dédiée** (Run 111, fait) : `/offres`, toutes les offres en cours, triées par rabais, par fin la plus proche, par ville ou par catégorie, avec leur propre aperçu de partage pour les médias sociaux.
+4. ✅ **Partage social qui vend** (Run 111, fait) : sur chaque offre, des boutons de partage avec les liens UTM déjà comptés (Run 49) et un aperçu qui montre le vrai rabais.
 
 ## BESOIN : ce qui la rend sûre et rentable
 
@@ -69,5 +69,6 @@
 - 2026-11-13 — Claude : créée ; Run 108 (axe sur « Préventes et rabais ») ; Run 109 (bons d'achat) commencé.
 - 2026-11-13 — Claude : Run 109 terminé, avec valeur, période de validité, conditions, vente pendant la période, badge « Bon » et « Valide jusqu'au » partout (`docs/BONS_ACHAT.md`). Prochain MUST : la limite par client (Run 110).
 - 2026-11-13 — Claude : Run 110 terminé. La limite par personne compte toutes les commandes de la même adresse courriel, au paiement, sous le verrou de l'acheteur, et le message ne révèle rien sur cette adresse. Prochain MUST : la page `/offres` et le partage social (Run 111).
+- 2026-11-13 — Claude : Run 111 terminé. La page `/offres` a son titre, son adresse et son aperçu, et figure au plan du site. Des boutons Facebook, X, WhatsApp, Courriel et Copier le lien, chacun marqué de sa source UTM, sont sur l'offre à la une et sur `/offres` ; le lien partagé depuis la boutique est marqué aussi. Les 4 MUST sont faits. Prochain : les BESOINS, à commencer par le rappel avant l'expiration d'un bon (no 5).
 
 — Signé : Claude (Claude Code, session cloud du dépôt takatakca/Alkao.ca), 2026-11-13.

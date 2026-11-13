@@ -1,5 +1,19 @@
 # ALKAO — Agent handoff (mandatory)
 
+## Run 111 — /offres and share links (2026-11-13)
+
+- **Page:** `renderHome({ mode: "offres" })` forces `deals` and drops `period`.
+  - Its `link()` base is `/offres` and its canonical is `${origin}/offres`.
+  - The language switch stays on `/offres`.
+  - There is no deals chip and no Passés switch.
+  - Route: `GET /offres` in `src/api/home.ts`. It is in the sitemap and 404 on white-label installs.
+- **Sharing:** `sharedUrl()` and `shareRow()` in `home-view.ts`.
+  - Plain links to facebook.com/sharer, twitter.com/intent/tweet, wa.me and mailto, with `rel="noopener noreferrer"` and no third-party script, so the CSP is unchanged.
+  - The copy button is `[data-copy-link]` in `home-ui/home.js`, hidden without a clipboard.
+- **Tests:** `test/api/offres-page.test.ts` (4), and axe covers `/offres`.
+
+Signature: Claude (Claude Code, cloud session), 2026-11-13.
+
 ## Run 110 — limit per buyer (2026-11-13)
 
 - **Model:** `ticketing_ticket_types.limit_per_buyer` (1–1000), and `TicketTypeRule.limitPerBuyer`.
